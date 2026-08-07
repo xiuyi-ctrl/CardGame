@@ -4,7 +4,7 @@ import { createBattle, computeStats, makeUnit, playerSkill, playerTame, type Bat
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
-import { getEvolution } from '../data/monsters';
+import { getEvolution, getMonster } from '../data/monsters';
 import { createRng } from '../rng';
 
 function getFoodSafe(id: string): boolean {
@@ -699,10 +699,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'DISCARD': {
+      if (state.roster.length <= 1) return state; // 至少保留一只宠物
+      const unit = state.roster.find((u) => u.uid === action.uid);
+      let goldGain = 0;
+      if (unit) {
+        const monster = getMonster(unit.speciesId);
+        // 释放奖励：基础 5 金 × 品阶 × 等级
+        goldGain = 5 * monster.rank * unit.level;
+      }
       return {
         ...state,
+        gold: state.gold + goldGain,
         roster: state.roster.filter((u) => u.uid !== action.uid),
         field: state.field.filter((uid) => uid !== action.uid),
+        log: goldGain > 0 ? [`释放 ${unit?.name}，获得 ${goldGain} 金币`, ...state.log].slice(0, 20) : state.log,
       };
     }
 

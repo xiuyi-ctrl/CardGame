@@ -583,9 +583,15 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                     🧪 净化（{state.inventory.purify}）
                   </button>
                 )}
-                {!evolveMode && !boostMode && !arenaMode && (
-                  <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })}>释放</button>
-                )}
+                {!evolveMode && !boostMode && !arenaMode && (() => {
+                  const monster = getMonster(u.speciesId);
+                  const goldGain = 5 * monster.rank * u.level;
+                  return (
+                    <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })} title={`释放后获得 ${goldGain} 金币（品阶 ${monster.rank} × 等级 ${u.level} × 5）`}>
+                      释放（+${goldGain}💰）
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           );
