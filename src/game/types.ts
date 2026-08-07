@@ -84,6 +84,8 @@ export interface Unit {
   isPlayer: boolean;
   /** 敌方专用：是否可被驯服 */
   tameable: boolean;
+  /** 敌方专用：本场战斗中已驯服失败的次数（每次失败提高后续捕捉概率） */
+  tameFails?: number;
   /** 击杀经验值（敌方） */
   expValue: number;
   exp: number;
@@ -109,4 +111,10 @@ export interface BattleState {
   pendingTame: Unit[];
   seed: number;
   rngCount: number;
+  /** 被侵蚀节点的暗影 debuff：'spd' 我方速度 -10% | 'dmg' 我方受到伤害 +10% */
+  corruptDebuff?: 'spd' | 'dmg';
+  /** 车轮战：total 总场数、current 当前上场序号（从 1 开始） */
+  gauntlet?: { total: number; current: number };
+  /** 车轮战：尚未上场的敌方后备队列 */
+  enemyBench?: Unit[];
 }

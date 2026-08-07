@@ -1,9 +1,9 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { Dispatch } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { ROSTER_MAX, FIELD_MAX, pendingEvolve, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, ROSTER_MAX, FIELD_MAX, pendingEvolve, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
 import { STARTING_CHOICES, getMonster, getEvolution } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
@@ -21,9 +21,14 @@ const NODE_ICON: Record<MapNode['type'], string> = {
   event: '📜',
   special: '💎',
   boss: '👑',
+  arena: '🗡️',
+  gauntlet: '🔥',
+  corrupted: '🌑',
 };
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory'];
+
+const EMPTY_ROW: MapNode[] = [];
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
@@ -101,6 +106,11 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
 
 function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [hasSave, setHasSave] = useState<boolean | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
+  const [dbgAct, setDbgAct] = useState(1);
+  const [dbgRow, setDbgRow] = useState(5);
+  const [dbgType, setDbgType] = useState<MapNode['type'] | 'all'>('all');
+  const [dbgSeed, setDbgSeed] = useState(42);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +128,19 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
     });
   }
 
+  const DEBUG_TYPES: { value: MapNode['type'] | 'all'; label: string }[] = [
+    { value: 'all', label: '任意' },
+    { value: 'battle', label: '战斗' },
+    { value: 'arena', label: '斗兽场' },
+    { value: 'gauntlet', label: '车轮战' },
+    { value: 'corrupted', label: '被侵蚀' },
+    { value: 'elite', label: '精英' },
+    { value: 'boss', label: '首领' },
+    { value: 'event', label: '事件' },
+    { value: 'shop', label: '商店' },
+    { value: 'special', label: '奇遇' },
+  ];
+
   return (
     <div className="center-col">
       <div className="title-logo">🐉</div>
@@ -130,10 +153,59 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
         <button className="big-btn" onClick={onContinue} disabled={hasSave !== true}>
           {hasSave === null ? '检查存档…' : hasSave ? '继续游戏' : '继续游戏（暂无存档）'}
         </button>
+        <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
+          {showDebug ? '收起测试面板' : '🔬 测试关卡'}
+        </button>
         <button className="big-btn" onClick={quitGame}>
           退出游戏
         </button>
       </div>
+      {showDebug && (
+        <div className="debug-panel">
+          <div className="debug-row">
+            <label>幕</label>
+            <select value={dbgAct} onChange={(e) => setDbgAct(Number(e.target.value))}>
+              {[1, 2, 3].map((a) => (
+                <option key={a} value={a}>
+                  第 {a} 幕
+                </option>
+              ))}
+            </select>
+            <label>层</label>
+            <select value={dbgRow} onChange={(e) => setDbgRow(Number(e.target.value))}>
+              {Array.from({ length: 10 }, (_, i) => (
+                <option key={i} value={i}>
+                  第 {i} 层
+                </option>
+              ))}
+            </select>
+            <label>节点</label>
+            <select value={dbgType} onChange={(e) => setDbgType(e.target.value as MapNode['type'] | 'all')}>
+              {DEBUG_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <label>种子</label>
+            <input
+              type="number"
+              value={dbgSeed}
+              onChange={(e) => setDbgSeed(Number(e.target.value))}
+              style={{ width: 80 }}
+            />
+          </div>
+          <button
+            className="primary big-btn"
+            onClick={() =>
+              dispatch({ type: 'DEBUG_JUMP', act: dbgAct, row: dbgRow, nodeType: dbgType, seed: dbgSeed })
+            }
+          >
+            直接进入
+          </button>
+          <div className="debug-hint">调试模式：自动配备 3 只 Lv9 强宠、500 金币、3 个跳关道具</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -179,19 +251,95 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   const currentCol = isFirst
     ? null
     : (state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.col ?? null);
-  const atStart = state.currentRow === 0;
-  const canSelect = (n: MapNode) =>
-    n.type === 'boss' ||
-    currentCol === null ||
-    atStart ||
-    typeof n.col !== 'number' ||
-    typeof currentCol !== 'number' ||
-    Math.abs(n.col - currentCol) <= 1;
+  const canSelect = (n: MapNode) => canStepTo(state.currentRow, currentCol, n);
+
+  // 路线预览：默认显示当前节点 → 下一步可达；悬停某节点时显示该节点的下一步可达
+  const nextRow = state.map.layers[optionsRow] ?? EMPTY_ROW;
+  const nearIds = useMemo(
+    () => new Set(nextRow.filter((n) => canStepTo(state.currentRow, currentCol, n)).map((n) => n.id)),
+    [nextRow, state.currentRow, currentCol],
+  );
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const hoverRow = hoverId ? state.map.layers.findIndex((r) => r.some((n) => n.id === hoverId)) : -1;
+  const hoverNode = hoverId && hoverRow >= 0 ? state.map.layers[hoverRow].find((n) => n.id === hoverId) : undefined;
+  const hoverNextRow =
+    hoverNode && hoverRow + 1 < state.map.layers.length ? state.map.layers[hoverRow + 1] : EMPTY_ROW;
+  const hoverReachIds = useMemo(
+    () =>
+      hoverNode
+        ? new Set(hoverNextRow.filter((m) => canStepTo(hoverRow, hoverNode.col, m)).map((m) => m.id))
+        : new Set<string>(),
+    [hoverNode, hoverRow, hoverNextRow],
+  );
+
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const nodeEls = useRef<Record<string, HTMLDivElement | null>>({});
+  const [svgSize, setSvgSize] = useState({ w: 0, h: 0 });
+  const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number; kind: 'near' | 'far' }[]>([]);
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const update = () => {
+      const w = canvas.scrollWidth;
+      const h = canvas.scrollHeight;
+      setSvgSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(canvas);
+    window.addEventListener('resize', update);
+    canvas.addEventListener('scroll', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+      canvas.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const center = (id: string): { x: number; y: number } | null => {
+      const el = nodeEls.current[id];
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left - rect.left + canvas.scrollLeft + r.width / 2, y: r.top - rect.top + canvas.scrollTop + r.height / 2 };
+    };
+    const result: typeof lines = [];
+    if (!isFirst) {
+      const src = center(state.currentNodeId);
+      if (src) {
+        for (const n of nextRow) {
+          if (!nearIds.has(n.id)) continue;
+          const t = center(n.id);
+          if (t) result.push({ x1: src.x, y1: src.y, x2: t.x, y2: t.y, kind: 'near' });
+        }
+      }
+    }
+    if (hoverNode) {
+      const a = center(hoverNode.id);
+      if (a) {
+        for (const m of hoverNextRow) {
+          if (!hoverReachIds.has(m.id)) continue;
+          const b = center(m.id);
+          if (b) result.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind: 'far' });
+        }
+      }
+    }
+    setLines(result);
+  }, [isFirst, state.currentNodeId, optionsRow, nearIds, hoverNode, hoverNextRow, hoverReachIds, svgSize]);
 
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
-      <div className="map-canvas">
+      <div className="map-canvas" ref={canvasRef}>
+        <svg className="map-lines" width={svgSize.w} height={svgSize.h}>
+          {lines.map((l, i) => (
+            <line key={i} className={l.kind === 'near' ? 'ln-near' : 'ln-far'} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} />
+          ))}
+        </svg>
         {state.map.layers.map((row, ri) => {
           const isOptionRow = ri === optionsRow;
           const isPast = ri < optionsRow;
@@ -200,12 +348,29 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
               {row.map((n) => {
                 const isCurrent = n.id === state.currentNodeId;
                 const selectable = isOptionRow && canSelect(n);
-                const cls = isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast ? '' : 'dim';
-                const skippable = (n.type === 'battle' || n.type === 'elite') && (state.inventory.skip ?? 0) > 0;
+                const reachCls = isCurrent ? '' : nearIds.has(n.id) ? 'reach-1' : hoverReachIds.has(n.id) ? 'reach-2' : '';
+                const cls = [
+                  isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast ? '' : 'dim',
+                  reachCls,
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+                const skippable =
+                  (n.type === 'battle' ||
+                    n.type === 'elite' ||
+                    n.type === 'arena' ||
+                    n.type === 'gauntlet' ||
+                    n.type === 'corrupted') &&
+                  (state.inventory.skip ?? 0) > 0;
                 return (
                   <div
                     key={n.id}
+                    ref={(el) => {
+                      nodeEls.current[n.id] = el;
+                    }}
                     className={`node ${cls}`}
+                    onMouseEnter={() => setHoverId(n.id)}
+                    onMouseLeave={() => setHoverId(null)}
                     onClick={selectable ? () => dispatch({ type: 'MOVE', nodeId: n.id }) : undefined}
                   >
                     <span className="nicon">{NODE_ICON[n.type]}</span>
@@ -231,6 +396,10 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
       </div>
       <div className="card-sub" style={{ textAlign: 'center' }}>
         选择下一处地点（出发后需走相邻路线；消灭首领后可进入下一层）
+        <span className="route-legend">
+          <span className="legend-near" /> 下一步可达
+          <span className="legend-far" /> 悬停查看再下一步
+        </span>
       </div>
     </div>
   );
@@ -276,18 +445,21 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const pending = state.specialPending;
   const evolveMode = pending?.kind === 'evolve';
   const boostMode = pending?.kind === 'boost';
+  const arenaMode = pending?.kind === 'arena';
   const title = evolveMode
     ? pending.super
       ? '超进化：选择要进化的宠物（会附带随机负面诅咒）'
       : '进化之光：选择要进化的宠物'
     : boostMode
       ? '属性强化：选择要强化的宠物'
-      : `队伍管理（${state.field.length}/${FIELD_MAX} 出战，上限 ${ROSTER_MAX} 只）`;
+      : arenaMode
+        ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
+        : `队伍管理（${state.field.length}/${FIELD_MAX} 出战，上限 ${ROSTER_MAX} 只）`;
 
   return (
     <div className="screen">
       <div className="section-title">{title}</div>
-      {!evolveMode && !boostMode && (
+      {!evolveMode && !boostMode && !arenaMode && (
         <div className="panel-row" style={{ marginBottom: 10 }}>
           <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
           {state.field.map((uid) => {
@@ -307,12 +479,14 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
               : undefined
             : boostMode
               ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
-              : () => toggleField(u.uid);
+              : arenaMode
+                ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
+                : () => toggleField(u.uid);
           return (
             <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <UnitCard
                 unit={u}
-                className={`${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode ? 'clickable' : ''}`}
+                className={`${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode || arenaMode ? 'clickable' : ''}`}
                 onClick={onCard}
               />
               <div className="panel-row">
@@ -334,7 +508,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                     🧪 净化（{state.inventory.purify}）
                   </button>
                 )}
-                {!evolveMode && !boostMode && (
+                {!evolveMode && !boostMode && !arenaMode && (
                   <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })}>释放</button>
                 )}
               </div>
@@ -342,7 +516,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
           );
         })}
       </div>
-      {!evolveMode && !boostMode && (
+      {!evolveMode && !boostMode && !arenaMode && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
           <button className="primary big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
             继续前进 →
@@ -354,30 +528,53 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 }
 
 function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const bought = state.shopBought === true;
+  const boughtItems = state.shopBoughtItems ?? [];
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">商人 🏪</div>
+      <p className="card-sub" style={{ textAlign: 'center' }}>
+        购买食物，或花 5 金币立即休整（回满血·不解诅咒）；{bought ? '已购买过食物，本节点不可再休整。' : '本节点购物与休整二选一。'}
+      </p>
       <div className="reward-cards">
         {Object.values(FOODS)
           .filter((f) => f.shop !== false)
-          .map((f) => (
-          <div key={f.id} className="reward-card">
-            <div className="ricon">{f.emoji}</div>
-            <div className="rtitle">{f.name}</div>
-            <div className="rdesc">{f.desc}</div>
-            <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-              <span className="chip">💰 {f.price}</span>
-              <button
-                className="primary"
-                disabled={state.gold < f.price}
-                onClick={() => dispatch({ type: 'SHOP_BUY', foodId: f.id })}
-              >
-                购买
-              </button>
+          .map((f) => {
+            const soldOut = boughtItems.includes(f.id);
+            return (
+            <div key={f.id} className={`reward-card ${soldOut ? 'dim' : ''}`}>
+              <div className="ricon">{f.emoji}</div>
+              <div className="rtitle">{f.name}</div>
+              <div className="rdesc">{f.desc}</div>
+              <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
+                <span className="chip">💰 {f.price}</span>
+                <button
+                  className="primary"
+                  disabled={soldOut || state.gold < f.price}
+                  onClick={() => dispatch({ type: 'SHOP_BUY', foodId: f.id })}
+                >
+                  {soldOut ? '已购买' : '购买'}
+                </button>
+              </div>
             </div>
+            );
+          })}
+        <div className={`reward-card ${bought ? 'dim' : ''}`}>
+          <div className="ricon">🛌</div>
+          <div className="rtitle">立即休整</div>
+          <div className="rdesc">花费 5 金币让全队回满血（不解超进化诅咒）</div>
+          <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
+            <span className="chip">💰 5</span>
+            <button
+              className="primary"
+              disabled={state.gold < 5 || bought}
+              onClick={() => dispatch({ type: 'SHOP_REST' })}
+            >
+              休整
+            </button>
           </div>
-        ))}
+        </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
         <button className="big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
@@ -419,7 +616,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
                 {c.kind === 'heal' && '❤️'}
                 {c.kind === 'gold' && '💰'}
                 {c.kind === 'food' && FOODS[c.foodId ?? 'berry'].emoji}
-                {c.kind === 'recruit' && getMonster(c.monsterId!).emoji}
+                {c.kind === 'recruit' && '🥚'}
                 {c.kind === 'damage' && '☠️'}
                 {c.kind === 'exp' && '📚'}
                 {c.kind === 'none' && '🚶'}

@@ -34,6 +34,11 @@
 - 所有随机必须经 `useRng`/`createRng`（seed + rngCount），保证确定性、可复现、可单测。
 - 平衡靠 `tests/simulation.test.ts` 的自动玩家整局模拟回归（当前 20 种子中至少 1 局通关、0 卡死）。
 
+## 会话约定
+
+- **一律用中文描述**（回复、总结、说明均用中文，代码注释/标识符保持英文）。
+- **浏览器/UI 实测需用户明确要求后才做**：默认只写代码 + 跑 `vitest`/`typecheck`/`build` 验证；用户没让测 UI，就不启动 agent-browser。
+
 ## 重要环境注意
 
 - **绝不用 PowerShell `Set-Content`/`Get-Content` 读写含中文的文件**（会把 UTF-8 编码写坏），编辑一律用 write/edit 工具。

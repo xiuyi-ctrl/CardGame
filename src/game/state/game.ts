@@ -1,10 +1,20 @@
 import type { BattleState, FoodDef, Unit } from '../types';
 import { getMonster } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
-import { chance, createRng, pick, randInt, shuffle } from '../rng';
+import { createRng, pick, randInt, shuffle } from '../rng';
 import { computeStats, makeUnit, unlockedSkills } from '../core/battle';
 
-export type NodeType = 'battle' | 'elite' | 'rest' | 'shop' | 'event' | 'special' | 'boss';
+export type NodeType =
+  | 'battle'
+  | 'elite'
+  | 'rest'
+  | 'shop'
+  | 'event'
+  | 'special'
+  | 'boss'
+  | 'arena'
+  | 'gauntlet'
+  | 'corrupted';
 
 export interface MapNode {
   id: string;
@@ -12,6 +22,28 @@ export interface MapNode {
   label: string;
   /** 列序号：本行第几个节点，用于判断下一层相邻路线 */
   col: number;
+  /** 被侵蚀节点 debuff：'spd' 我方速度 -10% | 'dmg' 我方受到伤害 +10% */
+  corruptDebuff?: 'spd' | 'dmg';
+  /** 被侵蚀节点奖励翻倍方式：'gold' 金币翻倍 | 'food' 食物翻倍 */
+  corruptReward?: 'gold' | 'food';
+  /** 车轮战敌人数：2 或 3 */
+  gauntletSize?: 2 | 3;
+}
+
+/**
+ * 相邻路线判定：从当前行 currentRow、当前列 currentCol 能否踏上下一行节点 node。
+ * - 出发层（currentRow === 0，即尚未出发或站在出发节点）可直达下一层任意节点；
+ * - 首领可从任意列到达（避免死锁）；
+ * - currentCol 为 null/undefined 表示旧存档或状态异常，放行；
+ * - 节点无 col（旧存档）时放行；
+ * - 其余要求列号相差不超过 1。
+ */
+export function canStepTo(currentRow: number, currentCol: number | null | undefined, node: MapNode): boolean {
+  if (node.type === 'boss') return true;
+  if (currentRow === 0) return true;
+  if (currentCol == null) return true;
+  if (typeof node.col !== 'number') return true;
+  return Math.abs(node.col - currentCol) <= 1;
 }
 
 export interface EventChoice {
@@ -120,8 +152,15 @@ export interface GameState {
   battle?: BattleState;
   rewards: RewardChoice[];
   log: string[];
-  /** 奇遇关奖励进行中：进化/超进化（等待玩家在队伍中点选）或属性强化（等待选属性） */
-  specialPending?: { kind: 'evolve'; super: boolean } | { kind: 'boost'; uid: string };
+  /** 奇遇关奖励进行中：进化/超进化（等待玩家在队伍中点选）或属性强化（等待选属性）；斗兽场等待选择出战宠物 */
+  specialPending?:
+    | { kind: 'evolve'; super: boolean }
+    | { kind: 'boost'; uid: string }
+    | { kind: 'arena'; uid: string };
+  /** 本次商人节点是否已购买过食物（买了就不能再立即休整） */
+  shopBought?: boolean;
+  /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */
+  shopBoughtItems?: string[];
 }
 
 export const ROSTER_MAX = 6;
@@ -144,31 +183,43 @@ const ACT3_ELITE_POOL = ['momo_god'];
 const BOSSES = ['boss_vine', 'boss_dark', 'boss_fire'];
 const RECRUIT_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
 
-/** 中间层节点类型加权随机：越靠后精英越多，前期偏战斗/奇遇；奇遇关为低概率稀有节点 */
+/** 中间层节点类型加权随机：越靠后精英越多，前期偏战斗/事件；奇遇关为低概率稀有节点；休整并入商人（不再生成 rest） */
 function middleNodeType(rng: () => number, progress: number): NodeType {
   const r = rng();
-  if (progress < 0.25) {
-    if (r < 0.7) return 'battle';
-    if (r < 0.9) return 'event';
+  // 战斗类节点变体：80% 普通遭遇战、10% 斗兽场（1v1）、10% 车轮战（轮换上阵）
+  const battleVariant = (): NodeType => {
+    const vr = rng();
+    if (vr < 0.8) return 'battle';
+    if (vr < 0.9) return 'arena';
+    return 'gauntlet';
+  };
+  if (progress < 0.2) {
+    if (r < 0.77) return battleVariant();
+    if (r < 0.92) return 'event';
     return 'elite';
   }
-  if (progress < 0.7) {
-    if (r < 0.4) return 'battle';
-    if (r < 0.55) return 'shop';
-    if (r < 0.7) return 'rest';
-    if (r < 0.84) return 'event';
-    if (r < 0.88) return 'special';
-    return 'elite';
+  if (progress < 0.6) {
+    if (r < 0.34) return battleVariant();
+    if (r < 0.51) return 'shop';
+    if (r < 0.74) return 'event';
+    if (r < 0.92) return 'elite';
+    return 'special';
   }
-  if (r < 0.45) return 'battle';
-  if (r < 0.7) return 'elite';
-  if (r < 0.8) return 'shop';
-  if (r < 0.88) return 'rest';
-  if (r < 0.92) return 'special';
-  return 'event';
+  if (r < 0.3) return battleVariant();
+  if (r < 0.52) return 'elite';
+  if (r < 0.7) return 'shop';
+  if (r < 0.78) return 'event';
+  if (r < 0.88) return 'special';
+  return battleVariant();
 }
 
-function buildEncounter(rng: () => number, type: NodeType, act: number, progress: number): { speciesId: string; level: number }[] {
+function buildEncounter(
+  rng: () => number,
+  type: NodeType,
+  act: number,
+  progress: number,
+  gauntletSize?: 2 | 3,
+): { speciesId: string; level: number }[] {
   const lv = (a: number, b: number) => a + Math.floor(rng() * (b - a + 1));
   const one = (pool: string[], lo: number, hi: number) => ({ speciesId: pick(rng, pool), level: lv(lo, hi) });
   if (type === 'boss') {
@@ -178,6 +229,19 @@ function buildEncounter(rng: () => number, type: NodeType, act: number, progress
     if (act === 1) return [one(ACT1_ELITE_POOL, 2, 3)];
     if (act === 2) return [one(ACT2_ELITE_POOL, 4, 5)];
     return [one(ACT3_ELITE_POOL, 6, 7), one(ACT2_BATTLE_POOL, 5, 6)];
+  }
+  // 斗兽场：1v1 单挑较强野生怪（精英池，等级略高）
+  if (type === 'arena') {
+    const pool = act === 1 ? ACT1_ELITE_POOL : act === 2 ? ACT2_ELITE_POOL : ACT3_ELITE_POOL;
+    const level = act === 1 ? lv(2, 3) : act === 2 ? lv(4, 5) : lv(6, 7);
+    return [one(pool, level, level)];
+  }
+  // 车轮战：2~3 只轮换上阵（数量由节点要求决定）
+  if (type === 'gauntlet') {
+    const size = gauntletSize ?? (act === 1 ? 2 : lv(2, 3));
+    const level = act === 1 ? lv(1, 2) : act === 2 ? lv(3, 5) : lv(5, 7);
+    const pool = act === 1 ? ACT1_BATTLE_POOL : act === 2 ? ACT2_BATTLE_POOL : ACT3_BATTLE_POOL;
+    return Array.from({ length: size }, () => one(pool, level, level));
   }
   // battle
   const early = progress < 0.2;
@@ -246,7 +310,7 @@ function buildEncounter(rng: () => number, type: NodeType, act: number, progress
       title: '神秘蛋',
       desc: '一颗布满奇异纹路的蛋静静躺在草丛中，轻轻颤动。',
       choices: [
-        c(1, '孵化它', `随机宠物（${getMonster(monsterId).name}）加入队伍`, 'recruit', { monsterId }),
+        c(1, '孵化它', '一只神秘生物破壳而出，加入队伍', 'recruit', { monsterId }),
         c(2, '敲开蛋壳', '里面散落出 15 金币', 'gold', { amount: 15 }),
         c(3, '离开', '让命运保持神秘', 'none'),
       ],
@@ -274,9 +338,44 @@ export function buildSpecial(rng: () => number): SpecialNode {
   };
 }
 
+/** 斗兽场/车轮战失败后的惩罚事件：多选一承受代价（宠物不会阵亡） */
+export function buildPunishmentEvent(rng: () => number): EventNode {
+  const roll = rng();
+  const damage = 15 + Math.floor(rng() * 11); // 15~25
+  const goldLoss = 20 + Math.floor(rng() * 16); // 20~35
+  return {
+    title: roll < 0.5 ? '挑战落败' : '铩羽而归',
+    desc: '没能通过这场挑战，队伍付出了代价……（此战没有宠物阵亡）',
+    choices: [
+      { id: 'p1', label: '承受伤痛', desc: `全体失去 ${damage}% 生命`, kind: 'damage', amount: damage },
+      { id: 'p2', label: '破财消灾', desc: `失去 ${goldLoss} 金币`, kind: 'gold', amount: -goldLoss },
+    ],
+  };
+}
+
+/** 斗兽场/车轮战胜利奖励：3 选 1 的丰厚选择（金币/食物/治疗/招募） */
+export function generateChallengeRewards(state: GameState, type: 'arena' | 'gauntlet'): RewardChoice[] {
+  const rng = createRng(state.seed * 173 + state.act * 37 + state.currentRow * 59 + (type === 'arena' ? 1 : 2));
+  const options: RewardChoice[] = [
+    { id: 'ch-gold', label: '冠军赏金', desc: '获得 30 金币', kind: 'gold', amount: 30 },
+    { id: 'ch-food', label: '美味补给', desc: '获得 1 个随机食物', kind: 'food', foodId: pick(rng, Object.keys(FOODS)) },
+    { id: 'ch-heal', label: '庆功宴', desc: '全体恢复 50% 生命', kind: 'heal', amount: 50 },
+  ];
+  if (state.roster.length < ROSTER_MAX) {
+    options.push({
+      id: 'ch-recruit',
+      label: '斗士招募',
+      desc: '随机一只普通宠物加入队伍',
+      kind: 'recruit',
+      monsterId: pick(rng, RECRUIT_POOL),
+    });
+  }
+  return shuffle(rng, options).slice(0, 3);
+}
+
 export function generateMap(seed: number, act: number): RunMap {
   const rng = createRng(seed + act * 1013);
-  const layerCount = randInt(rng, 5, 7);
+  const layerCount = randInt(rng, 8, 10);
   const encounter: Record<string, { speciesId: string; level: number }[]> = {};
   const boss: Record<string, { speciesId: string; level: number }[]> = {};
   const events: Record<string, EventNode> = {};
@@ -290,6 +389,9 @@ export function generateMap(seed: number, act: number): RunMap {
   });
 
   const layers: MapNode[][] = [];
+  // 保证相邻路线不出现死路：本行节点数最多比上一行多 1 个
+  // （这样任意列 c 在下一行都有 col ∈ [c-1, c+1] 的节点可走）
+  let prevCount = 1;
   for (let row = 0; row < layerCount; row++) {
     if (row === 0) {
       layers.push([make('battle', row, 0)]);
@@ -299,37 +401,74 @@ export function generateMap(seed: number, act: number): RunMap {
       layers.push([make('boss', row, 0)]);
       continue;
     }
-    const count = chance(rng, 0.5) ? 3 : 2;
+    const count = Math.max(prevCount - 1, randInt(rng, 3, 5));
+    prevCount = count;
     const progress = row / (layerCount - 1);
     const nodes: MapNode[] = [];
-    for (let i = 0; i < count; i++) nodes.push(make(middleNodeType(rng, progress), row, i));
+    for (let i = 0; i < count; i++) {
+      const n = make(middleNodeType(rng, progress), row, i);
+      if (n.type === 'gauntlet') n.gauntletSize = rng() < 0.5 ? 2 : 3;
+      nodes.push(n);
+    }
     layers.push(nodes);
   }
 
-  // 保证每幕至少 1 商人、1 休整、1~2 次奇遇
+  // 事件每幕 3~5 个、商人每幕 2~4 个（目标数量用种子预掷，可复现）
   const setType = (node: MapNode, t: NodeType): void => {
     const row = layers.findIndex((r) => r.includes(node));
     node.type = t;
     node.label = labelOf(t, row);
   };
   const mid = layers.slice(1, -1).flat();
+  // 出发后第 1 行强制全部战斗
+  const forcedRows = new Set([1]);
+  layers[1].forEach((n) => setType(n, 'battle'));
+  // 候选节点：非强制战斗行的普通战斗节点（保证逻辑不破坏 row1 纯战斗）
+  const candidateBattles = () => mid.filter((n) => n.type === 'battle' && !forcedRows.has(layers.findIndex((r) => r.includes(n))));
+  const countOf = (t: NodeType) => mid.filter((n) => n.type === t).length;
   // 奇遇关每幕最多 1 个：多余转为战斗
   const spNodes = mid.filter((n) => n.type === 'special');
   if (spNodes.length > 1) spNodes.slice(1).forEach((n) => setType(n, 'battle'));
-  if (mid.filter((n) => n.type === 'shop').length < 1) {
-    const n = mid.find((x) => x.type === 'battle');
-    if (n) setType(n, 'shop');
+  const evTarget = 3 + Math.floor(rng() * 3); // 3~5
+  const shopTarget = 2 + Math.floor(rng() * 3); // 2~4
+  // 超出上限的转回战斗
+  const over = mid.filter((n) => n.type === 'event');
+  if (over.length > 5) over.slice(5).forEach((n) => setType(n, 'battle'));
+  const overShop = mid.filter((n) => n.type === 'shop');
+  if (overShop.length > 4) overShop.slice(4).forEach((n) => setType(n, 'battle'));
+  // 不足的从候选战斗节点补足（优先补事件，再补商人；不动强制战斗行）
+  const ensure = (t: NodeType, target: number): void => {
+    while (countOf(t) < target) {
+      const n = candidateBattles()[0];
+      if (!n) break;
+      setType(n, t);
+    }
+  };
+  ensure('event', evTarget);
+  ensure('shop', shopTarget);
+  // 全部战斗的行数上限 2（row1 强制 + 至多 1 行随机巧合）：超出则把靠后的整行战斗行改为事件/商人（仍不超出上限）
+  const allBattleRows = () =>
+    layers.slice(1, -1).map((row, idx) => ({ row, idx: idx + 1 })).filter(({ row }) => row.every((n) => n.type === 'battle'));
+  for (const { row } of allBattleRows().slice(2)) {
+    const n = row[Math.floor(rng() * row.length)];
+    setType(n, countOf('event') < 5 ? 'event' : countOf('shop') < 4 ? 'shop' : 'elite');
   }
-  if (mid.filter((n) => n.type === 'rest').length < 1) {
-    const n = mid.find((x) => x.type === 'battle');
-    if (n) setType(n, 'rest');
-  }
-  const evNodes = mid.filter((n) => n.type === 'event');
-  if (evNodes.length < 1) {
-    const n = mid.find((x) => x.type === 'battle');
-    if (n) setType(n, 'event');
-  } else if (evNodes.length > 2) {
-    evNodes.slice(2).forEach((n) => setType(n, 'battle'));
+
+  // 被侵蚀节点：每 3~4 行间隔概率出现（行 2 起；不覆盖强制战斗行 1、商人/事件/奇遇/首领；间隔超 5 行则强制出现）
+  let lastCorruptRow = 1;
+  for (let row = 2; row < layers.length - 1; row++) {
+    if (row - lastCorruptRow < 3) continue;
+    const battles = layers[row].filter((n) => n.type === 'battle');
+    if (battles.length === 0) continue;
+    const force = row - lastCorruptRow >= 5;
+    if (force || rng() < 0.5) {
+      const n = battles[Math.floor(rng() * battles.length)];
+      n.type = 'corrupted';
+      n.label = labelOf('corrupted', row);
+      n.corruptDebuff = rng() < 0.5 ? 'spd' : 'dmg';
+      n.corruptReward = rng() < 0.5 ? 'gold' : 'food';
+      lastCorruptRow = row;
+    }
   }
 
   // 为所有节点生成遭遇/首领/事件/奇遇关内容
@@ -338,11 +477,19 @@ export function generateMap(seed: number, act: number): RunMap {
     for (const n of layers[row]) {
       if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress);
       else if (n.type === 'battle' || n.type === 'elite') encounter[n.id] = buildEncounter(rng, n.type, act, progress);
+      else if (n.type === 'arena') encounter[n.id] = buildEncounter(rng, 'arena', act, progress);
+      else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, n.gauntletSize);
+      else if (n.type === 'corrupted') encounter[n.id] = buildEncounter(rng, 'battle', act, progress);
       else if (n.type === 'event') events[n.id] = buildEvent(rng);
       else if (n.type === 'special') specials[n.id] = buildSpecial(rng);
     }
   }
   return { layers, encounter, boss, events, specials };
+}
+
+/** 当前所在节点（按 currentRow + currentNodeId 定位） */
+export function currentNode(state: GameState): MapNode | undefined {
+  return state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
 }
 
 function labelOf(t: NodeType, row: number): string {
@@ -361,6 +508,12 @@ function labelOf(t: NodeType, row: number): string {
       return '奇遇关';
     case 'boss':
       return '首领';
+    case 'arena':
+      return '斗兽场';
+    case 'gauntlet':
+      return '车轮战';
+    case 'corrupted':
+      return '被侵蚀';
   }
 }
 
@@ -557,6 +710,23 @@ export function generateRewards(state: GameState): RewardChoice[] {
     });
   }
   return shuffle(rng, options).slice(0, 2);
+}
+
+/** 被侵蚀节点奖励翻倍：把奖励池中的食物选项数量翻倍；若无食物选项则强制加入一个双份食物奖励 */
+export function applyCorruptFoodReward(rewards: RewardChoice[], rngSeed: number): RewardChoice[] {
+  const out = rewards.map((r) => (r.kind === 'food' ? { ...r, amount: 2, desc: '获得 2 个随机食物' } : r));
+  if (!out.some((r) => r.kind === 'food')) {
+    const rng = createRng(rngSeed);
+    out[0] = {
+      id: 'r-food-x2',
+      label: '暗影战利品',
+      desc: '获得 2 个随机食物',
+      kind: 'food',
+      foodId: pick(rng, Object.keys(FOODS)),
+      amount: 2,
+    };
+  }
+  return out;
 }
 
 export function canTameEnemy(enemy: Unit): boolean {

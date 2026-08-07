@@ -8,6 +8,7 @@ import {
   makeUnit,
   playerSkill,
   playerTame,
+  tameChance,
   TAME_THRESHOLD,
 } from '../src/game/core/battle';
 import type { BattleState } from '../src/game/types';
@@ -114,6 +115,73 @@ describe('驯服', () => {
     const boss = makeUnit('boss_vine', 4, false, 0, false);
     boss.hp = 1;
     expect(isTameable(boss)).toBe(false);
+  });
+
+  it('敌人 1 血时必定捕捉（可捕捉生物）', () => {
+    let b = createBattle([makeUnit('momo', 5, true, 0, false)], [{ speciesId: 'kiki', level: 3 }], 1);
+    const u = b.enemyUnits[0];
+    b = { ...b, enemyUnits: [{ ...u, hp: 1 }] };
+    b = playerTame(b, 'berry', b.enemyUnits[0].uid);
+    expect(b.pendingTame.length).toBe(1);
+    expect(b.enemyUnits.length).toBe(0);
+  });
+
+  it('不可捕捉的敌人即使 1 血也不会被捕捉', () => {
+    let b = createBattle([makeUnit('momo', 5, true, 0, false)], [{ speciesId: 'kiki', level: 1 }], 1, {
+      untameable: true,
+    });
+    b = { ...b, enemyUnits: [{ ...b.enemyUnits[0], hp: 1 }] };
+    b = playerTame(b, 'berry', b.enemyUnits[0].uid);
+    expect(b.pendingTame.length).toBe(0);
+    expect(b.enemyUnits.length).toBe(1);
+  });
+
+  it('驯服失败会累计 tameFails（每次失败提高后续捕捉概率）', () => {
+    let b: BattleState | null = null;
+    let enemyId = '';
+    // 搜索一个首次喂食失败的种子，验证失败次数被记录
+    for (let seed = 0; seed < 500; seed++) {
+      let trial = createBattle([makeUnit('momo', 5, true, 0, false)], [{ speciesId: 'kiki', level: 3 }], seed);
+      const u = trial.enemyUnits[0];
+      trial = { ...trial, enemyUnits: [{ ...u, hp: Math.max(1, Math.round(u.maxHp * 0.4)) }] };
+      const id = trial.enemyUnits[0].uid;
+      const after = playerTame(trial, 'berry', id);
+      if (after.enemyUnits.length === 1 && after.enemyUnits[0].tameFails === 1) {
+        b = after;
+        enemyId = id;
+        break;
+      }
+    }
+    expect(b).not.toBeNull();
+    // 继续喂食直到成功，验证失败加成机制不破坏流程且确实经历多次尝试
+    let attempts = 1;
+    let guard = 0;
+    while (b!.enemyUnits.length === 1 && guard < 200) {
+      b = playerTame(b!, 'berry', enemyId);
+      attempts += 1;
+      guard += 1;
+    }
+    expect(b!.pendingTame.length).toBe(1);
+    expect(attempts).toBeGreaterThanOrEqual(2);
+  });
+
+  it('tameChance 随失败次数递增且上限 100%', () => {
+    const u = makeUnit('kiki', 1, false, 0, true);
+    u.hp = Math.floor(u.maxHp * 0.4);
+    const c0 = tameChance(u, 'berry');
+    expect(c0).toBeGreaterThan(0);
+    u.tameFails = 1;
+    expect(tameChance(u, 'berry')).toBeGreaterThan(c0);
+    u.tameFails = 100;
+    expect(tameChance(u, 'berry')).toBe(1);
+  });
+
+  it('tameChance 血量越低概率越高', () => {
+    const a = makeUnit('kiki', 1, false, 0, true);
+    a.hp = Math.floor(a.maxHp * 0.4);
+    const b = makeUnit('kiki', 1, false, 0, true);
+    b.hp = 1;
+    expect(tameChance(b, 'berry')).toBeGreaterThan(tameChance(a, 'berry'));
   });
 });
 

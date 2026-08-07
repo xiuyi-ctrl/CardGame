@@ -3,9 +3,9 @@ import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
-import { currentPlayerUnit, isTameable, TAME_THRESHOLD } from '../game/core/battle';
+import { currentPlayerUnit, isTameable, tameChance, TAME_THRESHOLD } from '../game/core/battle';
 import { getSkill } from '../game/data/skills';
-import type { SkillDef } from '../game/types';
+import type { SkillDef, Unit } from '../game/types';
 import { UnitCard } from './components';
 import { persistSave } from './persistence';
 
@@ -20,6 +20,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const [pendingSkill, setPendingSkill] = useState<{ skillId: string; target?: string } | null>(null);
   const [pendingTame, setPendingTame] = useState<string | null>(null);
+  const [hoverEnemy, setHoverEnemy] = useState<string | null>(null);
 
   const current = currentPlayerUnit(battle);
   const actorUid = current?.uid;
@@ -31,6 +32,9 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const skills: SkillDef[] = useMemo(() => (current ? current.skills.map((id) => getSkill(id)) : []), [current]);
   const foods = currentFoodList(state);
+
+  const nodeType = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.type;
+  const isChallenge = nodeType === 'arena' || nodeType === 'gauntlet';
 
   const enemyUnits = [...battle.enemyUnits].sort((a, b) => a.column - b.column);
   const playerUnits = [...battle.playerUnits].sort((a, b) => a.column - b.column);
@@ -77,6 +81,14 @@ export function BattleScreen({ state, dispatch }: Props) {
     setPendingTame(foodId);
   }
 
+  function tameTip(u: Unit): string {
+    if (!u.tameable) return '不可捕捉';
+    if (u.hp / u.maxHp > TAME_THRESHOLD) return `需血量 ≤ ${Math.round(TAME_THRESHOLD * 100)}%`;
+    if (u.hp === 1) return '必定捕捉！';
+    if (!pendingTame) return '';
+    return `捕捉概率 ${Math.round(tameChance(u, pendingTame) * 100)}%`;
+  }
+
   const logItems = battle.log.slice(-6);
 
   return (
@@ -84,6 +96,16 @@ export function BattleScreen({ state, dispatch }: Props) {
       <div className="hud">
         <span className="act">第 {state.act} 层 · 回合 {battle.round}</span>
         <span>{current ? `轮到 ${current.name} 行动` : '战斗进行中…'}</span>
+        {battle.gauntlet && (
+          <span className="chip" title="敌方轮换上阵，一只倒下另一只顶替">
+            🔥 车轮战 {battle.gauntlet.current}/{battle.gauntlet.total}
+          </span>
+        )}
+        {battle.corruptDebuff && (
+          <span className="chip" title="被侵蚀区域的暗影 debuff">
+            🌑 暗影侵蚀：{battle.corruptDebuff === 'spd' ? '我方速度 -10%' : '我方受到伤害 +10%'}
+          </span>
+        )}
         <span className="chip">
           💰 {state.gold} · 食物 {foods.reduce((s, f) => s + (state.inventory[f.id] ?? 0), 0)}
         </span>
@@ -103,16 +125,23 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="side-label">敌 方</div>
           <div className="side enemy">
             {enemyUnits.map((u) => (
-              <UnitCard
+              <div
                 key={u.uid}
-                unit={u}
-                className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}
-                onClick={
-                  validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u))
-                    ? () => onTargetClick(u.uid, true)
-                    : undefined
-                }
-              />
+                className="enemy-slot"
+                onMouseEnter={() => setHoverEnemy(u.uid)}
+                onMouseLeave={() => setHoverEnemy(null)}
+              >
+                <UnitCard
+                  unit={u}
+                  className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}
+                  onClick={
+                    validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u))
+                      ? () => onTargetClick(u.uid, true)
+                      : undefined
+                  }
+                />
+                {pendingTame && hoverEnemy === u.uid && <div className="tame-tip">{tameTip(u)}</div>}
+              </div>
             ))}
           </div>
         </div>
@@ -161,7 +190,15 @@ export function BattleScreen({ state, dispatch }: Props) {
           </>
         ) : (
           <span className="card-sub">
-            {battle.phase === 'won' ? '战斗胜利！' : battle.phase === 'lost' ? '全队阵亡…' : '本回合结束'}
+            {battle.phase === 'won'
+              ? isChallenge
+                ? '挑战胜利！'
+                : '战斗胜利！'
+              : battle.phase === 'lost'
+                ? isChallenge
+                  ? '挑战失败…'
+                  : '全队阵亡…'
+                : '本回合结束'}
           </span>
         )}
       </div>
@@ -189,8 +226,12 @@ export function BattleScreen({ state, dispatch }: Props) {
         <div className="overlay">
           <div className="overlay-box">
             <div style={{ fontSize: 48 }}>🏆</div>
-            <h2>战斗胜利</h2>
-            <p>驯服了 {battle.pendingTame.length} 只宠物，获得经验与金币</p>
+            <h2>{isChallenge ? '挑战胜利' : '战斗胜利'}</h2>
+            <p>
+              {isChallenge
+                ? `驯服了 ${battle.pendingTame.length} 只宠物，获得经验与挑战奖励`
+                : `驯服了 ${battle.pendingTame.length} 只宠物，获得经验与金币`}
+            </p>
             <button className="primary big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
               确认收获
             </button>
@@ -201,15 +242,21 @@ export function BattleScreen({ state, dispatch }: Props) {
       {battle.phase === 'lost' && (
         <div className="overlay">
           <div className="overlay-box">
-            <div style={{ fontSize: 48 }}>💀</div>
-            <h2>全队阵亡</h2>
-            <p>阵亡的宠物永久消失，本次远征到此结束</p>
-            <button
-              className="primary big-btn"
-              onClick={() => dispatch({ type: 'RETRY', seed: Math.floor(Math.random() * 1e9) })}
-            >
-              重新开始
-            </button>
+            <div style={{ fontSize: 48 }}>{isChallenge ? '⚠️' : '💀'}</div>
+            <h2>{isChallenge ? '挑战失败' : '全队阵亡'}</h2>
+            <p>{isChallenge ? '没有宠物阵亡，但需要承受挑战失败的代价' : '阵亡的宠物永久消失，本次远征到此结束'}</p>
+            {isChallenge ? (
+              <button className="primary big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
+                确认承受代价
+              </button>
+            ) : (
+              <button
+                className="primary big-btn"
+                onClick={() => dispatch({ type: 'RETRY', seed: Math.floor(Math.random() * 1e9) })}
+              >
+                重新开始
+              </button>
+            )}
           </div>
         </div>
       )}

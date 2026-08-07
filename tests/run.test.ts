@@ -100,28 +100,39 @@ describe('成长与进化', () => {
 });
 
 describe('地图生成', () => {
-  it('层数在 5~7 之间，首层单战斗、末层单首领，且每幕含商人/休整/奇遇', () => {
+  it('层数在 8~10 之间，首层单战斗、末层单首领，且每幕含商店/事件', () => {
     for (let act = 1; act <= 3; act++) {
       const map = generateMap(42, act);
-      expect(map.layers.length).toBeGreaterThanOrEqual(5);
-      expect(map.layers.length).toBeLessThanOrEqual(7);
+      expect(map.layers.length).toBeGreaterThanOrEqual(8);
+      expect(map.layers.length).toBeLessThanOrEqual(10);
       expect(map.layers[0].length).toBe(1);
       expect(map.layers[0][0].type).toBe('battle');
       const last = map.layers[map.layers.length - 1];
       expect(last.length).toBe(1);
       expect(last[0].type).toBe('boss');
       expect(Object.keys(map.boss).length).toBe(1);
-      // col 列号连续递增
+      // col 列号连续递增；中间行宽度 3~5
       for (const row of map.layers) {
         row.forEach((n, i) => expect(n.col).toBe(i));
       }
-      // 每幕至少 1 商人、1 休整、1~2 次奇遇
+      for (const row of map.layers.slice(1, -1)) {
+        expect(row.length).toBeGreaterThanOrEqual(3);
+        expect(row.length).toBeLessThanOrEqual(5);
+      }
+      // 出发后第 1 行强制全战斗
+      expect(map.layers[1].every((n) => n.type === 'battle')).toBe(true);
+      // 全战斗行（不含首/尾）不超过 3
+      const allBattleRows = map.layers.slice(1, -1).filter((row) => row.every((n) => n.type === 'battle'));
+      expect(allBattleRows.length).toBeLessThanOrEqual(3);
+      // 不再生成独立休整节点；每幕 3~5 次事件、2~4 个商人
       const types = map.layers.flat().map((n) => n.type);
-      expect(types.includes('shop')).toBe(true);
-      expect(types.includes('rest')).toBe(true);
+      expect(types.includes('rest')).toBe(false);
+      const shopCount = types.filter((t) => t === 'shop').length;
+      expect(shopCount).toBeGreaterThanOrEqual(2);
+      expect(shopCount).toBeLessThanOrEqual(4);
       const evCount = types.filter((t) => t === 'event').length;
-      expect(evCount).toBeGreaterThanOrEqual(1);
-      expect(evCount).toBeLessThanOrEqual(2);
+      expect(evCount).toBeGreaterThanOrEqual(3);
+      expect(evCount).toBeLessThanOrEqual(5);
       // 奇遇节点都有事件内容
       for (const n of map.layers.flat().filter((x) => x.type === 'event')) {
         expect(map.events[n.id]).toBeDefined();
@@ -130,7 +141,23 @@ describe('地图生成', () => {
     }
   });
 
-  it('MOVE 只能移动到相邻列节点（出发节点除外）', () => {
+  it('神秘蛋事件不暴露孵化生物名', () => {
+    for (let act = 1; act <= 3; act++) {
+      for (const seed of [1, 42, 123]) {
+        const map = generateMap(seed, act);
+        for (const ev of Object.values(map.events)) {
+          for (const c of ev.choices) {
+            if (c.kind === 'recruit') {
+              expect(c.monsterId).toBeDefined();
+              expect(c.desc).not.toMatch(/（|）/);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('MOVE：出发层可直达任意下一层节点，进入第一层后只能走相邻列', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
     const start = s.map.layers[0][0];
     s = dispatch(s, { type: 'MOVE', nodeId: start.id });
@@ -507,5 +534,114 @@ describe('奇遇关', () => {
     expect(after2.inventory.skip).toBe(1);
     expect(after2.screen).toBe('map');
     expect(after2.gold).toBe(g2);
+  });
+});
+
+describe('商人·立即休整', () => {
+  it('未购买时可花 5 金币回满血并离开，扣金币不解诅咒', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
+    const row = run.map.layers.findIndex((r) => r.includes(shopNode));
+    const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
+    let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 30 };
+    s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
+    expect(s.screen).toBe('shop');
+    expect(s.shopBought).toBe(false);
+    s = {
+      ...s,
+      roster: s.roster.map((u, i) => ({ ...u, hp: i === 0 ? 1 : u.hp, curse: i === 0 ? ('atkDown' as const) : u.curse })),
+    };
+    const gold0 = s.gold;
+    const after = dispatch(s, { type: 'SHOP_REST' });
+    expect(after.screen).toBe('roster');
+    expect(after.gold).toBe(gold0 - 5);
+    expect(after.roster.every((u) => u.hp === u.maxHp)).toBe(true);
+    expect(after.roster.find((u) => u.curse)?.curse).toBe('atkDown');
+  });
+
+  it('购买食物后不可再休整，休整后被拒仍停留商店', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
+    const row = run.map.layers.findIndex((r) => r.includes(shopNode));
+    const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
+    let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 30 };
+    s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    expect(s.shopBought).toBe(true);
+    const after = dispatch(s, { type: 'SHOP_REST' });
+    expect(after.screen).toBe('shop');
+    expect(after.gold).toBe(s.gold);
+  });
+
+  it('金币不足休整被拒，仍停留商店', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
+    const row = run.map.layers.findIndex((r) => r.includes(shopNode));
+    const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
+    let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 3 };
+    s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
+    const after = dispatch(s, { type: 'SHOP_REST' });
+    expect(after.screen).toBe('shop');
+    expect(after.gold).toBe(3);
+  });
+
+  it('旧存档的休整节点仍可用 REST_HEAL 恢复', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const s: GameState = {
+      ...run,
+      screen: 'rest',
+      roster: run.roster.map((u, i) => ({ ...u, hp: i === 0 ? 1 : u.hp })),
+    };
+    const after = dispatch(s, { type: 'REST_HEAL' });
+    expect(after.screen).toBe('roster');
+    expect(after.roster.every((u) => u.hp === u.maxHp)).toBe(true);
+  });
+});
+
+describe('商人·每店限购', () => {
+  function enterShop(gold: number): GameState {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
+    const row = run.map.layers.findIndex((r) => r.includes(shopNode));
+    const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
+    return dispatch({ ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold }, { type: 'MOVE', nodeId: shopNode.id });
+  }
+
+  it('每种物品每次进入商店限购 1 次（重复购买被拒）', () => {
+    let s = enterShop(100);
+    expect(s.shopBoughtItems).toEqual([]);
+    const before = s.inventory.berry ?? 0;
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    expect(s.shopBoughtItems).toEqual(['berry']);
+    expect(s.inventory.berry).toBe(before + 1);
+    const gold = s.gold;
+    const again = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    expect(again.gold).toBe(gold);
+    expect(again.inventory.berry).toBe(s.inventory.berry);
+    expect(again.shopBoughtItems).toEqual(['berry']);
+  });
+
+  it('不同物品可在同一商店各买 1 次', () => {
+    let s = enterShop(100);
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'meat' });
+    expect(s.shopBoughtItems).toEqual(['berry', 'meat']);
+    expect(s.inventory.berry).toBeGreaterThan(0);
+    expect(s.inventory.meat).toBeGreaterThan(0);
+  });
+
+  it('重新进入商店节点后重置限购，可再次购买', () => {
+    let s = enterShop(100);
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    expect(s.shopBoughtItems).toEqual(['berry']);
+    // 离开并再次进入同一商店节点
+    const shopNode = s.map.layers[s.currentRow].find((n) => n.id === s.currentNodeId)!;
+    const parent = s.map.layers[s.currentRow - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? s.map.layers[s.currentRow - 1][0];
+    s = dispatch({ ...s, screen: 'map', currentRow: s.currentRow - 1, currentNodeId: parent.id }, { type: 'MOVE', nodeId: shopNode.id });
+    expect(s.screen).toBe('shop');
+    expect(s.shopBoughtItems).toEqual([]);
+    const count = s.inventory.berry ?? 0;
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    expect(s.inventory.berry).toBe(count + 1);
   });
 });

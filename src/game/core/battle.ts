@@ -5,6 +5,18 @@ import { getFood } from '../data/foods';
 import { createRng } from '../rng';
 
 export const TAME_THRESHOLD = 0.4;
+/** 每次驯服失败对该敌人捕捉概率的乘法加成（如 0.25 = +25%） */
+export const TAME_FAIL_BONUS = 0.25;
+
+/** 创建战斗的可选参数（地图节点特殊模式） */
+export interface BattleOptions {
+  /** 被侵蚀 debuff：'spd' 我方速度 -10% | 'dmg' 我方受到伤害 +10% */
+  corruptDebuff?: 'spd' | 'dmg';
+  /** 车轮战：敌方 2~3 只轮换上阵 */
+  gauntlet?: boolean;
+  /** 敌方不可驯服（斗兽场/车轮战） */
+  untameable?: boolean;
+}
 
 /** 五行循环克制：i 克 i+1，被 i+2 克 */
 export const ELEMENT_ORDER: ElementType[] = ['fire', 'nature', 'water', 'shadow', 'metal'];
@@ -93,20 +105,27 @@ export function computeTurnOrder(b: BattleState): string[] {
   return all.map((u) => u.uid);
 }
 
+function makeEnemy(e: { speciesId: string; level: number }, index: number, untameable = false): Unit {
+  const col = Math.min(2, index) as 0 | 1 | 2;
+  const s = getMonster(e.speciesId);
+  const u = makeUnit(e.speciesId, e.level, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0);
+  u.expValue = s.rank * 15;
+  return u;
+}
+
 export function createBattle(
   playerUnits: Unit[],
   enemySpecies: { speciesId: string; level: number }[],
   seed: number,
+  options?: BattleOptions,
 ): BattleState {
   const b: BattleState = {
-    playerUnits: playerUnits.map((u) => cloneUnit(u)),
-    enemyUnits: enemySpecies.map((e, i) => {
-      const col = Math.min(2, i) as 0 | 1 | 2;
-      const s = getMonster(e.speciesId);
-      const u = makeUnit(e.speciesId, e.level, false, col, s.rank < 4 && s.tame.difficulty > 0);
-      u.expValue = s.rank * 15;
-      return u;
+    playerUnits: playerUnits.map((u) => {
+      const c = cloneUnit(u);
+      if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, Math.round(c.spd * 0.9));
+      return c;
     }),
+    enemyUnits: [],
     turnOrder: [],
     turnIndex: 0,
     round: 0,
@@ -115,7 +134,17 @@ export function createBattle(
     pendingTame: [],
     seed,
     rngCount: 0,
+    corruptDebuff: options?.corruptDebuff,
   };
+  const untameable = options?.untameable === true;
+  if (options?.gauntlet) {
+    const [first, ...bench] = enemySpecies;
+    b.enemyUnits = first ? [makeEnemy(first, 0, untameable)] : [];
+    b.enemyBench = bench.map((e, i) => makeEnemy(e, i + 1, untameable));
+    b.gauntlet = { total: enemySpecies.length, current: 1 };
+  } else {
+    b.enemyUnits = enemySpecies.map((e, i) => makeEnemy(e, i, untameable));
+  }
   return advance(b);
 }
 
@@ -209,6 +238,18 @@ function advance(b: BattleState): BattleState {
 }
 
 function checkEnd(b: BattleState): BattleState {
+  // 车轮战：场上敌方全灭但还有后备 → 下一只上场
+  if (b.gauntlet && b.enemyBench && b.enemyBench.length > 0 && b.enemyUnits.every((u) => u.hp <= 0)) {
+    const next = b.enemyBench[0];
+    const nextUnit = { ...next, acted: false, statuses: [] };
+    b = {
+      ...b,
+      enemyUnits: [...b.enemyUnits, nextUnit],
+      enemyBench: b.enemyBench.slice(1),
+      gauntlet: { ...b.gauntlet, current: b.gauntlet.current + 1 },
+    };
+    b = pushLog(b, `敌方派出下一只：${next.name}！`);
+  }
   const playersAlive = b.playerUnits.some((u) => u.hp > 0);
   const enemiesAlive = b.enemyUnits.some((u) => u.hp > 0);
   if (!playersAlive) {
@@ -386,7 +427,10 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           total += Math.max(1, Math.round(actor.atk * skill.power * elem * variance) - t.def);
         }
         const crit = rngVal > 0.9 ? 1.5 : 1;
-        const finalDmg = Math.max(1, Math.round(total * crit));
+        let finalDmg = Math.max(1, Math.round(total * crit));
+        if (t.isPlayer && b2.corruptDebuff === 'dmg') {
+          finalDmg = Math.max(1, Math.round(finalDmg * 1.1));
+        }
         let t2 = { ...t, hp: Math.max(0, t.hp - finalDmg) };
         for (const e of skill.effects ?? []) {
           if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
@@ -412,20 +456,32 @@ export function playerSkill(b: BattleState, skillId: string, targetUid?: string)
   });
 }
 
-/** 玩家行动：喂食驯服敌人。 */
+/** 计算对某敌人使用某食物的捕捉概率（0..1）。不含 1 血/圣果的必定成功判定，由调用方另行判断。 */
+export function tameChance(enemy: Unit, foodId: string): number {
+  const food = getFood(foodId);
+  const species = getMonster(enemy.speciesId);
+  const hpFactor = 0.4 + 0.6 * (1 - enemy.hp / enemy.maxHp);
+  // 每次驯服失败 +25% 捕捉概率（乘法累加），多次失败后概率显著提高
+  const fails = enemy.tameFails ?? 0;
+  return Math.min(1, food.baseTame * species.tame.difficulty * hpFactor * (1 + fails * TAME_FAIL_BONUS));
+}
+
+/** 玩家行动：喂食驯服敌人。每次失败会提高该敌人的后续捕捉概率；残血到 1 点时必定捕捉。 */
 export function playerTame(b: BattleState, foodId: string, enemyUid: string): BattleState {
   const enemy = b.enemyUnits.find((u) => u.uid === enemyUid);
   if (!enemy || enemy.hp <= 0) return b;
+  if (!enemy.tameable) {
+    return pushLog(b, `${enemy.name} 不是可驯服的对手`);
+  }
   if (enemy.hp / enemy.maxHp > TAME_THRESHOLD) {
     return pushLog(b, `${enemy.name} 生命值过高，无法驯服`);
   }
   const food = getFood(foodId);
-  const species = getMonster(enemy.speciesId);
-  const hpFactor = 0.4 + 0.6 * (1 - enemy.hp / enemy.maxHp);
-  const chance = food.baseTame * species.tame.difficulty * hpFactor;
+  const chance = tameChance(enemy, foodId);
 
   return useRng(b, (rng, nb) => {
-    const success = food.guaranteed ? true : rng < chance;
+    const guaranteed = enemy.hp === 1 || food.guaranteed;
+    const success = guaranteed ? true : rng < chance;
     let after: BattleState = nb;
     if (success) {
       const avgLevel = Math.max(
@@ -442,9 +498,16 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
         enemyUnits: nb.enemyUnits.filter((u) => u.uid !== enemyUid),
         pendingTame: [...nb.pendingTame, tamed],
       };
-      after = pushLog(after, `${enemy.name} 被成功驯服！已加入队伍预备役`);
+      after = pushLog(
+        after,
+        enemy.hp === 1 ? `${enemy.name} 已是强弩之末，被成功驯服！已加入队伍预备役` : `${enemy.name} 被成功驯服！已加入队伍预备役`,
+      );
     } else {
-      after = pushLog(nb, `喂食${food.name}失败，${enemy.name} 抵抗了驯服`);
+      after = {
+        ...nb,
+        enemyUnits: nb.enemyUnits.map((u) => (u.uid === enemy.uid ? { ...u, tameFails: (u.tameFails ?? 0) + 1 } : u)),
+      };
+      after = pushLog(after, `喂食${food.name}失败，${enemy.name} 抵抗了驯服（下次捕捉概率提高）`);
     }
     return advance(after);
   });

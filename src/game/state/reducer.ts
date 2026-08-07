@@ -1,6 +1,6 @@
-import type { GameState } from './game';
-import { CUSTOM_PRESETS, evolveUnitForce, FIELD_MAX, generateMap, generateRewards, gainExp, makeCustomUnit, ROSTER_MAX, recomputeStats, settleEvolutions } from './game';
-import { createBattle, computeStats, makeUnit, playerSkill, playerTame } from '../core/battle';
+import type { GameState, MapNode, RewardChoice } from './game';
+import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, evolveUnitForce, FIELD_MAX, generateChallengeRewards, generateMap, generateRewards, gainExp, makeCustomUnit, ROSTER_MAX, recomputeStats, settleEvolutions } from './game';
+import { createBattle, computeStats, makeUnit, playerSkill, playerTame, type BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
 import { getEvolution } from '../data/monsters';
@@ -30,8 +30,10 @@ export type GameAction =
   | { type: 'SET_FIELD'; uids: string[] }
   | { type: 'DISCARD'; uid: string }
   | { type: 'SHOP_BUY'; foodId: string }
+  | { type: 'SHOP_REST' }
   | { type: 'REST_HEAL' }
   | { type: 'NEXT_NODE' }
+  | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
   | { type: 'RETRY'; seed: number }
   | { type: 'TITLE' };
 
@@ -112,8 +114,11 @@ function healRoster(state: GameState, pct: number): GameState {
 
 /** 战斗胜利后：同步存活单位、发放经验、确认驯服、结算进化、结算金币与奖励 */
 export function resolveBattle(state: GameState, battle: BattleState): GameState {
+  const node = currentNode(state);
+  const challenge = node?.type === 'arena' || node?.type === 'gauntlet';
   const bossNode = state.map.boss[state.currentNodeId] !== undefined;
   const eliteNode = state.map.encounter[state.currentNodeId] !== undefined;
+  const corruptNode = node?.type === 'corrupted';
 
   const synced: (Unit | null)[] = state.roster.map((r) => {
     const b = battle.playerUnits.find((u) => u.uid === r.uid);
@@ -132,7 +137,10 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       statuses: [],
     };
   });
-  let roster: Unit[] = synced.filter((u): u is Unit => u !== null);
+  // 斗兽场/车轮战：阵亡单位不会永久死亡（保留并保底 1 血），失败另有坏事件惩罚而非游戏结束
+  let roster: Unit[] = challenge
+    ? synced.filter((u): u is Unit => u !== null).map((u) => ({ ...u, hp: Math.max(1, u.hp) }))
+    : synced.filter((u): u is Unit => u !== null);
 
   const totalExp = battle.enemyUnits.reduce((s, u) => s + u.expValue, 0);
   const survivors = roster.filter((u) => state.field.includes(u.uid));
@@ -146,7 +154,15 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     if (roster.length < ROSTER_MAX) roster.push(t);
   }
 
-  const goldGain = bossNode ? 30 : eliteNode ? 16 : 8;
+  const goldGain = challenge
+    ? 0
+    : bossNode
+      ? 30
+      : eliteNode
+        ? corruptNode && node?.corruptReward === 'gold'
+          ? 32
+          : 16
+        : 8;
   // 本场战斗结束：达到进化等级的宠物立即自动进化
   const settled = settleEvolutions({
     ...state,
@@ -156,7 +172,8 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     gold: state.gold + goldGain,
     battle: undefined,
     log: [
-      `战斗胜利！获得 ${goldGain} 金币`,
+      `战斗胜利！${goldGain > 0 ? `获得 ${goldGain} 金币` : '赢得挑战奖励'}`,
+      ...(corruptNode ? ['被侵蚀区域：奖励已翻倍'] : []),
       ...(battle.pendingTame.length > 0 ? [`驯服了 ${battle.pendingTame.length} 只宠物`] : []),
       ...(roster.length < state.roster.length ? [`战斗中有宠物阵亡，永远失去了它`] : []),
       ...state.log,
@@ -164,8 +181,50 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   });
   // 战后全体恢复 50%，缓解减员滚雪球
   const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.5)) }));
-  const rewards = generateRewards({ ...settled, roster: healed });
+  let rewards = challenge
+    ? generateChallengeRewards({ ...settled, roster: healed }, node!.type as 'arena' | 'gauntlet')
+    : generateRewards({ ...settled, roster: healed });
+  if (corruptNode && node?.corruptReward === 'food') {
+    rewards = applyCorruptFoodReward(rewards, state.seed * 11 + state.currentRow * 7);
+  }
   return { ...settled, roster: healed, rewards };
+}
+
+/** 进入一个地图节点：根据节点类型进入对应界面（MOVE 与 DEBUG_JUMP 共用） */
+function enterNode(base: GameState, node: MapNode): GameState {
+  if (node.type === 'rest') return { ...base, screen: 'rest' };
+  if (node.type === 'shop') return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [] };
+  if (node.type === 'event') return { ...base, screen: 'event' };
+  if (node.type === 'special') return { ...base, screen: 'special' };
+  if (node.type === 'boss') {
+    const encounter = base.map.boss[node.id];
+    const battle = createBattle(
+      base.roster.filter((u) => base.field.includes(u.uid)),
+      encounter,
+      base.seed + base.currentRow * 17,
+    );
+    return { ...base, screen: 'battle', battle };
+  }
+  const encounter = base.map.encounter[node.id];
+  if (!encounter) return { ...base, screen: 'map' };
+  // 斗兽场：1v1 单挑，先让玩家选择出战宠物
+  if (node.type === 'arena') {
+    if (base.roster.length === 0) return { ...base, screen: 'map' };
+    return { ...base, screen: 'roster', specialPending: { kind: 'arena', uid: '' } };
+  }
+  const options: BattleOptions | undefined =
+    node.type === 'gauntlet'
+      ? { gauntlet: true, untameable: true }
+      : node.type === 'corrupted'
+        ? { corruptDebuff: node.corruptDebuff }
+        : undefined;
+  const battle = createBattle(
+    base.roster.filter((u) => base.field.includes(u.uid)),
+    encounter,
+    base.seed + base.currentRow * 17,
+    options,
+  );
+  return { ...base, screen: 'battle', battle };
 }
 
 function bossCleared(state: GameState): boolean {
@@ -193,43 +252,49 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rowNodes = state.map.layers[targetRow];
       const node = rowNodes?.find((n) => n.id === action.nodeId);
       if (!node) return state;
-      // 相邻校验：只能移动到当前节点列号 col±1（出发节点可直达第一层任意节点；首领可从任意列到达；旧存档无 col 时放行）
+      // 相邻校验：出发层可直达下一层任意节点；此后只能移动到当前节点列号 col±1（首领可从任意列到达；旧存档无 col 时放行）
       if (!isFirst) {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
-        const curCol = cur?.col;
-        const atStart = state.currentRow === 0;
-        if (
-          !atStart &&
-          node.type !== 'boss' &&
-          typeof curCol === 'number' &&
-          typeof node.col === 'number' &&
-          Math.abs(node.col - curCol) > 1
-        ) {
-          return state;
-        }
+        if (!canStepTo(state.currentRow, cur?.col, node)) return state;
       }
-      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId };
-      if (node.type === 'rest') return { ...base, screen: 'rest' };
-      if (node.type === 'shop') return { ...base, screen: 'shop' };
-      if (node.type === 'event') return { ...base, screen: 'event' };
-      if (node.type === 'special') return { ...base, screen: 'special' };
-      if (node.type === 'boss') {
-        const encounter = state.map.boss[node.id];
-        const battle = createBattle(
-          state.roster.filter((u) => state.field.includes(u.uid)),
-          encounter,
-          state.seed + targetRow * 17,
-        );
-        return { ...base, screen: 'battle', battle };
+      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false };
+      return enterNode(base, node);
+    }
+
+    case 'DEBUG_JUMP': {
+      const act = Math.max(1, Math.min(3, action.act));
+      const seed = action.seed > 0 ? action.seed : 1;
+      const map = generateMap(seed, act);
+      const row = Math.max(0, Math.min(action.row, map.layers.length - 1));
+      let node: MapNode | undefined;
+      if (action.nodeType && action.nodeType !== 'all') {
+        node = map.layers[row].find((n) => n.type === action.nodeType);
       }
-      const encounter = state.map.encounter[node.id];
-      if (!encounter) return { ...base, screen: 'map' };
-      const battle = createBattle(
-        state.roster.filter((u) => state.field.includes(u.uid)),
-        encounter,
-        state.seed + targetRow * 17,
-      );
-      return { ...base, screen: 'battle', battle };
+      if (!node) node = map.layers[row][0];
+      // 调试专用强队 + 物资，保证能顺利体验各关卡机制
+      const debugRoster = [
+        makeUnit('momo_queen', 9, true, 0, false),
+        makeUnit('lulu_king', 9, true, 1, false),
+        makeUnit('fifi_king', 9, true, 2, false),
+      ];
+      const base: GameState = {
+        ...state,
+        seed,
+        act,
+        map,
+        currentRow: row,
+        currentNodeId: node.id,
+        roster: debugRoster,
+        field: debugRoster.map((u) => u.uid),
+        gold: 500,
+        inventory: { berry: 5, meat: 5, skip: 3 },
+        rewards: [],
+        battle: undefined,
+        specialPending: undefined,
+        shopBought: false,
+        log: [`[调试] 第 ${act} 幕 第 ${row} 层 → ${node.label}`, ...state.log].slice(0, 20),
+      };
+      return enterNode(base, node);
     }
 
     case 'EVENT_CHOICE': {
@@ -238,13 +303,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!ev) return state;
       const choice = ev.choices.find((x) => x.id === action.choiceId);
       if (!choice) return state;
-      // 花费类选项若金币不足则视为无效选择
-      if (state.gold + (choice.goldDelta ?? 0) < 0) return state;
+      // 花费类选项若金币不足则视为无效选择（kind='gold' 的负数扣款选项除外，可直接为负扣款）
+      if (choice.kind !== 'gold' && state.gold + (choice.goldDelta ?? 0) < 0) return state;
       let next: GameState = { ...state, screen: 'roster', gold: state.gold + (choice.goldDelta ?? 0) };
       if (choice.kind === 'heal') {
         next = healRoster(next, (choice.amount ?? 0) / 100);
       } else if (choice.kind === 'gold') {
-        next = { ...next, gold: next.gold + (choice.amount ?? 0) };
+        next = { ...next, gold: Math.max(0, next.gold + (choice.amount ?? 0)) };
       } else if (choice.kind === 'food' && choice.foodId) {
         next = { ...next, inventory: { ...next.inventory, [choice.foodId]: (next.inventory[choice.foodId] ?? 0) + 1 } };
       } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
@@ -315,9 +380,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'SPECIAL_TARGET': {
-      if (state.specialPending?.kind !== 'boost') return state;
-      if (!state.roster.some((u) => u.uid === action.uid)) return state;
-      return { ...state, specialPending: { kind: 'boost', uid: action.uid }, screen: 'boost' };
+      if (state.specialPending?.kind === 'boost') {
+        if (!state.roster.some((u) => u.uid === action.uid)) return state;
+        return { ...state, specialPending: { kind: 'boost', uid: action.uid }, screen: 'boost' };
+      }
+      if (state.specialPending?.kind === 'arena') {
+        const unit = state.roster.find((u) => u.uid === action.uid);
+        if (!unit) return state;
+        const node = currentNode(state);
+        const encounter = node ? state.map.encounter[node.id] : undefined;
+        if (!encounter) return { ...state, screen: 'map', specialPending: undefined };
+        const battle = createBattle([unit], encounter, state.seed + state.currentRow * 17, { untameable: true });
+        return {
+          ...state,
+          screen: 'battle',
+          specialPending: undefined,
+          battle,
+          log: [`${unit.name} 出战斗兽场！`, ...state.log].slice(0, 20),
+        };
+      }
+      return state;
     }
 
     case 'BOOST_STAT': {
@@ -377,26 +459,34 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const node = state.map.layers[targetRow]?.find((n) => n.id === action.nodeId);
       if (!node) return state;
       // 与 MOVE 相同的相邻校验
-      if (state.currentNodeId !== '' && state.currentRow !== 0) {
+      if (state.currentNodeId !== '') {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
-        const curCol = cur?.col;
-        if (typeof curCol === 'number' && typeof node.col === 'number' && Math.abs(node.col - curCol) > 1) return state;
+        if (!canStepTo(state.currentRow, cur?.col, node)) return state;
       }
-      // 只能跳过战斗/精英节点，首领不可跳过
+      // 可跳过战斗/精英/斗兽场/车轮战/被侵蚀节点，首领不可跳过
       if (node.type === 'boss') return state;
-      if (node.type !== 'battle' && node.type !== 'elite') return state;
+      if (node.type !== 'battle' && node.type !== 'elite' && node.type !== 'arena' && node.type !== 'gauntlet' && node.type !== 'corrupted')
+        return state;
       const base: GameState = {
         ...state,
         currentRow: targetRow,
         currentNodeId: node.id,
         inventory: { ...state.inventory, skip: inv - 1 },
       };
-      const goldGain = node.type === 'elite' ? 16 : 8;
-      const withGold = { ...base, gold: base.gold + goldGain, screen: 'reward' as const };
-      const rewards = generateRewards(withGold);
+      const challenge = node.type === 'arena' || node.type === 'gauntlet';
+      const corrupt = node.type === 'corrupted';
+      let goldGain = 0;
+      let rewards: RewardChoice[];
+      if (challenge) {
+        // 挑战节点跳关：直接领取 3 选 1 挑战奖励
+        rewards = generateChallengeRewards(base, node.type as 'arena' | 'gauntlet');
+      } else {
+        goldGain = node.type === 'elite' ? 16 : corrupt && node.corruptReward === 'gold' ? 16 : 8;
+        rewards = applyCorruptFoodReward(generateRewards(base), base.seed * 11 + base.currentRow * 7);
+      }
+      const withRewards: GameState = { ...base, screen: 'reward', gold: base.gold + goldGain, rewards };
       return {
-        ...withGold,
-        rewards,
+        ...withRewards,
         log: [`使用跳关道具，跳过「${node.label}」获得奖励`, ...state.log].slice(0, 20),
       };
     }
@@ -424,6 +514,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!state.battle) return state;
       if (state.battle.phase === 'won') return resolveBattle(state, state.battle);
       if (state.battle.phase === 'lost') {
+        const node = currentNode(state);
+        // 斗兽场/车轮战：失败不 Game Over，改为随机坏事件惩罚（宠物不会阵亡）
+        if (node?.type === 'arena' || node?.type === 'gauntlet') {
+          const rng = createRng(state.seed * 97 + state.act * 29 + state.currentRow * 13 + state.battle.rngCount);
+          const event = buildPunishmentEvent(rng);
+          const roster = state.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp) }));
+          return {
+            ...state,
+            screen: 'event',
+            battle: undefined,
+            roster,
+            map: { ...state.map, events: { ...state.map.events, [state.currentNodeId]: event } },
+            log: [`挑战失败：在「${node.label}」失利，承受代价`, ...state.log].slice(0, 20),
+          };
+        }
         return settleEvolutions({ ...state, screen: 'gameover', battle: undefined });
       }
       return state;
@@ -434,7 +539,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!reward) return state;
       let next: GameState = { ...state, screen: 'roster', rewards: [] };
       if (reward.kind === 'food' && reward.foodId) {
-        next = { ...next, inventory: { ...next.inventory, [reward.foodId]: (next.inventory[reward.foodId] ?? 0) + 1 } };
+        next = { ...next, inventory: { ...next.inventory, [reward.foodId]: (next.inventory[reward.foodId] ?? 0) + (reward.amount ?? 1) } };
       } else if (reward.kind === 'heal') {
         next = healRoster(next, (reward.amount ?? 30) / 100);
       } else if (reward.kind === 'recruit' && reward.monsterId) {
@@ -465,10 +570,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SHOP_BUY': {
       const food = getFood(action.foodId);
       if (state.gold < food.price) return state;
+      if ((state.shopBoughtItems ?? []).includes(food.id)) return state;
       return {
         ...state,
         gold: state.gold - food.price,
+        shopBought: true,
+        shopBoughtItems: [...(state.shopBoughtItems ?? []), food.id],
         inventory: { ...state.inventory, [food.id]: (state.inventory[food.id] ?? 0) + 1 },
+      };
+    }
+
+    case 'SHOP_REST': {
+      if (state.screen !== 'shop' || state.shopBought === true || state.gold < 5) return state;
+      return {
+        ...healRoster(state, 1),
+        screen: 'roster',
+        gold: state.gold - 5,
+        shopBought: false,
+        log: ['花 5 金币立即休整，全队回满血（诅咒未解除）', ...state.log].slice(0, 20),
       };
     }
 

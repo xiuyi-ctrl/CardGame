@@ -3,7 +3,7 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { currentPlayerUnit, isTameable } from '../src/game/core/battle';
-import { canTameEnemy } from '../src/game/state/game';
+import { canStepTo, canTameEnemy, ROSTER_MAX } from '../src/game/state/game';
 import { getSkill } from '../src/game/data/skills';
 import { getEvolution } from '../src/game/data/monsters';
 import { FOODS } from '../src/game/data/foods';
@@ -74,27 +74,22 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           s = dispatch(s, { type: 'NEXT_NODE' });
           continue;
         }
-        // 只考虑与当前节点相邻的节点（col±1）
+        // 只考虑可到达的节点（出发层任意节点，此后 col±1）
         const currentCol =
           s.currentNodeId === ''
             ? null
             : (s.map.layers[s.currentRow]?.find((n) => n.id === s.currentNodeId)?.col ?? null);
-        const adjacent = nodes.filter(
-          (n) =>
-            n.type === 'boss' ||
-            currentCol === null ||
-            typeof n.col !== 'number' ||
-            typeof currentCol !== 'number' ||
-            Math.abs(n.col - currentCol) <= 1,
-        );
+        const adjacent = nodes.filter((n) => canStepTo(s.currentRow, currentCol, n));
         if (adjacent.length === 0) {
           s = dispatch(s, { type: 'NEXT_NODE' });
           continue;
         }
         const wounded = s.roster.some((u) => u.hp / u.maxHp < 0.6);
-        const restNode = adjacent.find((n) => n.type === 'rest');
+        const restNode = adjacent.find((n) => n.type === 'rest' || n.type === 'shop');
         const specialNode = adjacent.find((n) => n.type === 'special');
-        const battleNode = adjacent.find((n) => n.type === 'battle' || n.type === 'elite');
+        const battleNode = adjacent.find(
+          (n) => n.type === 'battle' || n.type === 'elite' || n.type === 'arena' || n.type === 'gauntlet' || n.type === 'corrupted',
+        );
         const eventNode = adjacent.find((n) => n.type === 'event');
         const chosen = (wounded && restNode) || specialNode || battleNode || eventNode || adjacent[0];
         s = dispatch(s, { type: 'MOVE', nodeId: chosen.id });
@@ -140,10 +135,21 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
             break;
           }
         }
+        if (s.specialPending?.kind === 'arena') {
+          const t = [...s.roster].sort((a, c) => c.maxHp + c.atk - (a.maxHp + a.atk))[0];
+          if (t) {
+            s = dispatch(s, { type: 'SPECIAL_TARGET', uid: t.uid });
+            break;
+          }
+        }
         s = dispatch(s, { type: 'NEXT_NODE' });
         break;
       }
       case 'shop': {
+        if (s.shopBought !== true && s.gold >= 5 && s.roster.some((u) => u.hp / u.maxHp < 0.5)) {
+          s = dispatch(s, { type: 'SHOP_REST' });
+          break;
+        }
         if (s.gold >= 14) s = dispatch(s, { type: 'SHOP_BUY', foodId: 'gem' });
         s = dispatch(s, { type: 'NEXT_NODE' });
         break;
@@ -158,11 +164,11 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           s = dispatch(s, { type: 'NEXT_NODE' });
           break;
         }
-        const priority = ['recruit', 'heal', 'exp', 'gold', 'food', 'none'];
-        const pick =
-          ev.choices.find((c) => priority.includes(c.kind)) ??
-          ev.choices.find((c) => c.kind === 'none') ??
-          ev.choices[0];
+        // 过滤买不起的花费选项，避免事件界面卡死
+        const affordable = ev.choices.filter((c) => (c.goldDelta ?? 0) >= 0 || s.gold + (c.goldDelta ?? 0) >= 0);
+        const pool = affordable.length > 0 ? affordable : ev.choices;
+        const priority = ['recruit', 'heal', 'exp', 'food', 'none', 'gold'];
+        const pick = pool.find((c) => priority.includes(c.kind)) ?? pool.find((c) => c.kind === 'none') ?? pool[0];
         s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: pick.id });
         break;
       }
@@ -173,8 +179,15 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           s = dispatch(s, { type: 'NEXT_NODE' });
           break;
         }
+        const hasEvolvable = s.roster.some((u) => getEvolution(u.speciesId));
+        const rosterFull = s.roster.length >= ROSTER_MAX;
+        const valid = sp.rewards.filter(
+          (r) =>
+            !((r.kind === 'evolve' || r.kind === 'superevolve') && !hasEvolvable) &&
+            !(r.kind === 'custom' && rosterFull),
+        );
         const order = ['gold', 'item', 'evolve', 'boost', 'custom', 'superevolve'];
-        const best = [...sp.rewards].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))[0];
+        const best = [...valid].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))[0] ?? valid[0];
         s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: best.id });
         break;
       }
