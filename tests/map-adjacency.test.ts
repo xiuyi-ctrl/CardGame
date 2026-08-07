@@ -32,7 +32,6 @@ describe('地图相邻寻路回归', () => {
             curNode &&
             typeof curNode.col === 'number' &&
             typeof n.col === 'number' &&
-            n.type !== 'boss' &&
             Math.abs(n.col - curNode.col) > 1
           ) {
             problems.push(`seed=${seed} 从 ${curNode.label}(c${curNode.col}) 非法移动到 ${n.label}(c${n.col})`);
@@ -46,14 +45,14 @@ describe('地图相邻寻路回归', () => {
     expect(problems).toEqual([]);
   });
 
-  it('地图相邻路线无死路：每个节点下一行都存在相邻节点（首领行除外）', () => {
+  it('地图相邻路线无死路：每个节点下一行都存在相邻节点（含末层首领行）', () => {
     const deadEnds: string[] = [];
     for (let seed = 1; seed < 40; seed++) {
       for (let act = 1; act <= 3; act++) {
         const map = generateMap(seed, act);
         for (let r = 1; r < map.layers.length - 1; r++) {
           const next = map.layers[r + 1];
-          if (!next || next.some((m) => m.type === 'boss')) continue;
+          if (!next) continue;
           for (const n of map.layers[r]) {
             const adj = next.filter((m) => Math.abs(m.col - n.col) <= 1);
             if (adj.length === 0) {

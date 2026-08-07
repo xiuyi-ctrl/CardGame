@@ -14,7 +14,8 @@ export type NodeType =
   | 'boss'
   | 'arena'
   | 'gauntlet'
-  | 'corrupted';
+  | 'corrupted'
+  | 'watchtower';
 
 export interface MapNode {
   id: string;
@@ -33,13 +34,11 @@ export interface MapNode {
 /**
  * 相邻路线判定：从当前行 currentRow、当前列 currentCol 能否踏上下一行节点 node。
  * - 出发层（currentRow === 0，即尚未出发或站在出发节点）可直达下一层任意节点；
- * - 首领可从任意列到达（避免死锁）；
  * - currentCol 为 null/undefined 表示旧存档或状态异常，放行；
  * - 节点无 col（旧存档）时放行；
- * - 其余要求列号相差不超过 1。
+ * - 其余要求列号相差不超过 1（末层首领同样遵循相邻寻路）。
  */
 export function canStepTo(currentRow: number, currentCol: number | null | undefined, node: MapNode): boolean {
-  if (node.type === 'boss') return true;
   if (currentRow === 0) return true;
   if (currentCol == null) return true;
   if (typeof node.col !== 'number') return true;
@@ -126,7 +125,8 @@ export type Screen =
   | 'custom'
   | 'boost'
   | 'gameover'
-  | 'victory';
+  | 'victory'
+  | 'watchtower';
 
 export interface RewardChoice {
   id: string;
@@ -180,8 +180,14 @@ const ACT2_BATTLE_POOL = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora'
 const ACT2_ELITE_POOL = ['momo_god'];
 const ACT3_BATTLE_POOL = ['momo_queen', 'fifi_king', 'sisi', 'gora', 'momo_god'];
 const ACT3_ELITE_POOL = ['momo_god'];
-const BOSSES = ['boss_vine', 'boss_dark', 'boss_fire'];
 const RECRUIT_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+
+/** 每幕首领候选池：末层 2~3 个首领节点从对应幕的池中随机抽取（不重复）。部分首领只在指定幕出现。 */
+export const ACT_BOSS_POOLS: Record<number, string[]> = {
+  1: ['boss_vine', 'boss_crab', 'boss_golem'],
+  2: ['boss_dark', 'boss_moss', 'boss_ghost'],
+  3: ['boss_fire', 'boss_dragon', 'boss_demon'],
+};
 
 /** 中间层节点类型加权随机：越靠后精英越多，前期偏战斗/事件；奇遇关为低概率稀有节点；休整并入商人（不再生成 rest） */
 function middleNodeType(rng: () => number, progress: number): NodeType {
@@ -201,15 +207,17 @@ function middleNodeType(rng: () => number, progress: number): NodeType {
   if (progress < 0.6) {
     if (r < 0.34) return battleVariant();
     if (r < 0.51) return 'shop';
-    if (r < 0.74) return 'event';
-    if (r < 0.92) return 'elite';
-    return 'special';
+    if (r < 0.73) return 'event';
+    if (r < 0.9) return 'elite';
+    if (r < 0.94) return 'special';
+    return 'watchtower';
   }
   if (r < 0.3) return battleVariant();
-  if (r < 0.52) return 'elite';
-  if (r < 0.7) return 'shop';
-  if (r < 0.78) return 'event';
-  if (r < 0.88) return 'special';
+  if (r < 0.5) return 'elite';
+  if (r < 0.68) return 'shop';
+  if (r < 0.76) return 'event';
+  if (r < 0.85) return 'special';
+  if (r < 0.89) return 'watchtower';
   return battleVariant();
 }
 
@@ -218,12 +226,13 @@ function buildEncounter(
   type: NodeType,
   act: number,
   progress: number,
+  bossId?: string,
   gauntletSize?: 2 | 3,
 ): { speciesId: string; level: number }[] {
   const lv = (a: number, b: number) => a + Math.floor(rng() * (b - a + 1));
   const one = (pool: string[], lo: number, hi: number) => ({ speciesId: pick(rng, pool), level: lv(lo, hi) });
   if (type === 'boss') {
-    return [{ speciesId: BOSSES[act - 1], level: lv(3 + act, 4 + act) }];
+    return [{ speciesId: bossId ?? ACT_BOSS_POOLS[act][0], level: lv(3 + act, 4 + act) }];
   }
   if (type === 'elite') {
     if (act === 1) return [one(ACT1_ELITE_POOL, 2, 3)];
@@ -392,16 +401,25 @@ export function generateMap(seed: number, act: number): RunMap {
   // 保证相邻路线不出现死路：本行节点数最多比上一行多 1 个
   // （这样任意列 c 在下一行都有 col ∈ [c-1, c+1] 的节点可走）
   let prevCount = 1;
+  // 末层首领池（shuffle 后按列分配，保证不重复）
+  let actBossPool: string[] = [];
   for (let row = 0; row < layerCount; row++) {
     if (row === 0) {
       layers.push([make('battle', row, 0)]);
       continue;
     }
     if (row === layerCount - 1) {
-      layers.push([make('boss', row, 0)]);
+      // 末层：2~3 个首领节点，均遵循寻路逻辑。数量受上一行节点数约束：
+      // 上一行 k 个节点时，末层至少要有 k-1 个首领（k-1 列能走到末层最大列 k-2）。
+      // k≥4 → 3 个首领（3 列全覆盖）；k=3 → 随机 2~3 个。
+      const m = prevCount >= 4 ? 3 : randInt(rng, 2, 3);
+      actBossPool = shuffle(rng, ACT_BOSS_POOLS[act]).slice(0, m);
+      layers.push(Array.from({ length: m }, (_, i) => make('boss', row, i)));
       continue;
     }
-    const count = Math.max(prevCount - 1, randInt(rng, 3, 5));
+    let count = Math.max(prevCount - 1, randInt(rng, 3, 5));
+    // 倒数第二行最多 4 个节点，保证末层 3 个首领全覆盖（4 列 c∈[0,3]，c=3 可到末层 2）
+    if (row === layerCount - 2) count = Math.min(4, count);
     prevCount = count;
     const progress = row / (layerCount - 1);
     const nodes: MapNode[] = [];
@@ -454,6 +472,21 @@ export function generateMap(seed: number, act: number): RunMap {
     setType(n, countOf('event') < 5 ? 'event' : countOf('shop') < 4 ? 'shop' : 'elite');
   }
 
+  // 瞭望塔：首领关前 3 行内出现该节点的概率 25%（优先覆盖战斗类节点，不破坏事件/商人数量保证）
+  const lastRow = layers.length - 1;
+  for (let row = Math.max(2, lastRow - 3); row < lastRow; row++) {
+    if (rng() < 0.25) {
+      const candidates = layers[row].filter(
+        (n) => n.type === 'battle' || n.type === 'elite' || n.type === 'arena' || n.type === 'gauntlet' || n.type === 'corrupted',
+      );
+      if (candidates.length > 0) {
+        const n = candidates[Math.floor(rng() * candidates.length)];
+        n.type = 'watchtower';
+        n.label = labelOf('watchtower', row);
+      }
+    }
+  }
+
   // 被侵蚀节点：每 3~4 行间隔概率出现（行 2 起；不覆盖强制战斗行 1、商人/事件/奇遇/首领；间隔超 5 行则强制出现）
   let lastCorruptRow = 1;
   for (let row = 2; row < layers.length - 1; row++) {
@@ -475,10 +508,10 @@ export function generateMap(seed: number, act: number): RunMap {
   for (let row = 0; row < layerCount; row++) {
     const progress = row / (layerCount - 1);
     for (const n of layers[row]) {
-      if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress);
+      if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress, actBossPool[n.col]);
       else if (n.type === 'battle' || n.type === 'elite') encounter[n.id] = buildEncounter(rng, n.type, act, progress);
       else if (n.type === 'arena') encounter[n.id] = buildEncounter(rng, 'arena', act, progress);
-      else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, n.gauntletSize);
+      else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, undefined, n.gauntletSize);
       else if (n.type === 'corrupted') encounter[n.id] = buildEncounter(rng, 'battle', act, progress);
       else if (n.type === 'event') events[n.id] = buildEvent(rng);
       else if (n.type === 'special') specials[n.id] = buildSpecial(rng);
@@ -514,6 +547,8 @@ function labelOf(t: NodeType, row: number): string {
       return '车轮战';
     case 'corrupted':
       return '被侵蚀';
+    case 'watchtower':
+      return '瞭望塔';
   }
 }
 

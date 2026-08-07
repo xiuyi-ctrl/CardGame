@@ -199,6 +199,10 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         s = dispatch(s, { type: 'BOOST_STAT', stat: 'atk' });
         break;
       }
+      case 'watchtower': {
+        s = dispatch(s, { type: 'NEXT_NODE' });
+        break;
+      }
       default:
         return { result: 'stuck', detail: `unknown screen ${s.screen}`, specials };
     }

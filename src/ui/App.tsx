@@ -9,7 +9,7 @@ import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { computeStats } from '../game/core/battle';
-import { UnitCard, elementStyle } from './components';
+import { UnitCard, elementStyle, ELEMENT_CN } from './components';
 import { BattleScreen } from './BattleScreen';
 import { loadSave, persistSave, quitGame } from './persistence';
 
@@ -24,6 +24,7 @@ const NODE_ICON: Record<MapNode['type'], string> = {
   arena: '🗡️',
   gauntlet: '🔥',
   corrupted: '🌑',
+  watchtower: '🔭',
 };
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory'];
@@ -58,6 +59,7 @@ export default function App() {
       {state.screen === 'boost' && <BoostScreen state={state} dispatch={dispatch} />}
       {state.screen === 'gameover' && <GameOverScreen state={state} dispatch={dispatch} />}
       {state.screen === 'victory' && <VictoryScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'watchtower' && <WatchtowerScreen state={state} dispatch={dispatch} />}
     </div>
   );
 }
@@ -139,6 +141,7 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
     { value: 'event', label: '事件' },
     { value: 'shop', label: '商店' },
     { value: 'special', label: '奇遇' },
+    { value: 'watchtower', label: '瞭望塔' },
   ];
 
   return (
@@ -594,6 +597,85 @@ function RestScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
       <button className="primary big-btn" onClick={() => dispatch({ type: 'REST_HEAL' })}>
         休息（恢复满血）
       </button>
+    </div>
+  );
+}
+
+function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const maxRow = state.map.layers.length - 1;
+  const rows = [state.currentRow + 1, state.currentRow + 2, state.currentRow + 3].filter((r) => r <= maxRow);
+  const [selRow, setSelRow] = useState<number>(rows[0] ?? state.currentRow);
+  const sel = rows.includes(selRow) ? selRow : rows[0] ?? state.currentRow;
+
+  function nodeInfo(n: MapNode): { icon: string; title: string; detail: string } {
+    const enc = state.map.encounter[n.id];
+    const encDetail = (list?: { speciesId: string; level: number }[]): string =>
+      list && list.length > 0
+        ? list.map((x) => `${getMonster(x.speciesId).emoji} ${getMonster(x.speciesId).name}（${ELEMENT_CN[getMonster(x.speciesId).element]}）Lv${x.level}`).join('、')
+        : '—';
+    switch (n.type) {
+      case 'battle':
+      case 'elite':
+      case 'arena':
+      case 'gauntlet':
+      case 'corrupted':
+        return { icon: NODE_ICON[n.type], title: n.label, detail: encDetail(enc) };
+      case 'boss': {
+        const e = state.map.boss[n.id]?.[0];
+        return {
+          icon: NODE_ICON.boss,
+          title: n.label,
+          detail: e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}（${ELEMENT_CN[getMonster(e.speciesId).element]}）Lv${e.level}` : '—',
+        };
+      }
+      case 'shop':
+        return { icon: NODE_ICON.shop, title: '商店', detail: '🍓 浆果 5 金 · 🍖 鲜肉 9 金 · 💎 秘晶 14 金（每店每种限购 1 次）' };
+      case 'event': {
+        const ev = state.map.events[n.id];
+        return { icon: NODE_ICON.event, title: ev?.title ?? '事件', detail: ev ? ev.choices.map((c) => c.label).join(' ／ ') : '—' };
+      }
+      case 'special': {
+        const sp = state.map.specials[n.id];
+        return { icon: NODE_ICON.special, title: sp?.title ?? '奇遇关', detail: sp ? sp.rewards.map((r) => r.label).join(' ／ ') : '—' };
+      }
+      case 'watchtower':
+        return { icon: NODE_ICON.watchtower, title: '瞭望塔', detail: '可以在此继续瞭望更下层' };
+      default:
+        return { icon: NODE_ICON[n.type], title: n.label, detail: '' };
+    }
+  }
+
+  return (
+    <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
+      <div className="section-title">瞭望塔 🔭</div>
+      <p className="card-sub" style={{ textAlign: 'center' }}>
+        居高远眺，提前窥探下 3 行内某一行的全部节点情报（敌人属性与数量、商店货物、事件与奇遇）
+      </p>
+      <div className="panel-row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+        {rows.map((r) => (
+          <button key={r} className={r === sel ? 'primary' : ''} onClick={() => setSelRow(r)}>
+            第 {r} 层{r === maxRow ? '（首领层）' : ''}
+          </button>
+        ))}
+      </div>
+      <div className="reward-cards">
+        {state.map.layers[sel].map((n) => {
+          const info = nodeInfo(n);
+          return (
+            <div key={n.id} className="reward-card">
+              <div className="ricon">{info.icon}</div>
+              <div className="rtitle">{info.title}</div>
+              <div className="rdesc">{info.detail}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+        <button className="big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
+          离开 →
+        </button>
+      </div>
     </div>
   );
 }

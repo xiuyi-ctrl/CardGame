@@ -7,7 +7,7 @@ import {
   type GameAction,
 } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { generateMap, gainExp, pendingEvolve, settleEvolutions, ROSTER_MAX, type SpecialReward } from '../src/game/state/game';
+import { generateMap, gainExp, pendingEvolve, settleEvolutions, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
 import { createBattle, makeUnit, currentPlayerUnit } from '../src/game/core/battle';
 
 function dispatch(state: GameState, action: GameAction): GameState {
@@ -100,7 +100,7 @@ describe('成长与进化', () => {
 });
 
 describe('地图生成', () => {
-  it('层数在 8~10 之间，首层单战斗、末层单首领，且每幕含商店/事件', () => {
+  it('层数在 8~10 之间，首层单战斗、末层 2~3 个首领（遵循寻路），且每幕含商店/事件', () => {
     for (let act = 1; act <= 3; act++) {
       const map = generateMap(42, act);
       expect(map.layers.length).toBeGreaterThanOrEqual(8);
@@ -108,9 +108,20 @@ describe('地图生成', () => {
       expect(map.layers[0].length).toBe(1);
       expect(map.layers[0][0].type).toBe('battle');
       const last = map.layers[map.layers.length - 1];
-      expect(last.length).toBe(1);
-      expect(last[0].type).toBe('boss');
-      expect(Object.keys(map.boss).length).toBe(1);
+      expect(last.length).toBeGreaterThanOrEqual(2);
+      expect(last.length).toBeLessThanOrEqual(3);
+      expect(last.every((n) => n.type === 'boss')).toBe(true);
+      expect(Object.keys(map.boss).length).toBe(last.length);
+      // 末层首领从对应幕的候选池抽取（不重复）
+      const pool = ACT_BOSS_POOLS[act];
+      const bossIds = last.map((n) => map.boss[n.id]![0].speciesId);
+      expect(new Set(bossIds).size).toBe(bossIds.length);
+      for (const b of bossIds) expect(pool).toContain(b);
+      // 末层遵循寻路：倒数第二行每个节点都能走到相邻首领节点
+      const prevRow = map.layers[map.layers.length - 2];
+      for (const n of prevRow) {
+        expect(last.some((m) => Math.abs(m.col - n.col) <= 1)).toBe(true);
+      }
       // col 列号连续递增；中间行宽度 3~5
       for (const row of map.layers) {
         row.forEach((n, i) => expect(n.col).toBe(i));
@@ -643,5 +654,62 @@ describe('商人·每店限购', () => {
     const count = s.inventory.berry ?? 0;
     s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
     expect(s.inventory.berry).toBe(count + 1);
+  });
+});
+
+describe('瞭望塔', () => {
+  it('进入瞭望塔节点进入瞭望界面，离开后回到地图', () => {
+    let run: GameState | null = null;
+    let target: MapNode | null = null;
+    for (let seed = 1; seed < 300 && !target; seed++) {
+      const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
+      const n = s.map.layers.flat().find((x) => x.type === 'watchtower');
+      if (n) {
+        run = s;
+        target = n;
+      }
+    }
+    expect(target).not.toBeNull();
+    const row = run!.map.layers.findIndex((r) => r.includes(target!));
+    const parent = run!.map.layers[row - 1].find((n) => Math.abs(n.col - target!.col) <= 1) ?? run!.map.layers[row - 1][0];
+    let s: GameState = { ...run!, screen: 'map', currentRow: row - 1, currentNodeId: parent.id };
+    s = dispatch(s, { type: 'MOVE', nodeId: target!.id });
+    expect(s.screen).toBe('watchtower');
+    const after = dispatch(s, { type: 'NEXT_NODE' });
+    expect(after.screen).toBe('map');
+    expect(after.currentRow).toBe(row);
+  });
+
+  it('瞭望塔在首领关前 3 行内出现概率显著更高（25%）', () => {
+    let last3Count = 0;
+    let otherCount = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      for (let act = 1; act <= 3; act++) {
+        const map = generateMap(seed, act);
+        const last = map.layers.length - 1;
+        for (let r = 1; r < last; r++) {
+          const wt = map.layers[r].filter((n) => n.type === 'watchtower').length;
+          if (wt === 0) continue;
+          if (r >= last - 3) last3Count += wt;
+          else otherCount += wt;
+        }
+      }
+    }
+    expect(last3Count).toBeGreaterThanOrEqual(80);
+    expect(last3Count).toBeGreaterThan(otherCount);
+  });
+
+  it('末层多个首领：击败任意一个即可通关本幕', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
+    const lastRow = s.map.layers.length - 1;
+    const bosses = s.map.layers[lastRow];
+    expect(bosses.length).toBeGreaterThanOrEqual(2);
+    expect(bosses.every((n) => n.type === 'boss')).toBe(true);
+    // 站在末层第一个首领节点，模拟击败后通关
+    s = { ...s, currentRow: lastRow, currentNodeId: bosses[0].id, screen: 'roster' };
+    const next = dispatch(s, { type: 'NEXT_NODE' });
+    expect(next.act).toBe(2);
+    expect(next.currentRow).toBe(0);
+    expect(next.screen).toBe('map');
   });
 });

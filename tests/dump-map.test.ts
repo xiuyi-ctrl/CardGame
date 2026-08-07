@@ -13,6 +13,10 @@ const ICON: Record<string, string> = {
   event: '📜',
   special: '💎',
   boss: '👑',
+  arena: '🗡️',
+  gauntlet: '🔥',
+  corrupted: '🌑',
+  watchtower: '🔭',
 };
 
 function encounterText(map: ReturnType<typeof generateMap>, n: MapNode): string {
@@ -45,6 +49,8 @@ function contentText(map: ReturnType<typeof generateMap>, n: MapNode): string {
       if (!sp) return '—';
       return `${sp.title}｜${sp.rewards.map((r, i) => `${i + 1}.${r.label}：${r.desc}`).join(' ／ ')}`;
     }
+    case 'watchtower':
+      return '瞭望塔：可预览下 3 行内某一行的全部节点情报';
     default:
       return '—';
   }
@@ -61,7 +67,7 @@ function buildMd(seed: number): string {
     const map = generateMap(seed, act);
     lines.push(`## 第 ${act} 幕`);
     lines.push('');
-    lines.push(`- 层数：**${map.layers.length}**；中间行每层 **3~5** 个节点；第 1 行（出发）为单战斗节点，最后 1 行为首领。`);
+    lines.push(`- 层数：**${map.layers.length}**；中间行每层 **3~5** 个节点；第 1 行（出发）为单战斗节点，最后 1 行为 **2~3 个首领节点**。`);
     lines.push('');
     for (let row = 0; row < map.layers.length; row++) {
       const isFirst = row === 0;

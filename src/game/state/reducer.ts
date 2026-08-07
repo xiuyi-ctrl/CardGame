@@ -58,7 +58,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory'];
+  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -196,6 +196,7 @@ function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'shop') return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [] };
   if (node.type === 'event') return { ...base, screen: 'event' };
   if (node.type === 'special') return { ...base, screen: 'special' };
+  if (node.type === 'watchtower') return { ...base, screen: 'watchtower' };
   if (node.type === 'boss') {
     const encounter = base.map.boss[node.id];
     const battle = createBattle(
@@ -252,7 +253,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rowNodes = state.map.layers[targetRow];
       const node = rowNodes?.find((n) => n.id === action.nodeId);
       if (!node) return state;
-      // 相邻校验：出发层可直达下一层任意节点；此后只能移动到当前节点列号 col±1（首领可从任意列到达；旧存档无 col 时放行）
+      // 相邻校验：出发层可直达下一层任意节点；此后只能移动到当前节点列号 col±1（旧存档无 col 时放行）
       if (!isFirst) {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
         if (!canStepTo(state.currentRow, cur?.col, node)) return state;

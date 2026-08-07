@@ -128,6 +128,48 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['flame_burst', 'double_hit', 'roar', 'tail'],
     tame: { difficulty: 0 }, rank: 4,
   },
+  boss_crab: {
+    id: 'boss_crab', name: '潮汐巨蟹', emoji: '🦀', element: 'water',
+    baseHp: 38, baseAtk: 6, baseSpd: 3, def: 0,
+    hpGrow: 0, atkGrow: 0, spdGrow: 0,
+    skills: ['aqua_shot', 'double_hit', 'tail', 'roar'],
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_golem: {
+    id: 'boss_golem', name: '岩甲巨像', emoji: '🗻', element: 'metal',
+    baseHp: 42, baseAtk: 6, baseSpd: 2, def: 2,
+    hpGrow: 0, atkGrow: 0, spdGrow: 0,
+    skills: ['steel_spike', 'tail', 'roar', 'double_hit'],
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_moss: {
+    id: 'boss_moss', name: '苔藓领主', emoji: '🍄', element: 'nature',
+    baseHp: 46, baseAtk: 7, baseSpd: 4, def: 1,
+    hpGrow: 0, atkGrow: 0, spdGrow: 0,
+    skills: ['leaf_needle', 'poison_sting', 'tail', 'roar'],
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_ghost: {
+    id: 'boss_ghost', name: '幽灵船长', emoji: '👻', element: 'water',
+    baseHp: 42, baseAtk: 8, baseSpd: 6, def: 0,
+    hpGrow: 0, atkGrow: 0, spdGrow: 0,
+    skills: ['aqua_shot', 'double_hit', 'dark_shock', 'roar'],
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_dragon: {
+    id: 'boss_dragon', name: '玄铁渊龙', emoji: '🐉', element: 'metal',
+    baseHp: 60, baseAtk: 9, baseSpd: 7, def: 1,
+    hpGrow: 0, atkGrow: 0, spdGrow: 0,
+    skills: ['steel_spike', 'double_hit', 'tail', 'roar'],
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_demon: {
+    id: 'boss_demon', name: '炼狱魔君', emoji: '😈', element: 'shadow',
+    baseHp: 55, baseAtk: 10, baseSpd: 8, def: 0,
+    hpGrow: 0, atkGrow: 0, spdGrow: 0,
+    skills: ['shadow_claw', 'dark_shock', 'double_hit', 'roar'],
+    tame: { difficulty: 0 }, rank: 4,
+  },
   // 奇遇关「造物」：自创生物，不出现在战斗池，技能由玩家随机组合
   custom_guardian: {
     id: 'custom_guardian', name: '岩甲兽', emoji: '🗿', element: 'metal',
