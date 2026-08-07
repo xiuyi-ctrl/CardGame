@@ -106,9 +106,11 @@ export interface UnitCardProps {
   className?: string;
   onClick?: () => void;
   small?: boolean;
+  /** 是否在卡片上列出技能（出阵的我方卡隐藏，见底部技能面板） */
+  showSkills?: boolean;
 }
 
-export function UnitCard({ unit, className = '', onClick }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, showSkills = true }: UnitCardProps) {
   const dead = unit.hp <= 0;
   return (
     <div
@@ -132,11 +134,13 @@ export function UnitCard({ unit, className = '', onClick }: UnitCardProps) {
         <StatusIcons unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
-      <div className="skill-list">
-        {unit.skills.map((sid) => (
-          <SkillTag key={sid} skill={getSkill(sid)} />
-        ))}
-      </div>
+      {showSkills && (
+        <div className="skill-list">
+          {unit.skills.map((sid) => (
+            <SkillTag key={sid} skill={getSkill(sid)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

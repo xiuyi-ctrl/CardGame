@@ -208,6 +208,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                 <UnitCard
                   key={u.uid}
                   unit={u}
+                  showSkills={false}
                   className={validAllyTargets.has(u.uid) ? 'valid-target targetable' : ''}
                   onClick={validAllyTargets.has(u.uid) ? () => onTargetClick(u.uid, false) : undefined}
                 />
