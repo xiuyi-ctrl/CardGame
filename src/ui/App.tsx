@@ -9,7 +9,7 @@ import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { computeStats } from '../game/core/battle';
-import { UnitCard } from './components';
+import { UnitCard, SkillTag } from './components';
 import { BattleScreen } from './BattleScreen';
 import { loadSave, persistSave, quitGame } from './persistence';
 
@@ -247,9 +247,7 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
               </div>
               <div className="skill-list">
                 {sp.skills.map((s) => (
-                  <span key={s} className="chip">
-                    {getSkill(s).name}
-                  </span>
+                  <SkillTag key={s} skill={getSkill(s)} />
                 ))}
               </div>
             </div>
@@ -916,9 +914,7 @@ function CustomScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                 </div>
                 <div className="skill-list">
                   {sp.skills.map((s) => (
-                    <span key={s} className="chip">
-                      {getSkill(s).name}
-                    </span>
+                    <SkillTag key={s} skill={getSkill(s)} />
                   ))}
                 </div>
               </div>

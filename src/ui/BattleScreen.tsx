@@ -7,7 +7,7 @@ import { currentPlayerUnit, isTameable, tameChance, TAME_THRESHOLD } from '../ga
 import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import type { SkillDef, Unit } from '../game/types';
-import { UnitCard } from './components';
+import { UnitCard, skillBrief } from './components';
 import { persistSave } from './persistence';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
@@ -164,115 +164,124 @@ export function BattleScreen({ state, dispatch }: Props) {
         </button>
       </div>
 
-      <div className="battle-grid">
-        <div>
-          <div className="side-label">敌 方</div>
-          <div className="side enemy">
-            {enemyUnits.map((u) => (
-              <div
-                key={u.uid}
-                className="enemy-slot"
-                onMouseEnter={() => setHoverEnemy(u.uid)}
-                onMouseLeave={() => setHoverEnemy(null)}
-              >
-                <UnitCard
-                  unit={u}
-                  className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}
-                  onClick={
-                    validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u))
-                      ? () => onTargetClick(u.uid, true)
-                      : undefined
-                  }
-                />
-                {pendingTame && hoverEnemy === u.uid && <div className="tame-tip">{tameTip(u)}</div>}
+      <div className="battle-main">
+        <div className="log-panel">
+          <div className="log-title">⚔️ 战斗记录</div>
+          <div className="log-box">
+            {logItems.map((l, i) => (
+              <div key={i} className={`log-line ${l.side} ${i === logItems.length - 1 ? 'recent' : ''}`}>
+                {l.text}
               </div>
             ))}
           </div>
         </div>
-        <div>
-          <div className="side-label">我 方</div>
-          <div className="side">
-            {playerUnits.map((u) => (
-              <UnitCard
-                key={u.uid}
-                unit={u}
-                className={validAllyTargets.has(u.uid) ? 'valid-target targetable' : ''}
-                onClick={validAllyTargets.has(u.uid) ? () => onTargetClick(u.uid, false) : undefined}
-              />
-            ))}
+
+        <div className="battle-grid">
+          <div>
+            <div className="side-label">敌 方</div>
+            <div className="side enemy">
+              {enemyUnits.map((u) => (
+                <div
+                  key={u.uid}
+                  className="enemy-slot"
+                  onMouseEnter={() => setHoverEnemy(u.uid)}
+                  onMouseLeave={() => setHoverEnemy(null)}
+                >
+                  <UnitCard
+                    unit={u}
+                    className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}
+                    onClick={
+                      validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u))
+                        ? () => onTargetClick(u.uid, true)
+                        : undefined
+                    }
+                  />
+                  {pendingTame && hoverEnemy === u.uid && <div className="tame-tip">{tameTip(u)}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="side-label">我 方</div>
+            <div className="side">
+              {playerUnits.map((u) => (
+                <UnitCard
+                  key={u.uid}
+                  unit={u}
+                  className={validAllyTargets.has(u.uid) ? 'valid-target targetable' : ''}
+                  onClick={validAllyTargets.has(u.uid) ? () => onTargetClick(u.uid, false) : undefined}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="action-panel">
-        <span className="who">{current ? `${current.emoji} ${current.name}` : '—'}</span>
-        {current ? (
-          <>
-            <div className="skills">
+        <div className="skill-column">
+          <span className="who">{current ? `${current.emoji} ${current.name}` : '—'}</span>
+          {current ? (
+            <>
               {skills.map((s) => (
-                <button key={s.id} onClick={() => onSkillClick(s)} title={s.desc}>
-                  {s.name}
+                <button key={s.id} className="skill-btn" onClick={() => onSkillClick(s)} title={`${s.desc}（${skillBrief(s)}）`}>
+                  <span className="skill-btn-main">
+                    {s.name}
+                    <span className="skill-num">{skillBrief(s)}</span>
+                  </span>
+                  <span className="skill-desc">{s.desc}</span>
                 </button>
               ))}
-            </div>
-            <div className="foods">
-              {foods.length === 0 && <span className="card-sub">没有食物</span>}
-              {foods.map((f) => {
-                const count = state.inventory[f.id] ?? 0;
-                return (
-                  <button
-                    key={f.id}
-                    onClick={() => onFoodClick(f.id)}
-                    disabled={count <= 0 || !battle.enemyUnits.some((u) => isTameable(u))}
-                    title={`${f.desc}（拥有 ${count} 个）`}
-                  >
-                    {f.emoji} {f.name}×{count}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="foods">
-              {battleItems.length === 0 ? (
-                <span className="card-sub">没有战斗道具</span>
-              ) : (
-                battleItems.map((it) => {
-                  const count = state.inventory[it.id] ?? 0;
-                  const isPending = pendingBattleItem === it.id;
-                  return (
-                    <button
-                      key={it.id}
-                      onClick={() => onBattleItemClick(it.id)}
-                      className={isPending ? 'primary' : ''}
-                      title={`${it.desc}（拥有 ${count} 个）`}
-                    >
-                      {it.emoji} {it.name}×{count}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </>
-        ) : (
-          <span className="card-sub">
-            {battle.phase === 'won'
-              ? isChallenge
-                ? '挑战胜利！'
-                : '战斗胜利！'
-              : battle.phase === 'lost'
+            </>
+          ) : (
+            <span className="card-sub">
+              {battle.phase === 'won'
                 ? isChallenge
-                  ? '挑战失败…'
-                  : '全队阵亡…'
-                : '本回合结束'}
-          </span>
-        )}
-      </div>
-
-      <div className="log-box">
-        {logItems.map((l, i) => (
-          <div key={i} className={i === logItems.length - 1 ? 'recent' : ''}>
-            {l}
-          </div>
-        ))}
+                  ? '挑战胜利！'
+                  : '战斗胜利！'
+                : battle.phase === 'lost'
+                  ? isChallenge
+                    ? '挑战失败…'
+                    : '全队阵亡…'
+                  : '本回合结束'}
+            </span>
+          )}
+        </div>
+        <div className="foods">
+          {foods.length === 0 && <span className="card-sub">没有食物</span>}
+          {foods.map((f) => {
+            const count = state.inventory[f.id] ?? 0;
+            return (
+              <button
+                key={f.id}
+                onClick={() => onFoodClick(f.id)}
+                disabled={count <= 0 || !battle.enemyUnits.some((u) => isTameable(u))}
+                title={`${f.desc}（拥有 ${count} 个）`}
+              >
+                {f.emoji} {f.name}×{count}
+              </button>
+            );
+          })}
+        </div>
+        <div className="foods">
+          {battleItems.length === 0 ? (
+            <span className="card-sub">没有战斗道具</span>
+          ) : (
+            battleItems.map((it) => {
+              const count = state.inventory[it.id] ?? 0;
+              const isPending = pendingBattleItem === it.id;
+              return (
+                <button
+                  key={it.id}
+                  onClick={() => onBattleItemClick(it.id)}
+                  className={isPending ? 'primary' : ''}
+                  title={`${it.desc}（拥有 ${count} 个）`}
+                >
+                  {it.emoji} {it.name}×{count}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
 
       {pendingSkill && (

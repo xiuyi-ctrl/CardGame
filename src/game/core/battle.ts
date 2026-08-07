@@ -154,7 +154,7 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
     if (s.kind === 'burn' || s.kind === 'poison') {
       const dmg = Math.max(1, s.value);
       unit = { ...unit, hp: Math.max(0, unit.hp - dmg) };
-      nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`);
+      nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit));
     }
   }
   return { unit, battle: nb };
@@ -167,8 +167,12 @@ function tickStatuses(u: Unit): void {
   u.statuses = u.statuses.filter((s) => s.turns > 0);
 }
 
-export function pushLog(b: BattleState, msg: string): BattleState {
-  return { ...b, log: [...b.log.slice(-40), msg] };
+export function pushLog(b: BattleState, msg: string, side: 'player' | 'enemy' | 'info' = 'info'): BattleState {
+  return { ...b, log: [...b.log.slice(-40), { text: msg, side }] };
+}
+
+function sideOf(u: Unit): 'player' | 'enemy' {
+  return u.isPlayer ? 'player' : 'enemy';
 }
 
 function actorFromId(b: BattleState, uid: string): Unit | undefined {
@@ -223,7 +227,7 @@ function checkEnd(b: BattleState): BattleState {
       enemyBench: b.enemyBench.slice(1),
       gauntlet: { ...b.gauntlet, current: b.gauntlet.current + 1 },
     };
-    b = pushLog(b, `敌方派出下一只：${next.name}！`);
+    b = pushLog(b, `敌方派出下一只：${next.name}！`, 'enemy');
   }
   // 车轮战：场上我方全灭但还有后备 → 当前单位战败退场（不再显示），下一只顶替上场
   if (b.gauntlet && b.playerBench && b.playerBench.length > 0 && b.playerUnits.every((u) => u.hp <= 0)) {
@@ -236,7 +240,7 @@ function checkEnd(b: BattleState): BattleState {
       playerBench: b.playerBench.slice(1),
       playerDown: [...(b.playerDown ?? []), ...down],
     };
-    b = pushLog(b, `我方派出下一只：${next.name}！`);
+    b = pushLog(b, `我方派出下一只：${next.name}！`, 'player');
   }
   const playersAlive = b.playerUnits.some((u) => u.hp > 0);
   const enemiesAlive = b.enemyUnits.some((u) => u.hp > 0);
@@ -345,7 +349,7 @@ function enemyAct(b: BattleState): BattleState {
   const actor = currentActor(b);
   if (!actor || actor.hp <= 0) return b;
   if (actor.statuses.some((s) => s.kind === 'stun')) {
-    return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`), actor.uid);
+    return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
 
   return useRng(b, (rngVal, nb) => {
@@ -370,14 +374,14 @@ function markActed(b: BattleState, uid: string): BattleState {
 function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): BattleState {
   if (actor.hp <= 0) return b;
   if (actor.statuses.some((s) => s.kind === 'stun')) {
-    return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`), actor.uid);
+    return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
 
   let nb = b;
   const { targets, battle } = resolveTargets(nb, actor, skill, explicitTarget);
   nb = battle;
   if (targets.length === 0) {
-    return markActed(pushLog(nb, `${actor.name} 的${skill.name}没有目标`), actor.uid);
+    return markActed(pushLog(nb, `${actor.name} 的${skill.name}没有目标`, sideOf(actor)), actor.uid);
   }
 
   if (skill.kind === 'heal') {
@@ -387,7 +391,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const maxHp = getEffectiveMaxHp(t);
       const healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
       r = replaceUnit(r, healed);
-      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`);
+      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`, sideOf(actor));
     }
     nb = r;
   } else if (skill.kind === 'buff') {
@@ -396,7 +400,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (!e) continue;
       const buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns });
       nb = replaceUnit(nb, buffed);
-      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`);
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor));
     }
   } else {
     const perTarget = new Map<string, number>();
@@ -425,7 +429,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           }
         }
         const nb2 = replaceUnit(b2, t2);
-        return pushLog(nb2, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害${crit > 1 ? '（暴击！）' : ''}`);
+        return pushLog(nb2, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害${crit > 1 ? '（暴击！）' : ''}`, sideOf(actor));
       });
       nb = single;
     }
@@ -458,10 +462,10 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
   const enemy = b.enemyUnits.find((u) => u.uid === enemyUid);
   if (!enemy || enemy.hp <= 0) return b;
   if (!enemy.tameable) {
-    return pushLog(b, `${enemy.name} 不是可驯服的对手`);
+    return pushLog(b, `${enemy.name} 不是可驯服的对手`, 'enemy');
   }
   if (enemy.hp / enemy.maxHp > TAME_THRESHOLD) {
-    return pushLog(b, `${enemy.name} 生命值过高，无法驯服`);
+    return pushLog(b, `${enemy.name} 生命值过高，无法驯服`, 'enemy');
   }
   const food = getFood(foodId);
   const chance = tameChance(enemy, foodId);
@@ -482,13 +486,14 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
       after = pushLog(
         after,
         enemy.hp === 1 ? `${enemy.name} 已是强弩之末，被成功驯服！已加入队伍预备役` : `${enemy.name} 被成功驯服！已加入队伍预备役`,
+        'enemy',
       );
     } else {
       after = {
         ...nb,
         enemyUnits: nb.enemyUnits.map((u) => (u.uid === enemy.uid ? { ...u, tameFails: (u.tameFails ?? 0) + 1 } : u)),
       };
-      after = pushLog(after, `喂食${food.name}失败，${enemy.name} 抵抗了驯服（下次捕捉概率提高）`);
+      after = pushLog(after, `喂食${food.name}失败，${enemy.name} 抵抗了驯服（下次捕捉概率提高）`, 'enemy');
     }
     return advance(after);
   });
@@ -553,7 +558,8 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
           playerUnits: newUnits.filter(u => u.isPlayer),
           enemyUnits: newUnits.filter(u => !u.isPlayer),
         },
-        `对 ${t.name} 使用道具：回复 50% 生命`
+        `对 ${t.name} 使用道具：回复 50% 生命`,
+        sideOf(t),
       );
     }
     if (key === 'hpDown') {
@@ -569,7 +575,8 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
           playerUnits: newUnits.filter(u => u.isPlayer),
           enemyUnits: newUnits.filter(u => !u.isPlayer),
         },
-        `对 ${t.name} 使用道具：当前生命 -30%`
+        `对 ${t.name} 使用道具：当前生命 -30%`,
+        sideOf(t),
       );
     }
 
@@ -595,7 +602,8 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
         playerUnits: newUnits.filter(u => u.isPlayer),
         enemyUnits: newUnits.filter(u => !u.isPlayer),
       },
-      `对 ${t.name} 使用道具：${effectDesc[key]}（持续 ${BUFF_DURATION} 回合）`
+      `对 ${t.name} 使用道具：${effectDesc[key]}（持续 ${BUFF_DURATION} 回合）`,
+      sideOf(t),
     );
   });
 }

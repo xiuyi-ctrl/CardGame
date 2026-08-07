@@ -90,6 +90,12 @@ export interface Unit {
   };
 }
 
+export interface LogEntry {
+  text: string;
+  /** 消息归属：player=我方行动、enemy=敌方行动、info=通用/系统 */
+  side: 'player' | 'enemy' | 'info';
+}
+
 export interface BattleState {
   playerUnits: Unit[];
   enemyUnits: Unit[];
@@ -97,7 +103,7 @@ export interface BattleState {
   turnIndex: number;
   round: number;
   phase: 'acting' | 'won' | 'lost';
-  log: string[];
+  log: LogEntry[];
   pendingTame: Unit[];
   seed: number;
   rngCount: number;

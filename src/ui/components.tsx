@@ -1,4 +1,50 @@
-import type { Unit } from '../game/types';
+import type { SkillDef, Unit } from '../game/types';
+import { getSkill } from '../game/data/skills';
+
+/** 技能数值简述：伤害/治疗 + 附加效果，如 "5"、"3×2"、"6 · 🔥2/2R" */
+export function skillBrief(s: SkillDef): string {
+  const parts: string[] = [];
+  if (s.kind === 'attack') {
+    parts.push(s.hits && s.hits > 1 ? `${s.damage}×${s.hits}` : String(s.damage));
+  } else if (s.kind === 'heal') {
+    parts.push(`+${s.heal}`);
+  }
+  for (const e of s.effects ?? []) {
+    const turns = e.turns > 0 ? `/${e.turns}R` : '';
+    switch (e.kind) {
+      case 'burn':
+        parts.push(`🔥${e.value}${turns}`);
+        break;
+      case 'poison':
+        parts.push(`☠️${e.value}${turns}`);
+        break;
+      case 'atkUp':
+        parts.push(`⬆️+${e.value}${turns}`);
+        break;
+      case 'atkDown':
+        parts.push(`⬇️-${e.value}${turns}`);
+        break;
+      case 'stun':
+        parts.push(`💫${turns}`);
+        break;
+      case 'healTick':
+        parts.push(`✚${e.value}${turns}`);
+        break;
+    }
+  }
+  return parts.join(' · ');
+}
+
+/** 技能标签：名称 + 伤害/效果，悬停显示完整描述 */
+export function SkillTag({ skill, className = '' }: { skill: SkillDef; className?: string }) {
+  const brief = skillBrief(skill);
+  return (
+    <span className={`chip skill-tag ${className}`} title={`${skill.desc}${brief ? `（${brief}）` : ''}`}>
+      {skill.name}
+      {brief && <span className="skill-num">{brief}</span>}
+    </span>
+  );
+}
 
 const STATUS_ICON: Record<string, string> = {
   burn: '🔥',
@@ -85,6 +131,11 @@ export function UnitCard({ unit, className = '', onClick }: UnitCardProps) {
         </span>
         <StatusIcons unit={unit} />
         <BattleBuffIcons unit={unit} />
+      </div>
+      <div className="skill-list">
+        {unit.skills.map((sid) => (
+          <SkillTag key={sid} skill={getSkill(sid)} />
+        ))}
       </div>
     </div>
   );

@@ -26,7 +26,7 @@ describe('战斗药水：增益', () => {
     expect(after.rngCount).toBe(rc0 + 1); // 消耗随机数
     expect(after.playerUnits[0].battleBuffs?.atkUp).toBe(3);
     expect(getDamageBonus(after.playerUnits[0])).toBe(1);
-    expect(after.log[after.log.length - 1]).toContain('伤害 +1');
+    expect(after.log[after.log.length - 1].text).toContain('伤害 +1');
   });
 
   it('spd_up 提升有效速度', () => {
