@@ -210,6 +210,19 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         s = dispatch(s, { type: 'NEXT_NODE' });
         break;
       }
+      case 'backpack': {
+        s = dispatch(s, { type: 'CLOSE_BACKPACK' });
+        break;
+      }
+      case 'tame-overflow': {
+        const t = (s.tameOverflow ?? [])[0];
+        if (t) {
+          s = dispatch(s, { type: 'TAME_OVERFLOW_DISCARD', tameUid: t.uid });
+          break;
+        }
+        s = dispatch(s, { type: 'NEXT_NODE' });
+        break;
+      }
       default:
         return { result: 'stuck', detail: `unknown screen ${s.screen}`, specials };
     }

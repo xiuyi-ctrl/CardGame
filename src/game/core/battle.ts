@@ -204,12 +204,12 @@ function advance(b: BattleState): BattleState {
     guard += 1;
     const actor = nextActor(nb);
     if (!actor) {
-      nb = startRound(checkEnd(nb));
+      nb = checkEnd(startRound(nb));
       continue;
     }
     const idx = nb.turnOrder.indexOf(actor.uid);
     nb = { ...nb, turnIndex: idx };
-    if (actor.isPlayer) return nb;
+    if (actor.isPlayer) return checkEnd(nb);
     nb = useRng(nb, (_v, b2) => enemyAct(b2));
     nb = checkEnd(nb);
   }

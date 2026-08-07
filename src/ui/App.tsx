@@ -3,7 +3,7 @@ import type { Dispatch } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { canStepTo, generateMap, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
 import { STARTING_CHOICES, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
@@ -12,23 +12,6 @@ import { computeStats } from '../game/core/battle';
 import { UnitCard, SkillTag } from './components';
 import { BattleScreen } from './BattleScreen';
 import { loadSave, persistSave, quitGame } from './persistence';
-
-const NODE_ICON: Record<MapNode['type'], string> = {
-  battle: '⚔️',
-  elite: '💀',
-  rest: '🛌',
-  shop: '🏪',
-  event: '📜',
-  special: '💎',
-  boss: '👑',
-  arena: '🗡️',
-  gauntlet: '🔥',
-  corrupted: '🌑',
-  watchtower: '🔭',
-  sync: '🎁',
-  guardian: '🛡️',
-  keydoor: '🔒',
-};
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory'];
 
@@ -64,6 +47,8 @@ export default function App() {
       {state.screen === 'victory' && <VictoryScreen state={state} dispatch={dispatch} />}
       {state.screen === 'watchtower' && <WatchtowerScreen state={state} dispatch={dispatch} />}
       {state.screen === 'chest' && <ChestScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'backpack' && <BackpackScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'tame-overflow' && <TameOverflowScreen state={state} dispatch={dispatch} />}
     </div>
   );
 }
@@ -97,6 +82,9 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
             return null;
           })}
       </span>
+      <button className="home-btn" onClick={() => dispatch({ type: 'OPEN_BACKPACK' })}>
+        🎒 背包
+      </button>
       <button
         className="home-btn"
         onClick={() => {
@@ -421,7 +409,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                       ? '钥匙门：需先击败对应守卫取得钥匙'
                       : '持有钥匙，可开启高级宝箱'
                     : n.type === 'sync'
-                    ? '双生宝箱：与配对宝箱二选一（持侦察/加速道具可同时开启）'
+                    ? '双生宝箱：与配对宝箱二选一（持双生符可同时开启）'
                     : n.type === 'guardian'
                     ? '守卫：强力怪物，击败获得专用钥匙'
                     : undefined;
@@ -478,6 +466,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
 function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   return (
     <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
       <div className="section-title">战利品</div>
       <div className="log-history">
         {state.log.slice(0, 8).map((l, i) => (
@@ -528,6 +517,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 
   return (
     <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
       <div className="section-title">{title}</div>
       {!evolveMode && !boostMode && !arenaMode && (
         <div className="panel-row" style={{ marginBottom: 10 }}>
@@ -701,50 +691,6 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   const [selRow, setSelRow] = useState<number>(rows[0] ?? previewRow);
   const sel = rows.includes(selRow) ? selRow : rows[0] ?? previewRow;
 
-  function nodeInfo(n: MapNode): { icon: string; title: string; detail: string } {
-    const enc = state.map.encounter[n.id];
-    const encDetail = (list?: { speciesId: string }[]): string =>
-      list && list.length > 0
-        ? list.map((x) => `${getMonster(x.speciesId).emoji} ${getMonster(x.speciesId).name}`).join('、')
-        : '—';
-    switch (n.type) {
-      case 'battle':
-      case 'elite':
-      case 'arena':
-      case 'gauntlet':
-      case 'corrupted':
-        return { icon: NODE_ICON[n.type], title: n.label, detail: encDetail(enc) };
-      case 'boss': {
-        const e = state.map.boss[n.id]?.[0];
-        return {
-          icon: NODE_ICON.boss,
-          title: n.label,
-          detail: e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}（首领）` : '—',
-        };
-      }
-      case 'shop':
-        return { icon: NODE_ICON.shop, title: '商店', detail: '🍓 浆果 5 金 · 🍖 鲜肉 9 金 · 💎 秘晶 14 金（每店每种限购 1 次）' };
-      case 'event': {
-        const ev = state.map.events[n.id];
-        return { icon: NODE_ICON.event, title: ev?.title ?? '事件', detail: ev ? ev.choices.map((c) => c.label).join(' ／ ') : '—' };
-      }
-      case 'special': {
-        const sp = state.map.specials[n.id];
-        return { icon: NODE_ICON.special, title: sp?.title ?? '奇遇关', detail: sp ? sp.rewards.map((r) => r.label).join(' ／ ') : '—' };
-      }
-      case 'watchtower':
-        return { icon: NODE_ICON.watchtower, title: '瞭望塔', detail: '可以在此继续瞭望更下层' };
-      case 'guardian':
-        return { icon: NODE_ICON.guardian, title: n.label, detail: `${encDetail(enc)}（守卫·不可驯服，击败获得专用钥匙）` };
-      case 'keydoor':
-        return { icon: NODE_ICON.keydoor, title: n.label, detail: '需击败对应守卫取得钥匙后开启高级宝箱' };
-      case 'sync':
-        return { icon: NODE_ICON.sync, title: n.label, detail: '双生宝箱：与配对宝箱二选一（持侦察/加速道具可同时开启）' };
-      default:
-        return { icon: NODE_ICON[n.type], title: n.label, detail: '' };
-    }
-  }
-
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
@@ -763,7 +709,7 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
       </div>
       <div className="reward-cards">
         {state.map.layers[sel].map((n) => {
-          const info = nodeInfo(n);
+          const info = nodeInfo(state, n);
           return (
             <div key={n.id} className="reward-card">
               <div className="ricon">{info.icon}</div>
@@ -802,6 +748,200 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
             继续前进 →
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const [scoutMode, setScoutMode] = useState(false);
+  useEffect(() => {
+    if ((state.inventory.scout ?? 0) <= 0) setScoutMode(false);
+  }, [state.inventory.scout]);
+  const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
+  const itemList = items.filter(([id]) => ITEMS[id]);
+  const foodList = items.filter(([id]) => FOODS[id]);
+  const result = state.scoutResult;
+  return (
+    <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
+      <div className="section-title">🎒 背包</div>
+
+      <div className="section-sub">道具</div>
+      <div className="panel-row" style={{ flexWrap: 'wrap' }}>
+        {itemList.map(([id, count]) => {
+          const it = ITEMS[id];
+          return (
+            <div key={id} className="reward-card" style={{ cursor: 'default' }}>
+              <div className="ricon">{it.emoji}</div>
+              <div className="rtitle">
+                {it.name} ×{count}
+              </div>
+              <div className="rdesc">{it.desc}</div>
+              <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
+                {id === 'scout' && (
+                  <button className="primary" onClick={() => setScoutMode((v) => !v)}>
+                    {scoutMode ? '✕ 取消侦查' : '🔍 侦查节点'}
+                  </button>
+                )}
+                {id === 'purify' && (
+                  <span className="card-sub" style={{ fontSize: 11 }}>
+                    对有诅咒的宠物使用（见下方宠物区）
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {scoutMode && (
+        <>
+          <div className="section-sub">选择节点侦查（消耗 1 个侦查符）</div>
+          <div className="scout-grid">
+            {state.map.layers.map((row, ri) => (
+              <div key={ri} className="scout-row">
+                <div className="card-sub" style={{ width: 44 }}>
+                  第 {ri + 1} 层
+                </div>
+                <div className="panel-row" style={{ gap: 6 }}>
+                  {row.map((n) => {
+                    const info = nodeInfo(state, n);
+                    return (
+                      <button key={n.id} className="scout-node" onClick={() => dispatch({ type: 'USE_SCOUT', nodeId: n.id })}>
+                        {info.icon} {n.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {result && (
+        <div className="scout-result">
+          <div className="ricon">🔍</div>
+          <div className="rtitle">侦查结果：{result.title}</div>
+          <div className="rdesc">{result.detail}</div>
+        </div>
+      )}
+
+      <div className="section-sub">食物</div>
+      <div className="panel-row" style={{ flexWrap: 'wrap' }}>
+        {foodList.map(([id, count]) => (
+          <span key={id} className="chip" title={FOODS[id].desc}>
+            {FOODS[id].emoji} {FOODS[id].name}×{count}（{FOODS[id].baseTame}% 驯服率）
+          </span>
+        ))}
+      </div>
+
+      <div className="section-sub">
+        宠物（{state.roster.length}/{ROSTER_MAX}，出战 {state.field.length}/{FIELD_MAX}）
+      </div>
+      <div className="roster-list">
+        {state.roster.map((u) => {
+          const inField = state.field.includes(u.uid);
+          return (
+            <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <UnitCard unit={u} className={inField ? 'selected' : ''} />
+              <div className="panel-row" style={{ justifyContent: 'center' }}>
+                {u.curse && <span className="chip">⚠️ {CURSE_CN[u.curse]}</span>}
+                {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
+                  <span className="chip">
+                    ✨ 生命+{u.bonusStats.hp ?? 0} 速度+{u.bonusStats.spd ?? 0}
+                  </span>
+                )}
+                {u.curse && (state.inventory.purify ?? 0) > 0 && (
+                  <button onClick={() => dispatch({ type: 'USE_PURIFY', uid: u.uid })}>
+                    🧪 净化（{state.inventory.purify}）
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+        <button className="big-btn" onClick={() => dispatch({ type: 'CLOSE_BACKPACK' })}>
+          关闭背包
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const tame = (state.tameOverflow ?? [])[0];
+  if (!tame) return null;
+  const fuseCandidates = state.roster.filter((u) => {
+    if (u.speciesId !== tame.speciesId) return false;
+    if (!nextStage(u.speciesId)) return false;
+    const need = fusionNeedCount(u.speciesId);
+    const same = state.roster.filter((x) => x.speciesId === u.speciesId);
+    return same.length + 1 >= need;
+  });
+  const remaining = state.tameOverflow!.length;
+  return (
+    <div className="screen">
+      <div className="section-title">队伍已满（{state.roster.length}/{ROSTER_MAX}）</div>
+      <p className="card-sub" style={{ maxWidth: 560, textAlign: 'center', margin: '0 auto 8px' }}>
+        你驯服了新的宠物，但队伍已满。三选一：<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（作为材料与同物种宠物进化）／<b>放生</b>（丢弃）。
+      </p>
+      <div className="center-col" style={{ flex: '0 0 auto', padding: '8px 0' }}>
+        <UnitCard unit={tame} />
+      </div>
+
+      <div className="section-sub">
+        一、替换：放生一只现有宠物，让「{tame.name}」加入（还有 {remaining} 只需要处理）
+      </div>
+      <div className="roster-list">
+        {state.roster.map((u) => (
+          <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <UnitCard unit={u} />
+            <div style={{ textAlign: 'center' }}>
+              <button
+                className="primary"
+                onClick={() => dispatch({ type: 'TAME_OVERFLOW_REPLACE', tameUid: tame.uid, discardUid: u.uid })}
+              >
+                替换：放生 {u.name}（+{5 * getMonster(u.speciesId).rank}💰）
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {fuseCandidates.length > 0 && (
+        <>
+          <div className="section-sub">二、融合：与同物种宠物融合进化（消耗「{tame.name}」作为材料）</div>
+          <div className="roster-list">
+            {fuseCandidates.map((u) => {
+              const stage = nextStage(u.speciesId)!;
+              const need = fusionNeedCount(u.speciesId);
+              return (
+                <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <UnitCard unit={u} />
+                  <div style={{ textAlign: 'center' }}>
+                    <button
+                      className="primary"
+                      onClick={() => dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: tame.uid, primaryUid: u.uid })}
+                    >
+                      融合 → {getMonster(stage).name}（需 {need} 只同物种）
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+        <button className="big-btn" onClick={() => dispatch({ type: 'TAME_OVERFLOW_DISCARD', tameUid: tame.uid })}>
+          放生「{tame.name}」（不加入队伍）
+        </button>
       </div>
     </div>
   );

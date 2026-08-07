@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice } from './game';
-import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, type BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
@@ -40,6 +40,12 @@ export type GameAction =
   | { type: 'USE_PURIFY'; uid: string }
   | { type: 'USE_SKIP'; nodeId: string }
   | { type: 'USE_BATTLE_ITEM'; itemId: string; targetUid: string }
+  | { type: 'USE_SCOUT'; nodeId: string }
+  | { type: 'OPEN_BACKPACK' }
+  | { type: 'CLOSE_BACKPACK' }
+  | { type: 'TAME_OVERFLOW_REPLACE'; tameUid: string; discardUid: string }
+  | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string }
+  | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
   | { type: 'PLAYER_SKILL'; skillId: string; targetUid?: string }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
@@ -79,7 +85,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest'];
+  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -164,8 +170,11 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     ? synced.filter((u): u is Unit => u !== null).map((u) => ({ ...u, hp: Math.max(1, u.hp) }))
     : synced.filter((u): u is Unit => u !== null);
 
+  // 驯服入库：先填满空位，超出的进入溢出队列（等待玩家处理：替换/融合/放弃）
+  let overflow: Unit[] = [];
   for (const t of battle.pendingTame) {
     if (roster.length < ROSTER_MAX) roster.push(t);
+    else overflow.push(t);
   }
 
   const goldGain = challenge
@@ -190,17 +199,19 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   // 本场战斗结束：进入奖励结算
   const settled: GameState = {
     ...state,
-    screen: 'reward',
+    screen: overflow.length > 0 ? 'tame-overflow' : 'reward',
     roster,
     field: state.field.filter((uid) => roster.some((r) => r.uid === uid)),
     gold: state.gold + goldGain,
     inventory,
     battle: undefined,
+    tameOverflow: overflow.length > 0 ? overflow : undefined,
     log: [
       `战斗胜利！${goldGain > 0 ? `获得 ${goldGain} 金币` : '赢得挑战奖励'}`,
       ...keyLog,
       ...(corruptNode ? ['被侵蚀区域：奖励已翻倍'] : []),
       ...(battle.pendingTame.length > 0 ? [`驯服了 ${battle.pendingTame.length} 只宠物`] : []),
+      ...(overflow.length > 0 ? [`队伍已满（${ROSTER_MAX} 只），需要处理 ${overflow.length} 只驯服的宠物`] : []),
       ...(roster.length < state.roster.length ? [`战斗中有宠物阵亡，永远失去了它`] : []),
       ...state.log,
     ].slice(0, 20),
@@ -293,15 +304,13 @@ function enterNode(base: GameState, node: MapNode): GameState {
     );
     return { ...base, screen: 'battle', battle };
   }
-  // 同步双节点（双生宝箱）：抵达开箱；持有侦察/加速道具时消耗 1 个、同时开启两个宝箱
+  // 同步双节点（双生宝箱）：抵达开箱；持有双生符（加速道具）时消耗 1 个、同时开启两个宝箱（侦察符只用于查看情报，不双开）
   if (node.type === 'sync') {
     const paired = node.pairedId ? base.map.layers[base.currentRow]?.find((n) => n.id === node.pairedId) : undefined;
-    const hasScout = (base.inventory.scout ?? 0) > 0;
     const hasHaste = (base.inventory.haste ?? 0) > 0;
-    const double = hasScout || hasHaste;
+    const double = hasHaste;
     let inventory = base.inventory;
-    if (hasScout) inventory = { ...inventory, scout: inventory.scout! - 1 };
-    else if (hasHaste) inventory = { ...inventory, haste: inventory.haste! - 1 };
+    if (hasHaste) inventory = { ...inventory, haste: inventory.haste! - 1 };
     let next: GameState = { ...base, inventory };
     const opened: string[] = [];
     if (double && paired) {
@@ -587,6 +596,32 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'OPEN_BACKPACK': {
+      if (state.screen === 'backpack') return state;
+      return { ...state, screen: 'backpack', backpackFrom: state.screen, scoutResult: undefined };
+    }
+
+    case 'CLOSE_BACKPACK': {
+      if (state.screen !== 'backpack') return state;
+      const back = state.backpackFrom ?? 'map';
+      return { ...state, screen: back, backpackFrom: undefined, scoutResult: undefined };
+    }
+
+    case 'USE_SCOUT': {
+      const inv = state.inventory.scout ?? 0;
+      if (inv <= 0) return state;
+      const node = state.map.layers.flat().find((n) => n.id === action.nodeId);
+      if (!node) return state;
+      const info = nodeInfo(state, node);
+      return {
+        ...state,
+        screen: 'backpack',
+        inventory: { ...state.inventory, scout: inv - 1 },
+        scoutResult: { nodeId: node.id, title: info.title, detail: info.detail },
+        log: [`侦查：查看了「${node.label}」的情报`, ...state.log].slice(0, 20),
+      };
+    }
+
     case 'USE_SKIP': {
       const inv = state.inventory.skip ?? 0;
       if (inv <= 0 || state.screen !== 'map') return state;
@@ -748,6 +783,67 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         field: state.field.filter((uid) => uid !== action.uid),
         log: goldGain > 0 ? [`释放 ${unit?.name}，获得 ${goldGain} 金币`, ...state.log].slice(0, 20) : state.log,
       };
+    }
+
+    case 'TAME_OVERFLOW_REPLACE': {
+      const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
+      if (!tame) return state;
+      const discard = state.roster.find((u) => u.uid === action.discardUid);
+      if (!discard) return state;
+      if (state.roster.length <= 0) return state;
+      const goldGain = 5 * getMonster(discard.speciesId).rank;
+      const roster = [...state.roster.filter((u) => u.uid !== discard.uid), tame];
+      const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
+      const next: GameState = {
+        ...state,
+        roster,
+        field: state.field.filter((uid) => uid !== discard.uid),
+        gold: state.gold + goldGain,
+        tameOverflow: overflow,
+        log: [`释放 ${discard.name}（+${goldGain}💰），刚驯服的 ${tame.name} 加入队伍`, ...state.log].slice(0, 20),
+      };
+      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : next;
+    }
+
+    case 'TAME_OVERFLOW_FUSE': {
+      const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
+      if (!tame) return state;
+      const primary = state.roster.find((u) => u.uid === action.primaryUid);
+      if (!primary || primary.speciesId !== tame.speciesId) return state;
+      if (!nextStage(primary.speciesId)) return state;
+      const need = fusionNeedCount(primary.speciesId);
+      // 同物种（现有队伍中，不含刚驯服的这只）数量 + 刚驯服的这只 = 总数，需 >= need
+      const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
+      if (same.length + 1 < need) return state;
+      // 材料：现有同物种中除主宠外取 need-2 只，再加上刚驯服的这只，共 need-1 只
+      const useExisting = same.filter((u) => u.uid !== primary.uid).slice(0, need - 2);
+      const evolved = fuseUnit(primary);
+      if (!evolved) return state;
+      const roster = state.roster
+        .filter((u) => !useExisting.some((m) => m.uid === u.uid))
+        .map((u) => (u.uid === primary.uid ? evolved : u));
+      const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
+      const materialNames = [...useExisting.map((m) => m.name), tame.name].join('、');
+      const next: GameState = {
+        ...state,
+        roster,
+        field: state.field.filter((uid) => roster.some((u) => u.uid === uid)),
+        tameOverflow: overflow,
+        log: [`融合！${materialNames} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
+      };
+      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : next;
+    }
+
+    case 'TAME_OVERFLOW_DISCARD': {
+      const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
+      if (!tame) return state;
+      const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
+      const next: GameState = {
+        ...state,
+        tameOverflow: overflow,
+        log: [`放生了刚驯服的 ${tame.name}`, ...state.log].slice(0, 20),
+      };
+      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : next;
     }
 
     case 'SHOP_BUY': {

@@ -672,6 +672,68 @@ button.primary {
   margin: 4px 0;
 }
 
+.section-sub {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin: 10px 0 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.scout-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.scout-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.scout-node {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.scout-node:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.scout-result {
+  margin: 10px auto;
+  padding: 14px 20px;
+  max-width: 520px;
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  background: var(--bg-card);
+  text-align: center;
+}
+
+.scout-result .ricon {
+  font-size: 32px;
+}
+
+.scout-result .rtitle {
+  font-weight: 700;
+  margin: 6px 0 4px;
+}
+
+.scout-result .rdesc {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
 .panel-row {
   display: flex;
   gap: 12px;

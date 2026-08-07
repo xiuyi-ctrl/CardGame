@@ -79,4 +79,28 @@ describe('地图相邻寻路回归', () => {
       expect(after.inventory.skip).toBe(0);
     }
   });
+
+  it('地图无不可达节点：从出发层按 canStepTo 规则 BFS 能访问全部节点', () => {
+    const problems: string[] = [];
+    for (let seed = 1; seed < 80; seed++) {
+      for (let act = 1; act <= 3; act++) {
+        const map = generateMap(seed, act);
+        const total = map.layers.flat().length;
+        const reachable = new Set<string>([map.layers[0][0].id]);
+        for (let r = 0; r < map.layers.length - 1; r++) {
+          for (const n of map.layers[r]) {
+            if (!reachable.has(n.id)) continue;
+            for (const m of map.layers[r + 1]) {
+              // 与 canStepTo 一致：row 0 出发层可直达任意下一行节点，其余要求列差 ≤1
+              if (r === 0 || Math.abs(m.col - n.col) <= 1) reachable.add(m.id);
+            }
+          }
+        }
+        if (reachable.size !== total) {
+          problems.push(`seed=${seed} act=${act} 不可达 ${total - reachable.size} 个节点`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
 });

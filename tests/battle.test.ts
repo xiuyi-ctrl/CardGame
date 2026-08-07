@@ -168,6 +168,26 @@ describe('驯服', () => {
     b.hp = 1;
     expect(tameChance(b, 'berry')).toBeGreaterThan(tameChance(a, 'berry'));
   });
+
+  it('回合开始 DOT（灼烧）杀死最后一只敌人后立即判定胜利，不再多给一回合', () => {
+    let b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'pipi' }], 1);
+    b = {
+      ...b,
+      playerUnits: b.playerUnits.map((u) => ({ ...u, acted: true })),
+      enemyUnits: b.enemyUnits.map((u) => ({
+        ...u,
+        hp: 2,
+        acted: true,
+        statuses: [{ kind: 'burn', value: 2, turns: 2 }],
+      })),
+      turnOrder: [b.playerUnits[0].uid],
+      turnIndex: 0,
+    };
+    // 玩家用自我增益（不碰敌人）推进回合：startRound 结算灼烧 → 敌人阵亡 → 应立即 won
+    const after = playerSkill(b, 'roar');
+    expect(after.phase).toBe('won');
+    expect(after.enemyUnits.every((u) => u.hp <= 0)).toBe(true);
+  });
 });
 
 describe('数据完整性', () => {

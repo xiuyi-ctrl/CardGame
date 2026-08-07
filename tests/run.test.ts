@@ -796,7 +796,7 @@ describe('同步双节点', () => {
     expect(after.chestResult).toBeUndefined();
   });
 
-  it('持侦察/加速道具抵达时消耗 1 个并同时开启两个宝箱', () => {
+  it('持疾行符抵达时消耗 1 个并同时开启两个宝箱（侦察符不再参与双开）', () => {
     const { s, node, parent } = atSyncParent();
     const row = s.map.layers.findIndex((r) => r.includes(node));
     let cur: GameState = {
@@ -809,10 +809,10 @@ describe('同步双节点', () => {
     cur = dispatch(cur, { type: 'MOVE', nodeId: node.id });
     expect(cur.screen).toBe('chest');
     expect((cur.chestResult ?? []).length).toBe(2);
-    expect(cur.inventory.scout).toBe(0);
-    expect(cur.inventory.haste).toBe(1); // 只消耗 1 个（优先侦察）
+    expect(cur.inventory.scout).toBe(1); // 侦察符只用于查看情报，不参与双开
+    expect(cur.inventory.haste).toBe(0); // 只消耗疾行符
 
-    // 持疾行符同样双开
+    // 仅持侦察符不会双开
     const { s: s2, node: node2, parent: parent2 } = atSyncParent();
     const row2 = s2.map.layers.findIndex((r) => r.includes(node2));
     let cur2: GameState = {
@@ -820,11 +820,11 @@ describe('同步双节点', () => {
       screen: 'map',
       currentRow: row2 - 1,
       currentNodeId: parent2.id,
-      inventory: { ...s2.inventory, haste: 1 },
+      inventory: { ...s2.inventory, scout: 1 },
     };
     cur2 = dispatch(cur2, { type: 'MOVE', nodeId: node2.id });
-    expect((cur2.chestResult ?? []).length).toBe(2);
-    expect(cur2.inventory.haste).toBe(0);
+    expect((cur2.chestResult ?? []).length).toBe(1);
+    expect(cur2.inventory.scout).toBe(1);
   });
 });
 

@@ -145,7 +145,9 @@ export type Screen =
   | 'gameover'
   | 'victory'
   | 'watchtower'
-  | 'chest';
+  | 'chest'
+  | 'backpack'
+  | 'tame-overflow';
 
 export interface RewardChoice {
   id: string;
@@ -190,10 +192,89 @@ export interface GameState {
   watchtowerPreviewNodeId?: string;
   /** 本幕已走过的节点 ID 列表（按访问顺序，用于绘制路径高亮） */
   visitedNodeIds?: string[];
+  /** 队伍已满（ROSTER_MAX）时捕捉溢出、等待玩家处理的宠物（替换/融合/放弃） */
+  tameOverflow?: Unit[];
+  /** 侦查符使用结果：查看指定节点情报（背包界面展示） */
+  scoutResult?: { nodeId: string; title: string; detail: string } | null;
+  /** 打开背包前所在的界面（关闭背包时返回） */
+  backpackFrom?: Screen;
 }
 
-export const ROSTER_MAX = 6;
+export const ROSTER_MAX = 8;
 export const FIELD_MAX = 3;
+
+/** 地图节点图标（UI 与侦查/瞭望共用） */
+export const NODE_ICON: Record<NodeType, string> = {
+  battle: '⚔️',
+  elite: '💀',
+  rest: '🛌',
+  shop: '🏪',
+  event: '📜',
+  special: '💎',
+  boss: '👑',
+  arena: '🗡️',
+  gauntlet: '🔥',
+  corrupted: '🌑',
+  watchtower: '🔭',
+  sync: '🎁',
+  guardian: '🛡️',
+  keydoor: '🔒',
+};
+
+export interface NodeInfo {
+  icon: string;
+  title: string;
+  detail: string;
+}
+
+/** 查看单个节点的情报（侦查符 / 瞭望塔共用）：按节点类型展示敌人/货物/事件等内容 */
+export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
+  const enc = state.map.encounter[n.id];
+  const encDetail = (list?: { speciesId: string }[]): string =>
+    list && list.length > 0
+      ? list.map((x) => `${getMonster(x.speciesId).emoji} ${getMonster(x.speciesId).name}`).join('、')
+      : '—';
+  switch (n.type) {
+    case 'battle':
+    case 'elite':
+    case 'arena':
+    case 'gauntlet':
+    case 'corrupted':
+      return { icon: NODE_ICON[n.type], title: n.label, detail: encDetail(enc) };
+    case 'boss': {
+      const e = state.map.boss[n.id]?.[0];
+      return {
+        icon: NODE_ICON.boss,
+        title: n.label,
+        detail: e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}（首领）` : '—',
+      };
+    }
+    case 'shop':
+      return {
+        icon: NODE_ICON.shop,
+        title: '商店',
+        detail: '🍓 浆果 5 金 · 🍖 鲜肉 9 金 · 💎 秘晶 14 金（每店每种限购 1 次）',
+      };
+    case 'event': {
+      const ev = state.map.events[n.id];
+      return { icon: NODE_ICON.event, title: ev?.title ?? '事件', detail: ev ? ev.choices.map((c) => c.label).join(' ／ ') : '—' };
+    }
+    case 'special': {
+      const sp = state.map.specials[n.id];
+      return { icon: NODE_ICON.special, title: sp?.title ?? '奇遇关', detail: sp ? sp.rewards.map((r) => r.label).join(' ／ ') : '—' };
+    }
+    case 'watchtower':
+      return { icon: NODE_ICON.watchtower, title: '瞭望塔', detail: '可以在此继续瞭望更下层' };
+    case 'guardian':
+      return { icon: NODE_ICON.guardian, title: n.label, detail: `${encDetail(enc)}（守卫·不可驯服，击败获得专用钥匙）` };
+    case 'keydoor':
+      return { icon: NODE_ICON.keydoor, title: n.label, detail: '需击败对应守卫取得钥匙后开启高级宝箱' };
+    case 'sync':
+      return { icon: NODE_ICON.sync, title: n.label, detail: '双生宝箱：与配对宝箱二选一（持双生符可同时开启）' };
+    default:
+      return { icon: NODE_ICON[n.type], title: n.label, detail: '' };
+  }
+}
 
 let nodeSeq = 0;
 function nodeId(): string {
@@ -438,8 +519,10 @@ export function generateMap(seed: number, act: number): RunMap {
   });
 
   const layers: MapNode[][] = [];
-  // 保证相邻路线不出现死路：本行节点数最多比上一行多 1 个
-  // （这样任意列 c 在下一行都有 col ∈ [c-1, c+1] 的节点可走）
+  // 保证相邻路线双向无死路：
+  // - 向下：本行节点数至少为上一行 -1（任意列 c 在下一行都有 col ∈ [c-1, c+1] 的节点可走）；
+  // - 向上：本行节点数最多为上一行 +1（上一行列 0..prevCount-1 只能到达下一行列 0..prevCount，
+  //   否则最右节点无父节点、永远不可达）。后者由下方 `row > 1` 的上限约束实现。
   let prevCount = 1;
   // 末层首领池（shuffle 后按列分配，保证不重复）
   let actBossPool: string[] = [];
@@ -456,6 +539,9 @@ export function generateMap(seed: number, act: number): RunMap {
       continue;
     }
     let count = Math.max(prevCount - 1, randInt(rng, 3, 5));
+    // 可达性：本行数量 ≤ 上一行+1，避免上一行只有 3 个节点时下一行 5 个导致最右节点无父、不可达。
+    // 第 1 行除外：出发层（row 0）可直达下一层任意节点，不受列约束。
+    if (row > 1) count = Math.min(count, prevCount + 1);
     // 末层数量纯随机 2~3，为保无死路需倒数第二行 ≤3（k≥2 时 p≤k+1）。
     // 而倒数第二行被压到 ≤3 时，倒数第三行必须 ≤4，否则其最右列走不到倒数第二行。
     if (row === layerCount - 2) count = Math.min(3, count);
