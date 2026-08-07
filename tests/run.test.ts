@@ -7,95 +7,79 @@ import {
   type GameAction,
 } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { generateMap, gainExp, pendingEvolve, settleEvolutions, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
+import { generateMap, fuseUnit, fusionNeedCount, nextStage, recomputeStats, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
 import { createBattle, makeUnit, currentPlayerUnit, isTameable } from '../src/game/core/battle';
 
 function dispatch(state: GameState, action: GameAction): GameState {
   return gameReducer(state, action);
 }
 
-describe('成长与进化', () => {
-  it('gainExp 升级后重算属性并保留生命比例', () => {
-    const u = makeUnit('momo', 1, true, 0, false);
-    const maxHp0 = u.maxHp;
-    const leveled = gainExp(u, 100); // 远超 1→2 需要经验
-    expect(leveled.level).toBeGreaterThan(1);
-    expect(leveled.maxHp).toBeGreaterThan(maxHp0);
-    expect(leveled.hp).toBeLessThanOrEqual(leveled.maxHp);
+describe('成长与融合', () => {
+  it('nextStage 返回可融合的下一形态，末段不可融合', () => {
+    expect(nextStage('momo')).toBe('momo_queen');
+    expect(nextStage('momo_queen')).toBe('momo_god');
+    expect(nextStage('momo_god')).toBeUndefined();
+    expect(nextStage('boss_vine')).toBeUndefined();
   });
 
-  it('pendingEvolve 仅在经验冻结后成立', () => {
-    const u1 = makeUnit('momo', 1, true, 0, false);
-    expect(pendingEvolve(u1)).toBe(false);
-    const u2 = gainExp(makeUnit('momo', 1, true, 0, false), 10000);
-    expect(pendingEvolve(u2)).toBe(true);
+  it('融合需求数量：第 n 阶需 n+1 只同物种', () => {
+    expect(fusionNeedCount('momo')).toBe(2);
+    expect(fusionNeedCount('momo_queen')).toBe(3);
+    expect(fusionNeedCount('momo_god')).toBe(4);
   });
 
-  it('局内经验在进化等级前冻结', () => {
-    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000);
-    expect(u.level).toBe(2);
-    expect(u.exp).toBe(u.expToLevel);
-    expect(u.level).toBeLessThan(3);
+  it('fuseUnit：主宠融合成下一形态，血回满、属性为新形态固定值', () => {
+    const u = makeUnit('momo', true, 0, false);
+    u.hp = 3;
+    const fused = fuseUnit(u)!;
+    expect(fused.speciesId).toBe('momo_queen');
+    expect(fused.name).toBe('毛毛王后');
+    expect(fused.maxHp).toBe(18);
+    expect(fused.hp).toBe(18);
+    expect(fused.uid).toBe(u.uid);
+    expect(fused.skills).toEqual(['bite', 'leaf_needle', 'heal_light']);
   });
 
-  it('局末结算自动进化并提升属性', () => {
-    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000); // Lv2 满经验冻结
-    const s = settleEvolutions({ ...createInitialState(), roster: [u] });
-    expect(s.roster[0].speciesId).toBe('momo_queen');
-    expect(s.roster[0].level).toBe(3);
-    expect(s.roster[0].maxHp).toBeGreaterThan(u.maxHp);
-    expect(s.log.some((l) => l.includes('进化'))).toBe(true);
+  it('fuseUnit 继承主宠的强化与诅咒', () => {
+    const u = makeUnit('momo', true, 0, false);
+    const boosted = recomputeStats({ ...u, bonusStats: { hp: 3, spd: 1 } });
+    const cursed = { ...boosted, curse: 'spdDown' as const };
+    const fused = fuseUnit(cursed)!;
+    expect(fused.bonusStats).toEqual({ hp: 3, spd: 1 });
+    expect(fused.curse).toBe('spdDown');
+    expect(fused.spd).toBe(4); // 王后 spd4 +1 -1
   });
 
-  it('失败结算触发进化并进入 gameover', () => {
-    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000);
-    let s: GameState = {
-      ...createInitialState(),
-      screen: 'battle',
-      roster: [u],
-      field: [u.uid],
-      battle: {
-        playerUnits: [u],
-        enemyUnits: [],
-        turnOrder: [],
-        turnIndex: 0,
-        round: 1,
-        phase: 'lost',
-        log: [],
-        pendingTame: [],
-        seed: 1,
-        rngCount: 0,
-      },
-    };
-    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
-    expect(s.screen).toBe('gameover');
-    expect(s.roster[0].speciesId).toBe('momo_queen');
+  it('FUSE reducer：材料不足被拒；材料足够融合并移除材料', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const a = makeUnit('momo', true, 0, false);
+    const b = makeUnit('momo', true, 1, false);
+    s = { ...s, screen: 'roster', roster: [a, b], field: [a.uid, b.uid] };
+    // 仅一只时被拒
+    const solo = dispatch({ ...s, roster: [a], field: [a.uid] }, { type: 'FUSE', primaryUid: a.uid });
+    expect(solo.roster).toHaveLength(1);
+    expect(solo.roster[0].speciesId).toBe('momo');
+    // 两只融合成 momo_queen
+    const next = dispatch(s, { type: 'FUSE', primaryUid: a.uid });
+    expect(next.roster).toHaveLength(1);
+    expect(next.roster[0].speciesId).toBe('momo_queen');
+    expect(next.roster[0].uid).toBe(a.uid);
+    expect(next.field).toEqual([a.uid]);
+    expect(next.log[0]).toContain('融合');
   });
 
-  it('战斗胜利结算自动进化', () => {
-    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000); // Lv2 满经验冻结
-    let s: GameState = {
-      ...createInitialState(),
-      screen: 'battle',
-      roster: [u],
-      field: [u.uid],
-      battle: {
-        playerUnits: [u],
-        enemyUnits: [],
-        turnOrder: [],
-        turnIndex: 0,
-        round: 1,
-        phase: 'won',
-        log: [],
-        pendingTame: [],
-        seed: 1,
-        rngCount: 0,
-      },
-    };
-    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
-    expect(s.screen).toBe('reward');
-    expect(s.roster[0].speciesId).toBe('momo_queen');
-    expect(s.roster[0].level).toBe(3);
+  it('二阶融合需要 3 只同物种', () => {
+    const a = makeUnit('momo_queen', true, 0, false);
+    const b = makeUnit('momo_queen', true, 1, false);
+    let s: GameState = { ...createInitialState(), screen: 'roster', roster: [a, b], field: [a.uid, b.uid] };
+    // 2 只不够
+    const two = dispatch(s, { type: 'FUSE', primaryUid: a.uid });
+    expect(two.roster.map((u) => u.speciesId)).toEqual(['momo_queen', 'momo_queen']);
+    // 3 只融合成 momo_god
+    const c = makeUnit('momo_queen', true, 2, false);
+    const three = dispatch({ ...s, roster: [a, b, c], field: [a.uid, b.uid, c.uid] }, { type: 'FUSE', primaryUid: a.uid });
+    expect(three.roster).toHaveLength(1);
+    expect(three.roster[0].speciesId).toBe('momo_god');
   });
 });
 
@@ -222,7 +206,6 @@ describe('地图生成', () => {
     const choice =
       ev.choices.find((x) => x.kind === 'gold') ??
       ev.choices.find((x) => x.kind === 'heal') ??
-      ev.choices.find((x) => x.kind === 'exp') ??
       ev.choices[0];
     const goldBefore = s.gold;
     s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: choice.id });
@@ -241,7 +224,7 @@ describe('地图生成', () => {
 
 describe('完整肉鸽流程', () => {
   it('从开始到战斗胜利并确认收获', () => {
-    const strong = makeUnit('momo_queen', 3, true, 0, false);
+    const strong = makeUnit('momo_god', true, 0, false);
     let s: GameState = {
       ...createInitialState(),
       screen: 'map',
@@ -257,8 +240,8 @@ describe('完整肉鸽流程', () => {
         encounter: {
           ...s.map.encounter,
           [firstNode.id]: [
-            { speciesId: 'kiki', level: 1 },
-            { speciesId: 'kiki', level: 1 },
+            { speciesId: 'kiki' },
+            { speciesId: 'kiki' },
           ],
         },
       },
@@ -293,8 +276,8 @@ describe('完整肉鸽流程', () => {
   });
 
   it('胜利后阵亡单位从队伍永久移除', () => {
-    const starter = makeUnit('momo', 1, true, 0, false);
-    const meat = makeUnit('fifi', 1, true, 1, false);
+    const starter = makeUnit('momo', true, 0, false);
+    const meat = makeUnit('fifi', true, 1, false);
     let s: GameState = {
       ...createInitialState(),
       screen: 'map',
@@ -302,7 +285,7 @@ describe('完整肉鸽流程', () => {
       field: [starter.uid, meat.uid],
       seed: 9,
     };
-    const battle = createBattle([starter, meat], [{ speciesId: 'pipi', level: 1 }], 9);
+    const battle = createBattle([starter, meat], [{ speciesId: 'pipi' }], 9);
     // 手动击杀 meat 后获胜
     const meatInBattle = battle.playerUnits.find((u) => u.uid === meat.uid)!;
     meatInBattle.hp = 0;
@@ -315,9 +298,9 @@ describe('完整肉鸽流程', () => {
   });
 
   it('战斗胜利后后备（未上场）宠物保留在队伍', () => {
-    const starter = makeUnit('momo', 1, true, 0, false);
-    const meat = makeUnit('fifi', 1, true, 1, false);
-    const backup = makeUnit('lulu', 1, true, 2, false);
+    const starter = makeUnit('momo', true, 0, false);
+    const meat = makeUnit('fifi', true, 1, false);
+    const backup = makeUnit('lulu', true, 2, false);
     let s: GameState = {
       ...createInitialState(),
       screen: 'map',
@@ -325,7 +308,7 @@ describe('完整肉鸽流程', () => {
       field: [starter.uid, meat.uid],
       seed: 9,
     };
-    const battle = createBattle([starter, meat], [{ speciesId: 'pipi', level: 1 }], 9);
+    const battle = createBattle([starter, meat], [{ speciesId: 'pipi' }], 9);
     const aliveEnemy = battle.enemyUnits.find((u) => u.hp > 0)!;
     aliveEnemy.hp = 0;
     const won = { ...battle, phase: 'won' as const };
@@ -337,13 +320,13 @@ describe('完整肉鸽流程', () => {
 
   it('驯服获得的新宠物会进入队伍', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 5 });
-    const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'momo', level: 1 }], 5);
+    const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'momo' }], 5);
     const enemy = battle.enemyUnits[0];
     enemy.hp = Math.floor(enemy.maxHp * 0.1);
     // 直接构造 battle 后 resolve
     const tamed = { ...battle, phase: 'won' as const };
     // 模拟玩家驯服：把敌人加入 pendingTame 再胜利
-    tamed.pendingTame.push(makeUnit(enemy.speciesId, 1, true, 2, false));
+    tamed.pendingTame.push(makeUnit(enemy.speciesId, true, 2, false));
     s = resolveBattle(s, tamed);
     expect(s.roster.length).toBe(3);
   });
@@ -352,7 +335,7 @@ describe('完整肉鸽流程', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 11 });
     // 直接放置首领战状态
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
-    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine', level: 4 }] } } };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     s = dispatch(s, { type: 'NEXT_NODE' });
     expect(s.act).toBe(2);
     expect(s.screen).toBe('map');
@@ -361,7 +344,7 @@ describe('完整肉鸽流程', () => {
   it('第三层首领后通关', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 12 });
     s = { ...s, act: 3, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
-    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_fire', level: 9 }] } } };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_fire' }] } } };
     s = dispatch(s, { type: 'NEXT_NODE' });
     expect(s.screen).toBe('victory');
   });
@@ -370,7 +353,7 @@ describe('完整肉鸽流程', () => {
 describe('队伍上限', () => {
   it('招募奖励不会超过队伍上限', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 2 });
-    const filler = Array.from({ length: ROSTER_MAX }, () => makeUnit('kiki', 1, true, 0, false));
+    const filler = Array.from({ length: ROSTER_MAX }, () => makeUnit('kiki', true, 0, false));
     s = { ...s, roster: filler };
     const rec = { id: 'r', label: '', desc: '', kind: 'recruit' as const, monsterId: 'mimi' };
     s = { ...s, rewards: [rec], screen: 'reward' };
@@ -469,7 +452,6 @@ describe('奇遇关', () => {
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'e' });
     expect(s.specialPending).toEqual({ kind: 'evolve', super: false });
     const momo = s.roster.find((u) => u.speciesId === 'momo')!;
-    expect(momo.level).toBe(1);
     s = dispatch(s, { type: 'EVOLVE_ONE', uid: momo.uid });
     const evolved = s.roster.find((u) => u.uid === momo.uid)!;
     expect(evolved.speciesId).toBe('momo_queen');
@@ -478,7 +460,7 @@ describe('奇遇关', () => {
 
   it('无可进化宠物时进化奖励被拒绝', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    const noEvo = { ...run, roster: [makeUnit('custom_fury', 1, true, 0, false)] };
+    const noEvo = { ...run, roster: [makeUnit('custom_fury', true, 0, false)] };
     const s = atSpecial(noEvo, [reward('e', 'evolve')]);
     const next = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'e' });
     expect(next.screen).toBe('special');
@@ -509,14 +491,14 @@ describe('奇遇关', () => {
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'b' });
     expect(s.specialPending).toEqual({ kind: 'boost', uid: '' });
     const u = s.roster[0];
-    const atk0 = u.atk;
+    const hp0 = u.maxHp;
     s = dispatch(s, { type: 'SPECIAL_TARGET', uid: u.uid });
     expect(s.screen).toBe('boost');
-    s = dispatch(s, { type: 'BOOST_STAT', stat: 'atk' });
+    s = dispatch(s, { type: 'BOOST_STAT', stat: 'hp' });
     expect(s.screen).toBe('roster');
     expect(s.specialPending).toBeUndefined();
     const boosted = s.roster.find((x) => x.uid === u.uid)!;
-    expect(boosted.atk).toBeGreaterThan(atk0);
+    expect(boosted.maxHp).toBe(hp0 + 3);
   });
 
   it('造物：选择模板后随机技能自创生物加入队伍', () => {

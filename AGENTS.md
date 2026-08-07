@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（21 个，含整局模拟）。
+- `npm test` / `npx vitest run`：单元测试（104 个，含整局模拟）。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
 - `npm run dist`：build 后 electron-builder 打包 `--win portable`。
@@ -21,14 +21,16 @@
 - `src/game/`：纯逻辑、数据驱动、可播种随机（与 UI 完全解耦，可单测）。
   - `types.ts` 全量类型；`rng.ts` 可复现随机；`data/{skills,foods,monsters}.ts` 数据表。
   - `core/battle.ts` 战斗引擎（createBattle/playerSkill/playerTame/advance/useRng/currentPlayerUnit/isTameable）。
-  - `state/game.ts` 地图/奖励/成长/经验/进化；`state/reducer.ts` 全局状态机与所有 GameAction。
+  - `state/game.ts` 地图/奖励/成长/融合；`state/reducer.ts` 全局状态机与所有 GameAction。
 - `src/ui/`：React 界面（App.tsx 全界面 + BattleScreen.tsx + components.tsx + styles.css）。
 - `electron/`：Electron 主进程/预加载（编译产物到 `dist-electron/`）。
 - `tests/`：vitest 测试（`test.include` 已限定 `tests/**/*.test.ts`，避免误扫 `.agents/skills`）。
 
 ## 核心设计约定
 
-- 五行克制：`ELEMENT_ORDER = ['fire','nature','water','shadow','metal']`，i 克 i+1（1.5x）、被 i+2 克（0.75x）。
+- 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼/虚弱/药水 ±1）+ 暴击 1.5x。
+- 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。
+- 属性强化固定值：生命 +3 / 速度 +1；诅咒：血脆=生命-5、虚弱=伤害-1、迟缓=速度-1；侵蚀节点：速度-1 / 受伤+1。
 - 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。
 - 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 6、出战 3。
 - 所有随机必须经 `useRng`/`createRng`（seed + rngCount），保证确定性、可复现、可单测。

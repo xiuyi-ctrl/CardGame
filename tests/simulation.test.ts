@@ -3,9 +3,8 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { currentPlayerUnit, isTameable } from '../src/game/core/battle';
-import { canStepTo, canTameEnemy, ROSTER_MAX, type MapNode } from '../src/game/state/game';
+import { canStepTo, canTameEnemy, nextStage, ROSTER_MAX, type MapNode } from '../src/game/state/game';
 import { getSkill } from '../src/game/data/skills';
-import { getEvolution } from '../src/game/data/monsters';
 import { FOODS } from '../src/game/data/foods';
 
 function dispatch(s: GameState, a: GameAction): GameState {
@@ -41,7 +40,7 @@ function botBattleStep(s: GameState): GameState {
   const skillIds = cur.skills
     .map((id) => ({ id, def: getSkill(id) }))
     .filter((x) => x.def.target !== 'self')
-    .sort((a, c) => c.def.power - a.def.power);
+    .sort((a, c) => (c.def.damage ?? 0) - (a.def.damage ?? 0));
   const chosen = skillIds[0] ?? { id: cur.skills[0], def: getSkill(cur.skills[0]) };
   const targets = b.enemyUnits.filter((u) => u.hp > 0);
   if (chosen.def.target === 'all') {
@@ -59,12 +58,12 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
     steps += 1;
     if (s.screen === 'victory') return { result: 'victory', detail: '', specials };
     if (s.screen === 'gameover')
-      return { result: 'gameover', detail: `act=${s.act} row=${s.currentRow} roster=${s.roster.length} rosterLv=${s.roster.map((u) => u.level).join(',')}`, specials };
+      return { result: 'gameover', detail: `act=${s.act} row=${s.currentRow} roster=${s.roster.length} hp=${s.roster.map((u) => u.hp).join(',')}`, specials };
 
     switch (s.screen) {
       case 'map': {
         const best = [...s.roster]
-          .sort((a, c) => c.maxHp + c.atk - (a.maxHp + a.atk))
+          .sort((a, c) => c.maxHp - a.maxHp)
           .slice(0, 3)
           .map((u) => u.uid);
         if (best.length > 0 && s.field.join(',') !== best.join(',')) s = dispatch(s, { type: 'SET_FIELD', uids: best });
@@ -126,7 +125,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
       }
       case 'roster': {
         if (s.specialPending?.kind === 'evolve') {
-          const target = s.roster.find((u) => getEvolution(u.speciesId));
+          const target = s.roster.find((u) => nextStage(u.speciesId));
           if (target) {
             s = dispatch(s, { type: 'EVOLVE_ONE', uid: target.uid });
             break;
@@ -140,7 +139,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           }
         }
         if (s.specialPending?.kind === 'arena') {
-          const t = [...s.roster].sort((a, c) => c.maxHp + c.atk - (a.maxHp + a.atk))[0];
+          const t = [...s.roster].sort((a, c) => c.maxHp - a.maxHp)[0];
           if (t) {
             s = dispatch(s, { type: 'SPECIAL_TARGET', uid: t.uid });
             break;
@@ -171,7 +170,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         // 过滤买不起的花费选项，避免事件界面卡死
         const affordable = ev.choices.filter((c) => (c.goldDelta ?? 0) >= 0 || s.gold + (c.goldDelta ?? 0) >= 0);
         const pool = affordable.length > 0 ? affordable : ev.choices;
-        const priority = ['recruit', 'heal', 'exp', 'food', 'none', 'gold'];
+        const priority = ['recruit', 'heal', 'food', 'none', 'gold'];
         const pick = pool.find((c) => priority.includes(c.kind)) ?? pool.find((c) => c.kind === 'none') ?? pool[0];
         s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: pick.id });
         break;
@@ -183,7 +182,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           s = dispatch(s, { type: 'NEXT_NODE' });
           break;
         }
-        const hasEvolvable = s.roster.some((u) => getEvolution(u.speciesId));
+        const hasEvolvable = s.roster.some((u) => nextStage(u.speciesId));
         const rosterFull = s.roster.length >= ROSTER_MAX;
         const valid = sp.rewards.filter(
           (r) =>
@@ -200,7 +199,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         break;
       }
       case 'boost': {
-        s = dispatch(s, { type: 'BOOST_STAT', stat: 'atk' });
+        s = dispatch(s, { type: 'BOOST_STAT', stat: 'hp' });
         break;
       }
       case 'watchtower': {

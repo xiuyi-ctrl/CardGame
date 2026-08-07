@@ -298,8 +298,8 @@ export function BattleScreen({ state, dispatch }: Props) {
             <h2>{isChallenge ? '挑战胜利' : '战斗胜利'}</h2>
             <p>
               {isChallenge
-                ? `驯服了 ${battle.pendingTame.length} 只宠物，获得经验与挑战奖励`
-                : `驯服了 ${battle.pendingTame.length} 只宠物，获得经验与金币`}
+                ? `驯服了 ${battle.pendingTame.length} 只宠物，获得挑战奖励`
+                : `驯服了 ${battle.pendingTame.length} 只宠物，获得金币`}
             </p>
             <button className="primary big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
               确认收获

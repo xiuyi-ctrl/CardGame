@@ -1,8 +1,8 @@
 import type { BattleState, FoodDef, Unit } from '../types';
-import { getMonster } from '../data/monsters';
+import { getMonster, fusionNeed } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
 import { createRng, pick, randInt, shuffle } from '../rng';
-import { computeStats, makeUnit, unlockedSkills } from '../core/battle';
+import { computeStats, makeUnit } from '../core/battle';
 
 export type NodeType =
   | 'battle'
@@ -63,8 +63,8 @@ export interface EventChoice {
   id: string;
   label: string;
   desc: string;
-  kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'exp' | 'item' | 'none';
-  /** heal/damage=百分比，gold=金额，exp=经验值 */
+  kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none';
+  /** heal/damage=百分比，gold=金额 */
   amount?: number;
   /** 金币变动（food/exp 附加） */
   goldDelta?: number;
@@ -101,12 +101,12 @@ export interface SpecialNode {
 }
 
 export const SPECIAL_REWARDS: SpecialReward[] = [
-  { id: 'sr-evolve', label: '进化之光', desc: '选择一只宠物直接进化到下一形态（无视等级）', kind: 'evolve' },
+  { id: 'sr-evolve', label: '进化之光', desc: '选择一只宠物免费融合进化到下一形态', kind: 'evolve' },
   { id: 'sr-gold', label: '龙之宝藏', desc: '获得 60 金币', kind: 'gold', amount: 60 },
   { id: 'sr-golden-fruit', label: '圣果', desc: '获得 1 个必定驯服的圣果', kind: 'item', itemId: 'golden_fruit' },
-  { id: 'sr-boost', label: '属性强化', desc: '选择一只宠物，永久提升生命/攻击/速度之一', kind: 'boost' },
+  { id: 'sr-boost', label: '属性强化', desc: '选择一只宠物，永久提升生命+3 或速度+1', kind: 'boost' },
   { id: 'sr-custom', label: '造物·自创生物', desc: '从三种属性模板中创造一只独特生物，技能随机组合', kind: 'custom' },
-  { id: 'sr-superevolve', label: '超进化', desc: '进化一只宠物，但附带随机负面诅咒', kind: 'superevolve' },
+  { id: 'sr-superevolve', label: '超进化', desc: '选择一只宠物融合进化，但附带随机负面诅咒', kind: 'superevolve' },
   { id: 'sr-purify', label: '净化药水', desc: '获得 1 瓶清除负面诅咒的药水', kind: 'item', itemId: 'purify' },
   { id: 'sr-skip', label: '跳关道具', desc: '获得 1 个可跳过战斗关卡的跳关道具', kind: 'item', itemId: 'skip' },
 ];
@@ -121,8 +121,8 @@ export const CURSE_CN: Record<NonNullable<Unit['curse']>, string> = {
 
 export interface RunMap {
   layers: MapNode[][];
-  encounter: Record<string, { speciesId: string; level: number }[]>;
-  boss: Record<string, { speciesId: string; level: number }[]>;
+  encounter: Record<string, { speciesId: string }[]>;
+  boss: Record<string, { speciesId: string }[]>;
   events: Record<string, EventNode>;
   specials: Record<string, SpecialNode>;
   /** 已失效（消失/已开启）的节点 id：同步双节点被开启后配对节点消失、钥匙门开启后失效 */
@@ -257,53 +257,46 @@ function buildEncounter(
   progress: number,
   bossId?: string,
   gauntletSize?: 2 | 3,
-): { speciesId: string; level: number }[] {
-  const lv = (a: number, b: number) => a + Math.floor(rng() * (b - a + 1));
-  const one = (pool: string[], lo: number, hi: number) => ({ speciesId: pick(rng, pool), level: lv(lo, hi) });
+): { speciesId: string }[] {
+  const one = (pool: string[]) => ({ speciesId: pick(rng, pool) });
   if (type === 'boss') {
-    return [{ speciesId: bossId ?? ACT_BOSS_POOLS[act][0], level: lv(3 + act, 4 + act) }];
+    return [{ speciesId: bossId ?? ACT_BOSS_POOLS[act][0] }];
   }
   if (type === 'elite') {
-    if (act === 1) return [one(ACT1_ELITE_POOL, 2, 3)];
-    if (act === 2) return [one(ACT2_ELITE_POOL, 4, 5)];
-    return [one(ACT3_ELITE_POOL, 6, 7), one(ACT2_BATTLE_POOL, 5, 6)];
+    if (act === 1) return [one(ACT1_ELITE_POOL)];
+    if (act === 2) return [one(ACT2_ELITE_POOL)];
+    return [one(ACT3_ELITE_POOL), one(ACT2_BATTLE_POOL)];
   }
-  // 斗兽场：1v1 单挑较强野生怪（精英池，等级略高）
+  // 斗兽场：1v1 单挑较强野生怪（精英池）
   if (type === 'arena') {
     const pool = act === 1 ? ACT1_ELITE_POOL : act === 2 ? ACT2_ELITE_POOL : ACT3_ELITE_POOL;
-    const level = act === 1 ? lv(2, 3) : act === 2 ? lv(4, 5) : lv(6, 7);
-    return [one(pool, level, level)];
+    return [one(pool)];
   }
   // 车轮战：2~3 只轮换上阵（数量由节点要求决定）
   if (type === 'gauntlet') {
-    const size = gauntletSize ?? (act === 1 ? 2 : lv(2, 3));
-    const level = act === 1 ? lv(1, 2) : act === 2 ? lv(3, 5) : lv(5, 7);
+    const size = gauntletSize ?? (act === 1 ? 2 : 2 + Math.floor(rng() * 2));
     const pool = act === 1 ? ACT1_BATTLE_POOL : act === 2 ? ACT2_BATTLE_POOL : ACT3_BATTLE_POOL;
-    return Array.from({ length: size }, () => one(pool, level, level));
+    return Array.from({ length: size }, () => one(pool));
   }
-  // 守卫：强力怪物（精英池、更高等级、不可驯服），击败获得专用钥匙
+  // 守卫：强力怪物（精英池、数量更多、不可驯服），击败获得专用钥匙
   if (type === 'guardian') {
     const pool = act === 1 ? ACT1_ELITE_POOL : act === 2 ? ACT2_ELITE_POOL : ACT3_ELITE_POOL;
-    const level = act === 1 ? lv(3, 4) : act === 2 ? lv(5, 6) : lv(7, 8);
-    const count = act === 1 ? 1 : lv(1, 2);
-    return Array.from({ length: count }, () => one(pool, level, level));
+    const count = act === 1 ? 1 : 1 + Math.floor(rng() * 2);
+    return Array.from({ length: count }, () => one(pool));
   }
   // battle
   const early = progress < 0.2;
   const late = progress > 0.6;
   if (act === 1) {
-    const count = early ? 1 : late ? lv(2, 3) : 2;
-    const level = early ? 1 : late ? lv(2, 3) : lv(1, 2);
-    return Array.from({ length: count }, () => one(ACT1_BATTLE_POOL, level, level));
+    const count = early ? 1 : late ? 2 + Math.floor(rng() * 2) : 2;
+    return Array.from({ length: count }, () => one(ACT1_BATTLE_POOL));
   }
   if (act === 2) {
-    const count = early ? 2 : lv(2, 3);
-    const level = early ? lv(3, 4) : lv(3, 5);
-    return Array.from({ length: count }, () => one(ACT2_BATTLE_POOL, level, level));
+    const count = early ? 2 : 2 + Math.floor(rng() * 2);
+    return Array.from({ length: count }, () => one(ACT2_BATTLE_POOL));
   }
-  const count = early ? 2 : lv(2, 3);
-  const level = early ? lv(5, 6) : lv(5, 7);
-  return Array.from({ length: count }, () => one(ACT3_BATTLE_POOL, level, level));
+  const count = early ? 2 : 2 + Math.floor(rng() * 2);
+  return Array.from({ length: count }, () => one(ACT3_BATTLE_POOL));
 }
 
 /** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */export function buildEvent(rng: () => number): EventNode {
@@ -333,7 +326,7 @@ function buildEncounter(
       title: '古老祭坛',
       desc: '一座刻满符文的祭坛散发着危险而诱人的力量。',
       choices: [
-        c(1, '献上金币祈愿', '损失 20 金币，全体获得大量经验', 'exp', { amount: 30, goldDelta: -20 }),
+        c(1, '献上金币祈愿', '损失 20 金币，全体恢复 40% 生命', 'heal', { amount: 40, goldDelta: -20 }),
         c(2, '鲁莽触碰', '符文能量灼伤全队（失去 15% 生命）', 'damage', { amount: 15 }),
         c(3, '离开', '敬畏地绕开祭坛', 'none'),
       ],
@@ -373,10 +366,10 @@ function buildEncounter(
     };
   }
   return {
-    title: '训练营地',
+      title: '训练营地',
     desc: '一片被踩实的空地，似乎曾被勇者用作训练场。',
     choices: [
-      c(1, '严格训练', '全体获得经验', 'exp', { amount: 20 }),
+      c(1, '严格训练', '全体恢复 30% 生命', 'heal', { amount: 30 }),
       c(2, '休整半天', '全体恢复 20% 生命', 'heal', { amount: 20 }),
       c(3, '离开', '时间不等人', 'none'),
     ],
@@ -432,8 +425,8 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
 export function generateMap(seed: number, act: number): RunMap {
   const rng = createRng(seed + act * 1013);
   const layerCount = randInt(rng, 8, 10);
-  const encounter: Record<string, { speciesId: string; level: number }[]> = {};
-  const boss: Record<string, { speciesId: string; level: number }[]> = {};
+  const encounter: Record<string, { speciesId: string }[]> = {};
+  const boss: Record<string, { speciesId: string }[]> = {};
   const events: Record<string, EventNode> = {};
   const specials: Record<string, SpecialNode> = {};
 
@@ -658,12 +651,10 @@ export function labelOf(t: NodeType, row: number): string {
 
 export interface BaseStats {
   maxHp: number;
-  atk: number;
   spd: number;
-  def: number;
 }
 
-/** 把属性强化加成与负面诅咒折算进基准属性（升级/进化/净化/强化时统一使用） */
+/** 把属性强化加成与负面诅咒折算进基准属性（融合/净化/强化时统一使用） */
 export function applyMods(stats: BaseStats, u: Pick<Unit, 'bonusStats' | 'curse'>): BaseStats {
   let out = { ...stats };
   const b = u.bonusStats;
@@ -671,139 +662,66 @@ export function applyMods(stats: BaseStats, u: Pick<Unit, 'bonusStats' | 'curse'
     out = {
       ...out,
       maxHp: out.maxHp + (b.hp ?? 0),
-      atk: out.atk + (b.atk ?? 0),
       spd: out.spd + (b.spd ?? 0),
     };
   }
-  if (u.curse === 'hpDown') out = { ...out, maxHp: Math.max(1, Math.round(out.maxHp * 0.8)) };
-  else if (u.curse === 'atkDown') out = { ...out, atk: Math.max(1, Math.round(out.atk * 0.8)) };
-  else if (u.curse === 'spdDown') out = { ...out, spd: Math.max(1, Math.round(out.spd * 0.8)) };
+  if (u.curse === 'hpDown') out = { ...out, maxHp: Math.max(1, out.maxHp - 5) };
+  else if (u.curse === 'spdDown') out = { ...out, spd: Math.max(1, out.spd - 1) };
+  // 虚弱（atkDown）：伤害 -1，在战斗伤害结算中体现，不影响属性
   return out;
 }
 
 /** 以物种基准 + 加成/诅咒重算并回写属性（属性强化、净化后调用） */
 export function recomputeStats(unit: Unit): Unit {
-  const stats = applyMods(computeStats(unit.speciesId, unit.level), unit);
+  const stats = applyMods(computeStats(unit.speciesId), unit);
   return {
     ...unit,
     maxHp: stats.maxHp,
     hp: Math.min(stats.maxHp, unit.hp + Math.max(0, stats.maxHp - unit.maxHp)),
-    atk: stats.atk,
     spd: stats.spd,
-    def: stats.def,
   };
 }
 
-/** 该物种的下一段进化等级；不可进化返回 undefined */
-export function nextEvolutionLevel(speciesId: string): number | undefined {
-  return getMonster(speciesId).evolutions?.[0]?.level;
+/** 该物种可融合到的下一形态（不可融合返回 undefined） */
+export function nextStage(speciesId: string): string | undefined {
+  return getMonster(speciesId).evolutions?.[0]?.to;
 }
 
-function levelUpUnit(unit: Unit): Unit {
-  const next = unit.level + 1;
-  const stats = applyMods(computeStats(unit.speciesId, next), unit);
-  const hpDelta = stats.maxHp - unit.maxHp;
+/** 融合需要的同物种数量（含主宠自身）：第 n 阶需 n+1 只 */
+export function fusionNeedCount(speciesId: string): number {
+  return fusionNeed(speciesId);
+}
+
+/**
+ * 融合：主宠 + 若干同物种材料 → 下一形态。
+ * 结果宠继承主宠的 bonusStats/诅咒/自创技能，属性为新形态固定值，生命回满。
+ * 材料（不含主宠）在调用前应从队伍移除。
+ */
+export function fuseUnit(primary: Unit): Unit | null {
+  const target = nextStage(primary.speciesId);
+  if (!target) return null;
+  const stats = applyMods(computeStats(target), primary);
+  const sp = getMonster(target);
   return {
-    ...unit,
-    level: next,
+    ...primary,
+    speciesId: target,
+    name: sp.name,
+    emoji: sp.emoji,
     maxHp: stats.maxHp,
-    hp: Math.min(stats.maxHp, unit.hp + Math.max(0, hpDelta)),
-    atk: stats.atk,
+    hp: stats.maxHp,
     spd: stats.spd,
-    def: stats.def,
-    exp: 0,
-    expToLevel: 10 * next,
-    skills: unit.customSkills ?? unlockedSkills(unit.speciesId, next),
+    skills: primary.customSkills ?? [...sp.skills],
   };
-}
-
-/** 获取经验并升级；若升级会跨过进化等级则经验冻结在该级满经验（局内不可进化） */
-export function gainExp(unit: Unit, amount: number): Unit {
-  let u = { ...unit };
-  const th = nextEvolutionLevel(u.speciesId);
-  if (th !== undefined && u.level >= th) return u;
-  let remaining = amount;
-  while (remaining > 0) {
-    const need = u.expToLevel - u.exp;
-    if (remaining < need) {
-      u = { ...u, exp: u.exp + remaining };
-      break;
-    }
-    const next = u.level + 1;
-    if (th !== undefined && next === th) {
-      u = { ...u, exp: u.expToLevel };
-      break;
-    }
-    remaining -= need;
-    u = levelUpUnit(u);
-  }
-  return u;
-}
-
-export function evolveUnit(unit: Unit): Unit | null {
-  const sp = getMonster(unit.speciesId);
-  const evo = sp.evolutions?.[0];
-  if (!evo || unit.level < evo.level) return null;
-  const stats = applyMods(computeStats(evo.to, unit.level), unit);
-  const hpDelta = stats.maxHp - unit.maxHp;
-  return {
-    ...unit,
-    speciesId: evo.to,
-    name: getMonster(evo.to).name,
-    emoji: getMonster(evo.to).emoji,
-    element: getMonster(evo.to).element,
-    maxHp: stats.maxHp,
-    hp: Math.min(stats.maxHp, unit.hp + Math.max(0, hpDelta)),
-    atk: stats.atk,
-    spd: stats.spd,
-    def: stats.def,
-    skills: unit.customSkills ?? unlockedSkills(evo.to, unit.level),
-  };
-}
-
-/** 无视等级直接进化（奇遇关「进化之光/超进化」） */
-export function evolveUnitForce(unit: Unit): Unit | null {
-  const sp = getMonster(unit.speciesId);
-  const evo = sp.evolutions?.[0];
-  if (!evo) return null;
-  let nu = unit;
-  if (nu.level < evo.level) nu = { ...nu, level: evo.level };
-  return evolveUnit(nu);
 }
 
 /** 造物·自创生物：按属性模板生成生物，技能从模板技能池随机组合 3 个 */
-export function makeCustomUnit(presetId: string, level: number, rng: () => number): Unit {
+export function makeCustomUnit(presetId: string, rng: () => number): Unit {
   const s = getMonster(presetId);
-  const u = makeUnit(presetId, level, true, 0, false);
+  const u = makeUnit(presetId, true, 0, false);
   const customSkills = shuffle(rng, [...s.skills]).slice(0, 3);
   u.customSkills = customSkills;
   u.skills = customSkills;
   return u;
-}
-
-/** 是否已达到进化等级（局内经验冻结，局末自动进化） */
-export function pendingEvolve(unit: Unit): boolean {
-  const th = nextEvolutionLevel(unit.speciesId);
-  if (th === undefined) return false;
-  return unit.level >= th || (unit.level === th - 1 && unit.exp >= unit.expToLevel);
-}
-
-/** 局末结算：所有达到进化等级的宠物自动进化一次（属性/外观随新形态更新） */
-export function settleEvolutions(state: GameState): GameState {
-  const log: string[] = [];
-  const roster = state.roster.map((u) => {
-    const sp = getMonster(u.speciesId);
-    const evo = sp.evolutions?.[0];
-    if (!evo || !pendingEvolve(u)) return u;
-    let nu = u;
-    if (nu.level < evo.level) nu = levelUpUnit(nu);
-    const evolved = evolveUnit(nu);
-    if (!evolved) return u;
-    log.push(`${nu.name} 进化成了 ${evolved.name}！`);
-    return evolved;
-  });
-  if (log.length === 0) return state;
-  return { ...state, roster, log: [...log, ...state.log].slice(0, 20) };
 }
 
 // ---------- 奖励 ----------

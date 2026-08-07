@@ -3,7 +3,7 @@ import {
   createBattle,
   currentPlayerUnit,
   decrementBattleBuffs,
-  getEffectiveAtk,
+  getDamageBonus,
   getEffectiveSpd,
   makeUnit,
   useBattleItem,
@@ -13,20 +13,20 @@ import type { GameState } from '../src/game/state/game';
 import { createInitialState } from '../src/game/state/reducer';
 
 function makeBattleState() {
-  const players = [makeUnit('momo', 3, true, 0, false)];
-  return createBattle(players, [{ speciesId: 'kiki', level: 1 }, { speciesId: 'pipi', level: 1 }], 12345);
+  const players = [makeUnit('momo', true, 0, false)];
+  return createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }], 12345);
 }
 
 describe('战斗药水：增益', () => {
-  it('atk_up 给目标写入 atkUp=3 并提升有效攻击', () => {
+  it('atk_up 给目标写入 atkUp=3 并提升固定伤害', () => {
     const b = makeBattleState();
     const target = b.playerUnits[0];
     const rc0 = b.rngCount;
     const after = useBattleItem(b, 'atk_up', target.uid);
     expect(after.rngCount).toBe(rc0 + 1); // 消耗随机数
     expect(after.playerUnits[0].battleBuffs?.atkUp).toBe(3);
-    expect(getEffectiveAtk(after.playerUnits[0])).toBe(Math.round(target.atk * 1.3));
-    expect(after.log[after.log.length - 1]).toContain('攻击 +30%');
+    expect(getDamageBonus(after.playerUnits[0])).toBe(1);
+    expect(after.log[after.log.length - 1]).toContain('伤害 +1');
   });
 
   it('spd_up 提升有效速度', () => {
@@ -34,7 +34,7 @@ describe('战斗药水：增益', () => {
     const target = b.playerUnits[0];
     const after = useBattleItem(b, 'spd_up', target.uid);
     expect(after.playerUnits[0].battleBuffs?.spdUp).toBe(3);
-    expect(getEffectiveSpd(after.playerUnits[0])).toBe(Math.round(target.spd * 1.3));
+    expect(getEffectiveSpd(after.playerUnits[0])).toBe(target.spd + 1);
   });
 
   it('buff 回合递减，3 回合后清除', () => {
@@ -46,7 +46,7 @@ describe('战斗药水：增益', () => {
     expect(r3.playerUnits[0].battleBuffs?.atkUp).toBe(1);
     const r4 = decrementBattleBuffs(r3);
     expect(r4.playerUnits[0].battleBuffs).toBeUndefined();
-    expect(getEffectiveAtk(r4.playerUnits[0])).toBe(r4.playerUnits[0].atk);
+    expect(getDamageBonus(r4.playerUnits[0])).toBe(0);
   });
 
   it('buff 只能用于我方单位，攻击敌方被拒', () => {
@@ -144,7 +144,7 @@ describe('USE_BATTLE_ITEM reducer', () => {
   });
 
   it('战斗中 buff 在真实回合推进后仍存在', () => {
-    const battle = makeBattleState();
+    const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 12345);
     const withInv: GameState = {
       ...createInitialState(),
       screen: 'battle',

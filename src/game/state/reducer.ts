@@ -1,11 +1,11 @@
 import type { GameState, MapNode, RewardChoice } from './game';
-import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, evolveUnitForce, FIELD_MAX, generateChallengeRewards, generateMap, generateRewards, gainExp, labelOf, makeCustomUnit, ROSTER_MAX, recomputeStats, settleEvolutions } from './game';
+import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem } from '../core/battle';
-import { createBattle, computeStats, makeUnit, playerSkill, playerTame, type BattleOptions } from '../core/battle';
+import { createBattle, makeUnit, playerSkill, playerTame, type BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
-import { getEvolution, getMonster } from '../data/monsters';
+import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
 
 function getFoodSafe(id: string): boolean {
@@ -34,7 +34,8 @@ export type GameAction =
   | { type: 'SPECIAL_CHOICE'; rewardId: string }
   | { type: 'EVOLVE_ONE'; uid: string }
   | { type: 'SPECIAL_TARGET'; uid: string }
-  | { type: 'BOOST_STAT'; stat: 'hp' | 'atk' | 'spd' }
+  | { type: 'BOOST_STAT'; stat: 'hp' | 'spd' }
+  | { type: 'FUSE'; primaryUid: string }
   | { type: 'PICK_CUSTOM'; presetId: string }
   | { type: 'USE_PURIFY'; uid: string }
   | { type: 'USE_SKIP'; nodeId: string }
@@ -103,12 +104,12 @@ export function newSeed(): number {
 }
 
 function freshRun(starterId: string, seed: number): GameState {
-  const starter = makeUnit(starterId, 1, true, 0, false);
+  const starter = makeUnit(starterId, true, 0, false);
   // 开局赠送一只同伴，避免单宠打不过第 1 战
   const rng = createRng(seed);
   const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'].filter((id) => id !== starterId);
   const companionId = pool[Math.floor(rng() * pool.length)];
-  const companion = makeUnit(companionId, 1, true, 1, false);
+  const companion = makeUnit(companionId, true, 1, false);
   return {
     screen: 'map',
     seed,
@@ -134,7 +135,7 @@ function healRoster(state: GameState, pct: number): GameState {
   };
 }
 
-/** 战斗胜利后：同步存活单位、发放经验、确认驯服、结算进化、结算金币与奖励 */
+/** 战斗胜利后：同步存活单位、确认驯服、发放金币与奖励 */
 export function resolveBattle(state: GameState, battle: BattleState): GameState {
   const node = currentNode(state);
   const challenge = node?.type === 'arena' || node?.type === 'gauntlet';
@@ -152,14 +153,9 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     }
     return {
       ...r,
-      level: b.level,
       maxHp: b.maxHp,
       hp: b.hp,
-      atk: b.atk,
       spd: b.spd,
-      def: b.def,
-      exp: b.exp,
-      expToLevel: b.expToLevel,
       skills: b.skills,
       statuses: [],
     };
@@ -167,14 +163,6 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   let roster: Unit[] = challenge
     ? synced.filter((u): u is Unit => u !== null).map((u) => ({ ...u, hp: Math.max(1, u.hp) }))
     : synced.filter((u): u is Unit => u !== null);
-
-  const totalExp = battle.enemyUnits.reduce((s, u) => s + u.expValue, 0);
-  const survivors = roster.filter((u) => state.field.includes(u.uid));
-  if (survivors.length > 0) {
-    const per = Math.max(1, Math.round(totalExp / survivors.length));
-    const gained = new Map(survivors.map((u) => [u.uid, gainExp(u, per)]));
-    roster = roster.map((u) => gained.get(u.uid) ?? u);
-  }
 
   for (const t of battle.pendingTame) {
     if (roster.length < ROSTER_MAX) roster.push(t);
@@ -199,8 +187,8 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     inventory = { ...inventory, [keyId]: (inventory[keyId] ?? 0) + 1 };
     keyLog.push('击败守卫，获得一把专用钥匙');
   }
-  // 本场战斗结束：达到进化等级的宠物立即自动进化
-  const settled = settleEvolutions({
+  // 本场战斗结束：进入奖励结算
+  const settled: GameState = {
     ...state,
     screen: 'reward',
     roster,
@@ -216,7 +204,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       ...(roster.length < state.roster.length ? [`战斗中有宠物阵亡，永远失去了它`] : []),
       ...state.log,
     ].slice(0, 20),
-  });
+  };
   // 战后全体恢复 50%，缓解减员滚雪球
   const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.5)) }));
   let rewards = challenge
@@ -425,9 +413,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!node) node = map.layers[row][0];
       // 调试专用强队 + 物资，保证能顺利体验各关卡机制
       const debugRoster = [
-        makeUnit('momo_queen', 9, true, 0, false),
-        makeUnit('lulu_king', 9, true, 1, false),
-        makeUnit('fifi_king', 9, true, 2, false),
+        makeUnit('momo_queen', true, 0, false),
+        makeUnit('lulu_king', true, 1, false),
+        makeUnit('fifi_king', true, 2, false),
       ];
       const base: GameState = {
         ...state,
@@ -467,14 +455,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (choice.kind === 'item' && choice.itemId) {
         next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
       } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
-        next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, 1 + (next.act - 1), true, 0, false)] };
+        next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
       } else if (choice.kind === 'damage') {
         next = {
           ...next,
           roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * (choice.amount ?? 0) / 100)) })),
         };
-      } else if (choice.kind === 'exp') {
-        next = { ...next, roster: next.roster.map((u) => gainExp(u, choice.amount ?? 0)) };
       }
       return { ...next, log: [choice.label, ...next.log].slice(0, 20) };
     }
@@ -497,7 +483,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           break;
         case 'evolve':
         case 'superevolve':
-          if (!next.roster.some((u) => getEvolution(u.speciesId))) return state;
+          if (!next.roster.some((u) => nextStage(u.speciesId))) return state;
           next = { ...next, specialPending: { kind: 'evolve', super: reward.kind === 'superevolve' } };
           break;
         case 'boost':
@@ -515,17 +501,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'EVOLVE_ONE': {
       if (state.specialPending?.kind !== 'evolve') return state;
       const target = state.roster.find((u) => u.uid === action.uid);
-      if (!target || !getEvolution(target.speciesId)) return state;
-      let evolved: Unit | null;
+      if (!target || !nextStage(target.speciesId)) return state;
+      let evolved = fuseUnit(target);
+      if (!evolved) return state;
       if (state.specialPending.super) {
         const rng = createRng(state.seed * 33 + state.act * 11 + state.roster.length * 7);
         const curses = ['hpDown', 'atkDown', 'spdDown'] as const;
-        evolved = evolveUnitForce(target);
-        if (evolved) evolved = { ...evolved, curse: curses[Math.floor(rng() * 3)] };
-      } else {
-        evolved = evolveUnitForce(target);
+        evolved = { ...evolved, curse: curses[Math.floor(rng() * 3)] };
       }
-      if (!evolved) return state;
       const roster = state.roster.map((u) => (u.uid === action.uid ? evolved! : u));
       const log = state.specialPending.super
         ? [`超进化！${target.name} 进化成了 ${evolved.name}，但付出了代价`, ...state.log]
@@ -563,11 +546,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const target = state.roster.find((u) => u.uid === pendingBoost.uid);
       if (!target) return state;
       const bonus = { ...target.bonusStats };
-      const statCn = { hp: '生命', atk: '攻击', spd: '速度' }[action.stat];
-      const base = computeStats(target.speciesId, target.level);
-      if (action.stat === 'hp') bonus.hp = (bonus.hp ?? 0) + Math.max(1, Math.round(base.maxHp * 0.25));
-      else if (action.stat === 'atk') bonus.atk = (bonus.atk ?? 0) + Math.max(1, Math.round(base.atk * 0.25));
-      else bonus.spd = (bonus.spd ?? 0) + Math.max(1, Math.round(base.spd * 0.25));
+      const statCn = { hp: '生命', spd: '速度' }[action.stat];
+      if (action.stat === 'hp') bonus.hp = (bonus.hp ?? 0) + 3;
+      else bonus.spd = (bonus.spd ?? 0) + 1;
       const roster = state.roster.map((u) => (u.uid === target.uid ? recomputeStats({ ...u, bonusStats: bonus }) : u));
       return {
         ...state,
@@ -583,7 +564,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.roster.length >= ROSTER_MAX) return state;
       if (!CUSTOM_PRESETS.some((p) => p === action.presetId)) return state;
       const rng = createRng(state.seed * 7 + state.act * 13 + state.roster.length * 3 + state.currentRow);
-      const unit = makeCustomUnit(action.presetId, 1 + (state.act - 1), rng);
+      const unit = makeCustomUnit(action.presetId, rng);
       return {
         ...state,
         screen: 'roster',
@@ -698,7 +679,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             log: [`挑战失败：在「${node.label}」失利，承受代价`, ...state.log].slice(0, 20),
           };
         }
-        return settleEvolutions({ ...state, screen: 'gameover', battle: undefined });
+        return { ...state, screen: 'gameover', battle: undefined };
       }
       return state;
     }
@@ -713,8 +694,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         next = healRoster(next, (reward.amount ?? 30) / 100);
       } else if (reward.kind === 'recruit' && reward.monsterId) {
         if (next.roster.length < ROSTER_MAX) {
-          const level = 1 + (next.act - 1);
-          const u = makeUnit(reward.monsterId, level, true, 0, false);
+          const u = makeUnit(reward.monsterId, true, 0, false);
           next = { ...next, roster: [...next.roster, u] };
         }
       } else if (reward.kind === 'gold') {
@@ -728,14 +708,38 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, field: uids };
     }
 
+    case 'FUSE': {
+      if (state.screen !== 'roster') return state;
+      const primary = state.roster.find((u) => u.uid === action.primaryUid);
+      if (!primary) return state;
+      if (!nextStage(primary.speciesId)) return state;
+      const need = fusionNeedCount(primary.speciesId);
+      const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
+      if (same.length < need) return state;
+      const evolved = fuseUnit(primary);
+      if (!evolved) return state;
+      // 主宠保留原 uid；其余同物种材料（need-1 只）从队伍移除
+      const materials = same.filter((u) => u.uid !== primary.uid).slice(0, need - 1);
+      const materialUids = materials.map((u) => u.uid);
+      const roster = state.roster
+        .filter((u) => !materialUids.includes(u.uid))
+        .map((u) => (u.uid === primary.uid ? evolved : u));
+      return {
+        ...state,
+        roster,
+        field: state.field.filter((uid) => roster.some((u) => u.uid === uid)),
+        log: [`融合！${materials.map((m) => m.name).join('+')} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
+      };
+    }
+
     case 'DISCARD': {
       if (state.roster.length <= 1) return state; // 至少保留一只宠物
       const unit = state.roster.find((u) => u.uid === action.uid);
       let goldGain = 0;
       if (unit) {
         const monster = getMonster(unit.speciesId);
-        // 释放奖励：基础 5 金 × 品阶 × 等级
-        goldGain = 5 * monster.rank * unit.level;
+        // 释放奖励：基础 5 金 × 品阶
+        goldGain = 5 * monster.rank;
       }
       return {
         ...state,
@@ -796,7 +800,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'NEXT_NODE': {
       if (bossCleared(state)) {
-        if (state.act >= 3) return settleEvolutions({ ...state, screen: 'victory' });
+        if (state.act >= 3) return { ...state, screen: 'victory' };
         const act = state.act + 1;
         return {
           ...state,
@@ -811,7 +815,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (nextRow < state.map.layers.length) {
         return { ...state, screen: 'map', chestResult: undefined };
       }
-      return settleEvolutions({ ...state, screen: 'victory' });
+      return { ...state, screen: 'victory' };
     }
 
     case 'RETRY':

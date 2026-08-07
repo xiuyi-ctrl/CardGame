@@ -25,11 +25,11 @@ const ICON: Record<string, string> = {
 function encounterText(map: ReturnType<typeof generateMap>, n: MapNode): string {
   if (n.type === 'boss') {
     const e = map.boss[n.id]?.[0];
-    return e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name} Lv${e.level}（首领）` : '—';
+    return e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}（首领）` : '—';
   }
   const e = map.encounter[n.id];
   if (!e) return '—';
-  return e.map((x) => `${getMonster(x.speciesId).emoji} ${getMonster(x.speciesId).name} Lv${x.level}`).join('、');
+  return e.map((x) => `${getMonster(x.speciesId).emoji} ${getMonster(x.speciesId).name}`).join('、');
 }
 
 function contentText(map: ReturnType<typeof generateMap>, n: MapNode): string {

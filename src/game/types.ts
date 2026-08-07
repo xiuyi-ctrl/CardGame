@@ -1,7 +1,6 @@
-export type ElementType = 'fire' | 'nature' | 'water' | 'shadow' | 'metal';
-
 export interface StatusEffect {
   kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick';
+  /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为固定持续伤害值 */
   value: number;
   turns: number;
 }
@@ -13,14 +12,13 @@ export interface SkillDef {
   name: string;
   desc: string;
   target: SkillTarget;
-  /** 伤害倍率（作用于攻击力）。治疗/增益类可复用 power 作为强度 */
-  power: number;
+  /** 攻击技能固定伤害值（整数，不经任何属性倍率） */
+  damage?: number;
+  /** 治疗技能固定回复值（整数） */
+  heal?: number;
   kind: 'attack' | 'heal' | 'buff';
   hits?: number;
   effects?: StatusEffect[];
-  element?: ElementType;
-  /** 附加伤害/治疗加成（不乘以攻速） */
-  bonus?: number;
 }
 
 export interface SpeciesTame {
@@ -32,18 +30,11 @@ export interface MonsterSpecies {
   id: string;
   name: string;
   emoji: string;
-  element: ElementType;
   baseHp: number;
-  baseAtk: number;
   baseSpd: number;
-  def: number;
-  /** 每级成长 */
-  hpGrow: number;
-  atkGrow: number;
-  spdGrow: number;
   skills: string[];
-  /** 进化链：依次 { 目标形态, 所需等级 }。缺省或空数组表示不可进化 */
-  evolutions?: { to: string; level: number }[];
+  /** 进化链：依次 { 目标形态 }。缺省或空数组表示不可进化 */
+  evolutions?: { to: string }[];
   tame: SpeciesTame;
   /** 1=普通 2=精英 3=传奇 4=Boss */
   rank: 1 | 2 | 3 | 4;
@@ -70,13 +61,9 @@ export interface Unit {
   speciesId: string;
   name: string;
   emoji: string;
-  level: number;
   maxHp: number;
   hp: number;
-  atk: number;
   spd: number;
-  def: number;
-  element: ElementType;
   skills: string[];
   statuses: StatusEffect[];
   /** 0=前 1=中 2=后 */
@@ -86,17 +73,13 @@ export interface Unit {
   tameable: boolean;
   /** 敌方专用：本场战斗中已驯服失败的次数（每次失败提高后续捕捉概率） */
   tameFails?: number;
-  /** 击杀经验值（敌方） */
-  expValue: number;
-  exp: number;
-  expToLevel: number;
   /** 本回合是否已行动（回合内排序用） */
   acted: boolean;
   /** 属性强化：对基准属性的永久加成（来自奇遇关「属性强化」） */
-  bonusStats?: { hp?: number; atk?: number; spd?: number };
-  /** 超进化带来的负面诅咒（atkDown/hpDown/spdDown 各 -20% 上限） */
+  bonusStats?: { hp?: number; spd?: number };
+  /** 超进化带来的负面诅咒：hpDown=生命-5 / atkDown=伤害-1 / spdDown=速度-1 */
   curse?: 'hpDown' | 'atkDown' | 'spdDown';
-  /** 自创生物：创建时随机组合的技能，升级时保留而非按物种解锁 */
+  /** 自创生物：创建时随机组合的技能，融合时保留而非按物种解锁 */
   customSkills?: string[];
   /** 战斗药水临时效果（uid -> {atkUp?, spdUp?, atkDown?, spdDown?} 回合数；hpUp/hpDown 为即时生效不入此表） */
   battleBuffs?: {

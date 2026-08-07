@@ -24,7 +24,7 @@ function autoPlay(b: BattleState, maxTurns = 400): BattleState {
 }
 
 /** 把指定行的第 0 个节点改造成目标类型，并构造「从上一行出发可到达」的状态 */
-function stateAtNode(s: GameState, row: number, type: MapNode['type'], encounter: { speciesId: string; level: number }[]): GameState {
+function stateAtNode(s: GameState, row: number, type: MapNode['type'], encounter: { speciesId: string }[]): GameState {
   const target = s.map.layers[row][0];
   const node: MapNode = { ...target, type, label: type, corruptDebuff: type === 'corrupted' ? 'dmg' : undefined, corruptReward: type === 'corrupted' ? 'gold' : undefined };
   const layers = s.map.layers.map((r, ri) => (ri === row ? r.map((n) => (n.id === target.id ? node : n)) : r));
@@ -88,7 +88,7 @@ describe('地图生成：新战斗节点', () => {
 describe('斗兽场（1v1 单挑）', () => {
   it('MOVE 进入后先选择 1 只出战，SPECIAL_TARGET 后进入单挑战斗', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora', level: 2 }]);
+    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
     expect(s.screen).toBe('roster');
@@ -104,7 +104,7 @@ describe('斗兽场（1v1 单挑）', () => {
 
   it('失败不 Game Over：进入坏事件选择，宠物保留不死', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora', level: 2 }]);
+    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
     const pick = s.roster[0];
@@ -133,7 +133,7 @@ describe('斗兽场（1v1 单挑）', () => {
 
   it('惩罚事件的金币扣款选项即使金币不足也能选择，且不会扣成负数', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora', level: 2 }]);
+    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
     const pick = s.roster[0];
@@ -154,11 +154,11 @@ describe('斗兽场（1v1 单挑）', () => {
 
 describe('车轮战（轮换上阵）', () => {
   it('创建战斗时只上第 1 只，其余在替补席；逐一击倒后胜利', () => {
-    const players = [makeUnit('momo_queen', 5, true, 0, false)];
+    const players = [makeUnit('momo_god', true, 0, false)];
     const enemies = [
-      { speciesId: 'kiki', level: 1 },
-      { speciesId: 'pipi', level: 1 },
-      { speciesId: 'mimi', level: 1 },
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
+      { speciesId: 'mimi' },
     ];
     const b = createBattle(players, enemies, 5, { gauntlet: true });
     expect(b.gauntlet).toEqual({ total: 3, current: 1 });
@@ -172,12 +172,12 @@ describe('车轮战（轮换上阵）', () => {
   });
 
   it('我方也一次只上一只：替补按序顶替，战败单位退出战场（不再显示）', () => {
-    const p1 = makeUnit('momo_queen', 5, true, 0, false);
-    const p2 = makeUnit('lulu_king', 5, true, 1, false);
+    const p1 = makeUnit('momo_queen', true, 0, false);
+    const p2 = makeUnit('momo_god', true, 1, false);
     const enemies = [
-      { speciesId: 'kiki', level: 1 },
-      { speciesId: 'pipi', level: 1 },
-      { speciesId: 'mimi', level: 1 },
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
+      { speciesId: 'mimi' },
     ];
     const b = createBattle([p1, p2], enemies, 11, { gauntlet: true });
     // 只有第 1 只上场，第 2 只进入我方替补席
@@ -203,8 +203,8 @@ describe('车轮战（轮换上阵）', () => {
   it('失败不 Game Over：进入坏事件惩罚，全队保留', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     s = stateAtNode(s, 4, 'gauntlet', [
-      { speciesId: 'kiki', level: 1 },
-      { speciesId: 'pipi', level: 1 },
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
@@ -221,8 +221,8 @@ describe('车轮战（轮换上阵）', () => {
   it('胜利结算为挑战奖励（3 选 1）且不加固定金币', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     s = stateAtNode(s, 4, 'gauntlet', [
-      { speciesId: 'kiki', level: 1 },
-      { speciesId: 'pipi', level: 1 },
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
@@ -237,8 +237,8 @@ describe('车轮战（轮换上阵）', () => {
   it('车轮战胜利时替补席与阵亡单位全部保留（保底 1 血）', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     s = stateAtNode(s, 4, 'gauntlet', [
-      { speciesId: 'kiki', level: 1 },
-      { speciesId: 'pipi', level: 1 },
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
@@ -269,17 +269,17 @@ describe('车轮战（轮换上阵）', () => {
 });
 
 describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
-  it('spd debuff：我方全体速度 -10%', () => {
-    const u = makeUnit('momo', 5, true, 0, false);
-    const b = createBattle([u], [{ speciesId: 'kiki', level: 1 }], 1, { corruptDebuff: 'spd' });
-    expect(b.playerUnits[0].spd).toBe(Math.max(1, Math.round(u.spd * 0.9)));
+  it('spd debuff：我方全体速度 -1', () => {
+    const u = makeUnit('momo', true, 0, false);
+    const b = createBattle([u], [{ speciesId: 'kiki' }], 1, { corruptDebuff: 'spd' });
+    expect(b.playerUnits[0].spd).toBe(Math.max(1, u.spd - 1));
   });
 
   it('dmg debuff：我方受到伤害更大（同种子同操作，总损失 ≥ 普通战斗）', () => {
     const build = (dmg: boolean) => {
-      const u = makeUnit('lulu', 5, true, 0, false);
+      const u = makeUnit('lulu', true, 0, false);
       u.spd = 1; // 让敌方先手
-      const b = createBattle([u], [{ speciesId: 'fifi', level: 6 }], 77, dmg ? { corruptDebuff: 'dmg' } : undefined);
+      const b = createBattle([u], [{ speciesId: 'fifi' }], 77, dmg ? { corruptDebuff: 'dmg' } : undefined);
       const end = autoPlay(b, 200);
       return end.playerUnits[0];
     };
@@ -292,7 +292,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
 
   it('MOVE 进入被侵蚀节点会携带 debuff 进入战斗', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki', level: 1 }]);
+    s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const corrupted = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     s = dispatch(s, { type: 'MOVE', nodeId: corrupted.id });
     expect(s.screen).toBe('battle');
@@ -301,7 +301,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
 
   it('胜利后金币翻倍（corruptReward=gold）', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki', level: 1 }]);
+    s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const corrupted = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     s = dispatch(s, { type: 'MOVE', nodeId: corrupted.id });
     const gold0 = s.gold;
@@ -312,7 +312,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
 
   it('胜利后食物奖励翻倍（corruptReward=food）', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki', level: 1 }]);
+    s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const node = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     node.corruptReward = 'food';
     s = dispatch(s, { type: 'MOVE', nodeId: node.id });
@@ -331,7 +331,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
 describe('跳关道具：可跳过 3 种新战斗节点', () => {
   it('跳过斗兽场：直接领取 3 选 1 挑战奖励，不加固定金币', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = { ...stateAtNode(s, 3, 'arena', [{ speciesId: 'gora', level: 2 }]), inventory: { ...s.inventory, skip: 1 } };
+    s = { ...stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]), inventory: { ...s.inventory, skip: 1 } };
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     const gold0 = s.gold;
     s = dispatch(s, { type: 'USE_SKIP', nodeId: arena.id });
@@ -345,8 +345,8 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     s = {
       ...stateAtNode(s, 4, 'gauntlet', [
-        { speciesId: 'kiki', level: 1 },
-        { speciesId: 'pipi', level: 1 },
+        { speciesId: 'kiki' },
+        { speciesId: 'pipi' },
       ]),
       inventory: { ...s.inventory, skip: 1 },
     };
@@ -358,7 +358,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
 
   it('跳过被侵蚀（corruptReward=gold）：金币翻倍 16', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = { ...stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki', level: 1 }]), inventory: { ...s.inventory, skip: 1 } };
+    s = { ...stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]), inventory: { ...s.inventory, skip: 1 } };
     const c = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     const gold0 = s.gold;
     s = dispatch(s, { type: 'USE_SKIP', nodeId: c.id });
@@ -368,7 +368,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
 
   it('跳过被侵蚀（corruptReward=food）：奖励池必含双份食物', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = { ...stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki', level: 1 }]), inventory: { ...s.inventory, skip: 1 } };
+    s = { ...stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]), inventory: { ...s.inventory, skip: 1 } };
     const c = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     c.corruptReward = 'food';
     s = dispatch(s, { type: 'USE_SKIP', nodeId: c.id });
@@ -384,7 +384,7 @@ describe('DEBUG_JUMP（测试关卡直达）', () => {
     expect(s.act).toBe(2);
     expect(s.currentRow).toBe(6);
     expect(s.roster.length).toBe(3);
-    expect(s.roster.every((u) => u.level === 9)).toBe(true);
+    expect(s.roster.map((u) => u.speciesId)).toEqual(['momo_queen', 'lulu_king', 'fifi_king']);
     expect(s.gold).toBe(500);
     expect(s.inventory.skip).toBe(3);
     expect(['battle', 'roster', 'event', 'shop', 'special', 'rest']).toContain(s.screen);
@@ -405,12 +405,12 @@ describe('DEBUG_JUMP（测试关卡直达）', () => {
 
 describe('斗兽场/车轮战：敌方不可驯服', () => {
   it('普通战斗敌人默认可驯服', () => {
-    const b = createBattle([makeUnit('momo', 5, true, 0, false)], [{ speciesId: 'kiki', level: 1 }], 1);
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 1);
     expect(b.enemyUnits[0].tameable).toBe(true);
   });
 
   it('斗兽场（untameable）敌人不可驯服，且 playerTame 会拒绝', () => {
-    const b = createBattle([makeUnit('momo', 5, true, 0, false)], [{ speciesId: 'gora', level: 2 }], 1, {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'gora' }], 1, {
       untameable: true,
     });
     expect(b.enemyUnits[0].tameable).toBe(false);
@@ -423,11 +423,11 @@ describe('斗兽场/车轮战：敌方不可驯服', () => {
 
   it('车轮战（gauntlet+untameable）场上与替补席都不可驯服', () => {
     const b = createBattle(
-      [makeUnit('momo', 5, true, 0, false)],
+      [makeUnit('momo', true, 0, false)],
       [
-        { speciesId: 'kiki', level: 1 },
-        { speciesId: 'pipi', level: 1 },
-        { speciesId: 'mimi', level: 1 },
+        { speciesId: 'kiki' },
+        { speciesId: 'pipi' },
+        { speciesId: 'mimi' },
       ],
       1,
       { gauntlet: true, untameable: true },
@@ -438,15 +438,15 @@ describe('斗兽场/车轮战：敌方不可驯服', () => {
 
   it('经 reducer 进入斗兽场/车轮战：敌方 tameable=false', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
-    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora', level: 2 }]);
+    s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
     s = dispatch(s, { type: 'SPECIAL_TARGET', uid: s.roster[0].uid });
     expect(s.battle?.enemyUnits.every((u) => !u.tameable)).toBe(true);
 
     s = stateAtNode(s, 4, 'gauntlet', [
-      { speciesId: 'kiki', level: 1 },
-      { speciesId: 'pipi', level: 1 },
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });

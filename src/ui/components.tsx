@@ -1,26 +1,4 @@
-import type { CSSProperties } from 'react';
-import type { ElementType, Unit } from '../game/types';
-import { ELEMENT_ORDER } from '../game/core/battle';
-
-export const ELEMENT_COLOR: Record<ElementType, string> = {
-  fire: 'var(--fire)',
-  nature: 'var(--nature)',
-  water: 'var(--water)',
-  shadow: 'var(--shadow)',
-  metal: 'var(--metal)',
-};
-
-export const ELEMENT_CN: Record<ElementType, string> = {
-  fire: '火',
-  nature: '木',
-  water: '水',
-  shadow: '暗',
-  metal: '金',
-};
-
-export function elementStyle(e: ElementType): CSSProperties {
-  return { borderColor: ELEMENT_COLOR[e], color: ELEMENT_COLOR[e] };
-}
+import type { Unit } from '../game/types';
 
 const STATUS_ICON: Record<string, string> = {
   burn: '🔥',
@@ -28,7 +6,6 @@ const STATUS_ICON: Record<string, string> = {
   atkUp: '⬆️',
   atkDown: '⬇️',
   stun: '💫',
-  healTick: '✚',
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -55,10 +32,10 @@ export function StatusIcons({ unit }: { unit: Unit }) {
 }
 
 const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
-  atkUp: { icon: '⚔️', label: '攻击 +30%' },
-  spdUp: { icon: '💨', label: '速度 +30%' },
-  atkDown: { icon: '🪄', label: '攻击 -30%' },
-  spdDown: { icon: '🕸️', label: '速度 -30%' },
+  atkUp: { icon: '⚔️', label: '伤害 +1' },
+  spdUp: { icon: '💨', label: '速度 +1' },
+  atkDown: { icon: '🪄', label: '伤害 -1' },
+  spdDown: { icon: '🕸️', label: '速度 -1' },
 };
 
 export function BattleBuffIcons({ unit }: { unit: Unit }) {
@@ -87,25 +64,18 @@ export interface UnitCardProps {
 
 export function UnitCard({ unit, className = '', onClick }: UnitCardProps) {
   const dead = unit.hp <= 0;
-  const st = elementStyle(unit.element);
   return (
     <div
       className={`unit-card ${className} ${dead ? 'dead' : ''} ${onClick ? 'clickable' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
-      style={dead ? undefined : st}
       onClick={onClick}
     >
       <div className="card-top">
         <span className="emoji">{unit.emoji}</span>
-        <span className="elem" style={st}>
-          {ELEMENT_CN[unit.element]}
-        </span>
       </div>
       <div>
         <div className="card-name">{unit.name}</div>
         <div className="card-sub">
-          <span>Lv.{unit.level}</span>
-          <span>⚔{unit.atk}</span>
-          <span>⚡{Math.round(unit.spd * 10) / 10}</span>
+          <span>⚡{unit.spd}</span>
         </div>
       </div>
       <HpBar hp={unit.hp} maxHp={unit.maxHp} />
@@ -118,8 +88,4 @@ export function UnitCard({ unit, className = '', onClick }: UnitCardProps) {
       </div>
     </div>
   );
-}
-
-export function elementWheel() {
-  return ELEMENT_ORDER.map((e) => `${ELEMENT_CN[e]}`).join(' › ');
 }

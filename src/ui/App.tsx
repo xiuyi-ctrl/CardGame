@@ -3,13 +3,13 @@ import type { Dispatch } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { canStepTo, generateMap, ROSTER_MAX, FIELD_MAX, pendingEvolve, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
-import { STARTING_CHOICES, getMonster, getEvolution } from '../game/data/monsters';
+import { canStepTo, generateMap, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
+import { STARTING_CHOICES, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { computeStats } from '../game/core/battle';
-import { UnitCard, elementStyle, ELEMENT_CN } from './components';
+import { UnitCard } from './components';
 import { BattleScreen } from './BattleScreen';
 import { loadSave, persistSave, quitGame } from './persistence';
 
@@ -221,7 +221,7 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           >
             直接进入
           </button>
-          <div className="debug-hint">调试模式：自动配备 3 只 Lv9 强宠、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
+          <div className="debug-hint">调试模式：自动配备 3 只强宠、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
         </div>
       )}
     </div>
@@ -235,18 +235,15 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
       <div className="starter-grid">
         {STARTING_CHOICES.map((id) => {
           const sp = getMonster(id);
-          const stats = computeStats(id, 1);
+          const stats = computeStats(id);
           return (
-            <div key={id} className="unit-card clickable" style={elementStyle(sp.element)} onClick={() => dispatch({ type: 'START_RUN', starterId: id, seed: newSeed() })}>
+            <div key={id} className="unit-card clickable" onClick={() => dispatch({ type: 'START_RUN', starterId: id, seed: newSeed() })}>
               <div className="card-top">
                 <span className="emoji">{sp.emoji}</span>
-                <span className="elem" style={elementStyle(sp.element)}>
-                  属性 {sp.element}
-                </span>
               </div>
               <div className="card-name">{sp.name}</div>
               <div className="card-sub">
-                生命 {stats.maxHp} · 攻击 {stats.atk} · 速度 {stats.spd}
+                生命 {stats.maxHp} · 速度 {stats.spd}
               </div>
               <div className="skill-list">
                 {sp.skills.map((s) => (
@@ -546,8 +543,11 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
       <div className="roster-list">
         {state.roster.map((u) => {
           const inField = state.field.includes(u.uid);
-          const canEvolve = getEvolution(u.speciesId) !== undefined;
-          const pEvolve = pendingEvolve(u);
+          const canEvolve = nextStage(u.speciesId) !== undefined;
+          const stage = nextStage(u.speciesId);
+          const need = stage ? fusionNeedCount(u.speciesId) : 0;
+          const sameCount = state.roster.filter((x) => x.speciesId === u.speciesId).length;
+          const canFuse = stage !== undefined && sameCount >= need;
           const onCard = evolveMode
             ? canEvolve
               ? () => dispatch({ type: 'EVOLVE_ONE', uid: u.uid })
@@ -565,16 +565,14 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                 onClick={onCard}
               />
               <div className="panel-row">
-                {pEvolve && !evolveMode && <span className="chip">🧬 已到进化等级，本场战斗结束进化</span>}
                 {u.curse && (
                   <span className="chip" title="负面诅咒，可用净化药水解除">
                     ⚠️ {CURSE_CN[u.curse]}
                   </span>
                 )}
-                {u.bonusStats && (u.bonusStats.hp || u.bonusStats.atk || u.bonusStats.spd) && (
+                {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
                   <span className="chip" title="来自奇遇关的属性强化">
                     ✨+{(u.bonusStats.hp ?? 0) ? `血${u.bonusStats.hp}` : ''}
-                    {(u.bonusStats.atk ?? 0) ? `攻${u.bonusStats.atk}` : ''}
                     {(u.bonusStats.spd ?? 0) ? `速${u.bonusStats.spd}` : ''}
                   </span>
                 )}
@@ -583,11 +581,20 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                     🧪 净化（{state.inventory.purify}）
                   </button>
                 )}
+                {!evolveMode && !boostMode && !arenaMode && stage && (
+                  <button
+                    disabled={!canFuse}
+                    onClick={() => dispatch({ type: 'FUSE', primaryUid: u.uid })}
+                    title={`融合为 ${getMonster(stage).name}：需 ${need} 只同物种（现有 ${sameCount}），融合后继承强化/诅咒`}
+                  >
+                    🧬 融合→{getMonster(stage).name}（{sameCount}/{need}）
+                  </button>
+                )}
                 {!evolveMode && !boostMode && !arenaMode && (() => {
                   const monster = getMonster(u.speciesId);
-                  const goldGain = 5 * monster.rank * u.level;
+                  const goldGain = 5 * monster.rank;
                   return (
-                    <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })} title={`释放后获得 ${goldGain} 金币（品阶 ${monster.rank} × 等级 ${u.level} × 5）`}>
+                    <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })} title={`释放后获得 ${goldGain} 金币（品阶 ${monster.rank} × 5）`}>
                       释放（+${goldGain}💰）
                     </button>
                   );
@@ -698,9 +705,9 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
 
   function nodeInfo(n: MapNode): { icon: string; title: string; detail: string } {
     const enc = state.map.encounter[n.id];
-    const encDetail = (list?: { speciesId: string; level: number }[]): string =>
+    const encDetail = (list?: { speciesId: string }[]): string =>
       list && list.length > 0
-        ? list.map((x) => `${getMonster(x.speciesId).emoji} ${getMonster(x.speciesId).name}（${ELEMENT_CN[getMonster(x.speciesId).element]}）Lv${x.level}`).join('、')
+        ? list.map((x) => `${getMonster(x.speciesId).emoji} ${getMonster(x.speciesId).name}`).join('、')
         : '—';
     switch (n.type) {
       case 'battle':
@@ -714,7 +721,7 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
         return {
           icon: NODE_ICON.boss,
           title: n.label,
-          detail: e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}（${ELEMENT_CN[getMonster(e.speciesId).element]}）Lv${e.level}` : '—',
+          detail: e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}（首领）` : '—',
         };
       }
       case 'shop':
@@ -823,7 +830,6 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
                 {c.kind === 'item' && (c.itemId && ITEMS[c.itemId] ? ITEMS[c.itemId].emoji : '🎒')}
                 {c.kind === 'recruit' && '🥚'}
                 {c.kind === 'damage' && '☠️'}
-                {c.kind === 'exp' && '📚'}
                 {c.kind === 'none' && '🚶'}
               </div>
               <div className="rtitle">{c.label}</div>
@@ -839,7 +845,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
 function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const sp = state.map.specials[state.currentNodeId];
   if (!sp) return null;
-  const hasEvolvable = state.roster.some((u) => getEvolution(u.speciesId));
+  const hasEvolvable = state.roster.some((u) => nextStage(u.speciesId));
   const rosterFull = state.roster.length >= ROSTER_MAX;
   const disabled = (r: SpecialReward) =>
     ((r.kind === 'evolve' || r.kind === 'superevolve') && !hasEvolvable) ||
@@ -883,7 +889,6 @@ function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
 }
 
 function CustomScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const level = 1 + (state.act - 1);
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
@@ -895,23 +900,19 @@ function CustomScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
         <div className="starter-grid">
           {CUSTOM_PRESETS.map((id) => {
             const sp = getMonster(id);
-            const stats = computeStats(id, level);
+            const stats = computeStats(id);
             return (
               <div
                 key={id}
                 className="unit-card clickable"
-                style={elementStyle(sp.element)}
                 onClick={() => dispatch({ type: 'PICK_CUSTOM', presetId: id })}
               >
                 <div className="card-top">
                   <span className="emoji">{sp.emoji}</span>
-                  <span className="elem" style={elementStyle(sp.element)}>
-                    {sp.element}
-                  </span>
                 </div>
                 <div className="card-name">{sp.name}</div>
                 <div className="card-sub">
-                  生命 {stats.maxHp} · 攻击 {stats.atk} · 速度 {stats.spd}
+                  生命 {stats.maxHp} · 速度 {stats.spd}
                 </div>
                 <div className="skill-list">
                   {sp.skills.map((s) => (
@@ -933,11 +934,9 @@ function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   const uid = state.specialPending?.kind === 'boost' ? state.specialPending.uid : '';
   const u = state.roster.find((x) => x.uid === uid);
   if (!u) return null;
-  const base = computeStats(u.speciesId, u.level);
   const options = [
-    { stat: 'hp' as const, icon: '❤️', label: '生命 +25%', value: Math.max(1, Math.round(base.maxHp * 0.25)) },
-    { stat: 'atk' as const, icon: '⚔️', label: '攻击 +25%', value: Math.max(1, Math.round(base.atk * 0.25)) },
-    { stat: 'spd' as const, icon: '⚡', label: '速度 +25%', value: Math.max(1, Math.round(base.spd * 0.25)) },
+    { stat: 'hp' as const, icon: '❤️', label: '生命 +3', value: 3 },
+    { stat: 'spd' as const, icon: '⚡', label: '速度 +1', value: 1 },
   ];
   return (
     <div className="screen">
@@ -972,11 +971,10 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
           <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
             {state.roster.map((u) => (
               <span className="chip" key={u.uid}>
-                {u.emoji} {u.name} Lv{u.level}
+                {u.emoji} {u.name}
               </span>
             ))}
           </div>
-          <p className="card-sub">达到进化等级的伙伴已自动完成进化</p>
         </>
       )}
       <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
@@ -998,11 +996,10 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
       <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
         {state.roster.map((u) => (
           <span className="chip" key={u.uid}>
-            {u.emoji} {u.name} Lv{u.level}
+            {u.emoji} {u.name}
           </span>
         ))}
       </div>
-      <p className="card-sub">达到进化等级的伙伴已自动完成进化</p>
       <button className="primary big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
         返回标题
       </button>

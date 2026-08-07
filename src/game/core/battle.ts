@@ -1,4 +1,4 @@
-import type { BattleState, ElementType, SkillDef, Unit } from '../types';
+import type { BattleState, SkillDef, Unit } from '../types';
 import { getSkill } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
@@ -10,7 +10,7 @@ export const TAME_FAIL_BONUS = 0.25;
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
-  /** 被侵蚀 debuff：'spd' 我方速度 -10% | 'dmg' 我方受到伤害 +10% */
+  /** 被侵蚀 debuff：'spd' 我方速度 -1 | 'dmg' 我方受到伤害 +1 */
   corruptDebuff?: 'spd' | 'dmg';
   /** 车轮战：敌方 2~3 只轮换上阵 */
   gauntlet?: boolean;
@@ -18,32 +18,9 @@ export interface BattleOptions {
   untameable?: boolean;
 }
 
-/** 五行循环克制：i 克 i+1，被 i+2 克 */
-export const ELEMENT_ORDER: ElementType[] = ['fire', 'nature', 'water', 'shadow', 'metal'];
-
-export function elementMultiplier(atk: ElementType, def: ElementType): number {
-  const i = ELEMENT_ORDER.indexOf(atk);
-  const j = ELEMENT_ORDER.indexOf(def);
-  if (i === j) return 1;
-  if ((i + 1) % ELEMENT_ORDER.length === j) return 1.5;
-  if ((i + 2) % ELEMENT_ORDER.length === j) return 0.75;
-  return 1;
-}
-
-export function unlockedSkills(speciesId: string, level: number): string[] {
-  const skills = getMonster(speciesId).skills;
-  const count = Math.min(skills.length, Math.max(1, 1 + Math.floor((level - 1) / 2)));
-  return skills.slice(0, count);
-}
-
-export function computeStats(speciesId: string, level: number) {
+export function computeStats(speciesId: string) {
   const s = getMonster(speciesId);
-  return {
-    maxHp: s.baseHp + s.hpGrow * (level - 1),
-    atk: s.baseAtk + s.atkGrow * (level - 1),
-    spd: s.baseSpd + s.spdGrow * (level - 1),
-    def: s.def,
-  };
+  return { maxHp: s.baseHp, spd: s.baseSpd };
 }
 
 let uidCounter = 0;
@@ -54,33 +31,24 @@ export function nextUid(prefix: string): string {
 
 export function makeUnit(
   speciesId: string,
-  level: number,
   isPlayer: boolean,
   column: 0 | 1 | 2,
   tameable: boolean,
 ): Unit {
   const s = getMonster(speciesId);
-  const stats = computeStats(speciesId, level);
   return {
     uid: nextUid(isPlayer ? 'p' : 'e'),
     speciesId,
     name: s.name,
     emoji: s.emoji,
-    level,
-    maxHp: stats.maxHp,
-    hp: stats.maxHp,
-    atk: stats.atk,
-    spd: stats.spd,
-    def: stats.def,
-    element: s.element,
-    skills: unlockedSkills(speciesId, level),
+    maxHp: s.baseHp,
+    hp: s.baseHp,
+    spd: s.baseSpd,
+    skills: [...s.skills],
     statuses: [],
     column,
     isPlayer,
     tameable,
-    expValue: s.rank * 15,
-    exp: 0,
-    expToLevel: 10 * level,
     acted: false,
   };
 }
@@ -105,23 +73,21 @@ export function computeTurnOrder(b: BattleState): string[] {
   return all.map((u) => u.uid);
 }
 
-function makeEnemy(e: { speciesId: string; level: number }, index: number, untameable = false): Unit {
+function makeEnemy(e: { speciesId: string }, index: number, untameable = false): Unit {
   const col = Math.min(2, index) as 0 | 1 | 2;
   const s = getMonster(e.speciesId);
-  const u = makeUnit(e.speciesId, e.level, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0);
-  u.expValue = s.rank * 15;
-  return u;
+  return makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0);
 }
 
 export function createBattle(
   playerUnits: Unit[],
-  enemySpecies: { speciesId: string; level: number }[],
+  enemySpecies: { speciesId: string }[],
   seed: number,
   options?: BattleOptions,
 ): BattleState {
   const preparedPlayer = playerUnits.map((u) => {
     const c = cloneUnit(u);
-    if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, Math.round(c.spd * 0.9));
+    if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, c.spd - 1);
     return c;
   });
   const b: BattleState = {
@@ -415,18 +381,15 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   }
 
   if (skill.kind === 'heal') {
-    const effectiveAtk = getEffectiveAtk(actor);
-    nb = useRng(nb, (rngVal, b2) => {
-      let r = b2;
-      for (const t of targets) {
-        const amt = Math.round(effectiveAtk * skill.power + (skill.bonus ?? 0) + rngVal);
-        const maxHp = getEffectiveMaxHp(t);
-        const healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
-        r = replaceUnit(r, healed);
-        r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`);
-      }
-      return r;
-    });
+    let r = nb;
+    const amt = Math.max(1, skill.heal ?? 0);
+    for (const t of targets) {
+      const maxHp = getEffectiveMaxHp(t);
+      const healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
+      r = replaceUnit(r, healed);
+      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`);
+    }
+    nb = r;
   } else if (skill.kind === 'buff') {
     for (const t of targets) {
       const e = skill.effects?.[0];
@@ -444,17 +407,16 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const t = actorFromId(nb, uid);
       if (!t || t.hp <= 0) continue;
       const single = useRng(nb, (rngVal, b2) => {
+        const base = (skill.damage ?? 0) + getDamageBonus(actor);
         let total = 0;
-        const effectiveAtk = getEffectiveAtk(actor);
         for (let i = 0; i < count; i++) {
-          const variance = 0.9 + rngVal * 0.2;
-          const elem = skill.element ? elementMultiplier(skill.element, t.element) : 1;
-          total += Math.max(1, Math.round(effectiveAtk * skill.power * elem * variance) - t.def);
+          const variance = Math.round(rngVal * 2 - 1); // -1 / 0 / +1
+          total += Math.max(1, base + variance);
         }
         const crit = rngVal > 0.9 ? 1.5 : 1;
         let finalDmg = Math.max(1, Math.round(total * crit));
         if (t.isPlayer && b2.corruptDebuff === 'dmg') {
-          finalDmg = Math.max(1, Math.round(finalDmg * 1.1));
+          finalDmg += 1;
         }
         let t2 = { ...t, hp: Math.max(0, t.hp - finalDmg) };
         for (const e of skill.effects ?? []) {
@@ -509,13 +471,7 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
     const success = guaranteed ? true : rng < chance;
     let after: BattleState = nb;
     if (success) {
-      const avgLevel = Math.max(
-        1,
-        Math.round(
-          nb.playerUnits.reduce((s, u) => s + u.level, 0) / Math.max(1, nb.playerUnits.filter((u) => u.hp > 0).length),
-        ),
-      );
-      const tamed = makeUnit(enemy.speciesId, avgLevel, true, 2, false);
+      const tamed = makeUnit(enemy.speciesId, true, 2, false);
       tamed.maxHp += food.hpBonus;
       tamed.hp = tamed.maxHp;
       after = {
@@ -621,11 +577,11 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
     unitBuffs[key] = BUFF_DURATION;
 
     const effectDesc: Record<string, string> = {
-      atkUp: '攻击 +30%',
-      spdUp: '速度 +30%',
+      atkUp: '伤害 +1',
+      spdUp: '速度 +1',
       hpUp: '回复 50% 生命',
-      atkDown: '攻击 -30%',
-      spdDown: '速度 -30%',
+      atkDown: '伤害 -1',
+      spdDown: '速度 -1',
       hpDown: '当前生命 -30%',
     };
 
@@ -673,22 +629,27 @@ export function decrementBattleBuffs(b: BattleState): BattleState {
     : b;
 }
 
-/** 获取单位的有效攻击（含临时buff） */
-export function getEffectiveAtk(u: Unit): number {
-  if (!u.battleBuffs) return u.atk;
-  let atk = u.atk;
-  if (u.battleBuffs.atkUp) atk = Math.round(atk * 1.3);
-  if (u.battleBuffs.atkDown) atk = Math.round(atk * 0.7);
-  return atk;
+/** 获取单位的固定伤害修正（诅咒虚弱 + 技能 atkUp/atkDown 状态 + 战斗药水 battleBuffs，整数） */
+export function getDamageBonus(u: Unit): number {
+  let bonus = 0;
+  if (u.curse === 'atkDown') bonus -= 1;
+  for (const s of u.statuses) {
+    if (s.kind === 'atkUp') bonus += s.value;
+    else if (s.kind === 'atkDown') bonus -= s.value;
+  }
+  if (u.battleBuffs) {
+    if (u.battleBuffs.atkUp) bonus += 1;
+    if (u.battleBuffs.atkDown) bonus -= 1;
+  }
+  return bonus;
 }
 
-/** 获取单位的有效速度（含临时buff） */
+/** 获取单位的有效速度（含临时buff，整数） */
 export function getEffectiveSpd(u: Unit): number {
-  if (!u.battleBuffs) return u.spd;
   let spd = u.spd;
-  if (u.battleBuffs.spdUp) spd = Math.round(spd * 1.3);
-  if (u.battleBuffs.spdDown) spd = Math.round(spd * 0.7);
-  return spd;
+  if (u.battleBuffs?.spdUp) spd += 1;
+  if (u.battleBuffs?.spdDown) spd -= 1;
+  return Math.max(1, spd);
 }
 
 /** 获取单位的有效最大生命（含临时buff） */
