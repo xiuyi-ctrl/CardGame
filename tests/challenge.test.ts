@@ -171,6 +171,35 @@ describe('车轮战（轮换上阵）', () => {
     expect(end.gauntlet?.current).toBe(3);
   });
 
+  it('我方也一次只上一只：替补按序顶替，战败单位退出战场（不再显示）', () => {
+    const p1 = makeUnit('momo_queen', 5, true, 0, false);
+    const p2 = makeUnit('lulu_king', 5, true, 1, false);
+    const enemies = [
+      { speciesId: 'kiki', level: 1 },
+      { speciesId: 'pipi', level: 1 },
+      { speciesId: 'mimi', level: 1 },
+    ];
+    const b = createBattle([p1, p2], enemies, 11, { gauntlet: true });
+    // 只有第 1 只上场，第 2 只进入我方替补席
+    expect(b.playerUnits.length).toBe(1);
+    expect(b.playerUnits[0].uid).toBe(p1.uid);
+    expect(b.playerBench?.length).toBe(1);
+    expect(b.playerBench?.[0].uid).toBe(p2.uid);
+    // 让第 1 只直接战败 → 自动换第 2 只上场
+    const killed: BattleState = {
+      ...b,
+      playerUnits: b.playerUnits.map((u) => ({ ...u, hp: 0 })),
+    };
+    const swapped = autoPlay(killed, 400);
+    expect(swapped.phase).toBe('won');
+    // 战败单位已退场（不在上场列表，也不在替补席），当前场上为第 2 只
+    expect(swapped.playerUnits.some((u) => u.uid === p1.uid)).toBe(false);
+    expect(swapped.playerUnits.some((u) => u.uid === p2.uid)).toBe(true);
+    expect(swapped.playerBench?.length ?? 0).toBe(0);
+    expect(swapped.playerDown?.some((u) => u.uid === p1.uid)).toBe(true);
+    expect(swapped.gauntlet?.current).toBe(3);
+  });
+
   it('失败不 Game Over：进入坏事件惩罚，全队保留', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     s = stateAtNode(s, 4, 'gauntlet', [

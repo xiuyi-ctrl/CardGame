@@ -117,4 +117,8 @@ export interface BattleState {
   gauntlet?: { total: number; current: number };
   /** 车轮战：尚未上场的敌方后备队列 */
   enemyBench?: Unit[];
+  /** 车轮战：尚未上场的我方后备队列（我方也一次只上一只） */
+  playerBench?: Unit[];
+  /** 车轮战：已战败退场、不再显示的我方单位 */
+  playerDown?: Unit[];
 }

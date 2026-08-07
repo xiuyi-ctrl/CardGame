@@ -3,7 +3,7 @@ import type { Dispatch } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { canStepTo, ROSTER_MAX, FIELD_MAX, pendingEvolve, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, ROSTER_MAX, FIELD_MAX, pendingEvolve, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
 import { STARTING_CHOICES, getMonster, getEvolution } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
@@ -134,7 +134,7 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
     });
   }
 
-  const DEBUG_TYPES: { value: MapNode['type'] | 'all'; label: string }[] = [
+  const DEBUG_TYPES_ALL: { value: MapNode['type'] | 'all'; label: string }[] = [
     { value: 'all', label: '任意' },
     { value: 'battle', label: '战斗' },
     { value: 'arena', label: '斗兽场' },
@@ -150,6 +150,14 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
     { value: 'guardian', label: '守卫' },
     { value: 'keydoor', label: '钥匙门' },
   ];
+
+  // 测试面板联动：按当前幕/种子实时生成地图，仅展示该幕该层实际存在的节点类型与层数
+  const dbgMap = useMemo(() => generateMap(dbgSeed, dbgAct), [dbgSeed, dbgAct]);
+  const dbgRows = dbgMap.layers.length;
+  const dbgRowClamped = Math.min(dbgRow, dbgRows - 1);
+  const rowTypes = new Set(dbgMap.layers[dbgRowClamped].map((n) => n.type));
+  const DEBUG_TYPES = DEBUG_TYPES_ALL.filter((t) => t.value === 'all' || rowTypes.has(t.value as MapNode['type']));
+  const dbgTypeEff = rowTypes.has(dbgType as MapNode['type']) ? dbgType : 'all';
 
   return (
     <div className="center-col">
@@ -182,15 +190,15 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
               ))}
             </select>
             <label>层</label>
-            <select value={dbgRow} onChange={(e) => setDbgRow(Number(e.target.value))}>
-              {Array.from({ length: 10 }, (_, i) => (
+            <select value={dbgRowClamped} onChange={(e) => setDbgRow(Number(e.target.value))}>
+              {Array.from({ length: dbgRows }, (_, i) => (
                 <option key={i} value={i}>
-                  第 {i} 层
+                  第 {i} 层{i === dbgRows - 1 ? '（首领层）' : ''}
                 </option>
               ))}
             </select>
             <label>节点</label>
-            <select value={dbgType} onChange={(e) => setDbgType(e.target.value as MapNode['type'] | 'all')}>
+            <select value={dbgTypeEff} onChange={(e) => setDbgType(e.target.value as MapNode['type'] | 'all')}>
               {DEBUG_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -208,12 +216,12 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           <button
             className="primary big-btn"
             onClick={() =>
-              dispatch({ type: 'DEBUG_JUMP', act: dbgAct, row: dbgRow, nodeType: dbgType, seed: dbgSeed })
+              dispatch({ type: 'DEBUG_JUMP', act: dbgAct, row: dbgRowClamped, nodeType: dbgTypeEff, seed: dbgSeed })
             }
           >
             直接进入
           </button>
-          <div className="debug-hint">调试模式：自动配备 3 只 Lv9 强宠、500 金币、3 个跳关道具</div>
+          <div className="debug-hint">调试模式：自动配备 3 只 Lv9 强宠、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
         </div>
       )}
     </div>
@@ -288,7 +296,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   const canvasRef = useRef<HTMLDivElement>(null);
   const nodeEls = useRef<Record<string, HTMLDivElement | null>>({});
   const [svgSize, setSvgSize] = useState({ w: 0, h: 0 });
-  const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number; kind: 'near' | 'far' | 'pair' }[]>([]);
+  const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number; kind: 'near' | 'far' | 'pair' | 'path' }[]>([]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -351,8 +359,15 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
         if (a && b) result.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind: 'pair' });
       }
     }
+    // 已走路径：连接所有 visitedNodeIds（按访问顺序），金色高亮
+    const visitedNodeIds = state.visitedNodeIds ?? [];
+    for (let i = 1; i < visitedNodeIds.length; i++) {
+      const a = center(visitedNodeIds[i - 1]);
+      const b = center(visitedNodeIds[i]);
+      if (a && b) result.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind: 'path' });
+    }
     setLines(result);
-  }, [isFirst, state.currentNodeId, optionsRow, nearIds, hoverNode, hoverNextRow, hoverReachIds, svgSize, state.map, state.inventory]);
+  }, [isFirst, state.currentNodeId, optionsRow, nearIds, hoverNode, hoverNextRow, hoverReachIds, svgSize, state.map, state.inventory, state.visitedNodeIds]);
 
   return (
     <div className="screen">
@@ -362,7 +377,15 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
           {lines.map((l, i) => (
             <line
               key={i}
-              className={l.kind === 'near' ? 'ln-near' : l.kind === 'far' ? 'ln-far' : 'ln-pair'}
+              className={
+                l.kind === 'near'
+                  ? 'ln-near'
+                  : l.kind === 'far'
+                  ? 'ln-far'
+                  : l.kind === 'pair'
+                  ? 'ln-pair'
+                  : 'ln-path'
+              }
               x1={l.x1}
               y1={l.y1}
               x2={l.x2}
@@ -370,7 +393,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
             />
           ))}
         </svg>
-        {state.map.layers.map((row, ri) => {
+{state.map.layers.map((row, ri) => {
           const isOptionRow = ri === optionsRow;
           const isPast = ri < optionsRow;
           return (
@@ -379,11 +402,14 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                 const isCurrent = n.id === state.currentNodeId;
                 const selectable = isOptionRow && canSelect(n);
                 const reachCls = isCurrent ? '' : nearIds.has(n.id) ? 'reach-1' : hoverReachIds.has(n.id) ? 'reach-2' : '';
+                const visitedWatchtowers = state.visitedWatchtowers ?? [];
+                const isVisitedWatchtower = n.type === 'watchtower' && visitedWatchtowers.includes(n.id);
                 const cls = [
                   isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast ? '' : 'dim',
                   reachCls,
                   isDisabled(n) ? 'node-off' : '',
                   isLocked(n) ? 'node-locked' : '',
+                  isVisitedWatchtower ? 'visited-watchtower' : '',
                 ]
                   .filter(Boolean)
                   .join(' ');
@@ -400,10 +426,10 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                       ? '钥匙门：需先击败对应守卫取得钥匙'
                       : '持有钥匙，可开启高级宝箱'
                     : n.type === 'sync'
-                      ? '双生宝箱：与配对宝箱二选一（持侦察/加速道具可同时开启）'
-                      : n.type === 'guardian'
-                        ? '守卫：强力怪物，击败获得专用钥匙'
-                        : undefined;
+                    ? '双生宝箱：与配对宝箱二选一（持侦察/加速道具可同时开启）'
+                    : n.type === 'guardian'
+                    ? '守卫：强力怪物，击败获得专用钥匙'
+                    : undefined;
                 return (
                   <div
                     key={n.id}
@@ -414,7 +440,13 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                     title={nodeHint}
                     onMouseEnter={() => setHoverId(n.id)}
                     onMouseLeave={() => setHoverId(null)}
-                    onClick={selectable ? () => dispatch({ type: 'MOVE', nodeId: n.id }) : undefined}
+                    onClick={selectable
+                      ? () => dispatch({ type: 'MOVE', nodeId: n.id })
+                      : isCurrent && n.type === 'watchtower'
+                      ? () => dispatch({ type: 'OPEN_WATCHTOWER' })
+                      : isVisitedWatchtower && isPast
+                      ? () => dispatch({ type: 'OPEN_WATCHTOWER', nodeId: n.id })
+                      : undefined}
                   >
                     <span className="nicon">{NODE_ICON[n.type]}</span>
                     <span className="nlabel">{n.label}</span>
@@ -664,10 +696,16 @@ function RestScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
 }
 
 function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  // 找到正在预览的瞭望塔节点及其所在行
+  const previewId = state.watchtowerPreviewNodeId;
+  const previewNode = previewId ? state.map.layers.flat().find((n) => n.id === previewId) : undefined;
+  const previewRow = previewNode
+    ? state.map.layers.findIndex((layer) => layer.some((n) => n.id === previewId))
+    : state.currentRow;
   const maxRow = state.map.layers.length - 1;
-  const rows = [state.currentRow + 1, state.currentRow + 2, state.currentRow + 3].filter((r) => r <= maxRow);
-  const [selRow, setSelRow] = useState<number>(rows[0] ?? state.currentRow);
-  const sel = rows.includes(selRow) ? selRow : rows[0] ?? state.currentRow;
+  const rows = [previewRow + 1, previewRow + 2, previewRow + 3].filter((r) => r <= maxRow);
+  const [selRow, setSelRow] = useState<number>(rows[0] ?? previewRow);
+  const sel = rows.includes(selRow) ? selRow : rows[0] ?? previewRow;
 
   function nodeInfo(n: MapNode): { icon: string; title: string; detail: string } {
     const enc = state.map.encounter[n.id];
@@ -716,9 +754,11 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
-      <div className="section-title">瞭望塔 🔭</div>
+      <div className="section-title">
+        瞭望塔 🔭 {previewNode ? `(第 ${previewRow + 1} 行)` : ''}
+      </div>
       <p className="card-sub" style={{ textAlign: 'center' }}>
-        居高远眺，提前窥探下 3 行内某一行的全部节点情报（敌人属性与数量、商店货物、事件与奇遇）
+        预览该瞭望塔后 3 行内某一行的全部节点情报（敌人属性与数量、商店货物、事件与奇遇）
       </p>
       <div className="panel-row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12 }}>
         {rows.map((r) => (
@@ -740,8 +780,8 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
         })}
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
-          离开 →
+        <button className="big-btn" onClick={() => dispatch({ type: 'CLOSE_WATCHTOWER' })}>
+          关闭瞭望
         </button>
       </div>
     </div>

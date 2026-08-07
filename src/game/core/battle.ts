@@ -119,12 +119,13 @@ export function createBattle(
   seed: number,
   options?: BattleOptions,
 ): BattleState {
+  const preparedPlayer = playerUnits.map((u) => {
+    const c = cloneUnit(u);
+    if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, Math.round(c.spd * 0.9));
+    return c;
+  });
   const b: BattleState = {
-    playerUnits: playerUnits.map((u) => {
-      const c = cloneUnit(u);
-      if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, Math.round(c.spd * 0.9));
-      return c;
-    }),
+    playerUnits: [],
     enemyUnits: [],
     turnOrder: [],
     turnIndex: 0,
@@ -138,11 +139,17 @@ export function createBattle(
   };
   const untameable = options?.untameable === true;
   if (options?.gauntlet) {
-    const [first, ...bench] = enemySpecies;
-    b.enemyUnits = first ? [makeEnemy(first, 0, untameable)] : [];
-    b.enemyBench = bench.map((e, i) => makeEnemy(e, i + 1, untameable));
+    const [first, ...playerRest] = preparedPlayer;
+    // 车轮战：我方也一次只上一只，其余进入替补席，阵亡后按序顶替
+    b.playerUnits = first ? [first] : [];
+    b.playerBench = playerRest;
+    b.playerDown = [];
+    const [firstEnemy, ...enemyRest] = enemySpecies;
+    b.enemyUnits = firstEnemy ? [makeEnemy(firstEnemy, 0, untameable)] : [];
+    b.enemyBench = enemyRest.map((e, i) => makeEnemy(e, i + 1, untameable));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
+    b.playerUnits = preparedPlayer;
     b.enemyUnits = enemySpecies.map((e, i) => makeEnemy(e, i, untameable));
   }
   return advance(b);
@@ -249,6 +256,19 @@ function checkEnd(b: BattleState): BattleState {
       gauntlet: { ...b.gauntlet, current: b.gauntlet.current + 1 },
     };
     b = pushLog(b, `敌方派出下一只：${next.name}！`);
+  }
+  // 车轮战：场上我方全灭但还有后备 → 当前单位战败退场（不再显示），下一只顶替上场
+  if (b.gauntlet && b.playerBench && b.playerBench.length > 0 && b.playerUnits.every((u) => u.hp <= 0)) {
+    const next = b.playerBench[0];
+    const nextUnit = { ...next, acted: false, statuses: [] };
+    const down = b.playerUnits.filter((u) => u.hp <= 0);
+    b = {
+      ...b,
+      playerUnits: [nextUnit],
+      playerBench: b.playerBench.slice(1),
+      playerDown: [...(b.playerDown ?? []), ...down],
+    };
+    b = pushLog(b, `我方派出下一只：${next.name}！`);
   }
   const playersAlive = b.playerUnits.some((u) => u.hp > 0);
   const enemiesAlive = b.enemyUnits.some((u) => u.hp > 0);

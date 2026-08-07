@@ -47,6 +47,8 @@ export type GameAction =
   | { type: 'SHOP_REST' }
   | { type: 'REST_HEAL' }
   | { type: 'NEXT_NODE' }
+  | { type: 'OPEN_WATCHTOWER'; nodeId?: string }
+  | { type: 'CLOSE_WATCHTOWER' }
   | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
   | { type: 'RETRY'; seed: number }
   | { type: 'TITLE' };
@@ -65,6 +67,8 @@ export function createInitialState(): GameState {
     gold: 12,
     rewards: [],
     log: [],
+    visitedWatchtowers: [],
+    visitedNodeIds: [],
   };
 }
 
@@ -116,6 +120,8 @@ function freshRun(starterId: string, seed: number): GameState {
     gold: 12,
     rewards: [],
     log: [],
+    visitedWatchtowers: [],
+    visitedNodeIds: [],
   };
 }
 
@@ -135,7 +141,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   const corruptNode = node?.type === 'corrupted';
 
   const synced: (Unit | null)[] = state.roster.map((r) => {
-    const b = battle.playerUnits.find((u) => u.uid === r.uid);
+    const b = [...battle.playerUnits, ...(battle.playerDown ?? [])].find((u) => u.uid === r.uid);
     if (!b || b.hp <= 0) return null;
     return {
       ...r,
@@ -228,11 +234,17 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
     const food = getFood(foodId);
     let extras: string[] = [];
     if (rng() < 0.4) {
+      // 额外奖励池混合食物（圣果）与道具：圣果走食物背包，其余走道具背包
       const pool = ['golden_fruit', 'purify', 'scout', 'haste', 'skip'];
-      const itemId = pool[Math.floor(rng() * pool.length)];
-      const it = getItem(itemId);
-      next = { ...next, inventory: { ...next.inventory, [itemId]: (next.inventory[itemId] ?? 0) + 1 } };
-      extras.push(`额外获得「${it.name}」`);
+      const extraId = pool[Math.floor(rng() * pool.length)];
+      if (extraId === 'golden_fruit') {
+        next = { ...next, inventory: { ...next.inventory, [extraId]: (next.inventory[extraId] ?? 0) + 1 } };
+        extras.push(`额外获得「${getFood(extraId).name}」`);
+      } else {
+        const it = getItem(extraId);
+        next = { ...next, inventory: { ...next.inventory, [extraId]: (next.inventory[extraId] ?? 0) + 1 } };
+        extras.push(`额外获得「${it.name}」`);
+      }
     }
     next = { ...next, gold: next.gold + amt, inventory: { ...next.inventory, [foodId]: (next.inventory[foodId] ?? 0) + 1 } };
     text = `开启「${labelOf(node.type, base.currentRow)}」：获得 ${amt} 金币、1 个${food.name}${extras.length ? '、' + extras.join('、') : ''}`;
@@ -262,7 +274,13 @@ function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'shop') return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [] };
   if (node.type === 'event') return { ...base, screen: 'event' };
   if (node.type === 'special') return { ...base, screen: 'special' };
-  if (node.type === 'watchtower') return { ...base, screen: 'watchtower' };
+  if (node.type === 'watchtower') {
+    const visited = base.visitedWatchtowers ?? [];
+    if (!visited.includes(node.id)) {
+      return { ...base, screen: 'map', visitedWatchtowers: [...visited, node.id] };
+    }
+    return { ...base, screen: 'map' };
+  }
   if (node.type === 'boss') {
     const encounter = base.map.boss[node.id];
     const battle = createBattle(
@@ -374,7 +392,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       // 钥匙门：未持有对应钥匙不可进入
       if (node.type === 'keydoor' && !hasKeyFor(state, node)) return state;
-      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false };
+      const visitedNodeIds = [...(state.visitedNodeIds ?? [])];
+      if (!visitedNodeIds.includes(action.nodeId)) visitedNodeIds.push(action.nodeId);
+      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false, visitedNodeIds };
       return enterNode(base, node);
     }
 
@@ -716,6 +736,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'REST_HEAL': {
       return { ...healRoster(state, 1), screen: 'roster' };
+    }
+
+    case 'OPEN_WATCHTOWER': {
+      // 打开已访问的瞭望塔：支持指定 nodeId（点击地图上历史瞭望塔节点），或回退到当前节点
+      const targetId = action.nodeId ?? state.currentNodeId;
+      const targetNode = state.map.layers.flat().find((n) => n.id === targetId);
+      if (!targetNode || targetNode.type !== 'watchtower') return state;
+      const visited = state.visitedWatchtowers ?? [];
+      if (!visited.includes(targetId)) return state;
+      return { ...state, screen: 'watchtower', watchtowerPreviewNodeId: targetId };
+    }
+
+    case 'CLOSE_WATCHTOWER': {
+      if (state.screen !== 'watchtower') return state;
+      return { ...state, screen: 'map', watchtowerPreviewNodeId: undefined };
     }
 
     case 'NEXT_NODE': {

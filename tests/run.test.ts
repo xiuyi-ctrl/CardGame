@@ -658,7 +658,7 @@ describe('商人·每店限购', () => {
 });
 
 describe('瞭望塔', () => {
-  it('进入瞭望塔节点进入瞭望界面，离开后回到地图', () => {
+  it('到达瞭望塔停留在地图，可反复打开/关闭查看，再继续前进', () => {
     let run: GameState | null = null;
     let target: MapNode | null = null;
     for (let seed = 1; seed < 300 && !target; seed++) {
@@ -674,13 +674,27 @@ describe('瞭望塔', () => {
     const parent = run!.map.layers[row - 1].find((n) => Math.abs(n.col - target!.col) <= 1) ?? run!.map.layers[row - 1][0];
     let s: GameState = { ...run!, screen: 'map', currentRow: row - 1, currentNodeId: parent.id };
     s = dispatch(s, { type: 'MOVE', nodeId: target!.id });
+    // 到达后停留在地图，不会强制进入瞭望界面
+    expect(s.screen).toBe('map');
+    expect(s.currentRow).toBe(row);
+    expect(s.currentNodeId).toBe(target!.id);
+    // 可反复打开 / 关闭
+    s = dispatch(s, { type: 'OPEN_WATCHTOWER' });
     expect(s.screen).toBe('watchtower');
+    s = dispatch(s, { type: 'CLOSE_WATCHTOWER' });
+    expect(s.screen).toBe('map');
+    s = dispatch(s, { type: 'OPEN_WATCHTOWER' });
+    expect(s.screen).toBe('watchtower');
+    // 从瞭望界面返回地图（同一层），再继续前进
     const after = dispatch(s, { type: 'NEXT_NODE' });
     expect(after.screen).toBe('map');
     expect(after.currentRow).toBe(row);
+    const nextParent = run!.map.layers[row + 1].find((n) => Math.abs(n.col - target!.col) <= 1) ?? run!.map.layers[row + 1][0];
+    const moved = dispatch(after, { type: 'MOVE', nodeId: nextParent.id });
+    expect(moved.currentRow).toBe(row + 1);
   });
 
-  it('瞭望塔在首领关前 3 行内出现概率显著更高（25%）', () => {
+  it('瞭望塔在首领关前 3 行内出现概率显著更高（20%）', () => {
     let last3Count = 0;
     let otherCount = 0;
     for (let seed = 1; seed <= 300; seed++) {
@@ -695,7 +709,7 @@ describe('瞭望塔', () => {
         }
       }
     }
-    expect(last3Count).toBeGreaterThanOrEqual(80);
+    expect(last3Count).toBeGreaterThanOrEqual(60);
     expect(last3Count).toBeGreaterThan(otherCount);
   });
 

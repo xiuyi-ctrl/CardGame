@@ -182,6 +182,12 @@ export interface GameState {
   shopBoughtItems?: string[];
   /** 宝箱/钥匙门开启结果（chest 界面展示的文本列表） */
   chestResult?: string[];
+  /** 本幕已访问的瞭望塔节点 ID 列表 */
+  visitedWatchtowers?: string[];
+  /** 当前预览的瞭望塔节点 ID（打开瞭望界面时设置，关闭时清空） */
+  watchtowerPreviewNodeId?: string;
+  /** 本幕已走过的节点 ID 列表（按访问顺序，用于绘制路径高亮） */
+  visitedNodeIds?: string[];
 }
 
 export const ROSTER_MAX = 6;
@@ -559,11 +565,12 @@ export function generateMap(seed: number, act: number): RunMap {
     guardMade += 1;
   }
 
-  // 瞭望塔：首领关前 3 行内出现该节点的概率 25%（优先覆盖战斗类节点，不破坏事件/商人数量保证）
+  // 瞭望塔：首领关前 3 行内每一行以 20% 概率把该行一个战斗类节点（战斗/精英/被侵蚀）改写为瞭望塔
+  // 不覆盖事件/商人/奇遇，也不动强制战斗行 1（此循环从第 2 行开始）
   for (let row = Math.max(2, lastRow - 3); row < lastRow; row++) {
-    if (rng() < 0.25) {
+    if (rng() < 0.2) {
       const candidates = layers[row].filter(
-        (n) => n.type === 'battle' || n.type === 'elite' || n.type === 'arena' || n.type === 'gauntlet' || n.type === 'corrupted',
+        (n) => n.type === 'battle' || n.type === 'elite' || n.type === 'corrupted',
       );
       if (candidates.length > 0) {
         const n = candidates[Math.floor(rng() * candidates.length)];

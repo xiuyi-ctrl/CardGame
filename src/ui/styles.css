@@ -415,6 +415,13 @@ button.primary {
   opacity: 0.7;
 }
 
+.ln-path {
+  stroke: #e8c26a;
+  stroke-width: 3;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 3px #e8c26a);
+}
+
 .map-row {
   display: flex;
   justify-content: center;
@@ -469,6 +476,22 @@ button.primary {
 .node.node-locked {
   opacity: 0.55;
   filter: saturate(0.6);
+}
+
+/* 已访问的瞭望塔：金色高亮边框 + 发光 */
+.node.visited-watchtower {
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(232, 194, 106, 0.6);
+  background: linear-gradient(180deg, rgba(232, 194, 106, 0.15), var(--bg-panel));
+}
+.node.visited-watchtower::after {
+  content: '★';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 10px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 3px var(--gold));
 }
 
 .route-legend {
