@@ -577,7 +577,7 @@ describe('商人·立即休整', () => {
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
     let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 30 };
     s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: s.shopStock![0] });
     expect(s.shopBought).toBe(true);
     const after = dispatch(s, { type: 'SHOP_REST' });
     expect(after.screen).toBe('shop');
@@ -621,39 +621,45 @@ describe('商人·每店限购', () => {
   it('每种物品每次进入商店限购 1 次（重复购买被拒）', () => {
     let s = enterShop(100);
     expect(s.shopBoughtItems).toEqual([]);
-    const before = s.inventory.berry ?? 0;
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
-    expect(s.shopBoughtItems).toEqual(['berry']);
-    expect(s.inventory.berry).toBe(before + 1);
+    const id = s.shopStock![0];
+    const before = s.inventory[id] ?? 0;
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: id });
+    expect(s.shopBoughtItems).toEqual([id]);
+    expect(s.inventory[id]).toBe(before + 1);
     const gold = s.gold;
-    const again = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
+    const again = dispatch(s, { type: 'SHOP_BUY', foodId: id });
     expect(again.gold).toBe(gold);
-    expect(again.inventory.berry).toBe(s.inventory.berry);
-    expect(again.shopBoughtItems).toEqual(['berry']);
+    expect(again.inventory[id]).toBe(s.inventory[id]);
+    expect(again.shopBoughtItems).toEqual([id]);
   });
 
   it('不同物品可在同一商店各买 1 次', () => {
     let s = enterShop(100);
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'meat' });
-    expect(s.shopBoughtItems).toEqual(['berry', 'meat']);
-    expect(s.inventory.berry).toBeGreaterThan(0);
-    expect(s.inventory.meat).toBeGreaterThan(0);
+    expect(s.shopStock!.length).toBe(4);
+    const a = s.shopStock![0];
+    const b = s.shopStock![1];
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: a });
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: b });
+    expect(s.shopBoughtItems).toEqual([a, b]);
+    expect(s.inventory[a]).toBeGreaterThan(0);
+    expect(s.inventory[b]).toBeGreaterThan(0);
   });
 
   it('重新进入商店节点后重置限购，可再次购买', () => {
     let s = enterShop(100);
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
-    expect(s.shopBoughtItems).toEqual(['berry']);
+    const id = s.shopStock![0];
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: id });
+    expect(s.shopBoughtItems).toEqual([id]);
     // 离开并再次进入同一商店节点
     const shopNode = s.map.layers[s.currentRow].find((n) => n.id === s.currentNodeId)!;
     const parent = s.map.layers[s.currentRow - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? s.map.layers[s.currentRow - 1][0];
     s = dispatch({ ...s, screen: 'map', currentRow: s.currentRow - 1, currentNodeId: parent.id }, { type: 'MOVE', nodeId: shopNode.id });
     expect(s.screen).toBe('shop');
     expect(s.shopBoughtItems).toEqual([]);
-    const count = s.inventory.berry ?? 0;
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'berry' });
-    expect(s.inventory.berry).toBe(count + 1);
+    expect(s.shopStock).toEqual(expect.arrayContaining([id]));
+    const count = s.inventory[id] ?? 0;
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: id });
+    expect(s.inventory[id]).toBe(count + 1);
   });
 });
 
@@ -899,7 +905,7 @@ describe('守卫与钥匙门', () => {
     expect(cur.gold).toBeGreaterThanOrEqual(gold0 + 25);
   });
 
-  it('商店可购买侦察/疾行符道具', () => {
+  it('商店随机出售 4 种商品，可购买侦察/双生符等库存中的道具', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
@@ -907,10 +913,14 @@ describe('守卫与钥匙门', () => {
     let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 100 };
     s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
     expect(s.screen).toBe('shop');
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'scout' });
-    expect(s.inventory.scout).toBe(1);
-    expect(s.gold).toBe(100 - 8);
-    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'haste' });
-    expect(s.inventory.haste).toBe(1);
+    expect(s.shopStock!.length).toBe(4);
+    expect([...new Set(s.shopStock!)].length).toBe(4);
+    // 购买第一件在售商品，库存 +1、金币减少
+    const before = s.gold;
+    const buyId = s.shopStock![0];
+    const invBefore = s.inventory[buyId] ?? 0;
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: buyId });
+    expect(s.inventory[buyId]).toBe(invBefore + 1);
+    expect(s.gold).toBeLessThan(before);
   });
 });

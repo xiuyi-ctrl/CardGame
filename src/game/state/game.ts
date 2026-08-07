@@ -180,6 +180,8 @@ export interface GameState {
   shopBought?: boolean;
   /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */
   shopBoughtItems?: string[];
+  /** 本次商人节点在售的 4 个随机物品 id（按节点确定性生成，重进同一商店不变） */
+  shopStock?: string[];
   /** 宝箱/钥匙门开启结果（chest 界面展示的文本列表） */
   chestResult?: string[];
   /** 本幕已访问的瞭望塔节点 ID 列表 */

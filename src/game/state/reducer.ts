@@ -1,11 +1,12 @@
 import type { GameState, MapNode, RewardChoice } from './game';
 import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, evolveUnitForce, FIELD_MAX, generateChallengeRewards, generateMap, generateRewards, gainExp, labelOf, makeCustomUnit, ROSTER_MAX, recomputeStats, settleEvolutions } from './game';
+import { useBattleItem } from '../core/battle';
 import { createBattle, computeStats, makeUnit, playerSkill, playerTame, type BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getEvolution, getMonster } from '../data/monsters';
-import { createRng } from '../rng';
+import { createRng, shuffle } from '../rng';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
@@ -37,6 +38,7 @@ export type GameAction =
   | { type: 'PICK_CUSTOM'; presetId: string }
   | { type: 'USE_PURIFY'; uid: string }
   | { type: 'USE_SKIP'; nodeId: string }
+  | { type: 'USE_BATTLE_ITEM'; itemId: string; targetUid: string }
   | { type: 'PLAYER_SKILL'; skillId: string; targetUid?: string }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
@@ -222,7 +224,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   return { ...settled, roster: healed, rewards };
 }
 
-/** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+40% 概率道具）。结果文本进 chestResult */
+/** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+40% 概率道具，其中净化药水固定 20% 概率单独判定）。结果文本进 chestResult */
 function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: GameState; text: string } {
   const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
   let next = base;
@@ -233,18 +235,22 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
     const foodId = foodPool[Math.floor(rng() * foodPool.length)];
     const food = getFood(foodId);
     let extras: string[] = [];
-    if (rng() < 0.4) {
-      // 额外奖励池混合食物（圣果）与道具：圣果走食物背包，其余走道具背包
-      const pool = ['golden_fruit', 'purify', 'scout', 'haste', 'skip'];
+    // 钥匙门额外奖励：净化药水固定 20% 概率；其余道具（侦察符/双生符/跳关）共 20% 概率，均分
+    if (rng() < 0.2) {
+      // 净化药水
+      next = { ...next, inventory: { ...next.inventory, purify: (next.inventory.purify ?? 0) + 1 } };
+      extras.push(`额外获得「${getItem('purify').name}」`);
+    } else if (rng() < 0.25) { // 剩余 80% * 25% = 20% 给其他道具
+      const pool = ['scout', 'haste', 'skip'];
       const extraId = pool[Math.floor(rng() * pool.length)];
-      if (extraId === 'golden_fruit') {
-        next = { ...next, inventory: { ...next.inventory, [extraId]: (next.inventory[extraId] ?? 0) + 1 } };
-        extras.push(`额外获得「${getFood(extraId).name}」`);
-      } else {
-        const it = getItem(extraId);
-        next = { ...next, inventory: { ...next.inventory, [extraId]: (next.inventory[extraId] ?? 0) + 1 } };
-        extras.push(`额外获得「${it.name}」`);
-      }
+      const it = getItem(extraId);
+      next = { ...next, inventory: { ...next.inventory, [extraId]: (next.inventory[extraId] ?? 0) + 1 } };
+      extras.push(`额外获得「${it.name}」`);
+    }
+    // 圣果单独 10% 概率（原逻辑保留）
+    if (rng() < 0.1) {
+      next = { ...next, inventory: { ...next.inventory, golden_fruit: (next.inventory.golden_fruit ?? 0) + 1 } };
+      extras.push(`额外获得「${getFood('golden_fruit').name}」`);
     }
     next = { ...next, gold: next.gold + amt, inventory: { ...next.inventory, [foodId]: (next.inventory[foodId] ?? 0) + 1 } };
     text = `开启「${labelOf(node.type, base.currentRow)}」：获得 ${amt} 金币、1 个${food.name}${extras.length ? '、' + extras.join('、') : ''}`;
@@ -271,7 +277,12 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
 /** 进入一个地图节点：根据节点类型进入对应界面（MOVE 与 DEBUG_JUMP 共用） */
 function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'rest') return { ...base, screen: 'rest' };
-  if (node.type === 'shop') return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [] };
+  if (node.type === 'shop') {
+    const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
+    const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
+    const stock = shuffle(rng, pool).slice(0, 4);
+    return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock };
+  }
   if (node.type === 'event') return { ...base, screen: 'event' };
   if (node.type === 'special') return { ...base, screen: 'special' };
   if (node.type === 'watchtower') {
@@ -649,6 +660,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, battle };
     }
 
+    case 'USE_BATTLE_ITEM': {
+      if (!state.battle || state.battle.phase !== 'acting') return state;
+      const item = getItem(action.itemId);
+      if (!item.usableInBattle || !item.needsTarget) return state;
+      const inv = state.inventory[action.itemId] ?? 0;
+      if (inv <= 0) return state;
+      if (!action.targetUid) return state;
+      const battle = useBattleItem(state.battle, action.itemId, action.targetUid);
+      if (battle.rngCount !== state.battle.rngCount) {
+        const inventory = { ...state.inventory, [action.itemId]: inv - 1 };
+        return { ...state, battle, inventory };
+      }
+      return { ...state, battle };
+    }
+
     case 'BATTLE_END_CONFIRM': {
       if (!state.battle) return state;
       if (state.battle.phase === 'won') return resolveBattle(state, state.battle);
@@ -721,6 +747,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const food = FOODS[action.foodId];
       const item = ITEMS[action.foodId];
       if (!food && !item) return state;
+      if (!(state.shopStock ?? []).includes(action.foodId)) return state;
       const price = food ? food.price : item.price;
       if (state.gold < price) return state;
       if ((state.shopBoughtItems ?? []).includes(action.foodId)) return state;

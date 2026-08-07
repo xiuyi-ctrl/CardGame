@@ -101,7 +101,7 @@ export function useRng(b: BattleState, fn: (value: number, b2: BattleState) => B
 export function computeTurnOrder(b: BattleState): string[] {
   const all = [...b.playerUnits, ...b.enemyUnits]
     .filter((u) => u.hp > 0)
-    .sort((a, c) => c.spd - a.spd || a.uid.localeCompare(c.uid));
+    .sort((a, c) => getEffectiveSpd(c) - getEffectiveSpd(a) || a.uid.localeCompare(c.uid));
   return all.map((u) => u.uid);
 }
 
@@ -157,13 +157,15 @@ export function createBattle(
 
 /** 开始新回合：重置行动标记、结算持续伤害与状态持续、重新按速度排序 */
 function startRound(b: BattleState): BattleState {
-  let nb: BattleState = {
-    ...b,
-    round: b.round + 1,
-    turnOrder: computeTurnOrder(b),
+  // 递减战斗药水效果回合数
+  let nb = decrementBattleBuffs(b);
+  nb = {
+    ...nb,
+    round: nb.round + 1,
+    turnOrder: computeTurnOrder(nb),
     turnIndex: 0,
-    playerUnits: b.playerUnits.map((u) => ({ ...u, acted: false, statuses: u.statuses.map((s) => ({ ...s })) })),
-    enemyUnits: b.enemyUnits.map((u) => ({ ...u, acted: false, statuses: u.statuses.map((s) => ({ ...s })) })),
+    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: false, statuses: u.statuses.map((s) => ({ ...s })) })),
+    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: false, statuses: u.statuses.map((s) => ({ ...s })) })),
   };
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     const res = applyDot(nb, u);
@@ -413,11 +415,13 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   }
 
   if (skill.kind === 'heal') {
+    const effectiveAtk = getEffectiveAtk(actor);
     nb = useRng(nb, (rngVal, b2) => {
       let r = b2;
       for (const t of targets) {
-        const amt = Math.round(actor.atk * skill.power + (skill.bonus ?? 0) + rngVal);
-        const healed = { ...t, hp: Math.min(t.maxHp, t.hp + amt) };
+        const amt = Math.round(effectiveAtk * skill.power + (skill.bonus ?? 0) + rngVal);
+        const maxHp = getEffectiveMaxHp(t);
+        const healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
         r = replaceUnit(r, healed);
         r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`);
       }
@@ -441,10 +445,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (!t || t.hp <= 0) continue;
       const single = useRng(nb, (rngVal, b2) => {
         let total = 0;
+        const effectiveAtk = getEffectiveAtk(actor);
         for (let i = 0; i < count; i++) {
           const variance = 0.9 + rngVal * 0.2;
           const elem = skill.element ? elementMultiplier(skill.element, t.element) : 1;
-          total += Math.max(1, Math.round(actor.atk * skill.power * elem * variance) - t.def);
+          total += Math.max(1, Math.round(effectiveAtk * skill.power * elem * variance) - t.def);
         }
         const crit = rngVal > 0.9 ? 1.5 : 1;
         let finalDmg = Math.max(1, Math.round(total * crit));
@@ -544,4 +549,144 @@ export function isTameable(enemy: Unit): boolean {
 
 export function playerHasMove(b: BattleState): boolean {
   return b.phase === 'acting' && currentActor(b)?.isPlayer === true;
+}
+
+/** 战斗药水临时效果键 */
+type BuffKey = 'atkUp' | 'spdUp' | 'hpUp' | 'atkDown' | 'spdDown' | 'hpDown';
+
+const BUFF_MAP: Record<string, BuffKey> = {
+  atk_up: 'atkUp',
+  spd_up: 'spdUp',
+  hp_up: 'hpUp',
+  atk_down: 'atkDown',
+  spd_down: 'spdDown',
+  hp_down: 'hpDown',
+};
+
+const BUFF_DURATION = 3; // 持续 3 回合
+
+/** 使用战斗药水：给指定单位加buff/debuff */
+export function useBattleItem(b: BattleState, itemId: string, targetUid: string): BattleState {
+  const key = BUFF_MAP[itemId];
+  if (!key) return b;
+
+  const target = [...b.playerUnits, ...b.enemyUnits].find(u => u.uid === targetUid);
+  if (!target) return b;
+
+  const isPlayer = target.isPlayer;
+  // 验证目标合法性：己方增益只能用于我方，敌方减益只能用于敌方
+  const isBuff = ['atkUp', 'spdUp', 'hpUp'].includes(key);
+  const isDebuff = ['atkDown', 'spdDown', 'hpDown'].includes(key);
+  if ((isBuff && !isPlayer) || (isDebuff && isPlayer)) return b;
+
+  return useRng(b, (_rngVal, nb) => {
+    const t = [...nb.playerUnits, ...nb.enemyUnits].find(u => u.uid === targetUid);
+    if (!t) return nb;
+
+    const unitBuffs = { ...(t.battleBuffs ?? {}) };
+    // 生命药水即时生效，不加入持续buff
+    if (key !== 'hpUp') {
+      unitBuffs[key] = BUFF_DURATION;
+    } else {
+      // 生命药水：即时回血 50%
+      const maxHp = getEffectiveMaxHp(t);
+      const heal = Math.round(maxHp * 0.5);
+      const healedUnit = { ...t, hp: Math.min(maxHp, t.hp + heal), battleBuffs: unitBuffs };
+      const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
+        u.uid === targetUid ? healedUnit : u
+      );
+      return pushLog(
+        {
+          ...nb,
+          playerUnits: newUnits.filter(u => u.isPlayer),
+          enemyUnits: newUnits.filter(u => !u.isPlayer),
+        },
+        `对 ${t.name} 使用道具：回复 50% 生命`
+      );
+    }
+
+    const effectDesc: Record<string, string> = {
+      atkUp: '攻击 +30%',
+      spdUp: '速度 +30%',
+      hpUp: '回复 50% 生命',
+      atkDown: '攻击 -30%',
+      spdDown: '速度 -30%',
+      hpDown: '最大生命 -30%',
+    };
+
+    const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
+      u.uid === targetUid ? { ...u, battleBuffs: unitBuffs } : u
+    );
+
+    return pushLog(
+      {
+        ...nb,
+        playerUnits: newUnits.filter(u => u.isPlayer),
+        enemyUnits: newUnits.filter(u => !u.isPlayer),
+      },
+      `对 ${t.name} 使用道具：${effectDesc[key]}（持续 ${BUFF_DURATION} 回合）`
+    );
+  });
+}
+
+/** 回合开始时递减所有单位的战斗药水效果回合数 */
+export function decrementBattleBuffs(b: BattleState): BattleState {
+  let changed = false;
+  const newUnits = [...b.playerUnits, ...b.enemyUnits].map(u => {
+    if (!u.battleBuffs) return u;
+    const next: Record<string, number> = {};
+    let unitChanged = false;
+    for (const [k, v] of Object.entries(u.battleBuffs)) {
+      if (v > 1) {
+        next[k] = v - 1;
+        unitChanged = true;
+      }
+    }
+    if (unitChanged) {
+      changed = true;
+      return { ...u, battleBuffs: next as Unit['battleBuffs'] };
+    }
+    if (Object.keys(next).length === 0) {
+      changed = true;
+      return { ...u, battleBuffs: undefined };
+    }
+    return u;
+  });
+
+  return changed
+    ? { ...b, playerUnits: newUnits.filter(u => u.isPlayer), enemyUnits: newUnits.filter(u => !u.isPlayer) }
+    : b;
+}
+
+/** 获取单位的有效攻击（含临时buff） */
+export function getEffectiveAtk(u: Unit): number {
+  if (!u.battleBuffs) return u.atk;
+  let atk = u.atk;
+  if (u.battleBuffs.atkUp) atk = Math.round(atk * 1.3);
+  if (u.battleBuffs.atkDown) atk = Math.round(atk * 0.7);
+  return atk;
+}
+
+/** 获取单位的有效速度（含临时buff） */
+export function getEffectiveSpd(u: Unit): number {
+  if (!u.battleBuffs) return u.spd;
+  let spd = u.spd;
+  if (u.battleBuffs.spdUp) spd = Math.round(spd * 1.3);
+  if (u.battleBuffs.spdDown) spd = Math.round(spd * 0.7);
+  return spd;
+}
+
+/** 获取单位的有效最大生命（含临时buff） */
+export function getEffectiveMaxHp(u: Unit): number {
+  if (!u.battleBuffs) return u.maxHp;
+  let maxHp = u.maxHp;
+  if (u.battleBuffs.hpDown) maxHp = Math.round(maxHp * 0.7);
+  return maxHp;
+}
+
+/** 生命药水即时生效：回复 50% 当前最大生命 */
+export function applyHpPotion(u: Unit): Unit {
+  const maxHp = getEffectiveMaxHp(u);
+  const heal = Math.round(maxHp * 0.5);
+  return { ...u, hp: Math.min(maxHp, u.hp + heal) };
 }

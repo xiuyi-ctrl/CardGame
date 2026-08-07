@@ -5,9 +5,12 @@ import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
 import { currentPlayerUnit, isTameable, tameChance, TAME_THRESHOLD } from '../game/core/battle';
 import { getSkill } from '../game/data/skills';
+import { getItem } from '../game/data/items';
 import type { SkillDef, Unit } from '../game/types';
 import { UnitCard } from './components';
 import { persistSave } from './persistence';
+
+const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
 
 interface Props {
   state: GameState;
@@ -20,6 +23,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const [pendingSkill, setPendingSkill] = useState<{ skillId: string; target?: string } | null>(null);
   const [pendingTame, setPendingTame] = useState<string | null>(null);
+  const [pendingBattleItem, setPendingBattleItem] = useState<string | null>(null);
   const [hoverEnemy, setHoverEnemy] = useState<string | null>(null);
 
   const current = currentPlayerUnit(battle);
@@ -28,10 +32,14 @@ export function BattleScreen({ state, dispatch }: Props) {
   useEffect(() => {
     setPendingSkill(null);
     setPendingTame(null);
+    setPendingBattleItem(null);
   }, [actorUid, battle?.rngCount]);
 
   const skills: SkillDef[] = useMemo(() => (current ? current.skills.map((id) => getSkill(id)) : []), [current]);
   const foods = currentFoodList(state);
+  const battleItems = BATTLE_ITEM_IDS
+    .map((id) => getItem(id))
+    .filter((it) => (state.inventory[it.id] ?? 0) > 0);
 
   const nodeType = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.type;
   const isChallenge = nodeType === 'arena' || nodeType === 'gauntlet';
@@ -40,18 +48,38 @@ export function BattleScreen({ state, dispatch }: Props) {
   const playerUnits = [...battle.playerUnits].sort((a, b) => a.column - b.column);
 
   const validEnemyTargets = useMemo(() => {
-    if (!pendingSkill) return new Set<string>();
-    const skill = getSkill(pendingSkill.skillId);
-    if (skill.target === 'single') return new Set(enemyUnits.filter((u) => u.hp > 0).map((u) => u.uid));
-    return new Set<string>();
-  }, [pendingSkill, battle.rngCount]);
+    const targets = new Set<string>();
+    if (pendingSkill) {
+      const skill = getSkill(pendingSkill.skillId);
+      if (skill.target === 'single') {
+        enemyUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
+      }
+    }
+    if (pendingBattleItem) {
+      const isDebuff = ['atk_down', 'spd_down', 'hp_down'].includes(pendingBattleItem);
+      if (isDebuff) {
+        enemyUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
+      }
+    }
+    return targets;
+  }, [pendingSkill, pendingBattleItem, battle.rngCount, enemyUnits]);
 
   const validAllyTargets = useMemo(() => {
-    if (!pendingSkill) return new Set<string>();
-    const skill = getSkill(pendingSkill.skillId);
-    if (skill.target === 'ally') return new Set(battle.playerUnits.filter((u) => u.hp > 0).map((u) => u.uid));
-    return new Set<string>();
-  }, [pendingSkill, battle.rngCount]);
+    const targets = new Set<string>();
+    if (pendingSkill) {
+      const skill = getSkill(pendingSkill.skillId);
+      if (skill.target === 'ally') {
+        battle.playerUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
+      }
+    }
+    if (pendingBattleItem) {
+      const isBuff = ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
+      if (isBuff) {
+        battle.playerUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
+      }
+    }
+    return targets;
+  }, [pendingSkill, pendingBattleItem, battle.rngCount]);
 
   function onSkillClick(skill: SkillDef) {
     if (!current) return;
@@ -69,6 +97,15 @@ export function BattleScreen({ state, dispatch }: Props) {
       setPendingSkill(null);
       return;
     }
+    if (pendingBattleItem) {
+      const isBuff = ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
+      const isDebuff = ['atk_down', 'spd_down', 'hp_down'].includes(pendingBattleItem);
+      // 验证目标合法性：buff只能给友方，debuff只能给敌方
+      if ((isBuff && isEnemy) || (isDebuff && !isEnemy)) return;
+      dispatch({ type: 'USE_BATTLE_ITEM', itemId: pendingBattleItem, targetUid: uid });
+      setPendingBattleItem(null);
+      return;
+    }
     if (pendingTame && isEnemy) {
       dispatch({ type: 'PLAYER_TAME', foodId: pendingTame, enemyUid: uid });
       setPendingTame(null);
@@ -79,6 +116,13 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (!current) return;
     setPendingSkill(null);
     setPendingTame(foodId);
+  }
+
+  function onBattleItemClick(itemId: string) {
+    if (!current) return;
+    setPendingSkill(null);
+    setPendingTame(null);
+    setPendingBattleItem(itemId);
   }
 
   function tameTip(u: Unit): string {
@@ -187,6 +231,26 @@ export function BattleScreen({ state, dispatch }: Props) {
                 );
               })}
             </div>
+            <div className="foods">
+              {battleItems.length === 0 ? (
+                <span className="card-sub">没有战斗道具</span>
+              ) : (
+                battleItems.map((it) => {
+                  const count = state.inventory[it.id] ?? 0;
+                  const isPending = pendingBattleItem === it.id;
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => onBattleItemClick(it.id)}
+                      className={isPending ? 'primary' : ''}
+                      title={`${it.desc}（拥有 ${count} 个）`}
+                    >
+                      {it.emoji} {it.name}×{count}
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </>
         ) : (
           <span className="card-sub">
@@ -219,6 +283,11 @@ export function BattleScreen({ state, dispatch }: Props) {
       {pendingTame && (
         <div className="card-sub" style={{ marginTop: 6 }}>
           🍖 选择血量低于 {Math.round(TAME_THRESHOLD * 100)}% 的敌人进行驯服
+        </div>
+      )}
+      {pendingBattleItem && (
+        <div className="card-sub" style={{ marginTop: 6 }}>
+          🧪 {getItem(pendingBattleItem).name}：点击任意目标使用（全体生效）
         </div>
       )}
 

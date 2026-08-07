@@ -611,58 +611,41 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const bought = state.shopBought === true;
   const boughtItems = state.shopBoughtItems ?? [];
+  const stock = (state.shopStock ?? []).filter((id) => FOODS[id] || ITEMS[id]);
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">商人 🏪</div>
       <p className="card-sub" style={{ textAlign: 'center' }}>
-        购买食物与道具，或花 5 金币立即休整（回满血·不解诅咒）；{bought ? '已购买过商品，本节点不可再休整。' : '本节点购物与休整二选一。'}
+        本店随机出售 4 种商品，或花 5 金币立即休整（回满血·不解诅咒）；{bought ? '已购买过商品，本节点不可再休整。' : '本节点购物与休整二选一。'}
       </p>
       <div className="reward-cards">
-        {Object.values(FOODS)
-          .filter((f) => f.shop !== false)
-          .map((f) => {
-            const soldOut = boughtItems.includes(f.id);
-            return (
-            <div key={f.id} className={`reward-card ${soldOut ? 'dim' : ''}`}>
-              <div className="ricon">{f.emoji}</div>
-              <div className="rtitle">{f.name}</div>
-              <div className="rdesc">{f.desc}</div>
+        {stock.map((id) => {
+          const f = FOODS[id];
+          const it = ITEMS[id];
+          const name = f ? f.name : it.name;
+          const emoji = f ? f.emoji : it.emoji;
+          const desc = f ? f.desc : it.desc;
+          const price = f ? f.price : it.price;
+          const soldOut = boughtItems.includes(id);
+          return (
+            <div key={id} className={`reward-card ${soldOut ? 'dim' : ''}`}>
+              <div className="ricon">{emoji}</div>
+              <div className="rtitle">{name}</div>
+              <div className="rdesc">{desc}</div>
               <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-                <span className="chip">💰 {f.price}</span>
+                <span className="chip">💰 {price}</span>
                 <button
                   className="primary"
-                  disabled={soldOut || state.gold < f.price}
-                  onClick={() => dispatch({ type: 'SHOP_BUY', foodId: f.id })}
+                  disabled={soldOut || state.gold < price}
+                  onClick={() => dispatch({ type: 'SHOP_BUY', foodId: id })}
                 >
                   {soldOut ? '已购买' : '购买'}
                 </button>
               </div>
             </div>
-            );
-          })}
-        {Object.values(ITEMS)
-          .filter((it) => it.price > 0)
-          .map((it) => {
-            const soldOut = boughtItems.includes(it.id);
-            return (
-              <div key={it.id} className={`reward-card ${soldOut ? 'dim' : ''}`}>
-                <div className="ricon">{it.emoji}</div>
-                <div className="rtitle">{it.name}</div>
-                <div className="rdesc">{it.desc}</div>
-                <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-                  <span className="chip">💰 {it.price}</span>
-                  <button
-                    className="primary"
-                    disabled={soldOut || state.gold < it.price}
-                    onClick={() => dispatch({ type: 'SHOP_BUY', foodId: it.id })}
-                  >
-                    {soldOut ? '已购买' : '购买'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          );
+        })}
         <div className={`reward-card ${bought ? 'dim' : ''}`}>
           <div className="ricon">🛌</div>
           <div className="rtitle">立即休整</div>

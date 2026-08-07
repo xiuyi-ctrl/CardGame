@@ -154,7 +154,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           s = dispatch(s, { type: 'SHOP_REST' });
           break;
         }
-        if (s.gold >= 14) s = dispatch(s, { type: 'SHOP_BUY', foodId: 'gem' });
+        if (s.gold >= 14 && (s.shopStock ?? []).includes('gem')) s = dispatch(s, { type: 'SHOP_BUY', foodId: 'gem' });
         s = dispatch(s, { type: 'NEXT_NODE' });
         break;
       }
