@@ -54,6 +54,30 @@ export function StatusIcons({ unit }: { unit: Unit }) {
   );
 }
 
+const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
+  atkUp: { icon: '⚔️', label: '攻击 +30%' },
+  spdUp: { icon: '💨', label: '速度 +30%' },
+  atkDown: { icon: '🪄', label: '攻击 -30%' },
+  spdDown: { icon: '🕸️', label: '速度 -30%' },
+};
+
+export function BattleBuffIcons({ unit }: { unit: Unit }) {
+  const buffs = unit.battleBuffs;
+  if (!buffs) return null;
+  const entries = Object.entries(buffs).filter(([k, v]) => v && BATTLE_BUFF_ICON[k]);
+  if (entries.length === 0) return null;
+  return (
+    <span className="battle-buffs">
+      {entries.map(([k, v]) => (
+        <span key={k} title={`${BATTLE_BUFF_ICON[k].label}（剩余 ${v} 回合）`}>
+          {BATTLE_BUFF_ICON[k].icon}
+          <sup>{v}</sup>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export interface UnitCardProps {
   unit: Unit;
   className?: string;
@@ -90,6 +114,7 @@ export function UnitCard({ unit, className = '', onClick }: UnitCardProps) {
           {unit.hp}/{unit.maxHp}
         </span>
         <StatusIcons unit={unit} />
+        <BattleBuffIcons unit={unit} />
       </div>
     </div>
   );

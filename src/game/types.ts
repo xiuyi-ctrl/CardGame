@@ -98,14 +98,12 @@ export interface Unit {
   curse?: 'hpDown' | 'atkDown' | 'spdDown';
   /** 自创生物：创建时随机组合的技能，升级时保留而非按物种解锁 */
   customSkills?: string[];
-  /** 战斗药水临时效果（uid -> {atkUp?, spdUp?, hpUp?, atkDown?, spdDown?, hpDown?} 回合数） */
+  /** 战斗药水临时效果（uid -> {atkUp?, spdUp?, atkDown?, spdDown?} 回合数；hpUp/hpDown 为即时生效不入此表） */
   battleBuffs?: {
     atkUp?: number;
     spdUp?: number;
-    hpUp?: number;
     atkDown?: number;
     spdDown?: number;
-    hpDown?: number;
   };
 }
 

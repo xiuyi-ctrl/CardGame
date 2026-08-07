@@ -583,15 +583,11 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
     const t = [...nb.playerUnits, ...nb.enemyUnits].find(u => u.uid === targetUid);
     if (!t) return nb;
 
-    const unitBuffs = { ...(t.battleBuffs ?? {}) };
-    // 生命药水即时生效，不加入持续buff
-    if (key !== 'hpUp') {
-      unitBuffs[key] = BUFF_DURATION;
-    } else {
-      // 生命药水：即时回血 50%
+    // 生命药水/腐蚀药水即时生效，不加入持续buff
+    if (key === 'hpUp') {
       const maxHp = getEffectiveMaxHp(t);
       const heal = Math.round(maxHp * 0.5);
-      const healedUnit = { ...t, hp: Math.min(maxHp, t.hp + heal), battleBuffs: unitBuffs };
+      const healedUnit = { ...t, hp: Math.min(maxHp, t.hp + heal) };
       const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
         u.uid === targetUid ? healedUnit : u
       );
@@ -604,6 +600,25 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
         `对 ${t.name} 使用道具：回复 50% 生命`
       );
     }
+    if (key === 'hpDown') {
+      // 腐蚀药水：当前生命 -30%（至少保留 1 血，不直接致死）
+      const hit = Math.max(1, Math.round(t.hp * 0.7));
+      const hitUnit = { ...t, hp: Math.max(1, hit) };
+      const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
+        u.uid === targetUid ? hitUnit : u
+      );
+      return pushLog(
+        {
+          ...nb,
+          playerUnits: newUnits.filter(u => u.isPlayer),
+          enemyUnits: newUnits.filter(u => !u.isPlayer),
+        },
+        `对 ${t.name} 使用道具：当前生命 -30%`
+      );
+    }
+
+    const unitBuffs = { ...(t.battleBuffs ?? {}) };
+    unitBuffs[key] = BUFF_DURATION;
 
     const effectDesc: Record<string, string> = {
       atkUp: '攻击 +30%',
@@ -611,7 +626,7 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
       hpUp: '回复 50% 生命',
       atkDown: '攻击 -30%',
       spdDown: '速度 -30%',
-      hpDown: '最大生命 -30%',
+      hpDown: '当前生命 -30%',
     };
 
     const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
@@ -678,15 +693,5 @@ export function getEffectiveSpd(u: Unit): number {
 
 /** 获取单位的有效最大生命（含临时buff） */
 export function getEffectiveMaxHp(u: Unit): number {
-  if (!u.battleBuffs) return u.maxHp;
-  let maxHp = u.maxHp;
-  if (u.battleBuffs.hpDown) maxHp = Math.round(maxHp * 0.7);
-  return maxHp;
-}
-
-/** 生命药水即时生效：回复 50% 当前最大生命 */
-export function applyHpPotion(u: Unit): Unit {
-  const maxHp = getEffectiveMaxHp(u);
-  const heal = Math.round(maxHp * 0.5);
-  return { ...u, hp: Math.min(maxHp, u.hp + heal) };
+  return u.maxHp;
 }

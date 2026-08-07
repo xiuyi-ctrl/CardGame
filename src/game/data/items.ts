@@ -79,10 +79,10 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   hp_down: {
     id: 'hp_down', name: '腐蚀药水', emoji: '☠️',
-    desc: '战斗中使用：指定一只敌方，最大生命 -30%（持续 3 回合）',
+    desc: '战斗中使用：指定一只敌方，当前生命 -30%',
     kind: 'hp_down', price: 15,
     usableInBattle: true,
-    battleDesc: '指定一只敌方，最大生命 -30%（3 回合）',
+    battleDesc: '指定一只敌方，当前生命 -30%',
     needsTarget: true,
   },
 };

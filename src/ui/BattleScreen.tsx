@@ -287,7 +287,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       )}
       {pendingBattleItem && (
         <div className="card-sub" style={{ marginTop: 6 }}>
-          🧪 {getItem(pendingBattleItem).name}：点击任意目标使用（全体生效）
+          🧪 {getItem(pendingBattleItem).name}：选择目标使用
         </div>
       )}
 
