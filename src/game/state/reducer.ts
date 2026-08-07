@@ -144,7 +144,12 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
 
   const synced: (Unit | null)[] = state.roster.map((r) => {
     const b = [...battle.playerUnits, ...(battle.playerDown ?? [])].find((u) => u.uid === r.uid);
-    if (!b || b.hp <= 0) return null;
+    if (!b) return r; // 后备宠物未参与本场战斗：原样保留
+    if (b.hp <= 0) {
+      // 斗兽场/车轮战：阵亡单位不会永久死亡（保留并保底 1 血）；普通战斗阵亡永久移除
+      if (challenge) return { ...r, statuses: [], hp: 1 };
+      return null;
+    }
     return {
       ...r,
       level: b.level,
@@ -159,7 +164,6 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       statuses: [],
     };
   });
-  // 斗兽场/车轮战：阵亡单位不会永久死亡（保留并保底 1 血），失败另有坏事件惩罚而非游戏结束
   let roster: Unit[] = challenge
     ? synced.filter((u): u is Unit => u !== null).map((u) => ({ ...u, hp: Math.max(1, u.hp) }))
     : synced.filter((u): u is Unit => u !== null);

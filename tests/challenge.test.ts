@@ -233,6 +233,39 @@ describe('车轮战（轮换上阵）', () => {
     expect(s.rewards.length).toBe(3);
     expect(s.gold).toBe(gold0);
   });
+
+  it('车轮战胜利时替补席与阵亡单位全部保留（保底 1 血）', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    s = stateAtNode(s, 4, 'gauntlet', [
+      { speciesId: 'kiki', level: 1 },
+      { speciesId: 'pipi', level: 1 },
+    ]);
+    const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
+    s = dispatch(s, { type: 'MOVE', nodeId: g.id });
+    // 当前场上第 1 只，替补席 1 只
+    expect(s.battle!.playerBench?.length).toBe(1);
+    const fieldUid = s.battle!.playerUnits[0].uid;
+    const benchUid = s.battle!.playerBench![0].uid;
+    // 模拟：场上这只被击杀 → 退场进入 playerDown；替补顶上但直接获胜
+    const killed: BattleState = {
+      ...s.battle!,
+      playerUnits: s.battle!.playerUnits.map((u) => ({ ...u, hp: 0 })),
+    };
+    // 手工构造胜利结算：场上单位存活、替补未上场、阵亡单位在 playerDown
+    const won: BattleState = {
+      ...killed,
+      phase: 'won',
+      playerUnits: killed.playerUnits.map((u) => ({ ...u, hp: 1 })),
+      playerDown: [...(killed.playerDown ?? []), ...killed.playerUnits.map((u) => ({ ...u, hp: 0 }))],
+    };
+    s = { ...s, battle: won };
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+    expect(s.screen).toBe('reward');
+    // 替补席与阵亡单位都不得被永久删除
+    expect(s.roster.some((u) => u.uid === fieldUid)).toBe(true);
+    expect(s.roster.some((u) => u.uid === benchUid)).toBe(true);
+    s.roster.forEach((u) => expect(u.hp).toBeGreaterThanOrEqual(1));
+  });
 });
 
 describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {

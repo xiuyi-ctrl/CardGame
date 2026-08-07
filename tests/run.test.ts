@@ -314,6 +314,27 @@ describe('完整肉鸽流程', () => {
     expect(s.roster.some((u) => u.uid === starter.uid)).toBe(true);
   });
 
+  it('战斗胜利后后备（未上场）宠物保留在队伍', () => {
+    const starter = makeUnit('momo', 1, true, 0, false);
+    const meat = makeUnit('fifi', 1, true, 1, false);
+    const backup = makeUnit('lulu', 1, true, 2, false);
+    let s: GameState = {
+      ...createInitialState(),
+      screen: 'map',
+      roster: [starter, meat, backup],
+      field: [starter.uid, meat.uid],
+      seed: 9,
+    };
+    const battle = createBattle([starter, meat], [{ speciesId: 'pipi', level: 1 }], 9);
+    const aliveEnemy = battle.enemyUnits.find((u) => u.hp > 0)!;
+    aliveEnemy.hp = 0;
+    const won = { ...battle, phase: 'won' as const };
+    s = resolveBattle(s, won);
+    expect(s.roster.some((u) => u.uid === backup.uid)).toBe(true);
+    expect(s.roster.some((u) => u.uid === starter.uid)).toBe(true);
+    expect(s.roster.some((u) => u.uid === meat.uid)).toBe(true);
+  });
+
   it('驯服获得的新宠物会进入队伍', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 5 });
     const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'momo', level: 1 }], 5);
