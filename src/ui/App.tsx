@@ -505,6 +505,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const evolveMode = pending?.kind === 'evolve';
   const boostMode = pending?.kind === 'boost';
   const arenaMode = pending?.kind === 'arena';
+  const [confirm, setConfirm] = useState<{ kind: 'fuse' | 'discard' | 'notice'; uid?: string; msg?: string } | null>(null);
   const title = evolveMode
     ? pending.super
       ? '超进化：选择要进化的宠物（会附带随机负面诅咒）'
@@ -546,47 +547,62 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                 ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
                 : () => toggleField(u.uid);
           return (
-            <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div key={u.uid} className="roster-item">
               <UnitCard
                 unit={u}
-                className={`${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode || arenaMode ? 'clickable' : ''}`}
+                className={`roster-card ${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode || arenaMode ? 'clickable' : ''}`}
                 onClick={onCard}
+                showSkillDesc
+                footer={
+                  !evolveMode && !boostMode && !arenaMode ? (
+                    <div className="unit-card-actions">
+                      <button
+                        title={stage ? `与同物种融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : '该宠物已是最终形态，无法融合'}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!stage) {
+                            setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
+                          } else if (!canFuse) {
+                            setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
+                          } else {
+                            setConfirm({ kind: 'fuse', uid: u.uid });
+                          }
+                        }}
+                      >
+                        融合
+                      </button>
+                      <button
+                        title="释放后获得金币，宠物被永久移除"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirm({ kind: 'discard', uid: u.uid });
+                        }}
+                      >
+                        释放
+                      </button>
+                    </div>
+                  ) : undefined
+                }
               />
-              <div className="panel-row">
-                {u.curse && (
-                  <span className="chip" title="负面诅咒，可用净化药水解除">
-                    ⚠️ {CURSE_CN[u.curse]}
-                  </span>
-                )}
-                {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
-                  <span className="chip" title="来自奇遇关的属性强化">
-                    ✨+{(u.bonusStats.hp ?? 0) ? `血${u.bonusStats.hp}` : ''}
-                    {(u.bonusStats.spd ?? 0) ? `速${u.bonusStats.spd}` : ''}
-                  </span>
-                )}
+              <div className="roster-actions">
+                <div className="panel-row" style={{ justifyContent: 'center' }}>
+                  {u.curse && (
+                    <span className="chip" title="负面诅咒，可用净化药水解除">
+                      ⚠️ {CURSE_CN[u.curse]}
+                    </span>
+                  )}
+                  {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
+                    <span className="chip" title="来自奇遇关的属性强化">
+                      ✨+{(u.bonusStats.hp ?? 0) ? `血${u.bonusStats.hp}` : ''}
+                      {(u.bonusStats.spd ?? 0) ? `速${u.bonusStats.spd}` : ''}
+                    </span>
+                  )}
+                </div>
                 {u.curse && (state.inventory.purify ?? 0) > 0 && (
                   <button onClick={() => dispatch({ type: 'USE_PURIFY', uid: u.uid })}>
                     🧪 净化（{state.inventory.purify}）
                   </button>
                 )}
-                {!evolveMode && !boostMode && !arenaMode && stage && (
-                  <button
-                    disabled={!canFuse}
-                    onClick={() => dispatch({ type: 'FUSE', primaryUid: u.uid })}
-                    title={`融合为 ${getMonster(stage).name}：需 ${need} 只同物种（现有 ${sameCount}），融合后继承强化/诅咒`}
-                  >
-                    🧬 融合→{getMonster(stage).name}（{sameCount}/{need}）
-                  </button>
-                )}
-                {!evolveMode && !boostMode && !arenaMode && (() => {
-                  const monster = getMonster(u.speciesId);
-                  const goldGain = 5 * monster.rank;
-                  return (
-                    <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })} title={`释放后获得 ${goldGain} 金币（品阶 ${monster.rank} × 5）`}>
-                      释放（+${goldGain}💰）
-                    </button>
-                  );
-                })()}
               </div>
             </div>
           );
@@ -599,6 +615,50 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
           </button>
         </div>
       )}
+      {confirm && (() => {
+        const target = confirm.uid ? state.roster.find((x) => x.uid === confirm.uid) : undefined;
+        const isFuse = confirm.kind === 'fuse';
+        const isDiscard = confirm.kind === 'discard';
+        return (
+          <div className="confirm-overlay" onClick={() => setConfirm(null)}>
+            <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+              <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : '提示'}</div>
+              {isFuse && target && (
+                <p>
+                  确定要融合「{target.name}」吗？将与同物种宠物融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>，继承强化/诅咒，生命回满。
+                </p>
+              )}
+              {isDiscard && target && (
+                <p>
+                  确定要释放「{target.name}」吗？将获得 <b>{5 * getMonster(target.speciesId).rank} 金币</b>，宠物将被永久移除。
+                </p>
+              )}
+              {confirm.kind === 'notice' && <p>{confirm.msg}</p>}
+              <div className="panel-row" style={{ justifyContent: 'center' }}>
+                {isFuse || isDiscard ? (
+                  <>
+                    <button
+                      className="primary"
+                      onClick={() => {
+                        if (isFuse) dispatch({ type: 'FUSE', primaryUid: confirm.uid! });
+                        else dispatch({ type: 'DISCARD', uid: confirm.uid! });
+                        setConfirm(null);
+                      }}
+                    >
+                      确定
+                    </button>
+                    <button onClick={() => setConfirm(null)}>取消</button>
+                  </>
+                ) : (
+                  <button className="primary" onClick={() => setConfirm(null)}>
+                    知道了
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

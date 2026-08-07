@@ -662,7 +662,106 @@ button.primary {
 }
 
 .roster-list .unit-card.clickable.selected {
-  outline-color: #4a6fb0;
+  outline-color: #4ad66d;
+  box-shadow: 0 0 12px rgba(74, 214, 109, 0.35);
+}
+
+/* 队伍管理：统一卡片尺寸、技能一行一个、操作按钮纵向排列在卡片下方 */
+.roster-item {
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roster-card {
+  width: 220px;
+  height: 350px;
+}
+
+.roster-card .skill-list {
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.roster-card .skill-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.roster-card .skill-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.roster-card .skill-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.roster-card .skill-desc {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.roster-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.roster-actions button {
+  width: 100%;
+}
+
+/* 卡片底部操作按钮（融合/释放） */
+.unit-card-footer {
+  margin-top: 2px;
+}
+
+.unit-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.unit-card-actions button {
+  flex: 1;
+  padding: 3px 4px;
+  font-size: 12px;
+}
+
+/* 确认弹窗 */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.confirm-box {
+  width: 360px;
+  max-width: 90vw;
+  padding: 18px 20px;
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  background: var(--bg-card);
+  text-align: center;
 }
 
 .section-title {
