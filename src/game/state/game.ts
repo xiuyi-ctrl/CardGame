@@ -2,9 +2,9 @@ import type { BattleState, FoodDef, Unit } from '../types';
 import { getMonster } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
 import { chance, createRng, pick, randInt, shuffle } from '../rng';
-import { computeStats, unlockedSkills } from '../core/battle';
+import { computeStats, makeUnit, unlockedSkills } from '../core/battle';
 
-export type NodeType = 'battle' | 'elite' | 'rest' | 'shop' | 'event' | 'boss';
+export type NodeType = 'battle' | 'elite' | 'rest' | 'shop' | 'event' | 'special' | 'boss';
 
 export interface MapNode {
   id: string;
@@ -33,11 +33,51 @@ export interface EventNode {
   choices: EventChoice[];
 }
 
+/** 奇遇关高级奖励类型 */
+export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item';
+
+export interface SpecialReward {
+  id: string;
+  label: string;
+  desc: string;
+  kind: SpecialRewardKind;
+  /** gold 的金额 */
+  amount?: number;
+  /** item 的（道具或食物）id */
+  itemId?: string;
+}
+
+export interface SpecialNode {
+  title: string;
+  desc: string;
+  rewards: SpecialReward[];
+}
+
+export const SPECIAL_REWARDS: SpecialReward[] = [
+  { id: 'sr-evolve', label: '进化之光', desc: '选择一只宠物直接进化到下一形态（无视等级）', kind: 'evolve' },
+  { id: 'sr-gold', label: '龙之宝藏', desc: '获得 60 金币', kind: 'gold', amount: 60 },
+  { id: 'sr-golden-fruit', label: '圣果', desc: '获得 1 个必定驯服的圣果', kind: 'item', itemId: 'golden_fruit' },
+  { id: 'sr-boost', label: '属性强化', desc: '选择一只宠物，永久提升生命/攻击/速度之一', kind: 'boost' },
+  { id: 'sr-custom', label: '造物·自创生物', desc: '从三种属性模板中创造一只独特生物，技能随机组合', kind: 'custom' },
+  { id: 'sr-superevolve', label: '超进化', desc: '进化一只宠物，但附带随机负面诅咒', kind: 'superevolve' },
+  { id: 'sr-purify', label: '净化药水', desc: '获得 1 瓶清除负面诅咒的药水', kind: 'item', itemId: 'purify' },
+  { id: 'sr-skip', label: '跳关道具', desc: '获得 1 个可跳过战斗关卡的跳关道具', kind: 'item', itemId: 'skip' },
+];
+
+export const CUSTOM_PRESETS = ['custom_guardian', 'custom_fury', 'custom_gale'] as const;
+
+export const CURSE_CN: Record<NonNullable<Unit['curse']>, string> = {
+  hpDown: '血脆',
+  atkDown: '虚弱',
+  spdDown: '迟缓',
+};
+
 export interface RunMap {
   layers: MapNode[][];
   encounter: Record<string, { speciesId: string; level: number }[]>;
   boss: Record<string, { speciesId: string; level: number }[]>;
   events: Record<string, EventNode>;
+  specials: Record<string, SpecialNode>;
 }
 
 export type Screen =
@@ -50,6 +90,9 @@ export type Screen =
   | 'shop'
   | 'rest'
   | 'event'
+  | 'special'
+  | 'custom'
+  | 'boost'
   | 'gameover'
   | 'victory';
 
@@ -77,6 +120,8 @@ export interface GameState {
   battle?: BattleState;
   rewards: RewardChoice[];
   log: string[];
+  /** 奇遇关奖励进行中：进化/超进化（等待玩家在队伍中点选）或属性强化（等待选属性） */
+  specialPending?: { kind: 'evolve'; super: boolean } | { kind: 'boost'; uid: string };
 }
 
 export const ROSTER_MAX = 6;
@@ -99,7 +144,7 @@ const ACT3_ELITE_POOL = ['momo_god'];
 const BOSSES = ['boss_vine', 'boss_dark', 'boss_fire'];
 const RECRUIT_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
 
-/** 中间层节点类型加权随机：越靠后精英越多，前期偏战斗/奇遇 */
+/** 中间层节点类型加权随机：越靠后精英越多，前期偏战斗/奇遇；奇遇关为低概率稀有节点 */
 function middleNodeType(rng: () => number, progress: number): NodeType {
   const r = rng();
   if (progress < 0.25) {
@@ -111,13 +156,15 @@ function middleNodeType(rng: () => number, progress: number): NodeType {
     if (r < 0.4) return 'battle';
     if (r < 0.55) return 'shop';
     if (r < 0.7) return 'rest';
-    if (r < 0.85) return 'event';
+    if (r < 0.84) return 'event';
+    if (r < 0.88) return 'special';
     return 'elite';
   }
   if (r < 0.45) return 'battle';
   if (r < 0.7) return 'elite';
   if (r < 0.8) return 'shop';
-  if (r < 0.9) return 'rest';
+  if (r < 0.88) return 'rest';
+  if (r < 0.92) return 'special';
   return 'event';
 }
 
@@ -150,8 +197,7 @@ function buildEncounter(rng: () => number, type: NodeType, act: number, progress
   return Array.from({ length: count }, () => one(ACT3_BATTLE_POOL, level, level));
 }
 
-/** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */
-export function buildEvent(rng: () => number): EventNode {
+/** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */export function buildEvent(rng: () => number): EventNode {
   const roll = rng();
   const foodId = pick(rng, Object.keys(FOODS));
   const monsterId = pick(rng, RECRUIT_POOL);
@@ -217,12 +263,24 @@ export function buildEvent(rng: () => number): EventNode {
   };
 }
 
+/** 奇遇关：从高级奖励池洗牌抽 3 个（种子预掷，可复现） */
+export function buildSpecial(rng: () => number): SpecialNode {
+  const rewards = shuffle(rng, [...SPECIAL_REWARDS]).slice(0, 3);
+  const titles = ['神秘裂隙', '命运回廊', '星辉祭坛'];
+  return {
+    title: pick(rng, titles),
+    desc: '一道泛着星光的裂隙缓缓睁开，其中蕴含着不可思议的机遇与代价。',
+    rewards,
+  };
+}
+
 export function generateMap(seed: number, act: number): RunMap {
   const rng = createRng(seed + act * 1013);
   const layerCount = randInt(rng, 5, 7);
   const encounter: Record<string, { speciesId: string; level: number }[]> = {};
   const boss: Record<string, { speciesId: string; level: number }[]> = {};
   const events: Record<string, EventNode> = {};
+  const specials: Record<string, SpecialNode> = {};
 
   const make = (type: NodeType, row: number, col: number): MapNode => ({
     id: nodeId(),
@@ -255,6 +313,9 @@ export function generateMap(seed: number, act: number): RunMap {
     node.label = labelOf(t, row);
   };
   const mid = layers.slice(1, -1).flat();
+  // 奇遇关每幕最多 1 个：多余转为战斗
+  const spNodes = mid.filter((n) => n.type === 'special');
+  if (spNodes.length > 1) spNodes.slice(1).forEach((n) => setType(n, 'battle'));
   if (mid.filter((n) => n.type === 'shop').length < 1) {
     const n = mid.find((x) => x.type === 'battle');
     if (n) setType(n, 'shop');
@@ -271,16 +332,17 @@ export function generateMap(seed: number, act: number): RunMap {
     evNodes.slice(2).forEach((n) => setType(n, 'battle'));
   }
 
-  // 为所有节点生成遭遇/首领/事件内容
+  // 为所有节点生成遭遇/首领/事件/奇遇关内容
   for (let row = 0; row < layerCount; row++) {
     const progress = row / (layerCount - 1);
     for (const n of layers[row]) {
       if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress);
       else if (n.type === 'battle' || n.type === 'elite') encounter[n.id] = buildEncounter(rng, n.type, act, progress);
       else if (n.type === 'event') events[n.id] = buildEvent(rng);
+      else if (n.type === 'special') specials[n.id] = buildSpecial(rng);
     }
   }
-  return { layers, encounter, boss, events };
+  return { layers, encounter, boss, events, specials };
 }
 
 function labelOf(t: NodeType, row: number): string {
@@ -294,13 +356,53 @@ function labelOf(t: NodeType, row: number): string {
     case 'shop':
       return '商人';
     case 'event':
-      return '奇遇';
+      return '事件';
+    case 'special':
+      return '奇遇关';
     case 'boss':
       return '首领';
   }
 }
 
 // ---------- 队伍与成长 ----------
+
+export interface BaseStats {
+  maxHp: number;
+  atk: number;
+  spd: number;
+  def: number;
+}
+
+/** 把属性强化加成与负面诅咒折算进基准属性（升级/进化/净化/强化时统一使用） */
+export function applyMods(stats: BaseStats, u: Pick<Unit, 'bonusStats' | 'curse'>): BaseStats {
+  let out = { ...stats };
+  const b = u.bonusStats;
+  if (b) {
+    out = {
+      ...out,
+      maxHp: out.maxHp + (b.hp ?? 0),
+      atk: out.atk + (b.atk ?? 0),
+      spd: out.spd + (b.spd ?? 0),
+    };
+  }
+  if (u.curse === 'hpDown') out = { ...out, maxHp: Math.max(1, Math.round(out.maxHp * 0.8)) };
+  else if (u.curse === 'atkDown') out = { ...out, atk: Math.max(1, Math.round(out.atk * 0.8)) };
+  else if (u.curse === 'spdDown') out = { ...out, spd: Math.max(1, Math.round(out.spd * 0.8)) };
+  return out;
+}
+
+/** 以物种基准 + 加成/诅咒重算并回写属性（属性强化、净化后调用） */
+export function recomputeStats(unit: Unit): Unit {
+  const stats = applyMods(computeStats(unit.speciesId, unit.level), unit);
+  return {
+    ...unit,
+    maxHp: stats.maxHp,
+    hp: Math.min(stats.maxHp, unit.hp + Math.max(0, stats.maxHp - unit.maxHp)),
+    atk: stats.atk,
+    spd: stats.spd,
+    def: stats.def,
+  };
+}
 
 /** 该物种的下一段进化等级；不可进化返回 undefined */
 export function nextEvolutionLevel(speciesId: string): number | undefined {
@@ -309,7 +411,7 @@ export function nextEvolutionLevel(speciesId: string): number | undefined {
 
 function levelUpUnit(unit: Unit): Unit {
   const next = unit.level + 1;
-  const stats = computeStats(unit.speciesId, next);
+  const stats = applyMods(computeStats(unit.speciesId, next), unit);
   const hpDelta = stats.maxHp - unit.maxHp;
   return {
     ...unit,
@@ -321,7 +423,7 @@ function levelUpUnit(unit: Unit): Unit {
     def: stats.def,
     exp: 0,
     expToLevel: 10 * next,
-    skills: unlockedSkills(unit.speciesId, next),
+    skills: unit.customSkills ?? unlockedSkills(unit.speciesId, next),
   };
 }
 
@@ -352,7 +454,7 @@ export function evolveUnit(unit: Unit): Unit | null {
   const sp = getMonster(unit.speciesId);
   const evo = sp.evolutions?.[0];
   if (!evo || unit.level < evo.level) return null;
-  const stats = computeStats(evo.to, unit.level);
+  const stats = applyMods(computeStats(evo.to, unit.level), unit);
   const hpDelta = stats.maxHp - unit.maxHp;
   return {
     ...unit,
@@ -365,8 +467,28 @@ export function evolveUnit(unit: Unit): Unit | null {
     atk: stats.atk,
     spd: stats.spd,
     def: stats.def,
-    skills: unlockedSkills(evo.to, unit.level),
+    skills: unit.customSkills ?? unlockedSkills(evo.to, unit.level),
   };
+}
+
+/** 无视等级直接进化（奇遇关「进化之光/超进化」） */
+export function evolveUnitForce(unit: Unit): Unit | null {
+  const sp = getMonster(unit.speciesId);
+  const evo = sp.evolutions?.[0];
+  if (!evo) return null;
+  let nu = unit;
+  if (nu.level < evo.level) nu = { ...nu, level: evo.level };
+  return evolveUnit(nu);
+}
+
+/** 造物·自创生物：按属性模板生成生物，技能从模板技能池随机组合 3 个 */
+export function makeCustomUnit(presetId: string, level: number, rng: () => number): Unit {
+  const s = getMonster(presetId);
+  const u = makeUnit(presetId, level, true, 0, false);
+  const customSkills = shuffle(rng, [...s.skills]).slice(0, 3);
+  u.customSkills = customSkills;
+  u.skills = customSkills;
+  return u;
 }
 
 /** 是否已达到进化等级（局内经验冻结，局末自动进化） */
@@ -443,6 +565,6 @@ export function canTameEnemy(enemy: Unit): boolean {
 
 export function currentFoodList(state: GameState): FoodDef[] {
   return Object.entries(state.inventory)
-    .filter(([, count]) => count > 0)
+    .filter(([id, count]) => count > 0 && FOODS[id])
     .map(([id]) => getFood(id));
 }

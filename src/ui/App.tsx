@@ -3,9 +3,10 @@ import type { Dispatch } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { ROSTER_MAX, FIELD_MAX, pendingEvolve, type MapNode } from '../game/state/game';
-import { STARTING_CHOICES, getMonster } from '../game/data/monsters';
+import { ROSTER_MAX, FIELD_MAX, pendingEvolve, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
+import { STARTING_CHOICES, getMonster, getEvolution } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
+import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { computeStats } from '../game/core/battle';
 import { UnitCard, elementStyle } from './components';
@@ -17,7 +18,8 @@ const NODE_ICON: Record<MapNode['type'], string> = {
   elite: '💀',
   rest: '🛌',
   shop: '🏪',
-  event: '❓',
+  event: '📜',
+  special: '💎',
   boss: '👑',
 };
 
@@ -46,6 +48,9 @@ export default function App() {
       {state.screen === 'shop' && <ShopScreen state={state} dispatch={dispatch} />}
       {state.screen === 'rest' && <RestScreen dispatch={dispatch} />}
       {state.screen === 'event' && <EventScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'special' && <SpecialScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'custom' && <CustomScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'boost' && <BoostScreen state={state} dispatch={dispatch} />}
       {state.screen === 'gameover' && <GameOverScreen state={state} dispatch={dispatch} />}
       {state.screen === 'victory' && <VictoryScreen state={state} dispatch={dispatch} />}
     </div>
@@ -61,11 +66,25 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
         <span className="chip">💰 {state.gold}</span>
         {Object.entries(state.inventory)
           .filter(([, c]) => c > 0)
-          .map(([id, c]) => (
-            <span key={id} className="chip">
-              {FOODS[id].emoji} {FOODS[id].name}×{c}
-            </span>
-          ))}
+          .map(([id, c]) => {
+            const f = FOODS[id];
+            const it = ITEMS[id];
+            if (f) {
+              return (
+                <span key={id} className="chip">
+                  {f.emoji} {f.name}×{c}
+                </span>
+              );
+            }
+            if (it) {
+              return (
+                <span key={id} className="chip" title={it.desc}>
+                  {it.emoji} {it.name}×{c}
+                </span>
+              );
+            }
+            return null;
+          })}
       </span>
       <button
         className="home-btn"
@@ -162,6 +181,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
     : (state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.col ?? null);
   const atStart = state.currentRow === 0;
   const canSelect = (n: MapNode) =>
+    n.type === 'boss' ||
     currentCol === null ||
     atStart ||
     typeof n.col !== 'number' ||
@@ -181,6 +201,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                 const isCurrent = n.id === state.currentNodeId;
                 const selectable = isOptionRow && canSelect(n);
                 const cls = isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast ? '' : 'dim';
+                const skippable = (n.type === 'battle' || n.type === 'elite') && (state.inventory.skip ?? 0) > 0;
                 return (
                   <div
                     key={n.id}
@@ -189,6 +210,18 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                   >
                     <span className="nicon">{NODE_ICON[n.type]}</span>
                     <span className="nlabel">{n.label}</span>
+                    {skippable && (
+                      <button
+                        className="skip-btn"
+                        title={`使用跳关道具直接获得「${n.label}」的奖励`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dispatch({ type: 'USE_SKIP', nodeId: n.id });
+                        }}
+                      >
+                        ⏭
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -240,42 +273,82 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
     }
   };
 
+  const pending = state.specialPending;
+  const evolveMode = pending?.kind === 'evolve';
+  const boostMode = pending?.kind === 'boost';
+  const title = evolveMode
+    ? pending.super
+      ? '超进化：选择要进化的宠物（会附带随机负面诅咒）'
+      : '进化之光：选择要进化的宠物'
+    : boostMode
+      ? '属性强化：选择要强化的宠物'
+      : `队伍管理（${state.field.length}/${FIELD_MAX} 出战，上限 ${ROSTER_MAX} 只）`;
+
   return (
     <div className="screen">
-      <div className="section-title">
-        队伍管理（{state.field.length}/{FIELD_MAX} 出战，上限 {ROSTER_MAX} 只）
-      </div>
-      <div className="panel-row" style={{ marginBottom: 10 }}>
-        <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
-        {state.field.map((uid) => {
-          const u = state.roster.find((x) => x.uid === uid);
-          return u ? <span className="chip" key={uid}>{u.emoji} {u.name}</span> : null;
-        })}
-      </div>
+      <div className="section-title">{title}</div>
+      {!evolveMode && !boostMode && (
+        <div className="panel-row" style={{ marginBottom: 10 }}>
+          <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
+          {state.field.map((uid) => {
+            const u = state.roster.find((x) => x.uid === uid);
+            return u ? <span className="chip" key={uid}>{u.emoji} {u.name}</span> : null;
+          })}
+        </div>
+      )}
       <div className="roster-list">
         {state.roster.map((u) => {
           const inField = state.field.includes(u.uid);
-          const pending = pendingEvolve(u);
+          const canEvolve = getEvolution(u.speciesId) !== undefined;
+          const pEvolve = pendingEvolve(u);
+          const onCard = evolveMode
+            ? canEvolve
+              ? () => dispatch({ type: 'EVOLVE_ONE', uid: u.uid })
+              : undefined
+            : boostMode
+              ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
+              : () => toggleField(u.uid);
           return (
             <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <UnitCard
                 unit={u}
-                className={inField ? 'selected' : ''}
-                onClick={() => toggleField(u.uid)}
+                className={`${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode ? 'clickable' : ''}`}
+                onClick={onCard}
               />
               <div className="panel-row">
-                {pending && <span className="chip">🧬 已到进化等级，本场战斗结束进化</span>}
-                <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })}>释放</button>
+                {pEvolve && !evolveMode && <span className="chip">🧬 已到进化等级，本场战斗结束进化</span>}
+                {u.curse && (
+                  <span className="chip" title="负面诅咒，可用净化药水解除">
+                    ⚠️ {CURSE_CN[u.curse]}
+                  </span>
+                )}
+                {u.bonusStats && (u.bonusStats.hp || u.bonusStats.atk || u.bonusStats.spd) && (
+                  <span className="chip" title="来自奇遇关的属性强化">
+                    ✨+{(u.bonusStats.hp ?? 0) ? `血${u.bonusStats.hp}` : ''}
+                    {(u.bonusStats.atk ?? 0) ? `攻${u.bonusStats.atk}` : ''}
+                    {(u.bonusStats.spd ?? 0) ? `速${u.bonusStats.spd}` : ''}
+                  </span>
+                )}
+                {u.curse && (state.inventory.purify ?? 0) > 0 && (
+                  <button onClick={() => dispatch({ type: 'USE_PURIFY', uid: u.uid })}>
+                    🧪 净化（{state.inventory.purify}）
+                  </button>
+                )}
+                {!evolveMode && !boostMode && (
+                  <button onClick={() => dispatch({ type: 'DISCARD', uid: u.uid })}>释放</button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="primary big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
-          继续前进 →
-        </button>
-      </div>
+      {!evolveMode && !boostMode && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+          <button className="primary big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
+            继续前进 →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -286,7 +359,9 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">商人 🏪</div>
       <div className="reward-cards">
-        {Object.values(FOODS).map((f) => (
+        {Object.values(FOODS)
+          .filter((f) => f.shop !== false)
+          .map((f) => (
           <div key={f.id} className="reward-card">
             <div className="ricon">{f.emoji}</div>
             <div className="rtitle">{f.name}</div>
@@ -333,7 +408,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="center-col">
-        <div className="section-title">❓ {ev.title}</div>
+        <div className="section-title">📜 {ev.title}</div>
         <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
           {ev.desc}
         </p>
@@ -359,8 +434,131 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   );
 }
 
-function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const sp = state.map.specials[state.currentNodeId];
+  if (!sp) return null;
+  const hasEvolvable = state.roster.some((u) => getEvolution(u.speciesId));
+  const rosterFull = state.roster.length >= ROSTER_MAX;
+  const disabled = (r: SpecialReward) =>
+    ((r.kind === 'evolve' || r.kind === 'superevolve') && !hasEvolvable) ||
+    (r.kind === 'custom' && rosterFull);
   return (
+    <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
+      <div className="center-col">
+        <div className="section-title">💎 {sp.title}</div>
+        <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
+          {sp.desc}
+        </p>
+        <div className="reward-cards">
+          {sp.rewards.map((r) => (
+            <div
+              key={r.id}
+              className={`reward-card ${disabled(r) ? 'dim' : ''}`}
+              onClick={disabled(r) ? undefined : () => dispatch({ type: 'SPECIAL_CHOICE', rewardId: r.id })}
+            >
+              <div className="ricon">
+                {r.kind === 'evolve' && '🧬'}
+                {r.kind === 'superevolve' && '🔥'}
+                {r.kind === 'gold' && '💰'}
+                {r.kind === 'boost' && '📈'}
+                {r.kind === 'custom' && '✨'}
+                {r.kind === 'item' && (FOODS[r.itemId ?? '']?.emoji ?? ITEMS[r.itemId ?? '']?.emoji)}
+              </div>
+              <div className="rtitle">{r.label}</div>
+              <div className="rdesc">{r.desc}</div>
+            </div>
+          ))}
+        </div>
+        {!hasEvolvable && (
+          <p className="card-sub" style={{ textAlign: 'center' }}>
+            当前没有可进化的宠物，进化/超进化不可选
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const level = 1 + (state.act - 1);
+  return (
+    <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
+      <div className="center-col">
+        <div className="section-title">✨ 造物·自创生物</div>
+        <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
+          选择属性模板，技能将从模板技能池中随机组合
+        </p>
+        <div className="starter-grid">
+          {CUSTOM_PRESETS.map((id) => {
+            const sp = getMonster(id);
+            const stats = computeStats(id, level);
+            return (
+              <div
+                key={id}
+                className="unit-card clickable"
+                style={elementStyle(sp.element)}
+                onClick={() => dispatch({ type: 'PICK_CUSTOM', presetId: id })}
+              >
+                <div className="card-top">
+                  <span className="emoji">{sp.emoji}</span>
+                  <span className="elem" style={elementStyle(sp.element)}>
+                    {sp.element}
+                  </span>
+                </div>
+                <div className="card-name">{sp.name}</div>
+                <div className="card-sub">
+                  生命 {stats.maxHp} · 攻击 {stats.atk} · 速度 {stats.spd}
+                </div>
+                <div className="skill-list">
+                  {sp.skills.map((s) => (
+                    <span key={s} className="chip">
+                      {getSkill(s).name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const uid = state.specialPending?.kind === 'boost' ? state.specialPending.uid : '';
+  const u = state.roster.find((x) => x.uid === uid);
+  if (!u) return null;
+  const base = computeStats(u.speciesId, u.level);
+  const options = [
+    { stat: 'hp' as const, icon: '❤️', label: '生命 +25%', value: Math.max(1, Math.round(base.maxHp * 0.25)) },
+    { stat: 'atk' as const, icon: '⚔️', label: '攻击 +25%', value: Math.max(1, Math.round(base.atk * 0.25)) },
+    { stat: 'spd' as const, icon: '⚡', label: '速度 +25%', value: Math.max(1, Math.round(base.spd * 0.25)) },
+  ];
+  return (
+    <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
+      <div className="center-col">
+        <div className="section-title">
+          📈 属性强化：{u.emoji} {u.name}
+        </div>
+        <div className="reward-cards">
+          {options.map((o) => (
+            <div key={o.stat} className="reward-card" onClick={() => dispatch({ type: 'BOOST_STAT', stat: o.stat })}>
+              <div className="ricon">{o.icon}</div>
+              <div className="rtitle">{o.label}</div>
+              <div className="rdesc">永久提升 {o.value} 点</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {  return (
     <div className="center-col">
       <div style={{ fontSize: 56 }}>💀</div>
       <div className="title-name" style={{ color: '#e05555', letterSpacing: 4 }}>

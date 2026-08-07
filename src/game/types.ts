@@ -59,6 +59,10 @@ export interface FoodDef {
   price: number;
   /** 奖励：驯服成功时给新怪物附加最大生命加成 */
   hpBonus: number;
+  /** 特殊道具：必定驯服（仍要求残血且可驯服） */
+  guaranteed?: boolean;
+  /** 是否在商店出售；特殊道具默认不售 */
+  shop?: boolean;
 }
 
 export interface Unit {
@@ -86,6 +90,12 @@ export interface Unit {
   expToLevel: number;
   /** 本回合是否已行动（回合内排序用） */
   acted: boolean;
+  /** 属性强化：对基准属性的永久加成（来自奇遇关「属性强化」） */
+  bonusStats?: { hp?: number; atk?: number; spd?: number };
+  /** 超进化带来的负面诅咒（atkDown/hpDown/spdDown 各 -20% 上限） */
+  curse?: 'hpDown' | 'atkDown' | 'spdDown';
+  /** 自创生物：创建时随机组合的技能，升级时保留而非按物种解锁 */
+  customSkills?: string[];
 }
 
 export interface BattleState {

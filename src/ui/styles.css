@@ -364,6 +364,22 @@ button.primary {
   font-size: 11px;
 }
 
+.node .skip-btn {
+  display: block;
+  margin: 6px auto 0;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  cursor: pointer;
+}
+
+.node .skip-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
 /* 队伍 / 奖励 / 商店 */
 .roster-list {
   flex: 1;

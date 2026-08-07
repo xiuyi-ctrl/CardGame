@@ -1,9 +1,14 @@
 import type { GameState } from './game';
-import { FIELD_MAX, generateMap, generateRewards, gainExp, ROSTER_MAX, settleEvolutions } from './game';
-import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
+import { CUSTOM_PRESETS, evolveUnitForce, FIELD_MAX, generateMap, generateRewards, gainExp, makeCustomUnit, ROSTER_MAX, recomputeStats, settleEvolutions } from './game';
+import { createBattle, computeStats, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleState, Unit } from '../types';
-import { getFood } from '../data/foods';
+import { getFood, FOODS } from '../data/foods';
+import { getEvolution } from '../data/monsters';
 import { createRng } from '../rng';
+
+function getFoodSafe(id: string): boolean {
+  return FOODS[id] !== undefined;
+}
 
 export type GameAction =
   | { type: 'START_RUN'; starterId: string; seed: number }
@@ -11,6 +16,13 @@ export type GameAction =
   | { type: 'LOAD_GAME'; state: GameState }
   | { type: 'MOVE'; nodeId: string }
   | { type: 'EVENT_CHOICE'; choiceId: string }
+  | { type: 'SPECIAL_CHOICE'; rewardId: string }
+  | { type: 'EVOLVE_ONE'; uid: string }
+  | { type: 'SPECIAL_TARGET'; uid: string }
+  | { type: 'BOOST_STAT'; stat: 'hp' | 'atk' | 'spd' }
+  | { type: 'PICK_CUSTOM'; presetId: string }
+  | { type: 'USE_PURIFY'; uid: string }
+  | { type: 'USE_SKIP'; nodeId: string }
   | { type: 'PLAYER_SKILL'; skillId: string; targetUid?: string }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
@@ -44,7 +56,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'gameover', 'victory'];
+  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -172,7 +184,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title' };
       return {
         ...action.state,
-        map: { ...action.state.map, events: action.state.map.events ?? {} },
+        map: { ...action.state.map, events: action.state.map.events ?? {}, specials: action.state.map.specials ?? {} },
       };
 
     case 'MOVE': {
@@ -181,13 +193,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rowNodes = state.map.layers[targetRow];
       const node = rowNodes?.find((n) => n.id === action.nodeId);
       if (!node) return state;
-      // 相邻校验：只能移动到当前节点列号 col±1（出发节点可直达第一层任意节点；旧存档无 col 时放行）
+      // 相邻校验：只能移动到当前节点列号 col±1（出发节点可直达第一层任意节点；首领可从任意列到达；旧存档无 col 时放行）
       if (!isFirst) {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
         const curCol = cur?.col;
         const atStart = state.currentRow === 0;
         if (
           !atStart &&
+          node.type !== 'boss' &&
           typeof curCol === 'number' &&
           typeof node.col === 'number' &&
           Math.abs(node.col - curCol) > 1
@@ -199,6 +212,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (node.type === 'rest') return { ...base, screen: 'rest' };
       if (node.type === 'shop') return { ...base, screen: 'shop' };
       if (node.type === 'event') return { ...base, screen: 'event' };
+      if (node.type === 'special') return { ...base, screen: 'special' };
       if (node.type === 'boss') {
         const encounter = state.map.boss[node.id];
         const battle = createBattle(
@@ -246,6 +260,147 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...next, log: [choice.label, ...next.log].slice(0, 20) };
     }
 
+    case 'SPECIAL_CHOICE': {
+      if (state.screen !== 'special') return state;
+      const sp = state.map.specials[state.currentNodeId];
+      if (!sp) return state;
+      const reward = sp.rewards.find((r) => r.id === action.rewardId);
+      if (!reward) return state;
+      let next: GameState = { ...state, screen: 'roster' };
+      switch (reward.kind) {
+        case 'gold':
+          next = { ...next, gold: next.gold + (reward.amount ?? 0) };
+          break;
+        case 'item':
+          if (reward.itemId) {
+            next = { ...next, inventory: { ...next.inventory, [reward.itemId]: (next.inventory[reward.itemId] ?? 0) + 1 } };
+          }
+          break;
+        case 'evolve':
+        case 'superevolve':
+          if (!next.roster.some((u) => getEvolution(u.speciesId))) return state;
+          next = { ...next, specialPending: { kind: 'evolve', super: reward.kind === 'superevolve' } };
+          break;
+        case 'boost':
+          if (next.roster.length === 0) return state;
+          next = { ...next, specialPending: { kind: 'boost', uid: '' } };
+          break;
+        case 'custom':
+          if (next.roster.length >= ROSTER_MAX) return state;
+          next = { ...next, screen: 'custom' };
+          break;
+      }
+      return { ...next, log: [`奇遇关：${reward.label}`, ...next.log].slice(0, 20) };
+    }
+
+    case 'EVOLVE_ONE': {
+      if (state.specialPending?.kind !== 'evolve') return state;
+      const target = state.roster.find((u) => u.uid === action.uid);
+      if (!target || !getEvolution(target.speciesId)) return state;
+      let evolved: Unit | null;
+      if (state.specialPending.super) {
+        const rng = createRng(state.seed * 33 + state.act * 11 + state.roster.length * 7);
+        const curses = ['hpDown', 'atkDown', 'spdDown'] as const;
+        evolved = evolveUnitForce(target);
+        if (evolved) evolved = { ...evolved, curse: curses[Math.floor(rng() * 3)] };
+      } else {
+        evolved = evolveUnitForce(target);
+      }
+      if (!evolved) return state;
+      const roster = state.roster.map((u) => (u.uid === action.uid ? evolved! : u));
+      const log = state.specialPending.super
+        ? [`超进化！${target.name} 进化成了 ${evolved.name}，但付出了代价`, ...state.log]
+        : [`${target.name} 进化成了 ${evolved.name}！`, ...state.log];
+      return { ...state, roster, specialPending: undefined, log: log.slice(0, 20) };
+    }
+
+    case 'SPECIAL_TARGET': {
+      if (state.specialPending?.kind !== 'boost') return state;
+      if (!state.roster.some((u) => u.uid === action.uid)) return state;
+      return { ...state, specialPending: { kind: 'boost', uid: action.uid }, screen: 'boost' };
+    }
+
+    case 'BOOST_STAT': {
+      const pendingBoost = state.specialPending;
+      if (pendingBoost?.kind !== 'boost') return state;
+      if (!pendingBoost.uid) return state;
+      const target = state.roster.find((u) => u.uid === pendingBoost.uid);
+      if (!target) return state;
+      const bonus = { ...target.bonusStats };
+      const statCn = { hp: '生命', atk: '攻击', spd: '速度' }[action.stat];
+      const base = computeStats(target.speciesId, target.level);
+      if (action.stat === 'hp') bonus.hp = (bonus.hp ?? 0) + Math.max(1, Math.round(base.maxHp * 0.25));
+      else if (action.stat === 'atk') bonus.atk = (bonus.atk ?? 0) + Math.max(1, Math.round(base.atk * 0.25));
+      else bonus.spd = (bonus.spd ?? 0) + Math.max(1, Math.round(base.spd * 0.25));
+      const roster = state.roster.map((u) => (u.uid === target.uid ? recomputeStats({ ...u, bonusStats: bonus }) : u));
+      return {
+        ...state,
+        screen: 'roster',
+        roster,
+        specialPending: undefined,
+        log: [`属性强化！${target.name} 的${statCn}永久提升`, ...state.log].slice(0, 20),
+      };
+    }
+
+    case 'PICK_CUSTOM': {
+      if (state.screen !== 'custom') return state;
+      if (state.roster.length >= ROSTER_MAX) return state;
+      if (!CUSTOM_PRESETS.some((p) => p === action.presetId)) return state;
+      const rng = createRng(state.seed * 7 + state.act * 13 + state.roster.length * 3 + state.currentRow);
+      const unit = makeCustomUnit(action.presetId, 1 + (state.act - 1), rng);
+      return {
+        ...state,
+        screen: 'roster',
+        roster: [...state.roster, unit],
+        log: [`造物：${unit.name} 加入了队伍`, ...state.log].slice(0, 20),
+      };
+    }
+
+    case 'USE_PURIFY': {
+      const inv = state.inventory.purify ?? 0;
+      if (inv <= 0) return state;
+      const target = state.roster.find((u) => u.uid === action.uid);
+      if (!target || !target.curse) return state;
+      const roster = state.roster.map((u) => (u.uid === action.uid ? recomputeStats({ ...u, curse: undefined }) : u));
+      return {
+        ...state,
+        roster,
+        inventory: { ...state.inventory, purify: inv - 1 },
+        log: [`净化药水清除了 ${target.name} 的诅咒`, ...state.log].slice(0, 20),
+      };
+    }
+
+    case 'USE_SKIP': {
+      const inv = state.inventory.skip ?? 0;
+      if (inv <= 0 || state.screen !== 'map') return state;
+      const targetRow = state.currentNodeId === '' ? state.currentRow : state.currentRow + 1;
+      const node = state.map.layers[targetRow]?.find((n) => n.id === action.nodeId);
+      if (!node) return state;
+      // 与 MOVE 相同的相邻校验
+      if (state.currentNodeId !== '' && state.currentRow !== 0) {
+        const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
+        const curCol = cur?.col;
+        if (typeof curCol === 'number' && typeof node.col === 'number' && Math.abs(node.col - curCol) > 1) return state;
+      }
+      // 只能跳过战斗/精英节点，首领不可跳过
+      if (node.type === 'boss') return state;
+      if (node.type !== 'battle' && node.type !== 'elite') return state;
+      const base: GameState = {
+        ...state,
+        currentRow: targetRow,
+        currentNodeId: node.id,
+        inventory: { ...state.inventory, skip: inv - 1 },
+      };
+      const goldGain = node.type === 'elite' ? 16 : 8;
+      const withGold = { ...base, gold: base.gold + goldGain, screen: 'reward' as const };
+      const rewards = generateRewards(withGold);
+      return {
+        ...withGold,
+        rewards,
+        log: [`使用跳关道具，跳过「${node.label}」获得奖励`, ...state.log].slice(0, 20),
+      };
+    }
+
     case 'PLAYER_SKILL': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
       const battle = playerSkill(state.battle, action.skillId, action.targetUid);
@@ -254,6 +409,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'PLAYER_TAME': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
+      if (!getFoodSafe(action.foodId)) return state;
       const inv = state.inventory[action.foodId] ?? 0;
       if (inv <= 0) return state;
       const battle = playerTame(state.battle, action.foodId, action.enemyUid);

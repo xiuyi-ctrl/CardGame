@@ -128,6 +128,28 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['flame_burst', 'double_hit', 'roar', 'tail'],
     tame: { difficulty: 0 }, rank: 4,
   },
+  // 奇遇关「造物」：自创生物，不出现在战斗池，技能由玩家随机组合
+  custom_guardian: {
+    id: 'custom_guardian', name: '岩甲兽', emoji: '🗿', element: 'metal',
+    baseHp: 20, baseAtk: 4, baseSpd: 2, def: 2,
+    hpGrow: 3, atkGrow: 1, spdGrow: 0.3,
+    skills: ['punch', 'tail', 'steel_spike', 'roar', 'heal_light'],
+    tame: { difficulty: 0.3 }, rank: 3,
+  },
+  custom_fury: {
+    id: 'custom_fury', name: '狂焰兽', emoji: '🐺', element: 'fire',
+    baseHp: 16, baseAtk: 7, baseSpd: 5, def: 0,
+    hpGrow: 3, atkGrow: 1, spdGrow: 0.4,
+    skills: ['ember', 'double_hit', 'bite', 'flame_burst', 'roar'],
+    tame: { difficulty: 0.3 }, rank: 3,
+  },
+  custom_gale: {
+    id: 'custom_gale', name: '迅风兽', emoji: '🕊️', element: 'nature',
+    baseHp: 15, baseAtk: 5, baseSpd: 8, def: 0,
+    hpGrow: 3, atkGrow: 1, spdGrow: 0.4,
+    skills: ['leaf_needle', 'aqua_shot', 'shadow_claw', 'double_hit', 'poison_sting'],
+    tame: { difficulty: 0.3 }, rank: 3,
+  },
 };
 
 export const STARTING_CHOICES = ['momo', 'lulu', 'fifi'];

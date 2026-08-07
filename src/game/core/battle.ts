@@ -425,7 +425,7 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
   const chance = food.baseTame * species.tame.difficulty * hpFactor;
 
   return useRng(b, (rng, nb) => {
-    const success = rng < chance;
+    const success = food.guaranteed ? true : rng < chance;
     let after: BattleState = nb;
     if (success) {
       const avgLevel = Math.max(

@@ -7,7 +7,7 @@ import {
   type GameAction,
 } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { generateMap, gainExp, pendingEvolve, settleEvolutions, ROSTER_MAX } from '../src/game/state/game';
+import { generateMap, gainExp, pendingEvolve, settleEvolutions, ROSTER_MAX, type SpecialReward } from '../src/game/state/game';
 import { createBattle, makeUnit, currentPlayerUnit } from '../src/game/core/battle';
 
 function dispatch(state: GameState, action: GameAction): GameState {
@@ -340,5 +340,172 @@ describe('存档读档', () => {
     expect(isValidGameState({ seed: 1 })).toBe(false);
     const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 4 });
     expect(isValidGameState(s)).toBe(true);
+  });
+});
+
+describe('奇遇关', () => {
+  const reward = (id: string, kind: SpecialReward['kind'], extra?: Partial<SpecialReward>): SpecialReward => ({
+    id,
+    label: id,
+    desc: 'd',
+    kind,
+    ...extra,
+  });
+
+  /** 构造一个当前位于指定奇遇关节点的状态 */
+  function atSpecial(s: GameState, rewards: SpecialReward[]): GameState {
+    return {
+      ...s,
+      screen: 'special',
+      currentNodeId: 'sp-test',
+      map: { ...s.map, specials: { ...s.map.specials, 'sp-test': { title: '裂隙', desc: '测试', rewards } } },
+    };
+  }
+
+  it('每幕奇遇关最多 1 个，奖励 3 选 1 且内容完整', () => {
+    for (let act = 1; act <= 3; act++) {
+      for (const seed of [1, 11, 42]) {
+        const map = generateMap(seed, act);
+        const sp = map.layers.flat().filter((n) => n.type === 'special');
+        expect(sp.length).toBeLessThanOrEqual(1);
+        for (const n of sp) {
+          const node = map.specials[n.id];
+          expect(node).toBeDefined();
+          expect(node.rewards.length).toBe(3);
+        }
+      }
+    }
+  });
+
+  it('SPECIAL_CHOICE gold 奖励金币并进入队伍界面', () => {
+    const s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+      reward('g', 'gold', { amount: 60 }),
+    ]);
+    const before = s.gold;
+    const next = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'g' });
+    expect(next.screen).toBe('roster');
+    expect(next.gold).toBe(before + 60);
+  });
+
+  it('SPECIAL_CHOICE item 获得跳关道具/净化药水/圣果', () => {
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+      reward('i', 'item', { itemId: 'skip' }),
+    ]);
+    s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'i' });
+    expect(s.inventory.skip).toBe(1);
+
+    s = atSpecial(s, [reward('p', 'item', { itemId: 'purify' })]);
+    s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'p' });
+    expect(s.inventory.purify).toBe(1);
+
+    s = atSpecial(s, [reward('f', 'item', { itemId: 'golden_fruit' })]);
+    s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'f' });
+    expect(s.inventory.golden_fruit).toBe(1);
+  });
+
+  it('进化之光：点选宠物后无视等级进化', () => {
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+      reward('e', 'evolve'),
+    ]);
+    s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'e' });
+    expect(s.specialPending).toEqual({ kind: 'evolve', super: false });
+    const momo = s.roster.find((u) => u.speciesId === 'momo')!;
+    expect(momo.level).toBe(1);
+    s = dispatch(s, { type: 'EVOLVE_ONE', uid: momo.uid });
+    const evolved = s.roster.find((u) => u.uid === momo.uid)!;
+    expect(evolved.speciesId).toBe('momo_queen');
+    expect(s.specialPending).toBeUndefined();
+  });
+
+  it('无可进化宠物时进化奖励被拒绝', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const noEvo = { ...run, roster: [makeUnit('custom_fury', 1, true, 0, false)] };
+    const s = atSpecial(noEvo, [reward('e', 'evolve')]);
+    const next = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'e' });
+    expect(next.screen).toBe('special');
+  });
+
+  it('超进化：进化并附带随机负面诅咒，净化药水可解除', () => {
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+      reward('x', 'superevolve'),
+    ]);
+    s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'x' });
+    expect(s.specialPending).toEqual({ kind: 'evolve', super: true });
+    const momo = s.roster.find((u) => u.speciesId === 'momo')!;
+    s = dispatch(s, { type: 'EVOLVE_ONE', uid: momo.uid });
+    const evolved = s.roster.find((u) => u.uid === momo.uid)!;
+    expect(evolved.speciesId).toBe('momo_queen');
+    expect(['hpDown', 'atkDown', 'spdDown']).toContain(evolved.curse);
+    // 净化药水清除诅咒
+    s = { ...s, inventory: { ...s.inventory, purify: 1 } };
+    s = dispatch(s, { type: 'USE_PURIFY', uid: momo.uid });
+    expect(s.roster.find((u) => u.uid === momo.uid)!.curse).toBeUndefined();
+    expect(s.inventory.purify).toBe(0);
+  });
+
+  it('属性强化：选宠物 → 选属性 → 属性提升', () => {
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+      reward('b', 'boost'),
+    ]);
+    s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'b' });
+    expect(s.specialPending).toEqual({ kind: 'boost', uid: '' });
+    const u = s.roster[0];
+    const atk0 = u.atk;
+    s = dispatch(s, { type: 'SPECIAL_TARGET', uid: u.uid });
+    expect(s.screen).toBe('boost');
+    s = dispatch(s, { type: 'BOOST_STAT', stat: 'atk' });
+    expect(s.screen).toBe('roster');
+    expect(s.specialPending).toBeUndefined();
+    const boosted = s.roster.find((x) => x.uid === u.uid)!;
+    expect(boosted.atk).toBeGreaterThan(atk0);
+  });
+
+  it('造物：选择模板后随机技能自创生物加入队伍', () => {
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+      reward('c', 'custom'),
+    ]);
+    const len0 = s.roster.length;
+    s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'c' });
+    expect(s.screen).toBe('custom');
+    s = dispatch(s, { type: 'PICK_CUSTOM', presetId: 'custom_fury' });
+    expect(s.screen).toBe('roster');
+    expect(s.roster.length).toBe(len0 + 1);
+    const created = s.roster[s.roster.length - 1];
+    expect(created.speciesId).toBe('custom_fury');
+    expect(created.skills.length).toBe(3);
+  });
+
+  it('USE_SKIP 跳过战斗节点直接结算奖励，首领/非战斗节点拒绝', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 5 });
+    const first = s.map.layers[0][0];
+    s = { ...s, screen: 'map', inventory: { ...s.inventory, skip: 1 } };
+    const gold0 = s.gold;
+    s = dispatch(s, { type: 'USE_SKIP', nodeId: first.id });
+    expect(s.screen).toBe('reward');
+    expect(s.gold).toBe(gold0 + 8);
+    expect(s.inventory.skip).toBe(0);
+    expect(s.currentNodeId).toBe(first.id);
+    expect(s.rewards.length).toBeGreaterThan(0);
+
+    // 首领不可跳过：位置在首领前一行
+    const lastRow = s.map.layers.length - 1;
+    const prev = s.map.layers[lastRow - 1][0];
+    const boss = s.map.layers[lastRow][0];
+    s = { ...s, screen: 'map', currentRow: lastRow - 1, currentNodeId: prev.id, inventory: { ...s.inventory, skip: 1 } };
+    const g1 = s.gold;
+    const after = dispatch(s, { type: 'USE_SKIP', nodeId: boss.id });
+    expect(after.inventory.skip).toBe(1);
+    expect(after.gold).toBe(g1);
+
+    // 非战斗节点（商人）不可跳过
+    const shopNode = s.map.layers.flat().find((n) => n.type === 'shop')!;
+    const shopRow = s.map.layers.findIndex((r) => r.includes(shopNode));
+    const parent = s.map.layers[shopRow - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? s.map.layers[shopRow - 1][0];
+    s = { ...s, currentRow: shopRow - 1, currentNodeId: parent.id };
+    const g2 = s.gold;
+    const after2 = dispatch(s, { type: 'USE_SKIP', nodeId: shopNode.id });
+    expect(after2.inventory.skip).toBe(1);
+    expect(after2.screen).toBe('map');
+    expect(after2.gold).toBe(g2);
   });
 });

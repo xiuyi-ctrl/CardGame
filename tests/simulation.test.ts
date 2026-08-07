@@ -5,6 +5,8 @@ import type { GameState } from '../src/game/state/game';
 import { currentPlayerUnit, isTameable } from '../src/game/core/battle';
 import { canTameEnemy } from '../src/game/state/game';
 import { getSkill } from '../src/game/data/skills';
+import { getEvolution } from '../src/game/data/monsters';
+import { FOODS } from '../src/game/data/foods';
 
 function dispatch(s: GameState, a: GameAction): GameState {
   return gameReducer(s, a);
@@ -20,9 +22,9 @@ function botBattleStep(s: GameState): GameState {
   const tameTarget = b.enemyUnits
     .filter((u) => u.hp > 0 && canTameEnemy(u) && isTameable(u) && u.hp / u.maxHp <= 0.25)
     .sort((a, c) => a.hp - c.hp)[0];
-  const hasFood = Object.values(s.inventory).some((c) => c > 0);
-  if (tameTarget && hasFood) {
-    const foodId = Object.entries(s.inventory).find(([, c]) => c > 0)![0];
+  const foods = Object.entries(s.inventory).filter(([id, c]) => c > 0 && FOODS[id]);
+  if (tameTarget && foods.length > 0) {
+    const foodId = foods[0][0];
     return dispatch(s, { type: 'PLAYER_TAME', foodId, enemyUid: tameTarget.uid });
   }
 
@@ -49,14 +51,15 @@ function botBattleStep(s: GameState): GameState {
   return dispatch(s, { type: 'PLAYER_SKILL', skillId: chosen.id, targetUid: victim?.uid });
 }
 
-function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; detail: string } {
+function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; detail: string; specials: number } {
   let s: GameState = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
   let steps = 0;
+  let specials = 0;
   while (steps < 600) {
     steps += 1;
-    if (s.screen === 'victory') return { result: 'victory', detail: '' };
+    if (s.screen === 'victory') return { result: 'victory', detail: '', specials };
     if (s.screen === 'gameover')
-      return { result: 'gameover', detail: `act=${s.act} row=${s.currentRow} roster=${s.roster.length} rosterLv=${s.roster.map((u) => u.level).join(',')}` };
+      return { result: 'gameover', detail: `act=${s.act} row=${s.currentRow} roster=${s.roster.length} rosterLv=${s.roster.map((u) => u.level).join(',')}`, specials };
 
     switch (s.screen) {
       case 'map': {
@@ -78,6 +81,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
             : (s.map.layers[s.currentRow]?.find((n) => n.id === s.currentNodeId)?.col ?? null);
         const adjacent = nodes.filter(
           (n) =>
+            n.type === 'boss' ||
             currentCol === null ||
             typeof n.col !== 'number' ||
             typeof currentCol !== 'number' ||
@@ -89,9 +93,10 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         }
         const wounded = s.roster.some((u) => u.hp / u.maxHp < 0.6);
         const restNode = adjacent.find((n) => n.type === 'rest');
+        const specialNode = adjacent.find((n) => n.type === 'special');
         const battleNode = adjacent.find((n) => n.type === 'battle' || n.type === 'elite');
         const eventNode = adjacent.find((n) => n.type === 'event');
-        const chosen = (wounded && restNode) || battleNode || eventNode || adjacent[0];
+        const chosen = (wounded && restNode) || specialNode || battleNode || eventNode || adjacent[0];
         s = dispatch(s, { type: 'MOVE', nodeId: chosen.id });
         break;
       }
@@ -121,6 +126,20 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         break;
       }
       case 'roster': {
+        if (s.specialPending?.kind === 'evolve') {
+          const target = s.roster.find((u) => getEvolution(u.speciesId));
+          if (target) {
+            s = dispatch(s, { type: 'EVOLVE_ONE', uid: target.uid });
+            break;
+          }
+        }
+        if (s.specialPending?.kind === 'boost') {
+          const t = s.roster[0];
+          if (t) {
+            s = dispatch(s, { type: 'SPECIAL_TARGET', uid: t.uid });
+            break;
+          }
+        }
         s = dispatch(s, { type: 'NEXT_NODE' });
         break;
       }
@@ -147,21 +166,44 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: pick.id });
         break;
       }
+      case 'special': {
+        specials += 1;
+        const sp = s.map.specials[s.currentNodeId];
+        if (!sp) {
+          s = dispatch(s, { type: 'NEXT_NODE' });
+          break;
+        }
+        const order = ['gold', 'item', 'evolve', 'boost', 'custom', 'superevolve'];
+        const best = [...sp.rewards].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))[0];
+        s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: best.id });
+        break;
+      }
+      case 'custom': {
+        s = dispatch(s, { type: 'PICK_CUSTOM', presetId: 'custom_fury' });
+        break;
+      }
+      case 'boost': {
+        s = dispatch(s, { type: 'BOOST_STAT', stat: 'atk' });
+        break;
+      }
       default:
-        return { result: 'stuck', detail: `unknown screen ${s.screen}` };
+        return { result: 'stuck', detail: `unknown screen ${s.screen}`, specials };
     }
   }
   return {
     result: 'stuck',
     detail: `screen=${s.screen} act=${s.act} row=${s.currentRow} roster=${s.roster.length} battlePhase=${s.battle?.phase}`,
+    specials,
   };
 }
 
 describe('整局模拟（自动玩家）', () => {
   it('多局不崩溃、无死循环，且存在通关', () => {
     const results = { victory: 0, gameover: 0, stuck: 0 };
+    let specials = 0;
     for (let seed = 2000; seed < 2020; seed++) {
       const r = simulate(seed);
+      specials += r.specials;
       if (r.result !== 'victory') {
         // eslint-disable-next-line no-console
         console.log(`[${r.result} seed=${seed}] ${r.detail}`);
@@ -169,8 +211,9 @@ describe('整局模拟（自动玩家）', () => {
       results[r.result] += 1;
     }
     // eslint-disable-next-line no-console
-    console.log(`STAT: victory=${results.victory} gameover=${results.gameover} stuck=${results.stuck}`);
+    console.log(`STAT: victory=${results.victory} gameover=${results.gameover} stuck=${results.stuck} specials=${specials}`);
     expect(results.stuck).toBe(0);
     expect(results.victory).toBeGreaterThan(0);
+    expect(specials).toBeGreaterThan(0);
   });
 });
