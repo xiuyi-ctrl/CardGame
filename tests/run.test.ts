@@ -1,0 +1,344 @@
+import { describe, it, expect } from 'vitest';
+import {
+  createInitialState,
+  gameReducer,
+  isValidGameState,
+  resolveBattle,
+  type GameAction,
+} from '../src/game/state/reducer';
+import type { GameState } from '../src/game/state/game';
+import { generateMap, gainExp, pendingEvolve, settleEvolutions, ROSTER_MAX } from '../src/game/state/game';
+import { createBattle, makeUnit, currentPlayerUnit } from '../src/game/core/battle';
+
+function dispatch(state: GameState, action: GameAction): GameState {
+  return gameReducer(state, action);
+}
+
+describe('成长与进化', () => {
+  it('gainExp 升级后重算属性并保留生命比例', () => {
+    const u = makeUnit('momo', 1, true, 0, false);
+    const maxHp0 = u.maxHp;
+    const leveled = gainExp(u, 100); // 远超 1→2 需要经验
+    expect(leveled.level).toBeGreaterThan(1);
+    expect(leveled.maxHp).toBeGreaterThan(maxHp0);
+    expect(leveled.hp).toBeLessThanOrEqual(leveled.maxHp);
+  });
+
+  it('pendingEvolve 仅在经验冻结后成立', () => {
+    const u1 = makeUnit('momo', 1, true, 0, false);
+    expect(pendingEvolve(u1)).toBe(false);
+    const u2 = gainExp(makeUnit('momo', 1, true, 0, false), 10000);
+    expect(pendingEvolve(u2)).toBe(true);
+  });
+
+  it('局内经验在进化等级前冻结', () => {
+    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000);
+    expect(u.level).toBe(2);
+    expect(u.exp).toBe(u.expToLevel);
+    expect(u.level).toBeLessThan(3);
+  });
+
+  it('局末结算自动进化并提升属性', () => {
+    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000); // Lv2 满经验冻结
+    const s = settleEvolutions({ ...createInitialState(), roster: [u] });
+    expect(s.roster[0].speciesId).toBe('momo_queen');
+    expect(s.roster[0].level).toBe(3);
+    expect(s.roster[0].maxHp).toBeGreaterThan(u.maxHp);
+    expect(s.log.some((l) => l.includes('进化'))).toBe(true);
+  });
+
+  it('失败结算触发进化并进入 gameover', () => {
+    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000);
+    let s: GameState = {
+      ...createInitialState(),
+      screen: 'battle',
+      roster: [u],
+      field: [u.uid],
+      battle: {
+        playerUnits: [u],
+        enemyUnits: [],
+        turnOrder: [],
+        turnIndex: 0,
+        round: 1,
+        phase: 'lost',
+        log: [],
+        pendingTame: [],
+        seed: 1,
+        rngCount: 0,
+      },
+    };
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+    expect(s.screen).toBe('gameover');
+    expect(s.roster[0].speciesId).toBe('momo_queen');
+  });
+
+  it('战斗胜利结算自动进化', () => {
+    const u = gainExp(makeUnit('momo', 1, true, 0, false), 10000); // Lv2 满经验冻结
+    let s: GameState = {
+      ...createInitialState(),
+      screen: 'battle',
+      roster: [u],
+      field: [u.uid],
+      battle: {
+        playerUnits: [u],
+        enemyUnits: [],
+        turnOrder: [],
+        turnIndex: 0,
+        round: 1,
+        phase: 'won',
+        log: [],
+        pendingTame: [],
+        seed: 1,
+        rngCount: 0,
+      },
+    };
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+    expect(s.screen).toBe('reward');
+    expect(s.roster[0].speciesId).toBe('momo_queen');
+    expect(s.roster[0].level).toBe(3);
+  });
+});
+
+describe('地图生成', () => {
+  it('层数在 5~7 之间，首层单战斗、末层单首领，且每幕含商人/休整/奇遇', () => {
+    for (let act = 1; act <= 3; act++) {
+      const map = generateMap(42, act);
+      expect(map.layers.length).toBeGreaterThanOrEqual(5);
+      expect(map.layers.length).toBeLessThanOrEqual(7);
+      expect(map.layers[0].length).toBe(1);
+      expect(map.layers[0][0].type).toBe('battle');
+      const last = map.layers[map.layers.length - 1];
+      expect(last.length).toBe(1);
+      expect(last[0].type).toBe('boss');
+      expect(Object.keys(map.boss).length).toBe(1);
+      // col 列号连续递增
+      for (const row of map.layers) {
+        row.forEach((n, i) => expect(n.col).toBe(i));
+      }
+      // 每幕至少 1 商人、1 休整、1~2 次奇遇
+      const types = map.layers.flat().map((n) => n.type);
+      expect(types.includes('shop')).toBe(true);
+      expect(types.includes('rest')).toBe(true);
+      const evCount = types.filter((t) => t === 'event').length;
+      expect(evCount).toBeGreaterThanOrEqual(1);
+      expect(evCount).toBeLessThanOrEqual(2);
+      // 奇遇节点都有事件内容
+      for (const n of map.layers.flat().filter((x) => x.type === 'event')) {
+        expect(map.events[n.id]).toBeDefined();
+        expect(map.events[n.id].choices.length).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it('MOVE 只能移动到相邻列节点（出发节点除外）', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
+    const start = s.map.layers[0][0];
+    s = dispatch(s, { type: 'MOVE', nodeId: start.id });
+    expect(s.screen).toBe('battle');
+    // 跳过战斗，直接构造已到达出发节点的地图状态
+    s = { ...s, screen: 'map', battle: undefined, currentNodeId: start.id, currentRow: 0 };
+    const nextRow = s.map.layers[1];
+    expect(nextRow.length).toBeGreaterThanOrEqual(2);
+    // 出发节点可直达第一层任意节点（含最右侧）
+    const far = nextRow.find((n) => n.col >= 2);
+    if (far) {
+      const moved = dispatch(s, { type: 'MOVE', nodeId: far.id });
+      expect(moved.currentNodeId).toBe(far.id);
+    }
+    // 进入第一层后：只能移动到 col±1
+    const mid = nextRow.find((n) => n.col <= 1)!;
+    s = dispatch(s, { type: 'MOVE', nodeId: mid.id });
+    s = { ...s, screen: 'map', battle: undefined };
+    const row2 = s.map.layers[2];
+    const far2 = row2.find((n) => Math.abs(n.col - (mid.col ?? 0)) > 1);
+    if (far2) {
+      const before = s.currentNodeId;
+      const after = dispatch(s, { type: 'MOVE', nodeId: far2.id });
+      expect(after.currentNodeId).toBe(before);
+      expect(after.screen).toBe('map');
+    }
+    // 相邻节点可以移动
+    const near2 = row2.find((n) => Math.abs(n.col - (mid.col ?? 0)) <= 1)!;
+    const moved = dispatch(s, { type: 'MOVE', nodeId: near2.id });
+    expect(moved.currentNodeId).toBe(near2.id);
+  });
+
+  it('奇遇节点可进入并做出抉择', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 13 });
+    const evNodes = s.map.layers.flat().filter((n) => n.type === 'event');
+    expect(evNodes.length).toBeGreaterThanOrEqual(1);
+    const evNode = evNodes[0];
+    const ev = s.map.events[evNode.id];
+    expect(ev).toBeDefined();
+    const rowIdx = s.map.layers.findIndex((row) => row.includes(evNode));
+    // 若上层存在相邻父节点，走真实 MOVE 进入奇遇
+    const parent = rowIdx > 0 ? s.map.layers[rowIdx - 1].find((n) => Math.abs(n.col - evNode.col) <= 1) : undefined;
+    if (parent) {
+      s = { ...s, screen: 'map', currentRow: rowIdx - 1, currentNodeId: parent.id, gold: 100 };
+      s = dispatch(s, { type: 'MOVE', nodeId: evNode.id });
+      expect(s.screen).toBe('event');
+    } else {
+      s = { ...s, screen: 'event', currentRow: rowIdx, currentNodeId: evNode.id, gold: 100 };
+    }
+    // 选择获得金币的选项（无金币选项时退而选择无花费的收益）
+    const choice =
+      ev.choices.find((x) => x.kind === 'gold') ??
+      ev.choices.find((x) => x.kind === 'heal') ??
+      ev.choices.find((x) => x.kind === 'exp') ??
+      ev.choices[0];
+    const goldBefore = s.gold;
+    s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: choice.id });
+    expect(s.screen).toBe('roster');
+    if (choice.kind === 'gold') expect(s.gold).toBeGreaterThan(goldBefore);
+    // 伤害选项不会杀死宠物
+    const damageEv = { ...ev, choices: [{ id: 'x', label: '损伤', desc: '', kind: 'damage' as const, amount: 100 }] };
+    s = { ...s, screen: 'event', map: { ...s.map, events: { ...s.map.events, [s.currentNodeId]: damageEv } } };
+    const hpBefore = s.roster.map((u) => u.hp);
+    s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: 'x' });
+    expect(s.screen).toBe('roster');
+    s.roster.forEach((u) => expect(u.hp).toBeGreaterThanOrEqual(1));
+    expect(s.roster.some((u, i) => u.hp < hpBefore[i])).toBe(true);
+  });
+});
+
+describe('完整肉鸽流程', () => {
+  it('从开始到战斗胜利并确认收获', () => {
+    const strong = makeUnit('momo_queen', 3, true, 0, false);
+    let s: GameState = {
+      ...createInitialState(),
+      screen: 'map',
+      seed: 3,
+      roster: [strong],
+      field: [strong.uid],
+    };
+    const firstNode = s.map.layers[0][0];
+    s = {
+      ...s,
+      map: {
+        ...s.map,
+        encounter: {
+          ...s.map.encounter,
+          [firstNode.id]: [
+            { speciesId: 'kiki', level: 1 },
+            { speciesId: 'kiki', level: 1 },
+          ],
+        },
+      },
+    };
+
+    s = dispatch(s, { type: 'MOVE', nodeId: firstNode.id });
+    expect(s.screen).toBe('battle');
+    expect(s.battle).toBeDefined();
+
+    // 自动打牌直到战斗结束
+    let guard = 0;
+    while (s.battle && s.battle.phase === 'acting' && guard < 300) {
+      const cur = currentPlayerUnit(s.battle);
+      if (!cur) break;
+      const target = s.battle.enemyUnits.filter((u) => u.hp > 0)[0];
+      s = dispatch(s, { type: 'PLAYER_SKILL', skillId: cur.skills[0], targetUid: target?.uid });
+      guard += 1;
+    }
+    expect(s.battle!.phase).toBe('won');
+    const goldBefore = s.gold;
+
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+    expect(s.screen).toBe('reward');
+    expect(s.gold).toBeGreaterThan(goldBefore);
+    expect(s.roster.length).toBeGreaterThanOrEqual(1);
+
+    s = dispatch(s, { type: 'PICK_REWARD', rewardId: s.rewards[0].id });
+    expect(s.screen).toBe('roster');
+
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('map');
+  });
+
+  it('胜利后阵亡单位从队伍永久移除', () => {
+    const starter = makeUnit('momo', 1, true, 0, false);
+    const meat = makeUnit('fifi', 1, true, 1, false);
+    let s: GameState = {
+      ...createInitialState(),
+      screen: 'map',
+      roster: [starter, meat],
+      field: [starter.uid, meat.uid],
+      seed: 9,
+    };
+    const battle = createBattle([starter, meat], [{ speciesId: 'pipi', level: 1 }], 9);
+    // 手动击杀 meat 后获胜
+    const meatInBattle = battle.playerUnits.find((u) => u.uid === meat.uid)!;
+    meatInBattle.hp = 0;
+    const aliveEnemy = battle.enemyUnits.find((u) => u.hp > 0)!;
+    aliveEnemy.hp = 0;
+    const won = { ...battle, phase: 'won' as const };
+    s = resolveBattle(s, won);
+    expect(s.roster.some((u) => u.uid === meat.uid)).toBe(false);
+    expect(s.roster.some((u) => u.uid === starter.uid)).toBe(true);
+  });
+
+  it('驯服获得的新宠物会进入队伍', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 5 });
+    const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'momo', level: 1 }], 5);
+    const enemy = battle.enemyUnits[0];
+    enemy.hp = Math.floor(enemy.maxHp * 0.1);
+    // 直接构造 battle 后 resolve
+    const tamed = { ...battle, phase: 'won' as const };
+    // 模拟玩家驯服：把敌人加入 pendingTame 再胜利
+    tamed.pendingTame.push(makeUnit(enemy.speciesId, 1, true, 2, false));
+    s = resolveBattle(s, tamed);
+    expect(s.roster.length).toBe(3);
+  });
+
+  it('首领战胜利后进入下一层', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 11 });
+    // 直接放置首领战状态
+    s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine', level: 4 }] } } };
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.act).toBe(2);
+    expect(s.screen).toBe('map');
+  });
+
+  it('第三层首领后通关', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 12 });
+    s = { ...s, act: 3, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_fire', level: 9 }] } } };
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('victory');
+  });
+});
+
+describe('队伍上限', () => {
+  it('招募奖励不会超过队伍上限', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 2 });
+    const filler = Array.from({ length: ROSTER_MAX }, () => makeUnit('kiki', 1, true, 0, false));
+    s = { ...s, roster: filler };
+    const rec = { id: 'r', label: '', desc: '', kind: 'recruit' as const, monsterId: 'mimi' };
+    s = { ...s, rewards: [rec], screen: 'reward' };
+    s = dispatch(s, { type: 'PICK_REWARD', rewardId: 'r' });
+    expect(s.roster.length).toBe(ROSTER_MAX);
+  });
+});
+
+describe('存档读档', () => {
+  it('合法存档可 LOAD_GAME 恢复，非法存档回首页', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const moved = dispatch(run, { type: 'MOVE', nodeId: run.map.layers[0][0].id });
+    expect(moved.screen).toBe('battle');
+
+    const restored = dispatch(createInitialState(), { type: 'LOAD_GAME', state: moved });
+    expect(restored.screen).toBe('battle');
+    expect(restored.seed).toBe(3);
+    expect(restored.roster.length).toBe(2);
+
+    const bad = dispatch(createInitialState(), { type: 'LOAD_GAME', state: { seed: 1 } as GameState });
+    expect(bad.screen).toBe('title');
+  });
+
+  it('isValidGameState 能识别残缺对象', () => {
+    expect(isValidGameState(null)).toBe(false);
+    expect(isValidGameState({ seed: 1 })).toBe(false);
+    const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 4 });
+    expect(isValidGameState(s)).toBe(true);
+  });
+});

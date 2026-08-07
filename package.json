@@ -1,0 +1,58 @@
+{
+  "name": "pet-card-rogue",
+  "version": "0.1.0",
+  "private": true,
+  "description": "肉鸽卡牌宠物对战游戏（参照 Decktamer 驯牌师）",
+  "main": "dist-electron/main.js",
+  "author": "PetCardRogue",
+  "scripts": {
+    "dev": "npm run build:main && concurrently -k -s first \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "build:main": "tsc -p tsconfig.electron.json",
+    "build": "npm run build:main && tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "start": "electron .",
+    "test": "vitest run",
+    "dist": "npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.1",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.petcardrogue.game",
+    "productName": "驯牌远征",
+    "asar": true,
+    "files": [
+      "dist/**",
+      "dist-electron/**"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "驯牌远征-${version}.exe"
+    }
+  }
+}
