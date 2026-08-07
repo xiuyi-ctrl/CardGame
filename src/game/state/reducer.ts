@@ -1,13 +1,27 @@
 import type { GameState, MapNode, RewardChoice } from './game';
-import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, evolveUnitForce, FIELD_MAX, generateChallengeRewards, generateMap, generateRewards, gainExp, makeCustomUnit, ROSTER_MAX, recomputeStats, settleEvolutions } from './game';
+import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, evolveUnitForce, FIELD_MAX, generateChallengeRewards, generateMap, generateRewards, gainExp, labelOf, makeCustomUnit, ROSTER_MAX, recomputeStats, settleEvolutions } from './game';
 import { createBattle, computeStats, makeUnit, playerSkill, playerTame, type BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
+import { getItem, ITEMS } from '../data/items';
 import { getEvolution } from '../data/monsters';
 import { createRng } from '../rng';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
+}
+
+/** 钥匙门节点：是否已持有对应守卫的专用钥匙 */
+function hasKeyFor(state: GameState, node: MapNode): boolean {
+  if (!node.guardianId) return false;
+  return (state.inventory[`key_${node.guardianId}`] ?? 0) > 0;
+}
+
+/** 字符串简单哈希（用于按节点 id 派生可复现随机） */
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
 
 export type GameAction =
@@ -58,7 +72,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower'];
+  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -162,7 +176,17 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
         ? corruptNode && node?.corruptReward === 'gold'
           ? 32
           : 16
-        : 8;
+        : node?.type === 'guardian'
+          ? 16
+          : 8;
+  // 守卫：击败后发放对应的专用钥匙（守卫不可驯服）
+  let inventory = state.inventory;
+  const keyLog: string[] = [];
+  if (node?.type === 'guardian') {
+    const keyId = `key_${node.id}`;
+    inventory = { ...inventory, [keyId]: (inventory[keyId] ?? 0) + 1 };
+    keyLog.push('击败守卫，获得一把专用钥匙');
+  }
   // 本场战斗结束：达到进化等级的宠物立即自动进化
   const settled = settleEvolutions({
     ...state,
@@ -170,9 +194,11 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     roster,
     field: state.field.filter((uid) => roster.some((r) => r.uid === uid)),
     gold: state.gold + goldGain,
+    inventory,
     battle: undefined,
     log: [
       `战斗胜利！${goldGain > 0 ? `获得 ${goldGain} 金币` : '赢得挑战奖励'}`,
+      ...keyLog,
       ...(corruptNode ? ['被侵蚀区域：奖励已翻倍'] : []),
       ...(battle.pendingTame.length > 0 ? [`驯服了 ${battle.pendingTame.length} 只宠物`] : []),
       ...(roster.length < state.roster.length ? [`战斗中有宠物阵亡，永远失去了它`] : []),
@@ -190,6 +216,46 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   return { ...settled, roster: healed, rewards };
 }
 
+/** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+40% 概率道具）。结果文本进 chestResult */
+function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: GameState; text: string } {
+  const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
+  let next = base;
+  let text: string;
+  const foodPool = Object.keys(FOODS).filter((id) => FOODS[id].shop !== false);
+  if (keydoor) {
+    const amt = 25 + Math.floor(rng() * 16);
+    const foodId = foodPool[Math.floor(rng() * foodPool.length)];
+    const food = getFood(foodId);
+    let extras: string[] = [];
+    if (rng() < 0.4) {
+      const pool = ['golden_fruit', 'purify', 'scout', 'haste', 'skip'];
+      const itemId = pool[Math.floor(rng() * pool.length)];
+      const it = getItem(itemId);
+      next = { ...next, inventory: { ...next.inventory, [itemId]: (next.inventory[itemId] ?? 0) + 1 } };
+      extras.push(`额外获得「${it.name}」`);
+    }
+    next = { ...next, gold: next.gold + amt, inventory: { ...next.inventory, [foodId]: (next.inventory[foodId] ?? 0) + 1 } };
+    text = `开启「${labelOf(node.type, base.currentRow)}」：获得 ${amt} 金币、1 个${food.name}${extras.length ? '、' + extras.join('、') : ''}`;
+  } else {
+    const roll = rng();
+    if (roll < 0.4) {
+      const amt = 12 + Math.floor(rng() * 9);
+      next = { ...next, gold: next.gold + amt };
+      text = `开启「${labelOf(node.type, base.currentRow)}」：获得 ${amt} 金币`;
+    } else if (roll < 0.7) {
+      const foodId = foodPool[Math.floor(rng() * foodPool.length)];
+      const food = getFood(foodId);
+      next = { ...next, inventory: { ...next.inventory, [foodId]: (next.inventory[foodId] ?? 0) + 1 } };
+      text = `开启「${labelOf(node.type, base.currentRow)}」：获得 1 个${food.name}`;
+    } else {
+      const healed = next.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.3)) }));
+      next = { ...next, roster: healed };
+      text = `开启「${labelOf(node.type, base.currentRow)}」：全体宠物恢复 30% 生命`;
+    }
+  }
+  return { next, text };
+}
+
 /** 进入一个地图节点：根据节点类型进入对应界面（MOVE 与 DEBUG_JUMP 共用） */
 function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'rest') return { ...base, screen: 'rest' };
@@ -205,6 +271,54 @@ function enterNode(base: GameState, node: MapNode): GameState {
       base.seed + base.currentRow * 17,
     );
     return { ...base, screen: 'battle', battle };
+  }
+  // 同步双节点（双生宝箱）：抵达开箱；持有侦察/加速道具时消耗 1 个、同时开启两个宝箱
+  if (node.type === 'sync') {
+    const paired = node.pairedId ? base.map.layers[base.currentRow]?.find((n) => n.id === node.pairedId) : undefined;
+    const hasScout = (base.inventory.scout ?? 0) > 0;
+    const hasHaste = (base.inventory.haste ?? 0) > 0;
+    const double = hasScout || hasHaste;
+    let inventory = base.inventory;
+    if (hasScout) inventory = { ...inventory, scout: inventory.scout! - 1 };
+    else if (hasHaste) inventory = { ...inventory, haste: inventory.haste! - 1 };
+    let next: GameState = { ...base, inventory };
+    const opened: string[] = [];
+    if (double && paired) {
+      const r1 = openChest(next, node, false);
+      next = r1.next;
+      opened.push(r1.text);
+      const r2 = openChest({ ...next, currentNodeId: paired.id }, paired, false);
+      next = r2.next;
+      opened.push(r2.text);
+    } else {
+      const r1 = openChest(next, node, false);
+      next = r1.next;
+      opened.push(r1.text);
+    }
+    const disabled = { ...(next.map.disabled ?? {}), [node.id]: true };
+    if (paired) disabled[paired.id] = true;
+    return { ...next, map: { ...next.map, disabled }, screen: 'chest', chestResult: opened, currentNodeId: node.id };
+  }
+  // 守卫：强力怪物战（不可驯服），击败获得专用钥匙
+  if (node.type === 'guardian') {
+    const encounter = base.map.encounter[node.id];
+    if (!encounter) return { ...base, screen: 'map' };
+    const battle = createBattle(
+      base.roster.filter((u) => base.field.includes(u.uid)),
+      encounter,
+      base.seed + base.currentRow * 17,
+      { untameable: true },
+    );
+    return { ...base, screen: 'battle', battle };
+  }
+  // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
+  if (node.type === 'keydoor') {
+    if (!node.guardianId || !hasKeyFor(base, node)) return { ...base, screen: 'map' };
+    const keyId = `key_${node.guardianId}`;
+    const inventory = { ...base.inventory, [keyId]: base.inventory[keyId] - 1 };
+    const r = openChest({ ...base, inventory }, node, true);
+    const disabled = { ...(r.next.map.disabled ?? {}), [node.id]: true };
+    return { ...r.next, map: { ...r.next.map, disabled }, screen: 'chest', chestResult: [r.text] };
   }
   const encounter = base.map.encounter[node.id];
   if (!encounter) return { ...base, screen: 'map' };
@@ -256,8 +370,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 相邻校验：出发层可直达下一层任意节点；此后只能移动到当前节点列号 col±1（旧存档无 col 时放行）
       if (!isFirst) {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
-        if (!canStepTo(state.currentRow, cur?.col, node)) return state;
+        if (!canStepTo(state.currentRow, cur?.col, node, state.map)) return state;
       }
+      // 钥匙门：未持有对应钥匙不可进入
+      if (node.type === 'keydoor' && !hasKeyFor(state, node)) return state;
       const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false };
       return enterNode(base, node);
     }
@@ -288,7 +404,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         roster: debugRoster,
         field: debugRoster.map((u) => u.uid),
         gold: 500,
-        inventory: { berry: 5, meat: 5, skip: 3 },
+        inventory: { berry: 5, meat: 5, skip: 3, scout: 2, haste: 2 },
         rewards: [],
         battle: undefined,
         specialPending: undefined,
@@ -313,6 +429,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         next = { ...next, gold: Math.max(0, next.gold + (choice.amount ?? 0)) };
       } else if (choice.kind === 'food' && choice.foodId) {
         next = { ...next, inventory: { ...next.inventory, [choice.foodId]: (next.inventory[choice.foodId] ?? 0) + 1 } };
+      } else if (choice.kind === 'item' && choice.itemId) {
+        next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
       } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
         next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, 1 + (next.act - 1), true, 0, false)] };
       } else if (choice.kind === 'damage') {
@@ -462,10 +580,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 与 MOVE 相同的相邻校验
       if (state.currentNodeId !== '') {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
-        if (!canStepTo(state.currentRow, cur?.col, node)) return state;
+        if (!canStepTo(state.currentRow, cur?.col, node, state.map)) return state;
       }
-      // 可跳过战斗/精英/斗兽场/车轮战/被侵蚀节点，首领不可跳过
-      if (node.type === 'boss') return state;
+      // 可跳过战斗/精英/斗兽场/车轮战/被侵蚀节点，首领与守卫不可跳过，钥匙门/双生宝箱不是战斗
+      if (node.type === 'boss' || node.type === 'guardian') return state;
       if (node.type !== 'battle' && node.type !== 'elite' && node.type !== 'arena' && node.type !== 'gauntlet' && node.type !== 'corrupted')
         return state;
       const base: GameState = {
@@ -569,15 +687,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'SHOP_BUY': {
-      const food = getFood(action.foodId);
-      if (state.gold < food.price) return state;
-      if ((state.shopBoughtItems ?? []).includes(food.id)) return state;
+      // 支持食物与道具两种商品（价格不同）
+      const food = FOODS[action.foodId];
+      const item = ITEMS[action.foodId];
+      if (!food && !item) return state;
+      const price = food ? food.price : item.price;
+      if (state.gold < price) return state;
+      if ((state.shopBoughtItems ?? []).includes(action.foodId)) return state;
       return {
         ...state,
-        gold: state.gold - food.price,
+        gold: state.gold - price,
         shopBought: true,
-        shopBoughtItems: [...(state.shopBoughtItems ?? []), food.id],
-        inventory: { ...state.inventory, [food.id]: (state.inventory[food.id] ?? 0) + 1 },
+        shopBoughtItems: [...(state.shopBoughtItems ?? []), action.foodId],
+        inventory: { ...state.inventory, [action.foodId]: (state.inventory[action.foodId] ?? 0) + 1 },
       };
     }
 
@@ -611,7 +733,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       const nextRow = state.currentRow + 1;
       if (nextRow < state.map.layers.length) {
-        return { ...state, screen: 'map' };
+        return { ...state, screen: 'map', chestResult: undefined };
       }
       return settleEvolutions({ ...state, screen: 'victory' });
     }

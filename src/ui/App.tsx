@@ -25,6 +25,9 @@ const NODE_ICON: Record<MapNode['type'], string> = {
   gauntlet: '🔥',
   corrupted: '🌑',
   watchtower: '🔭',
+  sync: '🎁',
+  guardian: '🛡️',
+  keydoor: '🔒',
 };
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory'];
@@ -60,6 +63,7 @@ export default function App() {
       {state.screen === 'gameover' && <GameOverScreen state={state} dispatch={dispatch} />}
       {state.screen === 'victory' && <VictoryScreen state={state} dispatch={dispatch} />}
       {state.screen === 'watchtower' && <WatchtowerScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'chest' && <ChestScreen state={state} dispatch={dispatch} />}
     </div>
   );
 }
@@ -142,6 +146,9 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
     { value: 'shop', label: '商店' },
     { value: 'special', label: '奇遇' },
     { value: 'watchtower', label: '瞭望塔' },
+    { value: 'sync', label: '双生宝箱' },
+    { value: 'guardian', label: '守卫' },
+    { value: 'keydoor', label: '钥匙门' },
   ];
 
   return (
@@ -254,7 +261,10 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   const currentCol = isFirst
     ? null
     : (state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.col ?? null);
-  const canSelect = (n: MapNode) => canStepTo(state.currentRow, currentCol, n);
+  const isDisabled = (n: MapNode) => state.map.disabled?.[n.id] === true;
+  const isLocked = (n: MapNode) => (n.type === 'keydoor' && (n.guardianId ? (state.inventory[`key_${n.guardianId}`] ?? 0) > 0 : false) === false);
+  const canSelect = (n: MapNode) =>
+    !isDisabled(n) && !isLocked(n) && canStepTo(state.currentRow, currentCol, n, state.map);
 
   // 路线预览：默认显示当前节点 → 下一步可达；悬停某节点时显示该节点的下一步可达
   const nextRow = state.map.layers[optionsRow] ?? EMPTY_ROW;
@@ -278,7 +288,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   const canvasRef = useRef<HTMLDivElement>(null);
   const nodeEls = useRef<Record<string, HTMLDivElement | null>>({});
   const [svgSize, setSvgSize] = useState({ w: 0, h: 0 });
-  const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number; kind: 'near' | 'far' }[]>([]);
+  const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number; kind: 'near' | 'far' | 'pair' }[]>([]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -331,8 +341,18 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
         }
       }
     }
+    // 同步双节点：虚线连接配对的两个宝箱（二选一，任一开启后连线消失）
+    for (const row of state.map.layers) {
+      for (const n of row) {
+        if (n.type !== 'sync' || !n.pairedId) continue;
+        if (isDisabled(n) || isDisabled({ id: n.pairedId, type: 'sync' } as MapNode)) continue;
+        const a = center(n.id);
+        const b = center(n.pairedId);
+        if (a && b) result.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind: 'pair' });
+      }
+    }
     setLines(result);
-  }, [isFirst, state.currentNodeId, optionsRow, nearIds, hoverNode, hoverNextRow, hoverReachIds, svgSize]);
+  }, [isFirst, state.currentNodeId, optionsRow, nearIds, hoverNode, hoverNextRow, hoverReachIds, svgSize, state.map, state.inventory]);
 
   return (
     <div className="screen">
@@ -340,7 +360,14 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
       <div className="map-canvas" ref={canvasRef}>
         <svg className="map-lines" width={svgSize.w} height={svgSize.h}>
           {lines.map((l, i) => (
-            <line key={i} className={l.kind === 'near' ? 'ln-near' : 'ln-far'} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} />
+            <line
+              key={i}
+              className={l.kind === 'near' ? 'ln-near' : l.kind === 'far' ? 'ln-far' : 'ln-pair'}
+              x1={l.x1}
+              y1={l.y1}
+              x2={l.x2}
+              y2={l.y2}
+            />
           ))}
         </svg>
         {state.map.layers.map((row, ri) => {
@@ -355,6 +382,8 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                 const cls = [
                   isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast ? '' : 'dim',
                   reachCls,
+                  isDisabled(n) ? 'node-off' : '',
+                  isLocked(n) ? 'node-locked' : '',
                 ]
                   .filter(Boolean)
                   .join(' ');
@@ -365,6 +394,16 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                     n.type === 'gauntlet' ||
                     n.type === 'corrupted') &&
                   (state.inventory.skip ?? 0) > 0;
+                const nodeHint =
+                  n.type === 'keydoor'
+                    ? isLocked(n)
+                      ? '钥匙门：需先击败对应守卫取得钥匙'
+                      : '持有钥匙，可开启高级宝箱'
+                    : n.type === 'sync'
+                      ? '双生宝箱：与配对宝箱二选一（持侦察/加速道具可同时开启）'
+                      : n.type === 'guardian'
+                        ? '守卫：强力怪物，击败获得专用钥匙'
+                        : undefined;
                 return (
                   <div
                     key={n.id}
@@ -372,6 +411,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                       nodeEls.current[n.id] = el;
                     }}
                     className={`node ${cls}`}
+                    title={nodeHint}
                     onMouseEnter={() => setHoverId(n.id)}
                     onMouseLeave={() => setHoverId(null)}
                     onClick={selectable ? () => dispatch({ type: 'MOVE', nodeId: n.id }) : undefined}
@@ -538,7 +578,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">商人 🏪</div>
       <p className="card-sub" style={{ textAlign: 'center' }}>
-        购买食物，或花 5 金币立即休整（回满血·不解诅咒）；{bought ? '已购买过食物，本节点不可再休整。' : '本节点购物与休整二选一。'}
+        购买食物与道具，或花 5 金币立即休整（回满血·不解诅咒）；{bought ? '已购买过商品，本节点不可再休整。' : '本节点购物与休整二选一。'}
       </p>
       <div className="reward-cards">
         {Object.values(FOODS)
@@ -561,6 +601,28 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
                 </button>
               </div>
             </div>
+            );
+          })}
+        {Object.values(ITEMS)
+          .filter((it) => it.price > 0)
+          .map((it) => {
+            const soldOut = boughtItems.includes(it.id);
+            return (
+              <div key={it.id} className={`reward-card ${soldOut ? 'dim' : ''}`}>
+                <div className="ricon">{it.emoji}</div>
+                <div className="rtitle">{it.name}</div>
+                <div className="rdesc">{it.desc}</div>
+                <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
+                  <span className="chip">💰 {it.price}</span>
+                  <button
+                    className="primary"
+                    disabled={soldOut || state.gold < it.price}
+                    onClick={() => dispatch({ type: 'SHOP_BUY', foodId: it.id })}
+                  >
+                    {soldOut ? '已购买' : '购买'}
+                  </button>
+                </div>
+              </div>
             );
           })}
         <div className={`reward-card ${bought ? 'dim' : ''}`}>
@@ -640,6 +702,12 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
       }
       case 'watchtower':
         return { icon: NODE_ICON.watchtower, title: '瞭望塔', detail: '可以在此继续瞭望更下层' };
+      case 'guardian':
+        return { icon: NODE_ICON.guardian, title: n.label, detail: `${encDetail(enc)}（守卫·不可驯服，击败获得专用钥匙）` };
+      case 'keydoor':
+        return { icon: NODE_ICON.keydoor, title: n.label, detail: '需击败对应守卫取得钥匙后开启高级宝箱' };
+      case 'sync':
+        return { icon: NODE_ICON.sync, title: n.label, detail: '双生宝箱：与配对宝箱二选一（持侦察/加速道具可同时开启）' };
       default:
         return { icon: NODE_ICON[n.type], title: n.label, detail: '' };
     }
@@ -680,6 +748,31 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   );
 }
 
+function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const results = state.chestResult ?? [];
+  return (
+    <div className="screen">
+      <HUD state={state} dispatch={dispatch} />
+      <div className="center-col">
+        <div className="section-title">宝箱 🎁</div>
+        <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
+          你开启了宝箱……
+        </p>
+        <div className="log-history" style={{ maxWidth: 480 }}>
+          {results.map((t, i) => (
+            <div key={i}>✨ {t}</div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+          <button className="big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
+            继续前进 →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const ev = state.map.events[state.currentNodeId];
   if (!ev) return null;
@@ -698,6 +791,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
                 {c.kind === 'heal' && '❤️'}
                 {c.kind === 'gold' && '💰'}
                 {c.kind === 'food' && FOODS[c.foodId ?? 'berry'].emoji}
+                {c.kind === 'item' && (c.itemId && ITEMS[c.itemId] ? ITEMS[c.itemId].emoji : '🎒')}
                 {c.kind === 'recruit' && '🥚'}
                 {c.kind === 'damage' && '☠️'}
                 {c.kind === 'exp' && '📚'}

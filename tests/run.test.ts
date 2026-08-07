@@ -8,7 +8,7 @@ import {
 } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { generateMap, gainExp, pendingEvolve, settleEvolutions, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
-import { createBattle, makeUnit, currentPlayerUnit } from '../src/game/core/battle';
+import { createBattle, makeUnit, currentPlayerUnit, isTameable } from '../src/game/core/battle';
 
 function dispatch(state: GameState, action: GameAction): GameState {
   return gameReducer(state, action);
@@ -711,5 +711,192 @@ describe('瞭望塔', () => {
     expect(next.act).toBe(2);
     expect(next.currentRow).toBe(0);
     expect(next.screen).toBe('map');
+  });
+});
+
+describe('同步双节点', () => {
+  /** 找到同时含 sync 节点与相邻父节点的地图状态 */
+  function atSyncParent(): { s: GameState; node: MapNode; parent: MapNode } {
+    for (let seed = 1; seed < 200; seed++) {
+      for (let act = 1; act <= 3; act++) {
+        const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
+        const map = generateMap(seed, act);
+        const node = map.layers.flat().find((n) => n.type === 'sync');
+        if (!node) continue;
+        const row = map.layers.findIndex((r) => r.includes(node));
+        const parent = map.layers[row - 1].find((n) => Math.abs(n.col - node.col) <= 1);
+        if (!parent) continue;
+        return { s: { ...s, act, map }, node, parent };
+      }
+    }
+    throw new Error('未找到含 sync 节点的地图');
+  }
+
+  it('生成：配对节点互指、同行相邻、每幕 1~2 对', () => {
+    let pairs = 0;
+    for (let act = 1; act <= 3; act++) {
+      const map = generateMap(1, act);
+      const syncs = map.layers.flat().filter((n) => n.type === 'sync');
+      for (const n of syncs) {
+        expect(n.pairedId).toBeDefined();
+        const p = map.layers.flat().find((m) => m.id === n.pairedId)!;
+        expect(p.type).toBe('sync');
+        expect(p.pairedId).toBe(n.id);
+        expect(Math.abs(p.col - n.col)).toBe(1);
+        expect(map.layers.findIndex((r) => r.includes(n))).toBe(map.layers.findIndex((r) => r.includes(p)));
+      }
+      pairs += syncs.length / 2;
+    }
+    expect(pairs).toBeGreaterThanOrEqual(3); // 每幕 1~2 对
+    expect(pairs).toBeLessThanOrEqual(6);
+  });
+
+  it('抵达开启双生宝箱：结果进 chest 界面、配对节点失效不可再进', () => {
+    const { s, node, parent } = atSyncParent();
+    const pairedId = node.pairedId!;
+    const row = s.map.layers.findIndex((r) => r.includes(node));
+    let cur: GameState = { ...s, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 100 };
+    cur = dispatch(cur, { type: 'MOVE', nodeId: node.id });
+    expect(cur.screen).toBe('chest');
+    expect((cur.chestResult ?? []).length).toBe(1);
+    expect(cur.map.disabled?.[node.id]).toBe(true);
+    expect(cur.map.disabled?.[pairedId]).toBe(true);
+    // 从相同父节点无法再进入已失效的配对节点
+    const blocked = dispatch({ ...cur, screen: 'map', currentNodeId: parent.id, currentRow: row - 1 }, {
+      type: 'MOVE',
+      nodeId: pairedId,
+    });
+    expect(blocked.currentNodeId).toBe(parent.id);
+    // chest 界面离开后回地图且清除结果
+    const after = dispatch(cur, { type: 'NEXT_NODE' });
+    expect(after.screen).toBe('map');
+    expect(after.chestResult).toBeUndefined();
+  });
+
+  it('持侦察/加速道具抵达时消耗 1 个并同时开启两个宝箱', () => {
+    const { s, node, parent } = atSyncParent();
+    const row = s.map.layers.findIndex((r) => r.includes(node));
+    let cur: GameState = {
+      ...s,
+      screen: 'map',
+      currentRow: row - 1,
+      currentNodeId: parent.id,
+      inventory: { ...s.inventory, scout: 1, haste: 1 },
+    };
+    cur = dispatch(cur, { type: 'MOVE', nodeId: node.id });
+    expect(cur.screen).toBe('chest');
+    expect((cur.chestResult ?? []).length).toBe(2);
+    expect(cur.inventory.scout).toBe(0);
+    expect(cur.inventory.haste).toBe(1); // 只消耗 1 个（优先侦察）
+
+    // 持疾行符同样双开
+    const { s: s2, node: node2, parent: parent2 } = atSyncParent();
+    const row2 = s2.map.layers.findIndex((r) => r.includes(node2));
+    let cur2: GameState = {
+      ...s2,
+      screen: 'map',
+      currentRow: row2 - 1,
+      currentNodeId: parent2.id,
+      inventory: { ...s2.inventory, haste: 1 },
+    };
+    cur2 = dispatch(cur2, { type: 'MOVE', nodeId: node2.id });
+    expect((cur2.chestResult ?? []).length).toBe(2);
+    expect(cur2.inventory.haste).toBe(0);
+  });
+});
+
+describe('守卫与钥匙门', () => {
+  /** 找到同时含 guardian 与 keydoor 且配对完整的地图状态 */
+  function atGuardPair(): { s: GameState; guardian: MapNode; keydoor: MapNode } {
+    for (let seed = 1; seed < 300; seed++) {
+      for (let act = 1; act <= 3; act++) {
+        const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
+        const map = generateMap(seed, act);
+        const keydoor = map.layers.flat().find((n) => n.type === 'keydoor');
+        if (!keydoor || !keydoor.guardianId) continue;
+        const guardian = map.layers.flat().find((n) => n.id === keydoor.guardianId);
+        if (!guardian || guardian.type !== 'guardian') continue;
+        return { s: { ...s, act, map }, guardian, keydoor };
+      }
+    }
+    throw new Error('未找到含守卫/钥匙门配对的节点');
+  }
+
+  it('生成：守卫在第 r-1 行、钥匙门在第 r 行且列相邻', () => {
+    const { s, guardian, keydoor } = atGuardPair();
+    const gRow = s.map.layers.findIndex((r) => r.includes(guardian));
+    const dRow = s.map.layers.findIndex((r) => r.includes(keydoor));
+    expect(dRow).toBe(gRow + 1);
+    expect(Math.abs(keydoor.col - guardian.col)).toBeLessThanOrEqual(1);
+    expect(keydoor.guardianId).toBe(guardian.id);
+    expect(s.map.encounter[guardian.id]).toBeDefined();
+  });
+
+  it('守卫战不可驯服：进入后敌人均不可驯服', () => {
+    const { s, guardian, keydoor } = atGuardPair();
+    const row = s.map.layers.findIndex((r) => r.includes(guardian));
+    const parent = s.map.layers[row - 1].find((n) => Math.abs(n.col - guardian.col) <= 1)!;
+    let cur: GameState = { ...s, screen: 'map', currentRow: row - 1, currentNodeId: parent.id };
+    cur = dispatch(cur, { type: 'MOVE', nodeId: guardian.id });
+    expect(cur.screen).toBe('battle');
+    expect(cur.battle!.enemyUnits.every((u) => !isTameable(u))).toBe(true);
+    expect(keydoor.guardianId).toBe(guardian.id);
+  });
+
+  it('守卫胜利：获得专用钥匙与精英级金币，钥匙门不可用跳关跳过', () => {
+    const { s, guardian } = atGuardPair();
+    const gRow = s.map.layers.findIndex((r) => r.includes(guardian));
+    let cur: GameState = { ...s, screen: 'map', currentRow: gRow, currentNodeId: guardian.id };
+    const battle = createBattle(
+      cur.roster.filter((u) => cur.field.includes(u.uid)),
+      cur.map.encounter[guardian.id]!,
+      cur.seed + 5 * 17,
+      { untameable: true },
+    );
+    const gold0 = cur.gold;
+    cur = resolveBattle(cur, { ...battle, phase: 'won' });
+    expect(cur.inventory[`key_${guardian.id}`]).toBe(1);
+    expect(cur.gold).toBe(gold0 + 16);
+    // 守卫不可被 USE_SKIP 跳过
+    const parent = cur.map.layers[gRow - 1].find((n) => Math.abs(n.col - guardian.col) <= 1)!;
+    const skipTry: GameState = { ...cur, screen: 'map', currentRow: gRow - 1, currentNodeId: parent.id, inventory: { ...cur.inventory, skip: 1 } };
+    const skipped = dispatch(skipTry, { type: 'USE_SKIP', nodeId: guardian.id });
+    expect(skipped.inventory.skip).toBe(1);
+    expect(skipped.screen).toBe('map');
+  });
+
+  it('钥匙门：无钥匙不可进入，有钥匙进入开启高级宝箱并消耗钥匙', () => {
+    const { s, guardian, keydoor } = atGuardPair();
+    const dRow = s.map.layers.findIndex((r) => r.includes(keydoor));
+    const parent = s.map.layers[dRow - 1].find((n) => Math.abs(n.col - keydoor.col) <= 1)!;
+    // 无钥匙：MOVE 被拒
+    let cur: GameState = { ...s, screen: 'map', currentRow: dRow - 1, currentNodeId: parent.id, gold: 100 };
+    const blocked = dispatch(cur, { type: 'MOVE', nodeId: keydoor.id });
+    expect(blocked.currentNodeId).toBe(parent.id);
+    expect(blocked.screen).toBe('map');
+    // 持钥匙：进入开启高级宝箱
+    cur = { ...cur, inventory: { ...cur.inventory, [`key_${guardian.id}`]: 1 } };
+    const gold0 = cur.gold;
+    cur = dispatch(cur, { type: 'MOVE', nodeId: keydoor.id });
+    expect(cur.screen).toBe('chest');
+    expect((cur.chestResult ?? []).length).toBe(1);
+    expect(cur.inventory[`key_${guardian.id}`]).toBe(0);
+    expect(cur.map.disabled?.[keydoor.id]).toBe(true);
+    expect(cur.gold).toBeGreaterThanOrEqual(gold0 + 25);
+  });
+
+  it('商店可购买侦察/疾行符道具', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
+    const row = run.map.layers.findIndex((r) => r.includes(shopNode));
+    const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
+    let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 100 };
+    s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
+    expect(s.screen).toBe('shop');
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'scout' });
+    expect(s.inventory.scout).toBe(1);
+    expect(s.gold).toBe(100 - 8);
+    s = dispatch(s, { type: 'SHOP_BUY', foodId: 'haste' });
+    expect(s.inventory.haste).toBe(1);
   });
 });

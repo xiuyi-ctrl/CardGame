@@ -17,6 +17,9 @@ const ICON: Record<string, string> = {
   gauntlet: '🔥',
   corrupted: '🌑',
   watchtower: '🔭',
+  sync: '🎁',
+  guardian: '🛡️',
+  keydoor: '🔒',
 };
 
 function encounterText(map: ReturnType<typeof generateMap>, n: MapNode): string {
@@ -51,6 +54,12 @@ function contentText(map: ReturnType<typeof generateMap>, n: MapNode): string {
     }
     case 'watchtower':
       return '瞭望塔：可预览下 3 行内某一行的全部节点情报';
+    case 'guardian':
+      return `守卫：${encounterText(map, n)}（不可驯服，击败获得专用钥匙）`;
+    case 'keydoor':
+      return '钥匙门：击败对应守卫取得钥匙后开启高级宝箱';
+    case 'sync':
+      return '双生宝箱：与配对宝箱二选一（持侦察/加速道具可同时开启）';
     default:
       return '—';
   }
@@ -83,7 +92,7 @@ function buildMd(seed: number): string {
     }
   }
   lines.push('---');
-  lines.push('> 术语：`battle` 遭遇战、`elite` 精英怪、`shop` 商人（含立即休整）、`event` 事件、`special` 奇遇关、`boss` 首领。');
+  lines.push('> 术语：`battle` 遭遇战、`elite` 精英怪、`shop` 商人（含立即休整）、`event` 事件、`special` 奇遇关、`boss` 首领、`sync` 双生宝箱（虚线配对二选一）、`guardian` 守卫（给钥匙）、`keydoor` 钥匙门。');
   return lines.join('\n');
 }
 

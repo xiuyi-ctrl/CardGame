@@ -15,7 +15,10 @@ export type NodeType =
   | 'arena'
   | 'gauntlet'
   | 'corrupted'
-  | 'watchtower';
+  | 'watchtower'
+  | 'sync'
+  | 'guardian'
+  | 'keydoor';
 
 export interface MapNode {
   id: string;
@@ -29,6 +32,10 @@ export interface MapNode {
   corruptReward?: 'gold' | 'food';
   /** 车轮战敌人数：2 或 3 */
   gauntletSize?: 2 | 3;
+  /** 同步双节点：配对节点 id（同一行相邻，虚线相连；抵达其一另一消失） */
+  pairedId?: string;
+  /** 钥匙门节点：对应守卫节点 id（击败守卫获得专用钥匙） */
+  guardianId?: string;
 }
 
 /**
@@ -36,9 +43,16 @@ export interface MapNode {
  * - 出发层（currentRow === 0，即尚未出发或站在出发节点）可直达下一层任意节点；
  * - currentCol 为 null/undefined 表示旧存档或状态异常，放行；
  * - 节点无 col（旧存档）时放行；
+ * - 已失效节点（同步双节点被开启后的配对节点）不可到达；
  * - 其余要求列号相差不超过 1（末层首领同样遵循相邻寻路）。
  */
-export function canStepTo(currentRow: number, currentCol: number | null | undefined, node: MapNode): boolean {
+export function canStepTo(
+  currentRow: number,
+  currentCol: number | null | undefined,
+  node: MapNode,
+  map?: RunMap,
+): boolean {
+  if (map?.disabled?.[node.id]) return false;
   if (currentRow === 0) return true;
   if (currentCol == null) return true;
   if (typeof node.col !== 'number') return true;
@@ -49,13 +63,15 @@ export interface EventChoice {
   id: string;
   label: string;
   desc: string;
-  kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'exp' | 'none';
+  kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'exp' | 'item' | 'none';
   /** heal/damage=百分比，gold=金额，exp=经验值 */
   amount?: number;
   /** 金币变动（food/exp 附加） */
   goldDelta?: number;
   foodId?: string;
   monsterId?: string;
+  /** item 道具 id */
+  itemId?: string;
 }
 
 export interface EventNode {
@@ -109,6 +125,8 @@ export interface RunMap {
   boss: Record<string, { speciesId: string; level: number }[]>;
   events: Record<string, EventNode>;
   specials: Record<string, SpecialNode>;
+  /** 已失效（消失/已开启）的节点 id：同步双节点被开启后配对节点消失、钥匙门开启后失效 */
+  disabled?: Record<string, boolean>;
 }
 
 export type Screen =
@@ -126,7 +144,8 @@ export type Screen =
   | 'boost'
   | 'gameover'
   | 'victory'
-  | 'watchtower';
+  | 'watchtower'
+  | 'chest';
 
 export interface RewardChoice {
   id: string;
@@ -161,6 +180,8 @@ export interface GameState {
   shopBought?: boolean;
   /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */
   shopBoughtItems?: string[];
+  /** 宝箱/钥匙门开启结果（chest 界面展示的文本列表） */
+  chestResult?: string[];
 }
 
 export const ROSTER_MAX = 6;
@@ -252,6 +273,13 @@ function buildEncounter(
     const pool = act === 1 ? ACT1_BATTLE_POOL : act === 2 ? ACT2_BATTLE_POOL : ACT3_BATTLE_POOL;
     return Array.from({ length: size }, () => one(pool, level, level));
   }
+  // 守卫：强力怪物（精英池、更高等级、不可驯服），击败获得专用钥匙
+  if (type === 'guardian') {
+    const pool = act === 1 ? ACT1_ELITE_POOL : act === 2 ? ACT2_ELITE_POOL : ACT3_ELITE_POOL;
+    const level = act === 1 ? lv(3, 4) : act === 2 ? lv(5, 6) : lv(7, 8);
+    const count = act === 1 ? 1 : lv(1, 2);
+    return Array.from({ length: count }, () => one(pool, level, level));
+  }
   // battle
   const early = progress < 0.2;
   const late = progress > 0.6;
@@ -322,6 +350,17 @@ function buildEncounter(
         c(1, '孵化它', '一只神秘生物破壳而出，加入队伍', 'recruit', { monsterId }),
         c(2, '敲开蛋壳', '里面散落出 15 金币', 'gold', { amount: 15 }),
         c(3, '离开', '让命运保持神秘', 'none'),
+      ],
+    };
+  }
+  if (roll < 0.92) {
+    return {
+      title: '神秘行商',
+      desc: '一位兜售奇物符文的游商，称他的货能解开远古双生宝箱的秘密。',
+      choices: [
+        c(1, '购得侦察符', '获得 1 个「侦察」道具（可同时开启双生宝箱）', 'item', { itemId: 'scout' }),
+        c(2, '购得疾行符', '获得 1 个「加速」道具（可同时开启双生宝箱）', 'item', { itemId: 'haste' }),
+        c(3, '离开', '继续赶路', 'none'),
       ],
     };
   }
@@ -409,17 +448,17 @@ export function generateMap(seed: number, act: number): RunMap {
       continue;
     }
     if (row === layerCount - 1) {
-      // 末层：2~3 个首领节点，均遵循寻路逻辑。数量受上一行节点数约束：
-      // 上一行 k 个节点时，末层至少要有 k-1 个首领（k-1 列能走到末层最大列 k-2）。
-      // k≥4 → 3 个首领（3 列全覆盖）；k=3 → 随机 2~3 个。
-      const m = prevCount >= 4 ? 3 : randInt(rng, 2, 3);
+      // 末层：2~3 个首领节点，均遵循寻路逻辑。数量纯随机（randInt 2~3），不受上一行节点数约束。
+      const m = randInt(rng, 2, 3);
       actBossPool = shuffle(rng, ACT_BOSS_POOLS[act]).slice(0, m);
       layers.push(Array.from({ length: m }, (_, i) => make('boss', row, i)));
       continue;
     }
     let count = Math.max(prevCount - 1, randInt(rng, 3, 5));
-    // 倒数第二行最多 4 个节点，保证末层 3 个首领全覆盖（4 列 c∈[0,3]，c=3 可到末层 2）
-    if (row === layerCount - 2) count = Math.min(4, count);
+    // 末层数量纯随机 2~3，为保无死路需倒数第二行 ≤3（k≥2 时 p≤k+1）。
+    // 而倒数第二行被压到 ≤3 时，倒数第三行必须 ≤4，否则其最右列走不到倒数第二行。
+    if (row === layerCount - 2) count = Math.min(3, count);
+    else if (row === layerCount - 3) count = Math.min(4, count);
     prevCount = count;
     const progress = row / (layerCount - 1);
     const nodes: MapNode[] = [];
@@ -472,8 +511,55 @@ export function generateMap(seed: number, act: number): RunMap {
     setType(n, countOf('event') < 5 ? 'event' : countOf('shop') < 4 ? 'shop' : 'elite');
   }
 
-  // 瞭望塔：首领关前 3 行内出现该节点的概率 25%（优先覆盖战斗类节点，不破坏事件/商人数量保证）
   const lastRow = layers.length - 1;
+
+  // 同步双节点：每幕 1~2 对。同一行两个相邻节点改写为「双生宝箱」（虚线相连，二选一；
+  // 持侦察/加速道具可同时开启两个）。只覆盖普通战斗/精英节点，不破坏事件/商人数量保证。
+  const syncPairs = randInt(rng, 1, 2);
+  let syncMade = 0;
+  for (let attempt = 0; attempt < syncPairs * 4 && syncMade < syncPairs; attempt++) {
+    const row = randInt(rng, 2, lastRow - 1);
+    const rowNodes = layers[row];
+    for (let i = 0; i + 1 < rowNodes.length; i++) {
+      const a = rowNodes[i];
+      const b = rowNodes[i + 1];
+      if ((a.type === 'battle' || a.type === 'elite') && (b.type === 'battle' || b.type === 'elite')) {
+        a.type = 'sync';
+        a.label = labelOf('sync', row);
+        a.pairedId = b.id;
+        b.type = 'sync';
+        b.label = labelOf('sync', row);
+        b.pairedId = a.id;
+        syncMade += 1;
+        break;
+      }
+    }
+  }
+
+  // 守卫 + 钥匙门：每幕 1~2 对。钥匙门在第 r 行，其上一行（r-1）相邻列生成对应守卫；
+  // 击败守卫获得该门的专用钥匙后，钥匙门才可开启（高级宝箱）。
+  const guardPairs = randInt(rng, 1, 2);
+  let guardMade = 0;
+  for (let attempt = 0; attempt < guardPairs * 6 && guardMade < guardPairs; attempt++) {
+    const row = randInt(rng, 3, lastRow - 1);
+    const rowNodes = layers[row];
+    const prevNodes = layers[row - 1];
+    const doorIdx = rowNodes.findIndex((n) => n.type === 'battle' || n.type === 'elite');
+    if (doorIdx < 0) continue;
+    const door = rowNodes[doorIdx];
+    const guardNode = prevNodes.find(
+      (n) => (n.type === 'battle' || n.type === 'elite') && Math.abs(n.col - door.col) <= 1,
+    );
+    if (!guardNode) continue;
+    door.type = 'keydoor';
+    door.label = labelOf('keydoor', row);
+    door.guardianId = guardNode.id;
+    guardNode.type = 'guardian';
+    guardNode.label = labelOf('guardian', row - 1);
+    guardMade += 1;
+  }
+
+  // 瞭望塔：首领关前 3 行内出现该节点的概率 25%（优先覆盖战斗类节点，不破坏事件/商人数量保证）
   for (let row = Math.max(2, lastRow - 3); row < lastRow; row++) {
     if (rng() < 0.25) {
       const candidates = layers[row].filter(
@@ -513,6 +599,7 @@ export function generateMap(seed: number, act: number): RunMap {
       else if (n.type === 'arena') encounter[n.id] = buildEncounter(rng, 'arena', act, progress);
       else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, undefined, n.gauntletSize);
       else if (n.type === 'corrupted') encounter[n.id] = buildEncounter(rng, 'battle', act, progress);
+      else if (n.type === 'guardian') encounter[n.id] = buildEncounter(rng, 'guardian', act, progress);
       else if (n.type === 'event') events[n.id] = buildEvent(rng);
       else if (n.type === 'special') specials[n.id] = buildSpecial(rng);
     }
@@ -525,7 +612,7 @@ export function currentNode(state: GameState): MapNode | undefined {
   return state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
 }
 
-function labelOf(t: NodeType, row: number): string {
+export function labelOf(t: NodeType, row: number): string {
   switch (t) {
     case 'battle':
       return row === 0 ? '出发' : '遭遇战';
@@ -549,6 +636,12 @@ function labelOf(t: NodeType, row: number): string {
       return '被侵蚀';
     case 'watchtower':
       return '瞭望塔';
+    case 'sync':
+      return '双生宝箱';
+    case 'guardian':
+      return '守卫';
+    case 'keydoor':
+      return '钥匙门';
   }
 }
 

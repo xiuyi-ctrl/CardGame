@@ -3,7 +3,7 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { currentPlayerUnit, isTameable } from '../src/game/core/battle';
-import { canStepTo, canTameEnemy, ROSTER_MAX } from '../src/game/state/game';
+import { canStepTo, canTameEnemy, ROSTER_MAX, type MapNode } from '../src/game/state/game';
 import { getSkill } from '../src/game/data/skills';
 import { getEvolution } from '../src/game/data/monsters';
 import { FOODS } from '../src/game/data/foods';
@@ -74,12 +74,16 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           s = dispatch(s, { type: 'NEXT_NODE' });
           continue;
         }
-        // 只考虑可到达的节点（出发层任意节点，此后 col±1）
+        // 只考虑可到达的节点（出发层任意节点，此后 col±1；失效节点与未持钥匙的钥匙门不可到达）
         const currentCol =
           s.currentNodeId === ''
             ? null
             : (s.map.layers[s.currentRow]?.find((n) => n.id === s.currentNodeId)?.col ?? null);
-        const adjacent = nodes.filter((n) => canStepTo(s.currentRow, currentCol, n));
+        const hasKey = (n: MapNode) =>
+          n.guardianId ? (s.inventory[`key_${n.guardianId}`] ?? 0) > 0 : false;
+        const adjacent = nodes.filter(
+          (n) => canStepTo(s.currentRow, currentCol, n, s.map) && !(n.type === 'keydoor' && !hasKey(n)),
+        );
         if (adjacent.length === 0) {
           s = dispatch(s, { type: 'NEXT_NODE' });
           continue;
@@ -88,7 +92,7 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         const restNode = adjacent.find((n) => n.type === 'rest' || n.type === 'shop');
         const specialNode = adjacent.find((n) => n.type === 'special');
         const battleNode = adjacent.find(
-          (n) => n.type === 'battle' || n.type === 'elite' || n.type === 'arena' || n.type === 'gauntlet' || n.type === 'corrupted',
+          (n) => n.type === 'battle' || n.type === 'elite' || n.type === 'arena' || n.type === 'gauntlet' || n.type === 'corrupted' || n.type === 'guardian',
         );
         const eventNode = adjacent.find((n) => n.type === 'event');
         const chosen = (wounded && restNode) || specialNode || battleNode || eventNode || adjacent[0];
@@ -200,6 +204,10 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         break;
       }
       case 'watchtower': {
+        s = dispatch(s, { type: 'NEXT_NODE' });
+        break;
+      }
+      case 'chest': {
         s = dispatch(s, { type: 'NEXT_NODE' });
         break;
       }

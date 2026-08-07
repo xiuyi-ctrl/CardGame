@@ -408,6 +408,13 @@ button.primary {
   opacity: 0.65;
 }
 
+.ln-pair {
+  stroke: #e8c26a;
+  stroke-width: 2;
+  stroke-dasharray: 3 6;
+  opacity: 0.7;
+}
+
 .map-row {
   display: flex;
   justify-content: center;
@@ -449,6 +456,19 @@ button.primary {
   border-style: dashed;
   border-color: #7be06a;
   box-shadow: 0 0 8px rgba(123, 224, 106, 0.3);
+}
+
+/* 已失效节点（被开启的双生宝箱配对节点 / 已开启的钥匙门）：灰显 */
+.node.node-off {
+  opacity: 0.35;
+  filter: grayscale(1);
+  border-style: dashed;
+}
+
+/* 钥匙门未持钥匙：半透明 + 锁标记 */
+.node.node-locked {
+  opacity: 0.55;
+  filter: saturate(0.6);
 }
 
 .route-legend {
