@@ -1,6 +1,6 @@
 {
   "name": "pet-card-rogue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "肉鸽卡牌宠物对战游戏（参照 Decktamer 驯牌师）",
   "main": "dist-electron/main.js",
