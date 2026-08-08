@@ -12,7 +12,7 @@ import {
 import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
-import type { SkillDef, Unit } from '../game/types';
+import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { UnitCard, skillBrief, SkillTag } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
@@ -60,7 +60,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, animating } = useBattleFx(battle);
+  const { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -76,8 +76,26 @@ export function BattleScreen({ state, dispatch }: Props) {
   // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）
   const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating;
 
-  /** 动画期间按 hpMap 覆盖显示血量，血量随动画事件推进逐步生效 */
-  const shownUnit = (u: Unit): Unit => (hpMap ? { ...u, hp: hpMap[u.uid] ?? u.hp } : u);
+  /** 动画期间按 hpMap 覆盖显示血量，血量随动画事件推进逐步生效；新增状态标签在对应攻击动画触发后才显示，到期状态标签在对应掉血动画触发时才移除 */
+  const shownUnit = (u: Unit): Unit => {
+    let next = hpMap ? { ...u, hp: hpMap[u.uid] ?? u.hp } : u;
+    const hidden = hiddenStatuses[u.uid];
+    if (hidden && hidden.length > 0) {
+      next = { ...next, statuses: next.statuses.filter((s) => !hidden.includes(s.kind)) };
+    }
+    const ending = endingStatuses[u.uid];
+    if (ending && ending.length > 0) {
+      const have = new Set<string>(next.statuses.map((s) => s.kind));
+      next = {
+        ...next,
+        statuses: [
+          ...next.statuses,
+          ...ending.filter((k) => !have.has(k)).map((k) => ({ kind: k as StatusEffect['kind'], value: 0, turns: 0 })),
+        ],
+      };
+    }
+    return next;
+  };
 
   useEffect(() => {
     setPendingSkill(null);

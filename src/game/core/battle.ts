@@ -236,6 +236,8 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
     if (s.kind === 'burn' || s.kind === 'poison') {
       const dmg = Math.max(1, s.value);
       unit = { ...unit, hp: Math.max(0, unit.hp - dmg) };
+      // 先写回再记录日志，让日志血量快照包含本次掉血，动画里飘字与血量条下降同步
+      nb = replaceUnit(nb, unit);
       nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit));
     }
   }
@@ -373,23 +375,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
     }
     case 'single': {
       const reach = skill.reach ?? 'front';
-      if (reach === 'direct') {
-        if (explicitTarget && enemies.some((u) => u.uid === explicitTarget)) {
-          targets = [enemies.find((u) => u.uid === explicitTarget)!];
-        } else {
-          const res = rngPick(nb, front.length > 0 ? front : back);
-          nb = res.battle;
-          if (res.pick) targets = [res.pick];
-        }
-      } else if (reach === 'back') {
-        if (explicitTarget && back.some((u) => u.uid === explicitTarget)) {
-          targets = [back.find((u) => u.uid === explicitTarget)!];
-        } else {
-          const res = rngPick(nb, back.length > 0 ? back : front);
-          nb = res.battle;
-          if (res.pick) targets = [res.pick];
-        }
-      } else if (reach === 'pierce') {
+      if (reach === 'pierce') {
         let ft: Unit | undefined;
         if (explicitTarget && front.some((u) => u.uid === explicitTarget)) {
           ft = front.find((u) => u.uid === explicitTarget)!;
@@ -406,12 +392,35 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
           }
         }
       } else {
-        if (explicitTarget && front.some((u) => u.uid === explicitTarget)) {
-          targets = [front.find((u) => u.uid === explicitTarget)!];
+        let picked: Unit | undefined;
+        if (reach === 'direct') {
+          if (explicitTarget && enemies.some((u) => u.uid === explicitTarget)) {
+            picked = enemies.find((u) => u.uid === explicitTarget)!;
+          } else {
+            const res = rngPick(nb, front.length > 0 ? front : back);
+            nb = res.battle;
+            picked = res.pick;
+          }
+        } else if (reach === 'back') {
+          if (explicitTarget && back.some((u) => u.uid === explicitTarget)) {
+            picked = back.find((u) => u.uid === explicitTarget)!;
+          } else {
+            const res = rngPick(nb, back.length > 0 ? back : front);
+            nb = res.battle;
+            picked = res.pick;
+          }
         } else {
-          const res = rngPick(nb, front.length > 0 ? front : back);
-          nb = res.battle;
-          if (res.pick) targets = [res.pick];
+          if (explicitTarget && front.some((u) => u.uid === explicitTarget)) {
+            picked = front.find((u) => u.uid === explicitTarget)!;
+          } else {
+            const res = rngPick(nb, front.length > 0 ? front : back);
+            nb = res.battle;
+            picked = res.pick;
+          }
+        }
+        // 连击：同一目标命中 hits 次（伤害按 hits 倍结算，perTarget 聚合）
+        if (picked) {
+          targets = Array.from({ length: skill.hits ?? 1 }, () => picked);
         }
       }
       break;

@@ -234,6 +234,22 @@ describe('驯服', () => {
     expect(after.log.filter((l) => l.text.includes(`${sisi.name} 受到灼烧`)).length).toBe(1);
     expect(after.log.some((l) => l.text.includes(`${sisi.name} 受到中毒`))).toBe(false);
   });
+
+  it('灼烧日志的血量快照包含本次掉血（飘字与血量条下降同步）', () => {
+    let b = createBattle([makeUnit('momo_god', true, 0, false), makeUnit('lulu', true, 1, false)], [{ speciesId: 'pipi' }], 1);
+    b = {
+      ...b,
+      playerUnits: b.playerUnits.map((u) => ({ ...u, acted: true })),
+      enemyUnits: b.enemyUnits.map((u) => ({ ...u, statuses: [{ kind: 'burn', value: 2, turns: 2 }] })),
+    };
+    const e = b.enemyUnits[0];
+    const before = e.hp;
+    const after = playerEndTurn(b);
+    const dotLog = after.log.find((l) => l.text.includes(`${e.name} 受到灼烧`));
+    expect(dotLog).toBeDefined();
+    expect(dotLog!.hp![e.uid]).toBe(before - 2);
+    expect(after.enemyUnits[0].hp).toBe(before - 2);
+  });
 });
 
 describe('数据完整性', () => {
@@ -310,6 +326,40 @@ describe('技能使用次数', () => {
     }
     expect(guard).toBeLessThan(300);
     expect(nb.phase).toBe('won');
+  });
+});
+
+describe('连击（多段命中）', () => {
+  it('连击对单个敌人命中 2 次（伤害×2）', () => {
+    const p = makeUnit('momo', true, 0, false);
+    p.skills = ['double_hit'];
+    const b = createBattle([p], [{ speciesId: 'momo' }], 1);
+    const enemy = b.enemyUnits[0];
+    const hpBefore = enemy.hp;
+    const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
+    const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
+    expect(hpBefore - e2.hp).toBe(8); // 4×2
+  });
+
+  it('连击受守卫减免前先按次数累计伤害', () => {
+    const p = makeUnit('momo', true, 0, false);
+    p.skills = ['double_hit'];
+    const b = createBattle([p], [{ speciesId: 'kiki' }], 2); // 基基 铁壁 -1
+    const enemy = b.enemyUnits[0];
+    const hpBefore = enemy.hp;
+    const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
+    const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
+    expect(hpBefore - e2.hp).toBe(7); // 4×2 - 1
+  });
+
+  it('普通单体技能 hits 缺省时仍只造成单次伤害', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'momo' }], 3);
+    const p = b.playerUnits[0];
+    const enemy = b.enemyUnits[0];
+    const hpBefore = enemy.hp;
+    const after = playerEndTurn(playerSkill(b, p.uid, 'punch', enemy.uid));
+    const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
+    expect(hpBefore - e2.hp).toBe(5); // 爪击 5
   });
 });
 
