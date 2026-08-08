@@ -14,6 +14,7 @@ import { computeStats } from '../game/core/battle';
 import { UnitCard, SkillTag, DragScrollRow } from './components';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
+import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { loadSave, persistSave, quitGame } from './persistence';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory'];
@@ -38,6 +39,7 @@ export default function App() {
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
       {state.screen === 'formation' && <FormationScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'gauntlet-order' && <GauntletOrderScreen state={state} dispatch={dispatch} />}
       {state.screen === 'battle' && <BattleScreen state={state} dispatch={dispatch} />}
       {state.screen === 'reward' && <RewardScreen state={state} dispatch={dispatch} />}
       {state.screen === 'roster' && <RosterScreen state={state} dispatch={dispatch} />}

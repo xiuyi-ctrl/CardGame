@@ -54,6 +54,7 @@ export type GameAction =
   | { type: 'PLAYER_SWAP'; actorUid: string; otherUid: string }
   | { type: 'END_TURN' }
   | { type: 'FORMATION_CONFIRM'; units: Unit[] }
+  | { type: 'GAUNTLET_ORDER_CONFIRM'; units: Unit[] }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
   | { type: 'PICK_REWARD'; rewardId: string }
@@ -92,7 +93,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -372,15 +373,11 @@ function enterNode(base: GameState, node: MapNode): GameState {
     if (base.roster.length === 0) return { ...base, screen: 'map' };
     return { ...base, screen: 'roster', specialPending: { kind: 'arena', uid: '' } };
   }
-  // 车轮战：一次上一只，无需布阵，直接开战
+  // 车轮战：一次上一只，先让玩家选择出战顺序（n v n，只选 n 只）
   if (node.type === 'gauntlet') {
-    const battle = createBattle(
-      fieldUnits(base),
-      encounter,
-      base.seed + base.currentRow * 17,
-      { gauntlet: true, untameable: true },
-    );
-    return { ...base, screen: 'battle', battle };
+    const units = fieldUnits(base);
+    if (units.length === 0) return { ...base, screen: 'map' };
+    return { ...base, screen: 'gauntlet-order', gauntletOrder: units, gauntletSize: encounter.length };
   }
   // 普通/精英/被侵蚀：先布阵选择站位
   const options = node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : undefined;
@@ -707,6 +704,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, screen: 'battle', battle, formation: undefined };
     }
 
+    case 'GAUNTLET_ORDER_CONFIRM': {
+      if (state.currentNodeId === '' || action.units.length === 0) return state;
+      const encounter = state.map.encounter[state.currentNodeId];
+      if (!encounter) return state;
+      const battle = createBattle(action.units, encounter, state.seed + state.currentRow * 17, { gauntlet: true, untameable: true });
+      return { ...state, screen: 'battle', battle, gauntletOrder: undefined, gauntletSize: undefined };
+    }
+
     case 'PLAYER_SKILL': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
       const battle = playerSkill(state.battle, action.actorUid, action.skillId, action.targetUid);
@@ -962,11 +967,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           currentRow: 0,
           currentNodeId: '',
           screen: 'map',
+          gauntletOrder: undefined,
+          gauntletSize: undefined,
         };
       }
       const nextRow = state.currentRow + 1;
       if (nextRow < state.map.layers.length) {
-        return { ...state, screen: 'map', chestResult: undefined };
+        return { ...state, screen: 'map', chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined };
       }
       return { ...state, screen: 'victory' };
     }

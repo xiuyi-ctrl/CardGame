@@ -145,6 +145,8 @@ export interface BattleState {
   round: number;
   /** 玩家剩余行动点数（每回合 = 场上存活宠物数，用于技能/换位/驯服/道具） */
   playerAp: number;
+  /** 本回合行动点上限（回合开始时场上存活宠物数） */
+  playerApMax: number;
   /** 敌方剩余行动点数（AI 每回合同样 = 场上存活数） */
   enemyAp: number;
   phase: 'acting' | 'won' | 'lost';

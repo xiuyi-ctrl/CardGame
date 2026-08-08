@@ -140,6 +140,10 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
         s = dispatch(s, { type: 'FORMATION_CONFIRM', units: s.formation!.units });
         break;
       }
+      case 'gauntlet-order': {
+        s = dispatch(s, { type: 'GAUNTLET_ORDER_CONFIRM', units: s.gauntletOrder ?? [] });
+        break;
+      }
       case 'reward': {
         const wounded = s.roster.some((u) => u.hp / u.maxHp < 0.7);
         const heal = s.rewards.find((r) => r.kind === 'heal');

@@ -131,6 +131,10 @@ export function createBattle(
     if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, c.spd - 1);
     return c;
   });
+  // 只有 1 只宠物上场时，位置默认为前排居中
+  if (preparedPlayer.length === 1 && preparedPlayer[0]) {
+    preparedPlayer[0] = { ...preparedPlayer[0], row: 'front', column: 1 };
+  }
   const b: BattleState = {
     playerUnits: [],
     enemyUnits: [],
@@ -138,6 +142,7 @@ export function createBattle(
     turnIndex: 0,
     round: 1,
     playerAp: 0,
+    playerApMax: 0,
     enemyAp: 0,
     phase: 'acting',
     log: [],
@@ -151,11 +156,11 @@ export function createBattle(
   if (options?.gauntlet) {
     const [first, ...playerRest] = preparedPlayer;
     // 车轮战：我方也一次只上一只，其余进入替补席，阵亡后按序顶替
-    b.playerUnits = first ? [first] : [];
+    b.playerUnits = first ? [{ ...first, row: 'front', column: 1 }] : [];
     b.playerBench = playerRest;
     b.playerDown = [];
     const [firstEnemy, ...enemyRest] = enemySpecies;
-    b.enemyUnits = firstEnemy ? [makeEnemy(firstEnemy, 0, untameable)] : [];
+    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 0, untameable), row: 'front', column: 1 }] : [];
     b.enemyBench = enemyRest.map((e, i) => makeEnemy(e, i + 1, untameable));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
@@ -169,6 +174,7 @@ export function createBattle(
     b.enemyUnits = picked.map((e, i) => makeEnemy(e, i, untameable));
   }
   b.playerAp = b.playerUnits.filter((u) => u.hp > 0).length;
+  b.playerApMax = b.playerAp;
   b.enemyAp = b.enemyUnits.filter((u) => u.hp > 0).length;
   b.turnOrder = computeTurnOrder(b);
   return checkEnd(b);
@@ -204,6 +210,7 @@ function startRound(b: BattleState): BattleState {
   nb = {
     ...nb,
     playerAp: nb.playerUnits.filter((u) => u.hp > 0).length,
+    playerApMax: nb.playerUnits.filter((u) => u.hp > 0).length,
     enemyAp: nb.enemyUnits.filter((u) => u.hp > 0).length,
   };
   return nb;
@@ -256,13 +263,13 @@ function enemiesOf(b: BattleState, actor: Unit): Unit[] {
 }
 
 function checkEnd(b: BattleState): BattleState {
-  // 车轮战：场上敌方全灭但还有后备 → 下一只上场
+  // 车轮战：场上敌方全灭但还有后备 → 下一只上场（上一只死亡单位不再显示）
   if (b.gauntlet && b.enemyBench && b.enemyBench.length > 0 && b.enemyUnits.every((u) => u.hp <= 0)) {
     const next = b.enemyBench[0];
-    const nextUnit = { ...next, acted: false, statuses: [] };
+    const nextUnit = { ...next, acted: false, statuses: [], row: 'front' as const, column: 1 as const };
     b = {
       ...b,
-      enemyUnits: [...b.enemyUnits, nextUnit],
+      enemyUnits: [nextUnit],
       enemyBench: b.enemyBench.slice(1),
       gauntlet: { ...b.gauntlet, current: b.gauntlet.current + 1 },
     };
@@ -271,7 +278,7 @@ function checkEnd(b: BattleState): BattleState {
   // 车轮战：场上我方全灭但还有后备 → 当前单位战败退场（不再显示），下一只顶替上场
   if (b.gauntlet && b.playerBench && b.playerBench.length > 0 && b.playerUnits.every((u) => u.hp <= 0)) {
     const next = b.playerBench[0];
-    const nextUnit = { ...next, acted: false, statuses: [] };
+    const nextUnit = { ...next, acted: false, statuses: [], row: 'front' as const, column: 1 as const };
     const down = b.playerUnits.filter((u) => u.hp <= 0);
     b = {
       ...b,

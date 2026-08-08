@@ -220,6 +220,8 @@ describe('车轮战（轮换上阵）', () => {
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
+    expect(s.screen).toBe('gauntlet-order');
+    s = dispatch(s, { type: 'GAUNTLET_ORDER_CONFIRM', units: s.gauntletOrder! });
     expect(s.screen).toBe('battle');
     expect(s.battle?.gauntlet).toBeDefined();
     // 全部玩家阵亡 → lost
@@ -238,6 +240,7 @@ describe('车轮战（轮换上阵）', () => {
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
+    s = dispatch(s, { type: 'GAUNTLET_ORDER_CONFIRM', units: s.gauntletOrder! });
     const gold0 = s.gold;
     s = { ...s, battle: { ...s.battle!, phase: 'won' } };
     s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
@@ -254,6 +257,7 @@ describe('车轮战（轮换上阵）', () => {
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
+    s = dispatch(s, { type: 'GAUNTLET_ORDER_CONFIRM', units: s.gauntletOrder! });
     // 当前场上第 1 只，替补席 1 只
     expect(s.battle!.playerBench?.length).toBe(1);
     const fieldUid = s.battle!.playerUnits[0].uid;
@@ -467,6 +471,7 @@ describe('斗兽场/车轮战：敌方不可驯服', () => {
     ]);
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
+    s = dispatch(s, { type: 'GAUNTLET_ORDER_CONFIRM', units: s.gauntletOrder! });
     expect(s.battle?.enemyUnits.every((u) => !u.tameable)).toBe(true);
     expect(s.battle?.enemyBench?.every((u) => !u.tameable)).toBe(true);
   });

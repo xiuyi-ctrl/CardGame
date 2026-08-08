@@ -37,11 +37,20 @@ function enemyTargetable(skill: SkillDef, enemy: Unit, enemies: Unit[]): boolean
 }
 
 function EnemySkillPanel({ unit }: { unit: Unit }) {
+  const passive = getPassive(unit.passive);
   return (
     <div className="enemy-skill-panel">
       <div className="enemy-skill-panel-title">
         {unit.emoji} {unit.name}
       </div>
+      {passive && (
+        <div className="skill-line">
+          <span className="skill-head">
+            <span className="skill-name">💠 {passive.name}</span>
+          </span>
+          <span className="skill-desc">{passive.desc}</span>
+        </div>
+      )}
       {unit.skills.map((sid) => (
         <SkillTag key={sid} skill={getSkill(sid)} desc />
       ))}
@@ -72,6 +81,16 @@ export function BattleScreen({ state, dispatch }: Props) {
     setPendingBattleItem(null);
     setInspectEnemy(null);
   }, [battle?.round, battle?.rngCount, battle?.phase]);
+
+  // 车轮战：场上只有一只上场宠物，默认选中它，技能栏直接展示其技能（含替补轮换后自动重选）
+  useEffect(() => {
+    if (!battle?.gauntlet) return;
+    const actable = battle.playerUnits.find((u) => u.hp > 0 && !u.acted);
+    if (!actable) return;
+    setSelectedUid((cur) =>
+      cur && battle.playerUnits.some((u) => u.uid === cur && u.hp > 0 && !u.acted) ? cur : actable.uid,
+    );
+  }, [battle?.gauntlet, battle?.round, battle?.playerUnits]);
 
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
   const selectedSkills: SkillDef[] = useMemo(
@@ -463,7 +482,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           )}
         </div>
         <div className="end-panel">
-          <span className="end-ap">⚡ 行动点 {battle.playerAp}</span>
+          <span className="end-ap">⚡ 行动点 {battle.playerAp}/{battle.playerApMax}</span>
           <button className="primary end-turn-btn" onClick={() => dispatch({ type: 'END_TURN' })} disabled={!canAct}>
             结束回合
           </button>
