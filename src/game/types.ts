@@ -56,6 +56,8 @@ export interface MonsterSpecies {
   baseHp: number;
   baseSpd: number;
   skills: string[];
+  /** 图鉴说明（登录界面图鉴展示用） */
+  desc?: string;
   /** 专属被动技能 id（见 PASSIVES 表），每只生物固定一个 */
   passive?: string;
   /** 进化链：依次 { 目标形态 }。缺省或空数组表示不可进化 */

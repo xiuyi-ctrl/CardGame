@@ -4,11 +4,12 @@ import { gameReducer, createInitialState, newSeed } from '../game/state/reducer'
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
 import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
-import type { Unit } from '../game/types';
-import { STARTING_CHOICES, getMonster } from '../game/data/monsters';
+import type { Unit, MonsterSpecies } from '../game/types';
+import { MONSTERS, STARTING_CHOICES, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
+import { getPassive } from '../game/data/passives';
 import { computeStats } from '../game/core/battle';
 import { UnitCard, SkillTag, DragScrollRow } from './components';
 import { BattleScreen } from './BattleScreen';
@@ -190,6 +191,7 @@ function FuseDiscardConfirm({
 function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [hasSave, setHasSave] = useState<boolean | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [showCodex, setShowCodex] = useState(false);
   const [dbgAct, setDbgAct] = useState(1);
   const [dbgRow, setDbgRow] = useState(5);
   const [dbgType, setDbgType] = useState<MapNode['type'] | 'all'>('all');
@@ -248,6 +250,9 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
         <button className="big-btn" onClick={onContinue} disabled={hasSave !== true}>
           {hasSave === null ? '检查存档…' : hasSave ? '继续游戏' : '继续游戏（暂无存档）'}
         </button>
+        <button className="big-btn" onClick={() => setShowCodex(true)}>
+          📖 生物图鉴
+        </button>
         <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
           {showDebug ? '收起测试面板' : '🔬 测试关卡'}
         </button>
@@ -301,6 +306,126 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           <div className="debug-hint">调试模式：自动配备 3 只强宠、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
         </div>
       )}
+      {showCodex && <CodexScreen onClose={() => setShowCodex(false)} />}
+    </div>
+  );
+}
+
+const CODEX_RANK_LABEL: Record<number, string> = { 1: '普通', 2: '精英', 3: '传奇', 4: '首领' };
+
+const CODEX_GROUPS: { key: string; label: string; match: (m: MonsterSpecies) => boolean }[] = [
+  { key: 'common', label: '普通宠物', match: (m) => m.rank === 1 },
+  { key: 'elite', label: '精英宠物', match: (m) => m.rank === 2 },
+  { key: 'legend', label: '传奇宠物', match: (m) => m.rank === 3 && !m.id.startsWith('custom_') },
+  { key: 'boss', label: '首领', match: (m) => m.rank === 4 },
+  { key: 'custom', label: '造物', match: (m) => m.id.startsWith('custom_') },
+];
+
+function CodexScreen({ onClose }: { onClose: () => void }) {
+  const groups = useMemo(
+    () =>
+      CODEX_GROUPS.map((g) => ({
+        ...g,
+        items: Object.values(MONSTERS).filter(g.match),
+      })).filter((g) => g.items.length > 0),
+    [],
+  );
+  const [selectedId, setSelectedId] = useState<string>(() => groups[0]?.items[0]?.id ?? '');
+  const sp = getMonster(selectedId);
+  const stats = computeStats(sp.id);
+  const passive = getPassive(sp.passive);
+  const next = nextStage(sp.id);
+  const rankLabel = sp.id.startsWith('custom_') ? '造物' : (CODEX_RANK_LABEL[sp.rank] ?? '');
+  const tameable = sp.rank !== 4;
+
+  return (
+    <div className="codex-root">
+      <div className="codex-header">
+        <div className="codex-title">📖 生物图鉴</div>
+        <div className="codex-sub">
+          共 {Object.keys(MONSTERS).length} 种生物 · 点击左侧查看详情
+        </div>
+        <button className="primary" onClick={onClose}>
+          返回
+        </button>
+      </div>
+      <div className="codex-body">
+        <div className="codex-list">
+          {groups.map((g) => (
+            <div key={g.key} className="codex-group">
+              <div className="codex-group-title">{g.label}</div>
+              {g.items.map((m) => (
+                <div
+                  key={m.id}
+                  className={`codex-item ${m.id === selectedId ? 'selected' : ''}`}
+                  onClick={() => setSelectedId(m.id)}
+                >
+                  <span className="codex-item-emoji">{m.emoji}</span>
+                  <span className="codex-item-name">{m.name}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="codex-detail">
+          <div className="codex-detail-head">
+            <span className="codex-detail-emoji">{sp.emoji}</span>
+            <div>
+              <div className="codex-detail-name">
+                {sp.name}
+                <span className="chip rank-chip">{rankLabel}</span>
+              </div>
+              <div className="codex-detail-stats">
+                ❤️ 生命 {stats.maxHp} · ⚡ 速度 {stats.spd}
+              </div>
+            </div>
+          </div>
+
+          {passive && (
+            <div className="codex-section">
+              <div className="codex-sec-title">💠 专属被动</div>
+              <div className="codex-passive" title={passive.desc}>
+                {passive.name}：{passive.desc}
+              </div>
+            </div>
+          )}
+
+          <div className="codex-section">
+            <div className="codex-sec-title">⚔️ 技能</div>
+            <div className="codex-skills">
+              {sp.skills.map((sid) => {
+                const s = getSkill(sid);
+                return <SkillTag key={sid} skill={s} desc usesNote />;
+              })}
+            </div>
+            {sp.id.startsWith('custom_') && (
+              <div className="codex-note">造物：从上方技能池随机组合 3 个技能</div>
+            )}
+          </div>
+
+          <div className="codex-section">
+            <div className="codex-sec-title">🎣 驯服</div>
+            <div className="codex-line">
+              {tameable ? `驯服难度 ${Math.round(sp.tame.difficulty * 100)}%` : '首领 · 不可驯服'}
+            </div>
+          </div>
+
+          <div className="codex-section">
+            <div className="codex-sec-title">✨ 融合</div>
+            <div className="codex-line">
+              {next ? (
+                <>
+                  需 {fusionNeedCount(sp.id)} 只同物种 → {getMonster(next).emoji} {getMonster(next).name}
+                </>
+              ) : (
+                '不可融合'
+              )}
+            </div>
+          </div>
+
+          {sp.desc && <div className="codex-desc">{sp.desc}</div>}
+        </div>
+      </div>
     </div>
   );
 }

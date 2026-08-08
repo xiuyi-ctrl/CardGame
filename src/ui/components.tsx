@@ -47,10 +47,24 @@ export function skillFullDesc(s: SkillDef): string {
 }
 
 /** 技能标签：名称 + 效果图标（如 🔥）+ 伤害/治疗数值；desc 模式下追加展示完整描述 */
-export function SkillTag({ skill, className = '', desc = false }: { skill: SkillDef; className?: string; desc?: boolean }) {
+export function SkillTag({
+  skill,
+  className = '',
+  desc = false,
+  usesNote = false,
+}: {
+  skill: SkillDef;
+  className?: string;
+  desc?: boolean;
+  /** 有次数限制的技能追加「每场限 N 次」标注（图鉴用） */
+  usesNote?: boolean;
+}) {
   const full = skillFullDesc(skill);
   const icons = (skill.effects ?? []).map((e) => EFFECT_ICON[e.kind]).join('');
   const brief = skillBrief(skill);
+  const usesChip = usesNote && skill.uses !== undefined ? (
+    <span className="skill-uses-note">每场限 {skill.uses} 次</span>
+  ) : null;
   const head = (
     <span className="skill-head">
       <span className="skill-name">{skill.name}</span>
@@ -64,6 +78,7 @@ export function SkillTag({ skill, className = '', desc = false }: { skill: Skill
     return (
       <span className={`skill-line ${className}`} title={full}>
         {head}
+        {usesChip}
         <span className="skill-desc">{full}</span>
       </span>
     );

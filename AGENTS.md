@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（116 个，含整局模拟）。
+- `npm test` / `npx vitest run`：单元测试（120 个，含整局模拟）。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
 - `npm run dist`：build 后 electron-builder 打包 `--win portable`。
@@ -24,7 +24,8 @@
   - `state/game.ts` 地图/奖励/成长/融合；`state/reducer.ts` 全局状态机与所有 GameAction。
 - `src/ui/`：React 界面（App.tsx 全界面 + BattleScreen.tsx + components.tsx + styles.css）。
   - 战斗布局：屏幕左侧居中竖向滚动日志面板（`.log-panel`，敌/我/系统分色）；底部操作面板 `.action-panel` 左侧为技能区（2 列网格、最多两行无滚动条，按钮=技能名+数值+描述），右侧为食物/战斗道具区。
-  - 组件 `components.tsx`：`UnitCard`（`showSkills` 默认 true，出阵我方卡传 false 隐藏技能）、`SkillTag`/`skillBrief`（技能名+金色数值，供敌方卡/队伍界面/预览使用）。
+  - 组件 `components.tsx`：`UnitCard`（`showSkills` 默认 true，出阵我方卡传 false 隐藏技能）、`SkillTag`/`skillBrief`（技能名+金色数值，供敌方卡/队伍界面/预览使用）、`SkillTag` 的 `usesNote` 在 desc 模式显示「每场限 N 次」。
+  - 登录界面 `HomeScreen` 主菜单含「📖 生物图鉴」按钮，打开 `CodexScreen` 覆盖层：左侧按 普通/精英/传奇/首领/造物 分组，右侧展示详情（属性/被动/技能/驯服/融合/说明），数据来自 `MONSTERS`+`computeStats`+`getPassive`+`nextStage`（物种 `desc` 为图鉴说明，见 `monsters.ts`）。
 - `electron/`：Electron 主进程/预加载（编译产物到 `dist-electron/`）。
 - `tests/`：vitest 测试（`test.include` 已限定 `tests/**/*.test.ts`，避免误扫 `.agents/skills`）。
 
