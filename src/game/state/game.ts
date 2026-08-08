@@ -561,7 +561,7 @@ export function generateMap(seed: number, act: number): RunMap {
     layers.push(nodes);
   }
 
-  // 事件每幕 3~5 个、商人每幕 2~4 个（目标数量用种子预掷，可复现）
+  // 事件每幕 3~5 个、商人每幕 2~4 个（目标数量用种子预掷，可复现）；另保证最后两层必有一个商人
   const setType = (node: MapNode, t: NodeType): void => {
     const row = layers.findIndex((r) => r.includes(node));
     node.type = t;
@@ -600,6 +600,17 @@ export function generateMap(seed: number, act: number): RunMap {
   for (const { row } of allBattleRows().slice(2)) {
     const n = row[Math.floor(rng() * row.length)];
     setType(n, countOf('event') < 5 ? 'event' : countOf('shop') < 4 ? 'shop' : 'elite');
+  }
+
+  // 最后两层（首领前两行）必存在一个商人：若都没有，把最靠后一行中一个普通战斗节点改写为商人
+  const tailRows = layers.slice(-3, -1);
+  if (!tailRows.some((row) => row.some((n) => n.type === 'shop'))) {
+    const tailBattle = [...tailRows]
+      .reverse()
+      .flat()
+      .find((n) => n.type === 'battle' && !forcedRows.has(layers.findIndex((r) => r.includes(n))));
+    const n = tailBattle ?? [...tailRows].reverse().flat().find((m) => m.type !== 'shop');
+    if (n) setType(n, 'shop');
   }
 
   const lastRow = layers.length - 1;

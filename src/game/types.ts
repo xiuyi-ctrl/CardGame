@@ -19,6 +19,29 @@ export interface SkillDef {
   kind: 'attack' | 'heal' | 'buff';
   hits?: number;
   effects?: StatusEffect[];
+  /** 每场战斗可使用次数上限（回血/强化等强技能限定，缺省无限制） */
+  uses?: number;
+}
+
+/** 被动技能效果类型 */
+export type PassiveKind =
+  | 'hp' // 生命加成：maxHp + value（战斗开始时生效）
+  | 'spd' // 速度加成：spd + value（战斗开始时生效）
+  | 'regen' // 再生：每回合开始恢复 value 点生命
+  | 'thorns' // 尖刺：受到攻击时反伤 value 点
+  | 'drain' // 吸血：造成伤害时恢复 value 点生命
+  | 'power' // 力量：所有技能伤害 + value
+  | 'guard' // 守护：受到的所有伤害 - value
+  | 'venom' // 毒牙：攻击命中附加中毒 value（2 回合）
+  | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
+  | 'frenzy'; // 狂暴：生命低于 50% 时伤害 + value
+
+export interface PassiveDef {
+  id: string;
+  name: string;
+  desc: string;
+  kind: PassiveKind;
+  value: number;
 }
 
 export interface SpeciesTame {
@@ -33,6 +56,8 @@ export interface MonsterSpecies {
   baseHp: number;
   baseSpd: number;
   skills: string[];
+  /** 专属被动技能 id（见 PASSIVES 表），每只生物固定一个 */
+  passive?: string;
   /** 进化链：依次 { 目标形态 }。缺省或空数组表示不可进化 */
   evolutions?: { to: string }[];
   tame: SpeciesTame;
@@ -75,6 +100,10 @@ export interface Unit {
   tameFails?: number;
   /** 本回合是否已行动（回合内排序用） */
   acted: boolean;
+  /** 专属被动技能 id（随物种固定） */
+  passive?: string;
+  /** 本场战斗中各技能剩余使用次数（skillId -> 剩余次数；有限次数技能用） */
+  skillUses?: Record<string, number>;
   /** 属性强化：对基准属性的永久加成（来自奇遇关「属性强化」） */
   bonusStats?: { hp?: number; spd?: number };
   /** 超进化带来的负面诅咒：hpDown=生命-5 / atkDown=伤害-1 / spdDown=速度-1 */
@@ -117,4 +146,6 @@ export interface BattleState {
   playerBench?: Unit[];
   /** 车轮战：已战败退场、不再显示的我方单位 */
   playerDown?: Unit[];
+  /** 敌方本场战斗剩余治疗次数（防止敌方治疗无限拉长战斗形成死局） */
+  enemyHealsLeft?: number;
 }

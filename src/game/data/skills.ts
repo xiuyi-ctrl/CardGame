@@ -37,11 +37,11 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   heal_light: {
     id: 'heal_light', name: '愈光', desc: '治疗一个队友',
-    target: 'ally', kind: 'heal', heal: 8,
+    target: 'ally', kind: 'heal', heal: 8, uses: 2,
   },
   roar: {
     id: 'roar', name: '战吼', desc: '提升自身伤害',
-    target: 'self', kind: 'buff',
+    target: 'self', kind: 'buff', uses: 2,
     effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
   },
   double_hit: {

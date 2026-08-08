@@ -119,12 +119,14 @@ describe('地图生成', () => {
       // 全战斗行（不含首/尾）不超过 3
       const allBattleRows = map.layers.slice(1, -1).filter((row) => row.every((n) => n.type === 'battle'));
       expect(allBattleRows.length).toBeLessThanOrEqual(3);
-      // 不再生成独立休整节点；每幕 3~5 次事件、2~4 个商人
+      // 不再生成独立休整节点；每幕 3~5 次事件、2~4 个商人（最后两层必有商人，故上限放宽到 5）
       const types = map.layers.flat().map((n) => n.type);
       expect(types.includes('rest')).toBe(false);
       const shopCount = types.filter((t) => t === 'shop').length;
       expect(shopCount).toBeGreaterThanOrEqual(2);
-      expect(shopCount).toBeLessThanOrEqual(4);
+      expect(shopCount).toBeLessThanOrEqual(5);
+      const tail = map.layers.slice(-3, -1);
+      expect(tail.some((row) => row.some((n) => n.type === 'shop'))).toBe(true);
       const evCount = types.filter((t) => t === 'event').length;
       expect(evCount).toBeGreaterThanOrEqual(3);
       expect(evCount).toBeLessThanOrEqual(5);

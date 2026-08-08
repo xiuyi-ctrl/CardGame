@@ -6,8 +6,10 @@ import {
   makeUnit,
   playerSkill,
   playerTame,
+  skillUsesLeft,
   tameChance,
   TAME_THRESHOLD,
+  getDamageGuard,
 } from '../src/game/core/battle';
 import type { BattleState } from '../src/game/types';
 import { MONSTERS } from '../src/game/data/monsters';
@@ -213,6 +215,100 @@ describe('数据完整性', () => {
     }
     for (const sk of Object.values(SKILLS)) {
       expect(sk.damage ?? sk.heal ?? 0).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
+
+describe('技能使用次数', () => {
+  it('有限次技能初始化次数，无限次技能返回 Infinity', () => {
+    const u = makeUnit('momo_queen', true, 0, false); // 愈光 uses:2
+    expect(u.skillUses?.['heal_light']).toBe(2);
+    expect(skillUsesLeft(u, 'heal_light')).toBe(2);
+    expect(skillUsesLeft(u, 'bite')).toBe(Infinity);
+  });
+
+  it('每次使用扣一次次数；耗尽后 playerSkill 拒绝（状态不变）', () => {
+    const u = makeUnit('momo_queen', true, 0, false);
+    let b = createBattle([u], [{ speciesId: 'kiki' }], 1);
+    // 让毛毛王后先挨打受伤，再连续使用愈光
+    b = {
+      ...b,
+      playerUnits: b.playerUnits.map((x) => (x.uid === u.uid ? { ...x, hp: 5 } : x)),
+    };
+    let after = playerSkill(b, 'heal_light', u.uid);
+    expect(skillUsesLeft(after.playerUnits[0], 'heal_light')).toBe(1);
+    after = playerSkill(after, 'heal_light', u.uid);
+    expect(skillUsesLeft(after.playerUnits[0], 'heal_light')).toBe(0);
+    const hpBefore = after.playerUnits[0].hp;
+    const rejected = playerSkill(after, 'heal_light', u.uid);
+    expect(rejected).toBe(after);
+    expect(rejected.playerUnits[0].hp).toBe(hpBefore);
+  });
+
+  it('全部玩家技能用尽时战斗不会卡死', () => {
+    const u = makeUnit('momo_god', true, 0, false); // 愈光 uses:2、战吼 uses:2
+    const b = createBattle([u], [{ speciesId: 'kiki' }], 42);
+    let cur = currentPlayerUnit(b)!;
+    const ids = cur.skills;
+    expect(ids).toContain('heal_light');
+    expect(ids).toContain('roar');
+    // 反复使用有限次技能直至耗尽的整局模拟由 simulation 保证不卡死
+    let nb = b;
+    let guard = 0;
+    while (nb.phase === 'acting' && guard < 300) {
+      cur = currentPlayerUnit(nb)!;
+      const limited = cur.skills.find((id) => skillUsesLeft(cur, id) > 0 && skillUsesLeft(cur, id) < Infinity);
+      nb = playerSkill(nb, limited ?? cur.skills[0], cur.skills.includes(limited ?? '') ? cur.uid : nb.enemyUnits[0].uid);
+      guard += 1;
+    }
+    expect(guard).toBeLessThan(300);
+  });
+});
+
+describe('专属被动', () => {
+  it('makeUnit 应用速度/生命被动加成并记录被动', () => {
+    const quick = makeUnit('momo', true, 0, false); // 迅捷：速度+1
+    expect(quick.passive).toBe('quick');
+    expect(quick.spd).toBe(MONSTERS.momo.baseSpd + 1);
+    const water = makeUnit('lulu', true, 1, false);
+    expect(water.passive).toBe('watery_regen');
+    expect(water.spd).toBe(MONSTERS.lulu.baseSpd);
+  });
+
+  it('铁壁/厚壳等减伤被动降低受到伤害', () => {
+    const kiki = makeUnit('kiki', true, 0, false); // 铁壁：-1
+    expect(getDamageGuard(kiki)).toBe(1);
+    const boss = makeUnit('boss_golem', false, 0, false); // 磐岩护甲：-3
+    expect(getDamageGuard(boss)).toBe(3);
+    const none = makeUnit('momo', true, 0, false);
+    expect(getDamageGuard(none)).toBe(0);
+  });
+
+  it('再生被动：每回合开始恢复生命', () => {
+    // 露露有水愈（每回合恢复 1）；被毛毛攻击后进入下一回合会触发再生
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu' }], 7);
+    const after = playerSkill(b, 'punch', b.enemyUnits[0].uid);
+    expect(after.enemyUnits[0].hp).toBeGreaterThan(0);
+    expect(after.log.some((e) => e.text.includes('「水愈」恢复'))).toBe(true);
+  });
+
+  it('尖刺反伤：受击反伤攻击者', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'pipi' }], 3);
+    const after = playerSkill(b, 'punch', b.enemyUnits[0].uid);
+    expect(after.log.some((e) => e.text.includes('「尖刺」反伤'))).toBe(true);
+    expect(after.playerUnits[0].hp).toBeLessThan(b.playerUnits[0].hp);
+  });
+
+  it('毒牙：攻击命中附加中毒', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'mimi' }], 3);
+    // 先让敌方行动（咪咪攻击毛毛）→ 触发毒牙
+    const after = playerSkill(b, 'punch', b.enemyUnits[0].uid);
+    expect(after.playerUnits[0].statuses.some((s) => s.kind === 'poison')).toBe(true);
+  });
+
+  it('所有怪物都配置了被动', () => {
+    for (const sp of Object.values(MONSTERS)) {
+      expect(sp.passive, `${sp.name} 缺少被动`).toBeDefined();
     }
   });
 });

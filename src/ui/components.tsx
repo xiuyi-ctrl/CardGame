@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
+import { getPassive } from '../game/data/passives';
 
 /** 技能数值简述：仅伤害/治疗数值，如 "5"、"3×2"（buff 效果数值不放这里，见 skillFullDesc） */
 export function skillBrief(s: SkillDef): string {
@@ -112,6 +113,16 @@ const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
   spdDown: { icon: '🕸️', label: '速度 -1' },
 };
 
+export function PassiveBadge({ unit }: { unit: Unit }) {
+  const p = getPassive(unit.passive);
+  if (!p) return null;
+  return (
+    <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
+      💠{p.name}
+    </span>
+  );
+}
+
 export function BattleBuffIcons({ unit }: { unit: Unit }) {
   const buffs = unit.battleBuffs;
   if (!buffs) return null;
@@ -177,6 +188,7 @@ export function UnitCard({ unit, className = '', onClick, showSkills = true, sho
       <div className="card-sub">
         {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
         <StatusIcons unit={unit} />
+        <PassiveBadge unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
       {showSkills && (

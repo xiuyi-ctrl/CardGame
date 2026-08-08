@@ -3,7 +3,7 @@ import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
-import { currentPlayerUnit, isTameable, tameChance, TAME_THRESHOLD } from '../game/core/battle';
+import { currentPlayerUnit, isTameable, tameChance, TAME_THRESHOLD, skillUsesLeft } from '../game/core/battle';
 import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import type { SkillDef, Unit } from '../game/types';
@@ -258,15 +258,29 @@ export function BattleScreen({ state, dispatch }: Props) {
           <span className="who">{current ? `${current.emoji} ${current.name}` : '—'}</span>
           {current ? (
             <>
-              {skills.map((s) => (
-                <button key={s.id} className="skill-btn" onClick={() => onSkillClick(s)} title={`${s.desc}（${skillBrief(s)}）`}>
-                  <span className="skill-btn-main">
-                    {s.name}
-                    <span className="skill-num">{skillBrief(s)}</span>
-                  </span>
-                  <span className="skill-desc">{s.desc}</span>
-                </button>
-              ))}
+              {skills.map((s) => {
+                const left = current ? skillUsesLeft(current, s.id) : 0;
+                const limited = Number.isFinite(left);
+                const exhausted = limited && left <= 0;
+                return (
+                  <button
+                    key={s.id}
+                    className="skill-btn"
+                    onClick={() => onSkillClick(s)}
+                    disabled={exhausted}
+                    title={`${s.desc}（${skillBrief(s)}）${limited ? `，本场剩余 ${Math.max(0, left)} 次` : ''}`}
+                  >
+                    <span className="skill-btn-main">
+                      {s.name}
+                      <span className="skill-num">{skillBrief(s)}</span>
+                    </span>
+                    <span className="skill-desc">
+                      {s.desc}
+                      {limited && <span className="skill-uses">{exhausted ? '（已用完）' : `（剩 ${Math.max(0, left)} 次）`}</span>}
+                    </span>
+                  </button>
+                );
+              })}
             </>
           ) : (
             <span className="card-sub">

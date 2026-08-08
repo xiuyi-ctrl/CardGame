@@ -103,4 +103,18 @@ describe('地图相邻寻路回归', () => {
     }
     expect(problems).toEqual([]);
   });
+
+  it('最后两层（首领前两行）必存在一个商人节点', () => {
+    const missing: string[] = [];
+    for (let seed = 1; seed < 120; seed++) {
+      for (let act = 1; act <= 3; act++) {
+        const map = generateMap(seed, act);
+        const tail = map.layers.slice(-3, -1);
+        if (!tail.some((row) => row.some((n) => n.type === 'shop'))) {
+          missing.push(`seed=${seed} act=${act} 最后两层无商人`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+  });
 });

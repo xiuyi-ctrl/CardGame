@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { currentPlayerUnit, isTameable } from '../src/game/core/battle';
+import { currentPlayerUnit, isTameable, skillUsesLeft } from '../src/game/core/battle';
 import { canStepTo, canTameEnemy, nextStage, ROSTER_MAX, type MapNode } from '../src/game/state/game';
 import { getSkill } from '../src/game/data/skills';
 import { FOODS } from '../src/game/data/foods';
@@ -27,7 +27,7 @@ function botBattleStep(s: GameState): GameState {
     return dispatch(s, { type: 'PLAYER_TAME', foodId, enemyUid: tameTarget.uid });
   }
 
-  const heal = cur.skills.map(getSkill).find((x) => x.kind === 'heal');
+  const heal = cur.skills.map(getSkill).find((x) => x.kind === 'heal' && skillUsesLeft(cur, x.id) > 0);
   if (heal) {
     const ally = [...b.playerUnits]
       .filter((u) => u.hp > 0)
@@ -39,9 +39,12 @@ function botBattleStep(s: GameState): GameState {
 
   const skillIds = cur.skills
     .map((id) => ({ id, def: getSkill(id) }))
-    .filter((x) => x.def.target !== 'self')
+    .filter((x) => x.def.target !== 'self' && skillUsesLeft(cur, x.id) > 0)
     .sort((a, c) => (c.def.damage ?? 0) - (a.def.damage ?? 0));
-  const chosen = skillIds[0] ?? { id: cur.skills[0], def: getSkill(cur.skills[0]) };
+  const usableFallback = cur.skills.find((id) => skillUsesLeft(cur, id) > 0);
+  const chosen =
+    skillIds[0] ??
+    (usableFallback ? { id: usableFallback, def: getSkill(usableFallback) } : { id: cur.skills[0], def: getSkill(cur.skills[0]) });
   const targets = b.enemyUnits.filter((u) => u.hp > 0);
   if (chosen.def.target === 'all') {
     return dispatch(s, { type: 'PLAYER_SKILL', skillId: chosen.id });

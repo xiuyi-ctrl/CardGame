@@ -1,12 +1,15 @@
-import type { BattleState, SkillDef, Unit } from '../types';
+import type { BattleState, PassiveDef, SkillDef, Unit } from '../types';
 import { getSkill } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
+import { getPassive } from '../data/passives';
 import { createRng } from '../rng';
 
 export const TAME_THRESHOLD = 0.4;
 /** 每次驯服失败对该敌人捕捉概率的乘法加成（如 0.25 = +25%） */
 export const TAME_FAIL_BONUS = 0.25;
+/** 敌方每场战斗的治疗次数上限，防止治疗无限拉长战斗形成死局 */
+export const ENEMY_HEAL_LIMIT = 3;
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
@@ -36,15 +39,25 @@ export function makeUnit(
   tameable: boolean,
 ): Unit {
   const s = getMonster(speciesId);
+  const passive = getPassive(s.passive);
+  const hpBonus = passive?.kind === 'hp' ? passive.value : 0;
+  const spdBonus = passive?.kind === 'spd' ? passive.value : 0;
+  const skillUses: Record<string, number> = {};
+  for (const id of s.skills) {
+    const def = getSkill(id);
+    if (def.uses !== undefined) skillUses[id] = def.uses;
+  }
   return {
     uid: nextUid(isPlayer ? 'p' : 'e'),
     speciesId,
     name: s.name,
     emoji: s.emoji,
-    maxHp: s.baseHp,
-    hp: s.baseHp,
-    spd: s.baseSpd,
+    maxHp: s.baseHp + hpBonus,
+    hp: s.baseHp + hpBonus,
+    spd: s.baseSpd + spdBonus,
     skills: [...s.skills],
+    passive: s.passive,
+    skillUses,
     statuses: [],
     column,
     isPlayer,
@@ -54,7 +67,30 @@ export function makeUnit(
 }
 
 export function cloneUnit(u: Unit): Unit {
-  return { ...u, statuses: u.statuses.map((s) => ({ ...s })) };
+  return {
+    ...u,
+    statuses: u.statuses.map((s) => ({ ...s })),
+    skillUses: u.skillUses ? { ...u.skillUses } : undefined,
+  };
+}
+
+/** 获取单位的被动技能定义 */
+export function getUnitPassive(u: Unit): PassiveDef | undefined {
+  return getPassive(u.passive);
+}
+
+/** 技能的剩余使用次数（无限制技能返回 Infinity） */
+export function skillUsesLeft(u: Unit, skillId: string): number {
+  return u.skillUses?.[skillId] ?? Infinity;
+}
+
+/** 消耗一次技能使用次数 */
+function consumeSkillUse(b: BattleState, actor: Unit, skillId: string): BattleState {
+  if (!actor.skillUses || actor.skillUses[skillId] === undefined) return b;
+  const current = actorFromId(b, actor.uid);
+  if (!current) return b;
+  const next = { ...current.skillUses, [skillId]: Math.max(0, (current.skillUses?.[skillId] ?? 0) - 1) };
+  return replaceUnit(b, { ...current, skillUses: next });
 }
 
 /**
@@ -102,6 +138,7 @@ export function createBattle(
     seed,
     rngCount: 0,
     corruptDebuff: options?.corruptDebuff,
+    enemyHealsLeft: ENEMY_HEAL_LIMIT,
   };
   const untameable = options?.untameable === true;
   if (options?.gauntlet) {
@@ -138,6 +175,16 @@ function startRound(b: BattleState): BattleState {
     nb = res.battle;
     if (res.unit.hp > 0) tickStatuses(res.unit);
     nb = replaceUnit(nb, res.unit);
+  }
+  // 被动再生：每回合开始恢复（存活且未满血）
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    const p = getUnitPassive(u);
+    if (p?.kind === 'regen' && u.hp > 0 && u.hp < u.maxHp) {
+      const maxHp = getEffectiveMaxHp(u);
+      const healed = { ...u, hp: Math.min(maxHp, u.hp + p.value) };
+      nb = replaceUnit(nb, healed);
+      nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${p.value} 点生命`, sideOf(u));
+    }
   }
   return nb;
 }
@@ -353,10 +400,13 @@ function enemyAct(b: BattleState): BattleState {
   }
 
   return useRng(b, (rngVal, nb) => {
-    const skills = actor.skills.map(getSkill);
+    const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0);
+    if (skills.length === 0) {
+      return markActed(pushLog(nb, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
+    }
     const healSkills = skills.filter((s) => s.kind === 'heal');
     let chosen = skills[Math.floor(rngVal * skills.length)];
-    if (healSkills.length > 0 && actor.hp / actor.maxHp < 0.5 && rngVal > 0.4) {
+    if (healSkills.length > 0 && (nb.enemyHealsLeft ?? 0) > 0 && actor.hp / actor.maxHp < 0.5 && rngVal > 0.4) {
       chosen = healSkills[0];
     }
     const explicit = chosen.target === 'self' || chosen.target === 'ally' ? actor.uid : undefined;
@@ -387,6 +437,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (skill.kind === 'heal') {
     let r = nb;
     const amt = Math.max(1, skill.heal ?? 0);
+    if (!actor.isPlayer && (r.enemyHealsLeft ?? 0) > 0) {
+      r = { ...r, enemyHealsLeft: (r.enemyHealsLeft ?? 0) - 1 };
+    }
     for (const t of targets) {
       const maxHp = getEffectiveMaxHp(t);
       const healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
@@ -417,30 +470,52 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           const variance = Math.round(rngVal * 2 - 1); // -1 / 0 / +1
           total += Math.max(1, base + variance);
         }
-        const crit = rngVal > 0.9 ? 1.5 : 1;
-        let finalDmg = Math.max(1, Math.round(total * crit));
+        let finalDmg = Math.max(1, total - getDamageGuard(t));
         if (t.isPlayer && b2.corruptDebuff === 'dmg') {
           finalDmg += 1;
         }
         let t2 = { ...t, hp: Math.max(0, t.hp - finalDmg) };
+        const ap = getUnitPassive(actor);
+        if (ap?.kind === 'venom') t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
+        if (ap?.kind === 'scorch') t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
         for (const e of skill.effects ?? []) {
           if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
             t2 = applyStatusTo(t2, e);
           }
         }
-        const nb2 = replaceUnit(b2, t2);
-        return pushLog(nb2, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害${crit > 1 ? '（暴击！）' : ''}`, sideOf(actor));
+        let nb2 = replaceUnit(b2, t2);
+        // 吸血：造成伤害后恢复自身
+        if (ap?.kind === 'drain') {
+          const healedActor = actorFromId(nb2, actor.uid);
+          if (healedActor && healedActor.hp > 0) {
+            const maxHp = getEffectiveMaxHp(healedActor);
+            const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
+            nb2 = replaceUnit(nb2, healed);
+          }
+        }
+        // 尖刺：受击者反伤攻击者
+        const tp = getUnitPassive(t2);
+        if (tp?.kind === 'thorns' && t2.hp > 0) {
+          const attacker = actorFromId(nb2, actor.uid);
+          if (attacker && attacker.hp > 0) {
+            const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
+            nb2 = replaceUnit(nb2, hurt);
+            nb2 = pushLog(nb2, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2));
+          }
+        }
+        return pushLog(nb2, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害`, sideOf(actor));
       });
       nb = single;
     }
   }
-  return markActed(nb, actor.uid);
+  return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);
 }
 
 /** 玩家行动：使用技能。自动推进敌方回合直到轮到下一个玩家或战斗结束。 */
 export function playerSkill(b: BattleState, skillId: string, targetUid?: string): BattleState {
   const actor = currentActor(b);
   if (!actor || !actor.isPlayer || b.phase !== 'acting') return b;
+  if (skillUsesLeft(actor, skillId) <= 0) return b;
   return useRng(b, (_v, nb) => {
     const after = useSkillInner(nb, actor, getSkill(skillId), targetUid);
     return advance(after);
@@ -637,7 +712,7 @@ export function decrementBattleBuffs(b: BattleState): BattleState {
     : b;
 }
 
-/** 获取单位的固定伤害修正（诅咒虚弱 + 技能 atkUp/atkDown 状态 + 战斗药水 battleBuffs，整数） */
+/** 获取单位的固定伤害修正（诅咒虚弱 + 技能 atkUp/atkDown 状态 + 战斗药水 battleBuffs + 被动，整数） */
 export function getDamageBonus(u: Unit): number {
   let bonus = 0;
   if (u.curse === 'atkDown') bonus -= 1;
@@ -649,7 +724,16 @@ export function getDamageBonus(u: Unit): number {
     if (u.battleBuffs.atkUp) bonus += 1;
     if (u.battleBuffs.atkDown) bonus -= 1;
   }
+  const p = getUnitPassive(u);
+  if (p?.kind === 'power') bonus += p.value;
+  if (p?.kind === 'frenzy' && u.hp / u.maxHp < 0.5) bonus += p.value;
   return bonus;
+}
+
+/** 获取单位的伤害减免（被动守护，整数） */
+export function getDamageGuard(u: Unit): number {
+  const p = getUnitPassive(u);
+  return p?.kind === 'guard' ? p.value : 0;
 }
 
 /** 获取单位的有效速度（含临时buff，整数） */

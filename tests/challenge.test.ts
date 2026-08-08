@@ -3,7 +3,8 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { generateMap, type MapNode } from '../src/game/state/game';
-import { createBattle, currentPlayerUnit, isTameable, makeUnit, playerSkill, playerTame } from '../src/game/core/battle';
+import { createBattle, currentPlayerUnit, isTameable, makeUnit, playerSkill, playerTame, skillUsesLeft } from '../src/game/core/battle';
+import { getSkill } from '../src/game/data/skills';
 import type { BattleState } from '../src/game/types';
 
 function dispatch(s: GameState, a: GameAction): GameState {
@@ -17,7 +18,16 @@ function autoPlay(b: BattleState, maxTurns = 400): BattleState {
     const cur = currentPlayerUnit(nb);
     if (!cur) break;
     const target = nb.enemyUnits.filter((u) => u.hp > 0)[0];
-    nb = playerSkill(nb, cur.skills[0], target?.uid);
+    const heal = cur.skills.map(getSkill).find((x) => x.kind === 'heal' && skillUsesLeft(cur, x.id) > 0);
+    if (heal && cur.hp / cur.maxHp < 0.5) {
+      nb = playerSkill(nb, heal.id, cur.uid);
+    } else {
+      const best = cur.skills
+        .map(getSkill)
+        .filter((x) => x.target !== 'self' && skillUsesLeft(cur, x.id) > 0)
+        .sort((a, c) => (c.damage ?? 0) - (a.damage ?? 0))[0];
+      nb = playerSkill(nb, best ? best.id : cur.skills[0], target?.uid);
+    }
     guard += 1;
   }
   return nb;
@@ -154,7 +164,7 @@ describe('斗兽场（1v1 单挑）', () => {
 
 describe('车轮战（轮换上阵）', () => {
   it('创建战斗时只上第 1 只，其余在替补席；逐一击倒后胜利', () => {
-    const players = [makeUnit('momo_god', true, 0, false)];
+    const players = [makeUnit('momo_god', true, 0, false), makeUnit('lulu_god', true, 1, false), makeUnit('fifi_god', true, 2, false)];
     const enemies = [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
@@ -164,6 +174,8 @@ describe('车轮战（轮换上阵）', () => {
     expect(b.gauntlet).toEqual({ total: 3, current: 1 });
     expect(b.enemyUnits.length).toBe(1);
     expect(b.enemyBench?.length).toBe(2);
+    expect(b.playerUnits.length).toBe(1);
+    expect(b.playerBench?.length).toBe(2);
     const end = autoPlay(b);
     expect(end.phase).toBe('won');
     expect(end.enemyUnits.filter((u) => u.hp > 0).length).toBe(0);
@@ -179,7 +191,7 @@ describe('车轮战（轮换上阵）', () => {
       { speciesId: 'pipi' },
       { speciesId: 'mimi' },
     ];
-    const b = createBattle([p1, p2], enemies, 11, { gauntlet: true });
+    const b = createBattle([p1, p2], enemies, 28, { gauntlet: true });
     // 只有第 1 只上场，第 2 只进入我方替补席
     expect(b.playerUnits.length).toBe(1);
     expect(b.playerUnits[0].uid).toBe(p1.uid);

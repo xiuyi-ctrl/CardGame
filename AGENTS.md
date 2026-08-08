@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（104 个，含整局模拟）。
+- `npm test` / `npx vitest run`：单元测试（116 个，含整局模拟）。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
 - `npm run dist`：build 后 electron-builder 打包 `--win portable`。
@@ -30,13 +30,16 @@
 
 ## 核心设计约定
 
-- 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`）+ 每段 ±1 浮动 + 暴击 1.5x（~10%）。`getEffectiveSpd` 含药水 ±1。
+- 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`）+ 每段 ±1 浮动。`getEffectiveSpd` 含药水 ±1。
 - 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+3 / 速度+1。
 - 战斗日志为结构化 `LogEntry[]`（`{ text, side: 'player'|'enemy'|'info' }`）：`pushLog(b, msg, side)` 带阵营，技能/状态/道具按行动者或受击者阵营，系统消息用 info。UI 左侧日志面板按 side 分色。
 - 状态：灼烧 2伤/2R、中毒 2伤/3R、战吼 伤害+2/2R、铁刺 伤害-1/2R、眩晕（跳过行动）。侵蚀节点：速度-1（入场）或 我方受伤+1。
+- **技能次数**：`SkillDef.uses?` 设置每场战斗的可用次数（缺省=无限，`skillUsesLeft` 返回 Infinity）。有限次技能在玩家/敌方使用后各扣 1（`consumeSkillUse` 需按当前状态重新取单位，勿用旧引用否则覆盖治疗等改动）；耗尽后 `playerSkill` 拒绝、UI 按钮禁用显示「剩 N 次/已用完」。已设：愈光（heal_light）2 次、战吼（roar）2 次。
+- **专属被动**：`MonsterSpecies.passive` + `Unit.passive`，所有生物（含 Boss/造物）各有 1 个，表在 `data/passives.ts`（`PASSIVES`/`getPassive`）。类型 `PassiveKind`：`hp`（最大生命+）`spd`（入场速度+）`regen`（回合开始回血）`thorns`（受击反伤）`drain`（造成伤害吸血）`power`（技能伤害+）`guard`（受击减伤，`getDamageGuard`）`venom`/`scorch`（攻击命中附中毒/灼烧）`frenzy`（血量<50% 伤害+）。被动入口：`makeUnit` 应用 hp/spd 加成、`startRound` 处理 regen、攻击结算处理 guard/venom/scorch/thorns/drain、`getDamageBonus` 含 power/frenzy。UI 卡片显示 `PassiveBadge`（components.tsx）。
 - 属性强化固定值：生命 +3 / 速度 +1；诅咒：血脆=生命-5、虚弱=伤害-1、迟缓=速度-1；侵蚀节点：速度-1 / 受伤+1。
-- 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。
+- 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。敌方治疗每场限 3 次（`enemyHealsLeft`），防止治疗无限拉长形成死局。
 - 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 3；队伍已满时驯服的新宠物进「处理队伍」界面（替换/融合/放生）。
+- 地图生成：每幕 8~10 层，出发后第 1 行强制全战斗；事件 3~5、商人 2~4（**最后两层必有 1 个商人**，故可至 5）、奇遇 ≤1；全战斗行 ≤2。
 - 侦查符/跳关道具均为背包中使用：背包点击 → 返回地图进入选择模式 → 点击目标节点执行。侦查符可看任意一关情报；跳关道具仅对可达的战斗类节点（battle/elite/arena/gauntlet/corrupted）直接获得奖励，boss/guardian 不可跳。双生宝箱双开仅由双生符触发。
 - 背包界面：HUD 右侧「🎒 背包」可随时打开（查看宠物/道具，使用侦查符/跳关道具/净化药水）。
 - 所有随机必须经 `useRng`/`createRng`（seed + rngCount），保证确定性、可复现、可单测。
