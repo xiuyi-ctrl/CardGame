@@ -353,9 +353,9 @@ function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'guardian') {
     const encounter = base.map.encounter[node.id];
     if (!encounter) return { ...base, screen: 'map' };
-    const units = autoPosition(fieldUnits(base));
-    if (units.length === 0) return { ...base, screen: 'map' };
-    return { ...base, screen: 'formation', formation: { units, encounter, nodeId: node.id, options: { untameable: true } } };
+    if (base.roster.length === 0) return { ...base, screen: 'map' };
+    const initial = autoPosition(fieldUnits(base));
+    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true } } };
   }
   // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
   if (node.type === 'keydoor') {
@@ -379,11 +379,11 @@ function enterNode(base: GameState, node: MapNode): GameState {
     if (units.length === 0) return { ...base, screen: 'map' };
     return { ...base, screen: 'gauntlet-order', gauntletOrder: units, gauntletSize: encounter.length };
   }
-  // 普通/精英/被侵蚀：先布阵选择站位
+  // 普通/精英/被侵蚀：先布阵选择站位（棋盘默认放自动出战宠物，列表为全部宠物池）
   const options = node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : undefined;
-  const units = autoPosition(fieldUnits(base));
-  if (units.length === 0) return { ...base, screen: 'map' };
-  return { ...base, screen: 'formation', formation: { units, encounter, nodeId: node.id, options } };
+  if (base.roster.length === 0) return { ...base, screen: 'map' };
+  const initial = autoPosition(fieldUnits(base));
+  return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options } };
 }
 
 function bossCleared(state: GameState): boolean {

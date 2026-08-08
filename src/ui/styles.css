@@ -397,19 +397,28 @@ button.primary {
 
 .tame-tip {
   position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 6px;
-  background: rgba(0, 0, 0, 0.9);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.78);
   border: 1px solid var(--gold);
+  border-radius: 10px;
   color: var(--gold);
-  border-radius: 8px;
-  padding: 4px 10px;
-  font-size: 13px;
-  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+  line-height: 1.4;
+  padding: 8px;
   z-index: 20;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.formation-slot:hover .tame-tip {
+  opacity: 1;
 }
 
 .dim {
@@ -549,6 +558,14 @@ button.primary {
 }
 
 .formation-pets > div[draggable] > .unit-card:active {
+  cursor: grabbing;
+}
+
+.formation-slot > div[draggable] > .unit-card {
+  cursor: grab;
+}
+
+.formation-slot > div[draggable] > .unit-card:active {
   cursor: grabbing;
 }
 

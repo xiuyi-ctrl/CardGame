@@ -199,6 +199,8 @@ export interface GameState {
   /** 布阵：进入普通/精英/被侵蚀/守卫战斗前选择站位（FORMATION_CONFIRM 确认后创建战斗） */
   formation?: {
     units: Unit[];
+    /** 默认自动布阵的出战宠物（带站位），布阵界面棋盘初始放置它们 */
+    initialField: Unit[];
     encounter: { speciesId: string }[];
     nodeId: string;
     options?: { corruptDebuff?: 'spd' | 'dmg'; untameable?: boolean };
