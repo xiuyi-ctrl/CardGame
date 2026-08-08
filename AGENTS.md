@@ -5,7 +5,7 @@
 ## 项目
 
 - 肉鸽卡牌宠物对战游戏「驯牌远征」（参考《驯牌师》Decktamer），技术栈：Electron + Vite + React + TypeScript。
-- 目标产物：Windows 便携版 `.exe`。已产出 `release/驯牌远征-0.1.0.exe`（68 MB，可启动）。
+- 目标产物：Windows 便携版 `.exe`。已发布 `v0.1.1`（含生物图鉴，Releases 页可下载）。
 
 ## 开发命令
 
@@ -15,6 +15,16 @@
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
 - `npm run dist`：build 后 electron-builder 打包 `--win portable`。
 - 打包遇到 winCodeSign symlink 权限错误时：`$env:CSC_IDENTITY_AUTO_DISCOVERY="false"` + 已配置 `win.signAndEditExecutable: false` 跳过签名（注意：会使用 Electron 默认图标，未自定义）。
+
+## 发布流程（CI 自动）
+
+- 发布由 GitHub Actions 自动完成（`.github/workflows/release.yml`）：**push `v*` 标签**即触发，在 `windows-latest` 上 `npm ci` → 从 tag 写入版本号 → build + electron-builder portable → 用 gh 创建 Release 并上传 `release/*.exe`。
+- 发版三步：
+  1. 改代码并 push（`git push origin main`）；
+  2. `git tag vX.Y.Z`（tag 需与 `package.json` version 一致，如 `v0.2.0` → `0.2.0`，CI 会自动从 tag 覆盖 version）；
+  3. `git push origin vX.Y.Z`，等待 Actions 完成（约 5~10 分钟），产物出现在 Releases 页。
+- 产物名 `驯牌远征-<version>.exe`（electron-builder `artifactName`）；CI 环境无 PowerShell 编码/文件占用问题，无需本地打包。
+- 手动备选：本地 `$env:CSC_IDENTITY_AUTO_DISCOVERY="false"; npm run dist` 后，用 `gh release create vX.Y.Z "release/驯牌远征-<version>.exe" --generate-notes` 发布（中文文件名经 PowerShell 传参可能丢失，需用 ASCII 名或 curl 上传，见提交历史）。
 
 ## 包结构边界
 
