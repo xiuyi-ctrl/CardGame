@@ -4,12 +4,13 @@ import { gameReducer, createInitialState, newSeed } from '../game/state/reducer'
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
 import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
+import type { Unit } from '../game/types';
 import { STARTING_CHOICES, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { computeStats } from '../game/core/battle';
-import { UnitCard, SkillTag } from './components';
+import { UnitCard, SkillTag, DragScrollRow } from './components';
 import { BattleScreen } from './BattleScreen';
 import { loadSave, persistSave, quitGame } from './persistence';
 
@@ -60,31 +61,16 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
       <span>
         <span className="chip">👥 {state.field.length}/{FIELD_MAX}</span>
         <span className="chip">💰 {state.gold}</span>
-        {Object.entries(state.inventory)
-          .filter(([, c]) => c > 0)
-          .map(([id, c]) => {
-            const f = FOODS[id];
-            const it = ITEMS[id];
-            if (f) {
-              return (
-                <span key={id} className="chip">
-                  {f.emoji} {f.name}×{c}
-                </span>
-              );
-            }
-            if (it) {
-              return (
-                <span key={id} className="chip" title={it.desc}>
-                  {it.emoji} {it.name}×{c}
-                </span>
-              );
-            }
-            return null;
-          })}
       </span>
-      <button className="home-btn" onClick={() => dispatch({ type: 'OPEN_BACKPACK' })}>
-        🎒 背包
-      </button>
+      {state.screen === 'backpack' ? (
+        <button className="home-btn" onClick={() => dispatch({ type: 'CLOSE_BACKPACK' })}>
+          🎒 关闭背包
+        </button>
+      ) : state.screen === 'map' ? (
+        <button className="home-btn" onClick={() => dispatch({ type: 'OPEN_BACKPACK' })}>
+          🎒 背包
+        </button>
+      ) : null}
       <button
         className="home-btn"
         onClick={() => {
@@ -94,6 +80,109 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
       >
         🏠 返回首页
       </button>
+    </div>
+  );
+}
+
+type PetConfirm = { kind: 'fuse' | 'discard' | 'notice'; uid?: string; msg?: string } | null;
+
+/** 宠物卡片底部操作区：融合 / 释放（点击弹出确认框，材料不足时提示） */
+function PetCardFooter({
+  unit,
+  state,
+  setConfirm,
+}: {
+  unit: Unit;
+  state: GameState;
+  setConfirm: (c: NonNullable<PetConfirm>) => void;
+}) {
+  const stage = nextStage(unit.speciesId);
+  const need = stage ? fusionNeedCount(unit.speciesId) : 0;
+  const sameCount = state.roster.filter((x) => x.speciesId === unit.speciesId).length;
+  const canFuse = stage !== undefined && sameCount >= need;
+  return (
+    <div className="unit-card-actions">
+      <button
+        title={stage ? `与同物种融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : '该宠物已是最终形态，无法融合'}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!stage) {
+            setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
+          } else if (!canFuse) {
+            setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
+          } else {
+            setConfirm({ kind: 'fuse', uid: unit.uid });
+          }
+        }}
+      >
+        融合
+      </button>
+      <button
+        title="释放后获得金币，宠物被永久移除"
+        onClick={(e) => {
+          e.stopPropagation();
+          setConfirm({ kind: 'discard', uid: unit.uid });
+        }}
+      >
+        释放
+      </button>
+    </div>
+  );
+}
+
+/** 融合/释放/提示 的二次确认弹窗 */
+function FuseDiscardConfirm({
+  confirm,
+  state,
+  dispatch,
+  setConfirm,
+}: {
+  confirm: PetConfirm;
+  state: GameState;
+  dispatch: Dispatch<GameAction>;
+  setConfirm: (c: PetConfirm) => void;
+}) {
+  if (!confirm) return null;
+  const target = confirm.uid ? state.roster.find((x) => x.uid === confirm.uid) : undefined;
+  const isFuse = confirm.kind === 'fuse';
+  const isDiscard = confirm.kind === 'discard';
+  return (
+    <div className="confirm-overlay" onClick={() => setConfirm(null)}>
+      <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+        <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : '提示'}</div>
+        {isFuse && target && (
+          <p>
+            确定要融合「{target.name}」吗？将与同物种宠物融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>，继承强化/诅咒，生命回满。
+          </p>
+        )}
+        {isDiscard && target && (
+          <p>
+            确定要释放「{target.name}」吗？将获得 <b>{5 * getMonster(target.speciesId).rank} 金币</b>，宠物将被永久移除。
+          </p>
+        )}
+        {confirm.kind === 'notice' && <p>{confirm.msg}</p>}
+        <div className="panel-row" style={{ justifyContent: 'center' }}>
+          {isFuse || isDiscard ? (
+            <>
+              <button
+                className="primary"
+                onClick={() => {
+                  if (isFuse) dispatch({ type: 'FUSE', primaryUid: confirm.uid! });
+                  else dispatch({ type: 'DISCARD', uid: confirm.uid! });
+                  setConfirm(null);
+                }}
+              >
+                确定
+              </button>
+              <button onClick={() => setConfirm(null)}>取消</button>
+            </>
+          ) : (
+            <button className="primary" onClick={() => setConfirm(null)}>
+              知道了
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -355,6 +444,22 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
+      {state.scoutSelecting && (
+        <div className="panel-row" style={{ justifyContent: 'center', marginBottom: 8 }}>
+          <span className="chip" style={{ fontSize: 13 }}>
+            🔍 侦查模式：点击任意节点查看情报（消耗 1 个侦查符，持有 {state.inventory.scout ?? 0} 个）
+          </span>
+          <button onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}>✕ 取消</button>
+        </div>
+      )}
+      {state.skipSelecting && (
+        <div className="panel-row" style={{ justifyContent: 'center', marginBottom: 8 }}>
+          <span className="chip" style={{ fontSize: 13 }}>
+            🪜 跳关模式：点击可达的战斗类节点，直接获得其奖励（消耗 1 个跳关道具，持有 {state.inventory.skip ?? 0} 个）
+          </span>
+          <button onClick={() => dispatch({ type: 'CANCEL_SKIP' })}>✕ 取消</button>
+        </div>
+      )}
       <div className="map-canvas" ref={canvasRef}>
         <svg className="map-lines" width={svgSize.w} height={svgSize.h}>
           {lines.map((l, i) => (
@@ -383,7 +488,16 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
             <div className="map-row" key={ri}>
               {row.map((n) => {
                 const isCurrent = n.id === state.currentNodeId;
+                const scoutable = state.scoutSelecting === true && !isDisabled(n);
                 const selectable = isOptionRow && canSelect(n);
+                const skipable =
+                  state.skipSelecting === true &&
+                  selectable &&
+                  (n.type === 'battle' ||
+                    n.type === 'elite' ||
+                    n.type === 'arena' ||
+                    n.type === 'gauntlet' ||
+                    n.type === 'corrupted');
                 const reachCls = isCurrent ? '' : nearIds.has(n.id) ? 'reach-1' : hoverReachIds.has(n.id) ? 'reach-2' : '';
                 const visitedWatchtowers = state.visitedWatchtowers ?? [];
                 const isVisitedWatchtower = n.type === 'watchtower' && visitedWatchtowers.includes(n.id);
@@ -393,16 +507,11 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                   isDisabled(n) ? 'node-off' : '',
                   isLocked(n) ? 'node-locked' : '',
                   isVisitedWatchtower ? 'visited-watchtower' : '',
+                  scoutable ? 'node-scoutable' : '',
+                  skipable ? 'node-skipable' : '',
                 ]
                   .filter(Boolean)
                   .join(' ');
-                const skippable =
-                  (n.type === 'battle' ||
-                    n.type === 'elite' ||
-                    n.type === 'arena' ||
-                    n.type === 'gauntlet' ||
-                    n.type === 'corrupted') &&
-                  (state.inventory.skip ?? 0) > 0;
                 const nodeHint =
                   n.type === 'keydoor'
                     ? isLocked(n)
@@ -423,28 +532,22 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                     title={nodeHint}
                     onMouseEnter={() => setHoverId(n.id)}
                     onMouseLeave={() => setHoverId(null)}
-                    onClick={selectable
-                      ? () => dispatch({ type: 'MOVE', nodeId: n.id })
-                      : isCurrent && n.type === 'watchtower'
-                      ? () => dispatch({ type: 'OPEN_WATCHTOWER' })
-                      : isVisitedWatchtower && isPast
-                      ? () => dispatch({ type: 'OPEN_WATCHTOWER', nodeId: n.id })
-                      : undefined}
+                    onClick={
+                      skipable
+                        ? () => dispatch({ type: 'USE_SKIP', nodeId: n.id })
+                        : scoutable
+                          ? () => dispatch({ type: 'USE_SCOUT', nodeId: n.id })
+                          : selectable
+                            ? () => dispatch({ type: 'MOVE', nodeId: n.id })
+                            : isCurrent && n.type === 'watchtower'
+                              ? () => dispatch({ type: 'OPEN_WATCHTOWER' })
+                              : isVisitedWatchtower && isPast
+                                ? () => dispatch({ type: 'OPEN_WATCHTOWER', nodeId: n.id })
+                                : undefined
+                    }
                   >
                     <span className="nicon">{NODE_ICON[n.type]}</span>
                     <span className="nlabel">{n.label}</span>
-                    {skippable && (
-                      <button
-                        className="skip-btn"
-                        title={`使用跳关道具直接获得「${n.label}」的奖励`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          dispatch({ type: 'USE_SKIP', nodeId: n.id });
-                        }}
-                      >
-                        ⏭
-                      </button>
-                    )}
                   </div>
                 );
               })}
@@ -452,6 +555,23 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
           );
         })}
       </div>
+      {state.scoutResult && (
+        <div className="confirm-overlay" onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}>
+          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">侦查结果 🔍</div>
+            <div className="scout-result">
+              <div className="ricon">{NODE_ICON[state.map.layers.flat().find((n) => n.id === state.scoutResult!.nodeId)?.type ?? 'battle']}</div>
+              <div className="rtitle">{state.scoutResult.title}</div>
+              <div className="rdesc">{state.scoutResult.detail}</div>
+            </div>
+            <div className="panel-row" style={{ justifyContent: 'center' }}>
+              <button className="primary" onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}>
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="card-sub" style={{ textAlign: 'center' }}>
         选择下一处地点（出发后需走相邻路线；消灭首领后可进入下一层）
         <span className="route-legend">
@@ -505,7 +625,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const evolveMode = pending?.kind === 'evolve';
   const boostMode = pending?.kind === 'boost';
   const arenaMode = pending?.kind === 'arena';
-  const [confirm, setConfirm] = useState<{ kind: 'fuse' | 'discard' | 'notice'; uid?: string; msg?: string } | null>(null);
+  const [confirm, setConfirm] = useState<PetConfirm>(null);
   const title = evolveMode
     ? pending.super
       ? '超进化：选择要进化的宠物（会附带随机负面诅咒）'
@@ -533,10 +653,6 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
         {state.roster.map((u) => {
           const inField = state.field.includes(u.uid);
           const canEvolve = nextStage(u.speciesId) !== undefined;
-          const stage = nextStage(u.speciesId);
-          const need = stage ? fusionNeedCount(u.speciesId) : 0;
-          const sameCount = state.roster.filter((x) => x.speciesId === u.speciesId).length;
-          const canFuse = stage !== undefined && sameCount >= need;
           const onCard = evolveMode
             ? canEvolve
               ? () => dispatch({ type: 'EVOLVE_ONE', uid: u.uid })
@@ -547,43 +663,17 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                 ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
                 : () => toggleField(u.uid);
           return (
-            <div key={u.uid} className="roster-item">
-              <UnitCard
-                unit={u}
-                className={`roster-card ${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode || arenaMode ? 'clickable' : ''}`}
-                onClick={onCard}
-                showSkillDesc
-                footer={
-                  !evolveMode && !boostMode && !arenaMode ? (
-                    <div className="unit-card-actions">
-                      <button
-                        title={stage ? `与同物种融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : '该宠物已是最终形态，无法融合'}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!stage) {
-                            setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
-                          } else if (!canFuse) {
-                            setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
-                          } else {
-                            setConfirm({ kind: 'fuse', uid: u.uid });
-                          }
-                        }}
-                      >
-                        融合
-                      </button>
-                      <button
-                        title="释放后获得金币，宠物被永久移除"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirm({ kind: 'discard', uid: u.uid });
-                        }}
-                      >
-                        释放
-                      </button>
-                    </div>
-                  ) : undefined
-                }
-              />
+        <div key={u.uid} className="roster-item">
+          <UnitCard
+            unit={u}
+            className={`roster-card ${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode || arenaMode ? 'clickable' : ''}`}
+            onClick={onCard}
+            showSkillDesc
+            topStats
+            footer={
+              !evolveMode && !boostMode && !arenaMode ? <PetCardFooter unit={u} state={state} setConfirm={setConfirm} /> : undefined
+            }
+          />
               <div className="roster-actions">
                 <div className="panel-row" style={{ justifyContent: 'center' }}>
                   {u.curse && (
@@ -615,50 +705,9 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
           </button>
         </div>
       )}
-      {confirm && (() => {
-        const target = confirm.uid ? state.roster.find((x) => x.uid === confirm.uid) : undefined;
-        const isFuse = confirm.kind === 'fuse';
-        const isDiscard = confirm.kind === 'discard';
-        return (
-          <div className="confirm-overlay" onClick={() => setConfirm(null)}>
-            <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-              <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : '提示'}</div>
-              {isFuse && target && (
-                <p>
-                  确定要融合「{target.name}」吗？将与同物种宠物融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>，继承强化/诅咒，生命回满。
-                </p>
-              )}
-              {isDiscard && target && (
-                <p>
-                  确定要释放「{target.name}」吗？将获得 <b>{5 * getMonster(target.speciesId).rank} 金币</b>，宠物将被永久移除。
-                </p>
-              )}
-              {confirm.kind === 'notice' && <p>{confirm.msg}</p>}
-              <div className="panel-row" style={{ justifyContent: 'center' }}>
-                {isFuse || isDiscard ? (
-                  <>
-                    <button
-                      className="primary"
-                      onClick={() => {
-                        if (isFuse) dispatch({ type: 'FUSE', primaryUid: confirm.uid! });
-                        else dispatch({ type: 'DISCARD', uid: confirm.uid! });
-                        setConfirm(null);
-                      }}
-                    >
-                      确定
-                    </button>
-                    <button onClick={() => setConfirm(null)}>取消</button>
-                  </>
-                ) : (
-                  <button className="primary" onClick={() => setConfirm(null)}>
-                    知道了
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {confirm && (
+        <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />
+      )}
     </div>
   );
 }
@@ -814,121 +863,97 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
 }
 
 function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const [scoutMode, setScoutMode] = useState(false);
-  useEffect(() => {
-    if ((state.inventory.scout ?? 0) <= 0) setScoutMode(false);
-  }, [state.inventory.scout]);
+  const [confirm, setConfirm] = useState<PetConfirm>(null);
   const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
-  const itemList = items.filter(([id]) => ITEMS[id]);
   const foodList = items.filter(([id]) => FOODS[id]);
-  const result = state.scoutResult;
+  const itemList = items.filter(([id]) => ITEMS[id]).sort((a, b) => (a[0] === 'scout' ? -1 : b[0] === 'scout' ? 1 : 0));
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">🎒 背包</div>
 
       <div className="section-sub">道具</div>
-      <div className="panel-row" style={{ flexWrap: 'wrap' }}>
+      <DragScrollRow>
+        {foodList.map(([id, count]) => {
+          const f = FOODS[id];
+          return (
+            <div key={id} className="reward-card bag-item" style={{ cursor: 'default' }}>
+              <div className="ricon">{f.emoji}</div>
+              <div className="rtitle">
+                {f.name} ×{count}
+              </div>
+              <div className="rdesc">
+                {f.desc}（{f.baseTame}% 驯服率）
+              </div>
+            </div>
+          );
+        })}
         {itemList.map(([id, count]) => {
           const it = ITEMS[id];
+          const isScout = id === 'scout';
+          const isSkip = id === 'skip';
+          const clickable = isScout || isSkip;
           return (
-            <div key={id} className="reward-card" style={{ cursor: 'default' }}>
+            <div
+              key={id}
+              className="reward-card bag-item"
+              style={{ cursor: clickable ? 'pointer' : 'default' }}
+              onClick={isScout ? () => dispatch({ type: 'OPEN_SCOUT' }) : isSkip ? () => dispatch({ type: 'OPEN_SKIP' }) : undefined}
+              title={isScout ? `点击前往地图选择要侦查的节点（持有 ${count} 个）` : isSkip ? `点击前往地图选择要跳过的战斗节点（持有 ${count} 个）` : undefined}
+            >
               <div className="ricon">{it.emoji}</div>
               <div className="rtitle">
                 {it.name} ×{count}
               </div>
               <div className="rdesc">{it.desc}</div>
-              <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-                {id === 'scout' && (
-                  <button className="primary" onClick={() => setScoutMode((v) => !v)}>
-                    {scoutMode ? '✕ 取消侦查' : '🔍 侦查节点'}
-                  </button>
-                )}
-                {id === 'purify' && (
-                  <span className="card-sub" style={{ fontSize: 11 }}>
-                    对有诅咒的宠物使用（见下方宠物区）
-                  </span>
-                )}
-              </div>
+              {id === 'purify' && (
+                <span className="card-sub" style={{ fontSize: 11 }}>
+                  对有诅咒的宠物使用（见下方宠物区）
+                </span>
+              )}
             </div>
           );
         })}
-      </div>
+      </DragScrollRow>
 
-      {scoutMode && (
-        <>
-          <div className="section-sub">选择节点侦查（消耗 1 个侦查符）</div>
-          <div className="scout-grid">
-            {state.map.layers.map((row, ri) => (
-              <div key={ri} className="scout-row">
-                <div className="card-sub" style={{ width: 44 }}>
-                  第 {ri + 1} 层
-                </div>
-                <div className="panel-row" style={{ gap: 6 }}>
-                  {row.map((n) => {
-                    const info = nodeInfo(state, n);
-                    return (
-                      <button key={n.id} className="scout-node" onClick={() => dispatch({ type: 'USE_SCOUT', nodeId: n.id })}>
-                        {info.icon} {n.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {result && (
-        <div className="scout-result">
-          <div className="ricon">🔍</div>
-          <div className="rtitle">侦查结果：{result.title}</div>
-          <div className="rdesc">{result.detail}</div>
-        </div>
-      )}
-
-      <div className="section-sub">食物</div>
-      <div className="panel-row" style={{ flexWrap: 'wrap' }}>
-        {foodList.map(([id, count]) => (
-          <span key={id} className="chip" title={FOODS[id].desc}>
-            {FOODS[id].emoji} {FOODS[id].name}×{count}（{FOODS[id].baseTame}% 驯服率）
-          </span>
-        ))}
-      </div>
-
-      <div className="section-sub">
+      <div className="section-sub" style={{ marginTop: 30 }}>
         宠物（{state.roster.length}/{ROSTER_MAX}，出战 {state.field.length}/{FIELD_MAX}）
       </div>
-      <div className="roster-list">
+      <DragScrollRow className="bag-pets">
         {state.roster.map((u) => {
           const inField = state.field.includes(u.uid);
           return (
-            <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <UnitCard unit={u} className={inField ? 'selected' : ''} />
-              <div className="panel-row" style={{ justifyContent: 'center' }}>
-                {u.curse && <span className="chip">⚠️ {CURSE_CN[u.curse]}</span>}
-                {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
-                  <span className="chip">
-                    ✨ 生命+{u.bonusStats.hp ?? 0} 速度+{u.bonusStats.spd ?? 0}
-                  </span>
-                )}
-                {u.curse && (state.inventory.purify ?? 0) > 0 && (
-                  <button onClick={() => dispatch({ type: 'USE_PURIFY', uid: u.uid })}>
-                    🧪 净化（{state.inventory.purify}）
-                  </button>
-                )}
+            <div key={u.uid} className="roster-item">
+              <UnitCard
+                unit={u}
+                className={`roster-card ${inField ? 'selected' : ''}`}
+                showSkillDesc
+                topStats
+                footer={<PetCardFooter unit={u} state={state} setConfirm={setConfirm} />}
+              />
+              <div className="roster-actions">
+                <div className="panel-row" style={{ justifyContent: 'center' }}>
+                  {u.curse && <span className="chip">⚠️ {CURSE_CN[u.curse]}</span>}
+                  {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
+                    <span className="chip">
+                      ✨ 生命+{u.bonusStats.hp ?? 0} 速度+{u.bonusStats.spd ?? 0}
+                    </span>
+                  )}
+                  {u.curse && (state.inventory.purify ?? 0) > 0 && (
+                    <button onClick={() => dispatch({ type: 'USE_PURIFY', uid: u.uid })}>
+                      🧪 净化（{state.inventory.purify}）
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
-      </div>
+      </DragScrollRow>
 
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'CLOSE_BACKPACK' })}>
-          关闭背包
-        </button>
-      </div>
+      {confirm && (
+        <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />
+      )}
     </div>
   );
 }

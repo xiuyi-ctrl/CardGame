@@ -3,7 +3,7 @@ export interface ItemDef {
   name: string;
   emoji: string;
   desc: string;
-  kind: 'purify' | 'skip' | 'scout' | 'haste' | 'atk_up' | 'spd_up' | 'hp_up' | 'atk_down' | 'spd_down' | 'hp_down';
+  kind: 'purify' | 'skip' | 'scout' | 'twin' | 'atk_up' | 'spd_up' | 'hp_up' | 'atk_down' | 'spd_down' | 'hp_down';
   /** 商店售价（金币） */
   price: number;
   /** 是否可在战斗中使用 */
@@ -30,10 +30,10 @@ export const ITEMS: Record<string, ItemDef> = {
     desc: '使用后可查看指定一关的全部节点情报',
     kind: 'scout', price: 16,
   },
-  haste: {
-    id: 'haste', name: '双生符', emoji: '🔮',
+  twin: {
+    id: 'twin', name: '双生符', emoji: '🔮',
     desc: '抵达「双生宝箱」任一节点时，可同时开启两个宝箱（消耗 1 个）',
-    kind: 'haste', price: 16,
+    kind: 'twin', price: 16,
   },
   // === 战斗药水：提升己方单体 ===
   atk_up: {

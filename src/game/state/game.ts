@@ -196,6 +196,10 @@ export interface GameState {
   tameOverflow?: Unit[];
   /** 侦查符使用结果：查看指定节点情报（背包界面展示） */
   scoutResult?: { nodeId: string; title: string; detail: string } | null;
+  /** 侦查选择模式：打开背包使用侦查符后跳回地图，点击任意节点查看情报 */
+  scoutSelecting?: boolean;
+  /** 跳关选择模式：打开背包使用跳关道具后跳回地图，点击可达的战斗类节点直接获得奖励 */
+  skipSelecting?: boolean;
   /** 打开背包前所在的界面（关闭背包时返回） */
   backpackFrom?: Screen;
 }
@@ -440,8 +444,8 @@ function buildEncounter(
       title: '神秘行商',
       desc: '一位兜售奇物符文的游商，称他的货能解开远古双生宝箱的秘密。',
       choices: [
-        c(1, '购得侦察符', '获得 1 个「侦察」道具（可同时开启双生宝箱）', 'item', { itemId: 'scout' }),
-        c(2, '购得疾行符', '获得 1 个「加速」道具（可同时开启双生宝箱）', 'item', { itemId: 'haste' }),
+        c(1, '购得侦察符', '获得 1 个「侦察符」（使用后可查看指定一关的情报）', 'item', { itemId: 'scout' }),
+        c(2, '购得双生符', '获得 1 个「双生符」（抵达双生宝箱时可同时开启两个宝箱）', 'item', { itemId: 'twin' }),
         c(3, '离开', '继续赶路', 'none'),
       ],
     };

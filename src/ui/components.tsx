@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
 
@@ -137,31 +138,44 @@ export interface UnitCardProps {
   showSkills?: boolean;
   /** 是否在卡片上展示每个技能的完整描述（队伍管理界面用） */
   showSkillDesc?: boolean;
+  /** 是否把速度与生命值显示在图标和名字同行的最右侧（队伍管理界面用） */
+  topStats?: boolean;
   /** 渲染在卡片底部的操作区（如队伍管理里的融合/释放按钮） */
   footer?: ReactNode;
 }
 
-export function UnitCard({ unit, className = '', onClick, showSkills = true, showSkillDesc = false, footer }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, showSkills = true, showSkillDesc = false, topStats = false, footer }: UnitCardProps) {
   const dead = unit.hp <= 0;
   return (
     <div
       className={`unit-card ${className} ${dead ? 'dead' : ''} ${onClick ? 'clickable' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
       onClick={onClick}
     >
-      <div className="card-top">
+      <div className={`card-top ${topStats ? 'card-top-stats' : ''}`}>
         <span className="emoji">{unit.emoji}</span>
+        {topStats && (
+          <div className="card-stats">
+            <div className="card-stat">⚡{unit.spd}</div>
+          </div>
+        )}
       </div>
-      <div>
-        <div className="card-name">{unit.name}</div>
-        <div className="card-sub">
-          <span>⚡{unit.spd}</span>
+      {!topStats && (
+        <div>
+          <div className="card-name">{unit.name}</div>
+          <div className="card-sub">
+            <span>⚡{unit.spd}</span>
+          </div>
         </div>
-      </div>
+      )}
+      {topStats && (
+        <div className="card-name-row">
+          <div className="card-name">{unit.name}</div>
+          <div className="card-hp">❤️ {unit.hp}/{unit.maxHp}</div>
+        </div>
+      )}
       <HpBar hp={unit.hp} maxHp={unit.maxHp} />
       <div className="card-sub">
-        <span>
-          {unit.hp}/{unit.maxHp}
-        </span>
+        {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
         <StatusIcons unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
@@ -173,6 +187,74 @@ export function UnitCard({ unit, className = '', onClick, showSkills = true, sho
         </div>
       )}
       {footer && <div className="unit-card-footer">{footer}</div>}
+    </div>
+  );
+}
+
+/** 单行横向拖拽滚动容器：内容超出时鼠标按住左右拖动，不换行 */
+export function useDragScroll() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const suppressClick = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let down = false;
+    let startX = 0;
+    let startScroll = 0;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      down = true;
+      suppressClick.current = false;
+      startX = e.clientX;
+      startScroll = el.scrollLeft;
+      el.style.cursor = 'grabbing';
+      el.style.userSelect = 'none';
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!down) return;
+      el.scrollLeft = startScroll - (e.clientX - startX);
+      if (el.scrollLeft !== startScroll) suppressClick.current = true;
+    };
+    const onUp = () => {
+      if (!down) return;
+      down = false;
+      el.style.cursor = '';
+      el.style.userSelect = '';
+    };
+    const onClickCapture = (e: MouseEvent) => {
+      if (suppressClick.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        suppressClick.current = false;
+      }
+    };
+    el.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    el.addEventListener('click', onClickCapture, true);
+    return () => {
+      el.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      el.removeEventListener('click', onClickCapture, true);
+    };
+  }, []);
+  return ref;
+}
+
+export function DragScrollRow({
+  children,
+  className = '',
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const ref = useDragScroll();
+  return (
+    <div ref={ref} className={`drag-row ${className}`} style={style}>
+      {children}
     </div>
   );
 }

@@ -41,6 +41,10 @@ export type GameAction =
   | { type: 'USE_SKIP'; nodeId: string }
   | { type: 'USE_BATTLE_ITEM'; itemId: string; targetUid: string }
   | { type: 'USE_SCOUT'; nodeId: string }
+  | { type: 'OPEN_SCOUT' }
+  | { type: 'CANCEL_SCOUT' }
+  | { type: 'OPEN_SKIP' }
+  | { type: 'CANCEL_SKIP' }
   | { type: 'OPEN_BACKPACK' }
   | { type: 'CLOSE_BACKPACK' }
   | { type: 'TAME_OVERFLOW_REPLACE'; tameUid: string; discardUid: string }
@@ -244,7 +248,7 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
       next = { ...next, inventory: { ...next.inventory, purify: (next.inventory.purify ?? 0) + 1 } };
       extras.push(`额外获得「${getItem('purify').name}」`);
     } else if (rng() < 0.25) { // 剩余 80% * 25% = 20% 给其他道具
-      const pool = ['scout', 'haste', 'skip'];
+      const pool = ['scout', 'twin', 'skip'];
       const extraId = pool[Math.floor(rng() * pool.length)];
       const it = getItem(extraId);
       next = { ...next, inventory: { ...next.inventory, [extraId]: (next.inventory[extraId] ?? 0) + 1 } };
@@ -307,10 +311,10 @@ function enterNode(base: GameState, node: MapNode): GameState {
   // 同步双节点（双生宝箱）：抵达开箱；持有双生符（加速道具）时消耗 1 个、同时开启两个宝箱（侦察符只用于查看情报，不双开）
   if (node.type === 'sync') {
     const paired = node.pairedId ? base.map.layers[base.currentRow]?.find((n) => n.id === node.pairedId) : undefined;
-    const hasHaste = (base.inventory.haste ?? 0) > 0;
-    const double = hasHaste;
+    const hasTwin = (base.inventory.twin ?? 0) > 0;
+    const double = hasTwin;
     let inventory = base.inventory;
-    if (hasHaste) inventory = { ...inventory, haste: inventory.haste! - 1 };
+    if (hasTwin) inventory = { ...inventory, twin: inventory.twin! - 1 };
     let next: GameState = { ...base, inventory };
     const opened: string[] = [];
     if (double && paired) {
@@ -436,7 +440,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         roster: debugRoster,
         field: debugRoster.map((u) => u.uid),
         gold: 500,
-        inventory: { berry: 5, meat: 5, skip: 3, scout: 2, haste: 2 },
+        inventory: { berry: 5, meat: 5, skip: 3, scout: 2, twin: 2 },
         rewards: [],
         battle: undefined,
         specialPending: undefined,
@@ -597,29 +601,50 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'OPEN_BACKPACK': {
-      if (state.screen === 'backpack') return state;
-      return { ...state, screen: 'backpack', backpackFrom: state.screen, scoutResult: undefined };
+      if (state.screen !== 'map') return state;
+      return { ...state, screen: 'backpack', backpackFrom: state.screen, scoutResult: undefined, skipSelecting: false };
     }
 
     case 'CLOSE_BACKPACK': {
       if (state.screen !== 'backpack') return state;
       const back = state.backpackFrom ?? 'map';
-      return { ...state, screen: back, backpackFrom: undefined, scoutResult: undefined };
+      return { ...state, screen: back, backpackFrom: undefined, scoutResult: undefined, skipSelecting: false };
     }
 
     case 'USE_SCOUT': {
       const inv = state.inventory.scout ?? 0;
-      if (inv <= 0) return state;
+      if (inv <= 0 || state.screen !== 'map') return state;
       const node = state.map.layers.flat().find((n) => n.id === action.nodeId);
       if (!node) return state;
       const info = nodeInfo(state, node);
       return {
         ...state,
-        screen: 'backpack',
+        screen: 'map',
+        scoutSelecting: false,
         inventory: { ...state.inventory, scout: inv - 1 },
         scoutResult: { nodeId: node.id, title: info.title, detail: info.detail },
         log: [`侦查：查看了「${node.label}」的情报`, ...state.log].slice(0, 20),
       };
+    }
+
+    case 'OPEN_SCOUT': {
+      const inv = state.inventory.scout ?? 0;
+      if (inv <= 0 || state.screen !== 'backpack') return state;
+      return { ...state, screen: 'map', scoutSelecting: true, skipSelecting: false, scoutResult: undefined };
+    }
+
+    case 'CANCEL_SCOUT': {
+      return { ...state, scoutSelecting: false, scoutResult: undefined };
+    }
+
+    case 'OPEN_SKIP': {
+      const inv = state.inventory.skip ?? 0;
+      if (inv <= 0 || state.screen !== 'backpack') return state;
+      return { ...state, screen: 'map', skipSelecting: true, scoutSelecting: false, scoutResult: undefined };
+    }
+
+    case 'CANCEL_SKIP': {
+      return { ...state, skipSelecting: false };
     }
 
     case 'USE_SKIP': {
@@ -657,6 +682,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const withRewards: GameState = { ...base, screen: 'reward', gold: base.gold + goldGain, rewards };
       return {
         ...withRewards,
+        skipSelecting: false,
         log: [`使用跳关道具，跳过「${node.label}」获得奖励`, ...state.log].slice(0, 20),
       };
     }

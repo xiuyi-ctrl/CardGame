@@ -27,6 +27,15 @@ body,
   height: 100%;
 }
 
+html,
+body {
+  overflow-x: hidden;
+}
+
+#root {
+  overflow: hidden;
+}
+
 body {
   background: radial-gradient(ellipse at top, #241b3d 0%, var(--bg) 55%);
   color: var(--text);
@@ -69,6 +78,12 @@ button.primary {
   display: flex;
   flex-direction: column;
   padding: 14px 20px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.screen::-webkit-scrollbar {
+  display: none;
 }
 
 .hud {
@@ -220,6 +235,45 @@ button.primary {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+/* 属性位于顶行（⚡速度在最右）与名字同行（❤️生命在最右），队伍管理/背包/战斗共用 */
+.card-top-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.card-stats {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.card-stat {
+  color: var(--gold);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-hp {
+  margin-left: auto;
+  color: var(--hp-good);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .emoji {
@@ -375,9 +429,11 @@ button.primary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px 10px;
-  min-width: 340px;
-  max-width: 460px;
-  max-height: 132px;
+  flex: 0 1 auto;
+  margin: 0 auto;
+  min-width: 260px;
+  max-width: 400px;
+  max-height: 210px;
   overflow: hidden;
   align-content: start;
 }
@@ -386,7 +442,7 @@ button.primary {
   font-weight: 700;
   white-space: nowrap;
   color: var(--gold);
-  font-size: 13px;
+  font-size: 15px;
   grid-column: 1 / -1;
 }
 
@@ -394,8 +450,8 @@ button.primary {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
-  padding: 4px 8px;
+  gap: 2px;
+  padding: 6px 10px;
   text-align: left;
 }
 
@@ -405,31 +461,95 @@ button.primary {
   align-items: center;
   width: 100%;
   font-weight: 700;
+  font-size: 15px;
+  color: #7ac3ff;
+}
+
+.action-panel .skill-btn .skill-num {
+  font-size: 14px;
 }
 
 .action-panel .skill-btn .skill-desc {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-dim);
-  line-height: 1.3;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
 }
 
-.action-panel .foods {
+/* 捕获物（最左）与道具（最右）面板：竖向排列、无滚动条 */
+.action-panel .capture-panel,
+.action-panel .items-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-start;
-  border-left: 1px solid var(--border);
-  padding-left: 16px;
-  overflow-y: auto;
+  min-width: 96px;
 }
 
-.action-panel .foods button {
+.action-panel .capture-panel {
+  border-right: 1px solid var(--border);
+  padding-right: 16px;
+}
+
+.action-panel .items-panel {
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+
+/* 左右面板内的按钮：网格横向排布，最多 3 行，自动加宽占用区域 */
+.action-panel .panel-btns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, auto);
+  grid-auto-columns: minmax(110px, max-content);
+  gap: 6px 10px;
+  align-content: start;
+  overflow: hidden;
+}
+
+.action-panel .capture-panel button,
+.action-panel .items-panel button {
   text-align: left;
+}
+
+.action-panel .panel-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
   white-space: nowrap;
+}
+
+/* 底部操作面板上方的横向提示框：选中技能/食物/道具后在此提示选择目标 */
+.hint-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  margin-bottom: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.hint-bar .pending-hint {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold);
+  text-align: center;
+}
+
+.hint-bar .hint-skill {
+  color: #7ac3ff;
+  font-weight: 700;
+}
+
+.hint-bar .pending-hint.idle {
+  color: var(--text-dim);
+  font-weight: 400;
 }
 
 /* 左侧战斗日志 */
@@ -489,6 +609,11 @@ button.primary {
   gap: 18px;
   overflow: auto;
   padding: 10px 0;
+  scrollbar-width: none;
+}
+
+.map-canvas::-webkit-scrollbar {
+  display: none;
 }
 
 .map-lines {
@@ -568,6 +693,28 @@ button.primary {
   box-shadow: 0 0 8px rgba(123, 224, 106, 0.3);
 }
 
+/* 侦查模式：任意节点可点击查看情报 */
+.node.node-scoutable {
+  cursor: pointer;
+  border-color: #ffd166;
+  box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.55), 0 0 12px rgba(255, 209, 102, 0.4);
+}
+
+.node.node-scoutable:hover {
+  background: var(--bg-card);
+}
+
+/* 跳关模式：可达的战斗类节点可点击直接获得奖励 */
+.node.node-skipable {
+  cursor: pointer;
+  border-color: #7be06a;
+  box-shadow: 0 0 0 2px rgba(123, 224, 106, 0.55), 0 0 12px rgba(123, 224, 106, 0.45);
+}
+
+.node.node-skipable:hover {
+  background: var(--bg-card);
+}
+
 /* 已失效节点（被开启的双生宝箱配对节点 / 已开启的钥匙门）：灰显 */
 .node.node-off {
   opacity: 0.35;
@@ -635,22 +782,6 @@ button.primary {
   font-size: 11px;
 }
 
-.node .skip-btn {
-  display: block;
-  margin: 6px auto 0;
-  padding: 2px 8px;
-  font-size: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-panel);
-  cursor: pointer;
-}
-
-.node .skip-btn:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
 /* 队伍 / 奖励 / 商店 */
 .roster-list {
   flex: 1;
@@ -677,6 +808,45 @@ button.primary {
 .roster-card {
   width: 220px;
   height: 350px;
+}
+
+.roster-card .card-top-stats {
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.roster-card .card-stats {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.roster-card .card-stat,
+.roster-card .card-hp {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.roster-card .card-stat {
+  color: var(--gold);
+}
+
+.roster-card .card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-card .card-hp {
+  margin-left: auto;
+  color: var(--hp-good);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .roster-card .skill-list {
@@ -725,6 +895,27 @@ button.primary {
 
 .roster-actions button {
   width: 100%;
+}
+
+/* 单行横向拖拽滚动（不换行，内容超出时鼠标拖动，子项保持自身宽度不被压缩） */
+.drag-row {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  padding: 6px 2px 12px;
+  cursor: grab;
+  scrollbar-width: none;
+}
+
+.drag-row > * {
+  flex-shrink: 0;
+}
+
+.drag-row::-webkit-scrollbar {
+  display: none;
 }
 
 /* 卡片底部操作按钮（融合/释放） */
@@ -781,34 +972,6 @@ button.primary {
   padding-bottom: 4px;
 }
 
-.scout-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 6px 0;
-}
-
-.scout-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.scout-node {
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.scout-node:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
 .scout-result {
   margin: 10px auto;
   padding: 14px 20px;
@@ -831,6 +994,16 @@ button.primary {
 .scout-result .rdesc {
   color: var(--text-dim);
   font-size: 13px;
+}
+
+/* 弹窗内的侦查结果：去掉重复外框，紧凑居中 */
+.confirm-box .scout-result {
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  margin: 6px 0 10px;
+  padding: 12px 10px;
+  max-width: 100%;
 }
 
 .panel-row {
@@ -860,6 +1033,23 @@ button.primary {
 
 .reward-card:hover {
   border-color: var(--gold);
+}
+
+/* 背包道具卡：统一尺寸，描述区自动伸缩 */
+.reward-card.bag-item {
+  width: 220px;
+  height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px;
+}
+
+.reward-card.bag-item .rdesc {
+  flex: 1;
+  display: flex;
+  align-items: center;
 }
 
 .reward-card .ricon {

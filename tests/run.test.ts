@@ -796,7 +796,7 @@ describe('同步双节点', () => {
     expect(after.chestResult).toBeUndefined();
   });
 
-  it('持疾行符抵达时消耗 1 个并同时开启两个宝箱（侦察符不再参与双开）', () => {
+  it('持双生符抵达时消耗 1 个并同时开启两个宝箱（侦察符不再参与双开）', () => {
     const { s, node, parent } = atSyncParent();
     const row = s.map.layers.findIndex((r) => r.includes(node));
     let cur: GameState = {
@@ -804,13 +804,13 @@ describe('同步双节点', () => {
       screen: 'map',
       currentRow: row - 1,
       currentNodeId: parent.id,
-      inventory: { ...s.inventory, scout: 1, haste: 1 },
+      inventory: { ...s.inventory, scout: 1, twin: 1 },
     };
     cur = dispatch(cur, { type: 'MOVE', nodeId: node.id });
     expect(cur.screen).toBe('chest');
     expect((cur.chestResult ?? []).length).toBe(2);
     expect(cur.inventory.scout).toBe(1); // 侦察符只用于查看情报，不参与双开
-    expect(cur.inventory.haste).toBe(0); // 只消耗疾行符
+    expect(cur.inventory.twin).toBe(0); // 只消耗双生符
 
     // 仅持侦察符不会双开
     const { s: s2, node: node2, parent: parent2 } = atSyncParent();

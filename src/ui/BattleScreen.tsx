@@ -189,6 +189,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                 >
                   <UnitCard
                     unit={u}
+                    topStats
                     className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}
                     onClick={
                       validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u))
@@ -209,6 +210,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                   key={u.uid}
                   unit={u}
                   showSkills={false}
+                  topStats
                   className={validAllyTargets.has(u.uid) ? 'valid-target targetable' : ''}
                   onClick={validAllyTargets.has(u.uid) ? () => onTargetClick(u.uid, false) : undefined}
                 />
@@ -218,7 +220,40 @@ export function BattleScreen({ state, dispatch }: Props) {
         </div>
       </div>
 
+      <div className="hint-bar">
+        {pendingSkill ? (
+          <span className="pending-hint">
+            ⚡ <span className="hint-skill">{getSkill(pendingSkill.skillId).name}</span>：请选择一个目标
+          </span>
+        ) : pendingTame ? (
+          <span className="pending-hint">🍖 选择血量低于 {Math.round(TAME_THRESHOLD * 100)}% 的敌人进行驯服</span>
+        ) : pendingBattleItem ? (
+          <span className="pending-hint">🧪 {getItem(pendingBattleItem).name}：选择目标使用</span>
+        ) : (
+          <span className="pending-hint idle">⚔️ 选择技能、食物或战斗道具开始行动</span>
+        )}
+      </div>
+
       <div className="action-panel">
+        <div className="capture-panel">
+          <span className="panel-label">🍖 捕获</span>
+          <div className="panel-btns">
+            {foods.length === 0 && <span className="card-sub">没有食物</span>}
+            {foods.map((f) => {
+              const count = state.inventory[f.id] ?? 0;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => onFoodClick(f.id)}
+                  disabled={count <= 0 || !battle.enemyUnits.some((u) => isTameable(u))}
+                  title={`${f.desc}（拥有 ${count} 个）`}
+                >
+                  {f.emoji} {f.name}×{count}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div className="skill-column">
           <span className="who">{current ? `${current.emoji} ${current.name}` : '—'}</span>
           {current ? (
@@ -247,59 +282,30 @@ export function BattleScreen({ state, dispatch }: Props) {
             </span>
           )}
         </div>
-        <div className="foods">
-          {foods.length === 0 && <span className="card-sub">没有食物</span>}
-          {foods.map((f) => {
-            const count = state.inventory[f.id] ?? 0;
-            return (
-              <button
-                key={f.id}
-                onClick={() => onFoodClick(f.id)}
-                disabled={count <= 0 || !battle.enemyUnits.some((u) => isTameable(u))}
-                title={`${f.desc}（拥有 ${count} 个）`}
-              >
-                {f.emoji} {f.name}×{count}
-              </button>
-            );
-          })}
-        </div>
-        <div className="foods">
-          {battleItems.length === 0 ? (
-            <span className="card-sub">没有战斗道具</span>
-          ) : (
-            battleItems.map((it) => {
-              const count = state.inventory[it.id] ?? 0;
-              const isPending = pendingBattleItem === it.id;
-              return (
-                <button
-                  key={it.id}
-                  onClick={() => onBattleItemClick(it.id)}
-                  className={isPending ? 'primary' : ''}
-                  title={`${it.desc}（拥有 ${count} 个）`}
-                >
-                  {it.emoji} {it.name}×{count}
-                </button>
-              );
-            })
-          )}
+        <div className="items-panel">
+          <span className="panel-label">🧪 道具</span>
+          <div className="panel-btns">
+            {battleItems.length === 0 ? (
+              <span className="card-sub">没有战斗道具</span>
+            ) : (
+              battleItems.map((it) => {
+                const count = state.inventory[it.id] ?? 0;
+                const isPending = pendingBattleItem === it.id;
+                return (
+                  <button
+                    key={it.id}
+                    onClick={() => onBattleItemClick(it.id)}
+                    className={isPending ? 'primary' : ''}
+                    title={`${it.desc}（拥有 ${count} 个）`}
+                  >
+                    {it.emoji} {it.name}×{count}
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
-
-      {pendingSkill && (
-        <div className="card-sub" style={{ marginTop: 6 }}>
-          ⚡ {getSkill(pendingSkill.skillId).name}：请选择一个目标
-        </div>
-      )}
-      {pendingTame && (
-        <div className="card-sub" style={{ marginTop: 6 }}>
-          🍖 选择血量低于 {Math.round(TAME_THRESHOLD * 100)}% 的敌人进行驯服
-        </div>
-      )}
-      {pendingBattleItem && (
-        <div className="card-sub" style={{ marginTop: 6 }}>
-          🧪 {getItem(pendingBattleItem).name}：选择目标使用
-        </div>
-      )}
 
       {battle.phase === 'won' && (
         <div className="overlay">
