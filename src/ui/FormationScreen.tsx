@@ -92,7 +92,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                       onClick={() => onSlotClick(row, col)}
                     >
                       {u ? (
-                        <UnitCard unit={u} showSkills={false} topStats className={isSel ? 'valid-target targetable' : ''} />
+                        <UnitCard unit={u} small showSkills={false} topStats className={isSel ? 'valid-target targetable' : ''} />
                       ) : (
                         <span className="formation-empty-slot">空</span>
                       )}

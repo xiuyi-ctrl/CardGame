@@ -474,6 +474,20 @@ button.primary {
   cursor: crosshair;
 }
 
+.formation-pets {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-content: flex-start;
+}
+
+.formation-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+
 .formation-slot.valid-target .unit-card,
 .formation-slot.selected .unit-card {
   border-color: var(--gold);
@@ -490,6 +504,16 @@ button.primary {
   gap: 10px;
 }
 
+.formation-board .formation-row {
+  gap: 15px;
+}
+
+.formation-board {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
 .battle-field .formation-slot .unit-card {
   width: 140px;
   padding: 6px;
@@ -498,10 +522,24 @@ button.primary {
   height: 92px;
 }
 
+.formation-board .formation-slot .unit-card {
+  width: 210px;
+  padding: 9px;
+  gap: 5px;
+  border-radius: 12px;
+  height: 138px;
+}
+
 .battle-field .formation-slot.empty {
   width: 140px;
   height: 92px;
   border-radius: 10px;
+}
+
+.formation-board .formation-slot.empty {
+  width: 210px;
+  height: 138px;
+  border-radius: 12px;
 }
 
 /* 点击敌方生物查看技能：面板定位在该行左侧空白区域 */
@@ -568,28 +606,56 @@ button.primary {
   box-shadow: 0 0 10px rgba(176, 141, 255, 0.4);
 }
 
-.battle-field .formation-empty-slot {
+.battle-field .formation-empty-slot,
+.formation-board .formation-empty-slot {
   font-size: 11px;
 }
 
-.battle-field .emoji {
+.formation-board .formation-empty-slot {
+  font-size: 17px;
+}
+
+.battle-field .emoji,
+.formation-board .emoji {
   font-size: 28px;
 }
 
-.battle-field .card-name {
+.formation-board .emoji {
+  font-size: 42px;
+}
+
+.battle-field .card-name,
+.formation-board .card-name {
   font-size: 12px;
 }
 
+.formation-board .card-name {
+  font-size: 18px;
+}
+
 .battle-field .card-hp,
-.battle-field .card-stat {
+.battle-field .card-stat,
+.formation-board .card-hp,
+.formation-board .card-stat {
   font-size: 11px;
 }
 
-.battle-field .card-sub {
+.formation-board .card-hp,
+.formation-board .card-stat {
+  font-size: 17px;
+}
+
+.battle-field .card-sub,
+.formation-board .card-sub {
   font-size: 10px;
 }
 
-.battle-field .passive-badge {
+.formation-board .card-sub {
+  font-size: 15px;
+}
+
+.battle-field .passive-badge,
+.formation-board .passive-badge {
   display: none;
 }
 
