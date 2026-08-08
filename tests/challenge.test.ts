@@ -413,9 +413,10 @@ describe('DEBUG_JUMP（测试关卡直达）', () => {
     expect(['battle', 'roster', 'event', 'shop', 'special', 'rest']).toContain(s.screen);
   });
 
-  it('可直接跳到首领层开战', () => {
+  it('可直接跳到首领层布阵', () => {
     const s = dispatch(createInitialState(), { type: 'DEBUG_JUMP', act: 3, row: 9, nodeType: 'boss', seed: 7 });
-    expect(s.screen).toBe('battle');
+    expect(s.screen).toBe('formation');
+    expect(s.formation?.encounter).toBeDefined();
     expect(s.map.boss[s.currentNodeId]).toBeDefined();
   });
 

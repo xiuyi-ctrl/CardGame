@@ -4,12 +4,12 @@ import type { GameState } from '../game/state/game';
 import { FIELD_MAX } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { getMonster } from '../game/data/monsters';
+import { placeUnit } from '../game/state/formation';
+import type { FormationPosition, FormationRow } from '../game/state/formation';
 import { UnitCard } from './components';
 import type { Unit } from '../game/types';
 
-type Row = 'front' | 'back';
-type Position = { row: Row; column: 0 | 1 | 2 };
-const ROWS: { row: Row; label: string }[] = [
+const ROWS: { row: FormationRow; label: string }[] = [
   { row: 'front', label: '前 排' },
   { row: 'back', label: '后 排' },
 ];
@@ -21,8 +21,8 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   const fb = f;
 
   /** 棋盘站位：uid -> 位置。初始放默认自动布阵的出战宠物 */
-  const [positions, setPositions] = useState<Record<string, Position>>(() => {
-    const p: Record<string, Position> = {};
+  const [positions, setPositions] = useState<Record<string, FormationPosition>>(() => {
+    const p: Record<string, FormationPosition> = {};
     for (const u of fb.initialField) p[u.uid] = { row: u.row, column: u.column };
     return p;
   });
@@ -46,26 +46,20 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     if (pos) bySlot[`${pos.row}-${pos.column}`] = u;
   }
 
-  const fieldCount = Object.keys(positions).length;
+  const fieldCount = Object.keys(positions).filter((k) => positions[k]).length;
   /** 宠物池 = 全部宠物中未上场的 */
   const pool = fb.units.filter((u) => !positions[u.uid]);
 
-  function moveToSlot(uid: string, row: Row, col: 0 | 1 | 2) {
+  function moveToSlot(uid: string, row: FormationRow, col: 0 | 1 | 2) {
     const key = `${row}-${col}`;
     const existing = bySlot[key];
-    if (!existing) {
-      if (fieldCount >= FIELD_MAX) return;
-      setPositions({ ...positions, [uid]: { row, column: col } });
-    } else if (existing.uid !== uid) {
-      const a = positions[uid];
-      const b = positions[existing.uid];
-      setPositions({ ...positions, [uid]: b, [existing.uid]: a });
-    }
+    if (!existing && !positions[uid] && fieldCount >= FIELD_MAX) return;
+    setPositions(placeUnit(positions, uid, { row, column: col }));
     setSelected(null);
   }
 
   /** 拖到棋盘格子：目标有宠物则交换，空位则移动（出战已满时空位拒绝） */
-  function onSlotDrop(e: DragEvent, row: Row, col: 0 | 1 | 2) {
+  function onSlotDrop(e: DragEvent, row: FormationRow, col: 0 | 1 | 2) {
     e.preventDefault();
     const raw = e.dataTransfer.getData('text/plain');
     if (!raw) return;
@@ -74,7 +68,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     moveToSlot(uid, row, col);
   }
 
-  function onSlotClick(row: Row, col: 0 | 1 | 2) {
+  function onSlotClick(row: FormationRow, col: 0 | 1 | 2) {
     if (dragMoved.current) return;
     const key = `${row}-${col}`;
     const existing = bySlot[key];
@@ -122,11 +116,13 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   }
 
   const enemyDesc = fb.encounter.map((e) => `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}`).join('、');
+  const curNode = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
+  const title = curNode?.type === 'boss' ? '👑 首领战布阵' : curNode?.type === 'guardian' ? '🛡️ 守卫战布阵' : '战前布阵';
 
   return (
     <div className="screen">
       <div className="hud">
-        <span className="act">第 {state.act} 层 · 战前布阵</span>
+        <span className="act">第 {state.act} 层 · {title}</span>
         <span className="chip">👥 出战 {fieldCount}/{FIELD_MAX} 只</span>
         <button className="home-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
           ↩ 返回地图
