@@ -189,7 +189,6 @@ describe('车轮战（轮换上阵）', () => {
     const enemies = [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
-      { speciesId: 'mimi' },
     ];
     const b = createBattle([p1, p2], enemies, 6, { gauntlet: true });
     // 只有第 1 只上场，第 2 只进入我方替补席
@@ -209,7 +208,7 @@ describe('车轮战（轮换上阵）', () => {
     expect(swapped.playerUnits.some((u) => u.uid === p2.uid)).toBe(true);
     expect(swapped.playerBench?.length ?? 0).toBe(0);
     expect(swapped.playerDown?.some((u) => u.uid === p1.uid)).toBe(true);
-    expect(swapped.gauntlet?.current).toBe(3);
+    expect(swapped.gauntlet?.current).toBe(2);
   });
 
   it('失败不 Game Over：进入坏事件惩罚，全队保留', () => {

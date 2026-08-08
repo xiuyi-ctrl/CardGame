@@ -207,6 +207,10 @@ export function BattleScreen({ state, dispatch }: Props) {
   }
 
   function onFoodClick(foodId: string) {
+    if (pendingTame === foodId) {
+      setPendingTame(null);
+      return;
+    }
     setPendingSkill(null);
     setSwapFrom(null);
     setPendingBattleItem(null);
@@ -251,14 +255,15 @@ export function BattleScreen({ state, dispatch }: Props) {
     const isTarget = validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u));
     const isInspect = !pendingSkill && !pendingBattleItem && !pendingTame && !swapFrom;
     const inspected = inspectEnemy === u.uid;
+    const showTameTip = pendingTame && isTameable(u);
     return (
       <div
         key={key}
         className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${isInspect ? 'inspectable' : ''} ${inspected ? 'inspected' : ''}`}
         onClick={isTarget || isInspect ? () => onEnemyClick(u.uid) : undefined}
-        title={pendingTame && isTameable(u) ? tameTip(u) : undefined}
       >
         <UnitCard unit={u} small topStats className={isTarget ? 'valid-target targetable' : ''} />
+        {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
       </div>
     );
   };
@@ -372,12 +377,14 @@ export function BattleScreen({ state, dispatch }: Props) {
             {foods.length === 0 && <span className="card-sub">没有食物</span>}
             {foods.map((f) => {
               const count = state.inventory[f.id] ?? 0;
+              const isPending = pendingTame === f.id;
               return (
                 <button
                   key={f.id}
                   onClick={() => onFoodClick(f.id)}
-                  disabled={count <= 0 || !canAct || !aliveEnemies.some((u) => isTameable(u))}
-                  title={`${f.desc}（拥有 ${count} 个）`}
+                  className={isPending ? 'primary' : ''}
+                  disabled={count <= 0 || battle.phase !== 'acting' || !aliveEnemies.some((u) => isTameable(u))}
+                  title={`${f.desc}（拥有 ${count} 个，喂食不消耗行动点）`}
                 >
                   {f.emoji} {f.name}×{count}
                 </button>

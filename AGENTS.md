@@ -41,7 +41,7 @@
 
 ## 核心设计约定
 
-- 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`）+ 每段 ±1 浮动。`getEffectiveSpd` 含药水 ±1。
+- 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`），无随机浮动。`getEffectiveSpd` 含药水 ±1。
 - 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+3 / 速度+1。
 - 战斗日志为结构化 `LogEntry[]`（`{ text, side: 'player'|'enemy'|'info' }`）：`pushLog(b, msg, side)` 带阵营，技能/状态/道具按行动者或受击者阵营，系统消息用 info。UI 左侧日志面板按 side 分色。
 - 状态：灼烧 2伤/2R、中毒 2伤/3R、战吼 伤害+2/2R、铁刺 伤害-1/2R、眩晕（跳过行动）。侵蚀节点：速度-1（入场）或 我方受伤+1。

@@ -172,6 +172,10 @@ export function createBattle(
     while (picked.length < target) picked.push(picked[picked.length % enemySpecies.length] || enemySpecies[0]);
     b.playerUnits = preparedPlayer;
     b.enemyUnits = picked.map((e, i) => makeEnemy(e, i, untameable));
+    // 只有一个敌人时，默认前排居中显示
+    if (b.enemyUnits.length === 1 && b.enemyUnits[0]) {
+      b.enemyUnits = [{ ...b.enemyUnits[0], row: 'front', column: 1 }];
+    }
   }
   b.playerAp = b.playerUnits.filter((u) => u.hp > 0).length;
   b.playerApMax = b.playerAp;
@@ -542,49 +546,42 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     for (const [uid, count] of perTarget) {
       const t = actorFromId(nb, uid);
       if (!t || t.hp <= 0) continue;
-      const single = useRng(nb, (rngVal, b2) => {
-        const base = (skill.damage ?? 0) + getDamageBonus(actor);
-        let total = 0;
-        for (let i = 0; i < count; i++) {
-          const variance = Math.round(rngVal * 2 - 1); // -1 / 0 / +1
-          total += Math.max(1, base + variance);
+      const base = Math.max(1, (skill.damage ?? 0) + getDamageBonus(actor));
+      const total = base * count;
+      let finalDmg = Math.max(1, total - getDamageGuard(t));
+      if (t.isPlayer && nb.corruptDebuff === 'dmg') {
+        finalDmg += 1;
+      }
+      let t2 = { ...t, hp: Math.max(0, t.hp - finalDmg) };
+      const ap = getUnitPassive(actor);
+      if (ap?.kind === 'venom') t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
+      if (ap?.kind === 'scorch') t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
+      for (const e of skill.effects ?? []) {
+        if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
+          t2 = applyStatusTo(t2, e);
         }
-        let finalDmg = Math.max(1, total - getDamageGuard(t));
-        if (t.isPlayer && b2.corruptDebuff === 'dmg') {
-          finalDmg += 1;
+      }
+      let nb2 = replaceUnit(nb, t2);
+      // 吸血：造成伤害后恢复自身
+      if (ap?.kind === 'drain') {
+        const healedActor = actorFromId(nb2, actor.uid);
+        if (healedActor && healedActor.hp > 0) {
+          const maxHp = getEffectiveMaxHp(healedActor);
+          const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
+          nb2 = replaceUnit(nb2, healed);
         }
-        let t2 = { ...t, hp: Math.max(0, t.hp - finalDmg) };
-        const ap = getUnitPassive(actor);
-        if (ap?.kind === 'venom') t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
-        if (ap?.kind === 'scorch') t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
-        for (const e of skill.effects ?? []) {
-          if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
-            t2 = applyStatusTo(t2, e);
-          }
+      }
+      // 尖刺：受击者反伤攻击者
+      const tp = getUnitPassive(t2);
+      if (tp?.kind === 'thorns' && t2.hp > 0) {
+        const attacker = actorFromId(nb2, actor.uid);
+        if (attacker && attacker.hp > 0) {
+          const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
+          nb2 = replaceUnit(nb2, hurt);
+          nb2 = pushLog(nb2, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2));
         }
-        let nb2 = replaceUnit(b2, t2);
-        // 吸血：造成伤害后恢复自身
-        if (ap?.kind === 'drain') {
-          const healedActor = actorFromId(nb2, actor.uid);
-          if (healedActor && healedActor.hp > 0) {
-            const maxHp = getEffectiveMaxHp(healedActor);
-            const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
-            nb2 = replaceUnit(nb2, healed);
-          }
-        }
-        // 尖刺：受击者反伤攻击者
-        const tp = getUnitPassive(t2);
-        if (tp?.kind === 'thorns' && t2.hp > 0) {
-          const attacker = actorFromId(nb2, actor.uid);
-          if (attacker && attacker.hp > 0) {
-            const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
-            nb2 = replaceUnit(nb2, hurt);
-            nb2 = pushLog(nb2, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2));
-          }
-        }
-        return pushLog(nb2, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害`, sideOf(actor));
-      });
-      nb = single;
+      }
+      nb = pushLog(nb2, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害`, sideOf(actor));
     }
   }
   return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);
@@ -654,9 +651,9 @@ export function tameChance(enemy: Unit, foodId: string): number {
   return Math.min(1, food.baseTame * species.tame.difficulty * hpFactor * (1 + fails * TAME_FAIL_BONUS));
 }
 
-/** 玩家行动：喂食驯服敌人（消耗 1 AP）。每次失败会提高该敌人的后续捕捉概率；残血到 1 点时必定捕捉。 */
+/** 玩家行动：喂食驯服敌人（不消耗 AP）。每次失败会提高该敌人的后续捕捉概率；残血到 1 点时必定捕捉。 */
 export function playerTame(b: BattleState, foodId: string, enemyUid: string): BattleState {
-  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
+  if (b.phase !== 'acting') return b;
   const enemy = b.enemyUnits.find((u) => u.uid === enemyUid);
   if (!enemy || enemy.hp <= 0) return b;
   if (!enemy.tameable) {
@@ -696,8 +693,7 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
     return after;
   });
   if (nb.rngCount === b.rngCount) return b;
-  const after = { ...nb, playerAp: nb.playerAp - 1 };
-  return afterPlayerAction(after);
+  return afterPlayerAction(nb);
 }
 
 /** 第一个尚未行动的存活玩家单位（供 UI 高亮/测试使用；新模型下玩家自由选择，此函数仅为辅助） */
