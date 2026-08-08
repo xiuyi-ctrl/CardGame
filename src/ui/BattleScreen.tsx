@@ -5,7 +5,6 @@ import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
 import {
   isTameable,
-  playerHasMove,
   skillUsesLeft,
   tameChance,
   TAME_THRESHOLD,
@@ -15,6 +14,7 @@ import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { SkillDef, Unit } from '../game/types';
 import { UnitCard, skillBrief, SkillTag } from './components';
+import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
@@ -60,6 +60,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
+  const { fx, pops, hpMap, animating } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -70,9 +71,13 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [inspectEnemy, setInspectEnemy] = useState<string | null>(null);
 
-  const canAct = playerHasMove(b);
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0);
+  // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）
+  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating;
+
+  /** 动画期间按 hpMap 覆盖显示血量，血量随动画事件推进逐步生效 */
+  const shownUnit = (u: Unit): Unit => (hpMap ? { ...u, hp: hpMap[u.uid] ?? u.hp } : u);
 
   useEffect(() => {
     setPendingSkill(null);
@@ -94,9 +99,10 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
   const selectedSkills: SkillDef[] = useMemo(
-    () => (selected && !selected.acted && selected.hp > 0 ? selected.skills.map((id) => getSkill(id)) : []),
+    () => (selected && selected.hp > 0 ? selected.skills.map((id) => getSkill(id)) : []),
     [selected],
   );
+  const selectedOrder = selected ? battle.orders?.[selected.uid] : undefined;
 
   const foods = currentFoodList(state);
   const battleItems = BATTLE_ITEM_IDS.map((id) => getItem(id)).filter((it) => (state.inventory[it.id] ?? 0) > 0);
@@ -138,6 +144,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   }, [pendingSkill, swapFrom, pendingBattleItem, battle?.rngCount]);
 
   function onPlayerClick(uid: string) {
+    if (animating) return;
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
       if (skill.target === 'ally') {
@@ -161,10 +168,11 @@ export function BattleScreen({ state, dispatch }: Props) {
       return;
     }
     const u = b.playerUnits.find((x) => x.uid === uid);
-    if (u && u.hp > 0 && !u.acted) setSelectedUid(selectedUid === uid ? null : uid);
+    if (u && u.hp > 0) setSelectedUid(selectedUid === uid ? null : uid);
   }
 
   function onEnemyClick(uid: string) {
+    if (animating) return;
     if (pendingSkill) {
       dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
       setPendingSkill(null);
@@ -190,7 +198,8 @@ export function BattleScreen({ state, dispatch }: Props) {
   }
 
   function onSkillClick(skill: SkillDef) {
-    if (!selected || selected.acted) return;
+    if (animating) return;
+    if (!selected || selected.hp <= 0) return;
     if (skill.target === 'single' || skill.target === 'ally') {
       if (pendingSkill && pendingSkill.skillId === skill.id) {
         setPendingSkill(null);
@@ -207,6 +216,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   }
 
   function onFoodClick(foodId: string) {
+    if (animating) return;
     if (pendingTame === foodId) {
       setPendingTame(null);
       return;
@@ -219,6 +229,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   }
 
   function onBattleItemClick(itemId: string) {
+    if (animating) return;
     if (pendingBattleItem === itemId) {
       setPendingBattleItem(null);
       return;
@@ -249,6 +260,15 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const logItems = battle.log.slice(-6);
 
+  const popOverlay = (uid: string) =>
+    pops
+      .filter((p) => p.uid === uid)
+      .map((p) => (
+        <span key={p.id} className={`dmg-pop ${p.heal ? 'heal' : ''}`}>
+          {p.text}
+        </span>
+      ));
+
   const enemySlot = (u: Unit | undefined, key: string, topRow: boolean) => {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
     if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
@@ -256,14 +276,16 @@ export function BattleScreen({ state, dispatch }: Props) {
     const isInspect = !pendingSkill && !pendingBattleItem && !pendingTame && !swapFrom;
     const inspected = inspectEnemy === u.uid;
     const showTameTip = pendingTame && isTameable(u);
+    const fxCls = fx[u.uid];
     return (
       <div
         key={key}
         className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${isInspect ? 'inspectable' : ''} ${inspected ? 'inspected' : ''}`}
         onClick={isTarget || isInspect ? () => onEnemyClick(u.uid) : undefined}
       >
-        <UnitCard unit={u} small topStats className={isTarget ? 'valid-target targetable' : ''} />
+        <UnitCard unit={shownUnit(u)} small topStats className={`${fxCls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} />
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
+        {popOverlay(u.uid)}
       </div>
     );
   };
@@ -272,14 +294,16 @@ export function BattleScreen({ state, dispatch }: Props) {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
     if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
     const sel = selectedUid === u.uid;
-    const clickable = validAllyTargets.has(u.uid) || (u.hp > 0 && !u.acted);
+    const clickable = validAllyTargets.has(u.uid) || u.hp > 0;
+    const fxCls = fx[u.uid];
     return (
       <div
         key={key}
         className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
       >
-        <UnitCard unit={u} small showSkills={false} topStats className={clickable || sel ? 'valid-target targetable' : ''} />
+        <UnitCard unit={shownUnit(u)} small showSkills={false} topStats className={`${fxCls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} />
+        {popOverlay(u.uid)}
       </div>
     );
   };
@@ -299,9 +323,11 @@ export function BattleScreen({ state, dispatch }: Props) {
           ? '↔ 请选择要交换位置的己方宠物'
           : selected
             ? `⚔️ ${selected.emoji} ${selected.name}：选择技能或换位`
-            : canAct
-              ? '点击一只未行动的己方宠物，再选择技能或换位'
-              : '敌方行动中…';
+            : animating
+              ? '战斗结算中…'
+              : canAct
+                ? '给每只宠物下达技能指令，点「⚡ 结束回合」后按速度统一结算'
+                : '敌方行动中…';
 
   return (
     <div className="screen">
@@ -417,7 +443,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           </div>
         </div>
         <div className="skill-column">
-          {selected && !selected.acted ? (
+          {selected && selected.hp > 0 ? (
             <>
               <span className="who">
                 {selected.emoji} {selected.name}
@@ -429,17 +455,26 @@ export function BattleScreen({ state, dispatch }: Props) {
                     </span>
                   ) : null;
                 })()}
+                {selectedOrder ? (
+                  <span className="order-badge" title="该宠物已选择技能，可再次点击技能修改">
+                    ⚡ 已选择
+                  </span>
+                ) : selected.acted ? (
+                  <span className="order-badge">已行动</span>
+                ) : null}
               </span>
               {selectedSkills.map((s) => {
                 const left = skillUsesLeft(selected, s.id);
                 const limited = Number.isFinite(left);
                 const exhausted = limited && left <= 0;
+                const isCurrent = selectedOrder?.skillId === s.id;
+                const cannotOrder = selected.acted && !selectedOrder;
                 return (
                   <button
                     key={s.id}
-                    className="skill-btn"
+                    className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
                     onClick={() => onSkillClick(s)}
-                    disabled={exhausted}
+                    disabled={exhausted || cannotOrder || animating}
                     title={`${s.desc}（${skillBrief(s)}）${limited ? `，本场剩余 ${Math.max(0, left)} 次` : ''}`}
                   >
                     <span className="skill-btn-main">
@@ -448,7 +483,9 @@ export function BattleScreen({ state, dispatch }: Props) {
                     </span>
                     <span className="skill-desc">
                       {s.desc}
-                      {limited && <span className="skill-uses">{exhausted ? '（已用完）' : `（剩 ${Math.max(0, left)} 次）`}</span>}
+                      {limited && (
+                        <span className="skill-uses">{exhausted ? '（已用完）' : `（剩 ${Math.max(0, left)} 次）`}</span>
+                      )}
                     </span>
                   </button>
                 );
@@ -462,7 +499,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                   setInspectEnemy(null);
                   setSwapFrom(selected.uid);
                 }}
-                disabled={alivePlayers.length < 2}
+                disabled={alivePlayers.length < 2 || selected.acted || animating}
                 title="与另一只己方宠物交换前后/左右位置（消耗 1 行动点）"
               >
                 <span className="skill-btn-main">↔ 换位</span>
@@ -471,7 +508,7 @@ export function BattleScreen({ state, dispatch }: Props) {
             </>
           ) : (
             <>
-              <span className="who">{selected && selected.acted ? `${selected.emoji} ${selected.name}（已行动）` : '—'}</span>
+              <span className="who">{selected ? `${selected.emoji} ${selected.name}` : '—'}</span>
               <span className="card-sub">
                 {battle.phase === 'won'
                   ? isChallenge
@@ -482,7 +519,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                       ? '挑战失败…'
                       : '全队阵亡…'
                     : canAct
-                      ? '先点击一只未行动的己方宠物'
+                      ? '先点击一只己方宠物'
                       : '敌方行动中…'}
               </span>
             </>
@@ -490,13 +527,18 @@ export function BattleScreen({ state, dispatch }: Props) {
         </div>
         <div className="end-panel">
           <span className="end-ap">⚡ 行动点 {battle.playerAp}/{battle.playerApMax}</span>
-          <button className="primary end-turn-btn" onClick={() => dispatch({ type: 'END_TURN' })} disabled={!canAct}>
+          <button
+            className="primary end-turn-btn"
+            onClick={() => dispatch({ type: 'END_TURN' })}
+            disabled={!canAct}
+            title="结束指令阶段，已选择的技能与敌方行动按速度统一结算"
+          >
             结束回合
           </button>
         </div>
       </div>
 
-      {battle.phase === 'won' && (
+      {battle.phase === 'won' && !animating && (
         <div className="overlay">
           <div className="overlay-box">
             <div style={{ fontSize: 48 }}>🏆</div>

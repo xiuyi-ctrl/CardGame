@@ -8,7 +8,7 @@ import {
 } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { generateMap, fuseUnit, fusionNeedCount, nextStage, recomputeStats, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
-import { createBattle, makeUnit, currentPlayerUnit, isTameable } from '../src/game/core/battle';
+import { createBattle, makeUnit, isTameable } from '../src/game/core/battle';
 
 function dispatch(state: GameState, action: GameAction): GameState {
   return gameReducer(state, action);
@@ -262,10 +262,15 @@ describe('完整肉鸽流程', () => {
     // 自动打牌直到战斗结束
     let guard = 0;
     while (s.battle && s.battle.phase === 'acting' && guard < 300) {
-      const cur = currentPlayerUnit(s.battle);
-      if (!cur) break;
-      const target = s.battle.enemyUnits.filter((u) => u.hp > 0)[0];
-      s = dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: cur.skills[0], targetUid: target?.uid });
+      const b = s.battle;
+      const actable = b.playerUnits.filter((u) => u.hp > 0 && !u.acted && b.playerAp > 0);
+      if (actable.length === 0) {
+        s = dispatch(s, { type: 'END_TURN' });
+      } else {
+        const cur = actable[0];
+        const target = b.enemyUnits.filter((u) => u.hp > 0)[0];
+        s = dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: cur.skills[0], targetUid: target?.uid });
+      }
       guard += 1;
     }
     expect(s.battle!.phase).toBe('won');

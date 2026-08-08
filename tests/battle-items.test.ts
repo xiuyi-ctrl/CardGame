@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   createBattle,
-  currentPlayerUnit,
   decrementBattleBuffs,
   getDamageBonus,
   getEffectiveSpd,
@@ -157,16 +156,17 @@ describe('USE_BATTLE_ITEM reducer', () => {
     };
     const s = gameReducer(withInv, { type: 'USE_BATTLE_ITEM', itemId: 'atk_up', targetUid: battle.playerUnits[0].uid });
     expect(s.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(3);
-    const cur = currentPlayerUnit(s.battle!);
-    if (cur) {
-      const s2 = gameReducer(s, {
+    // 给所有可行动玩家下达指令，再结束回合触发结算与新回合（回合初 buff 递减 1）
+    let s2 = s;
+    for (const u of s.battle!.playerUnits.filter((p) => p.hp > 0 && !p.acted && s.battle!.playerAp > 0)) {
+      s2 = gameReducer(s2, {
         type: 'PLAYER_SKILL',
-        actorUid: cur.uid,
-        skillId: cur.skills[0],
-        targetUid: s.battle!.enemyUnits[0].uid,
+        actorUid: u.uid,
+        skillId: u.skills[0],
+        targetUid: s2.battle!.enemyUnits[0].uid,
       });
-      // 玩家行动后敌人行动、开启新回合，buff 递减 1（仍应存在）
-      expect(s2.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(2);
     }
+    s2 = gameReducer(s2, { type: 'END_TURN' });
+    expect(s2.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(2);
   });
 });

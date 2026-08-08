@@ -149,6 +149,7 @@ export function createBattle(
     pendingTame: [],
     seed,
     rngCount: 0,
+    orders: {},
     corruptDebuff: options?.corruptDebuff,
     enemyHealsLeft: ENEMY_HEAL_LIMIT,
   };
@@ -196,6 +197,7 @@ function startRound(b: BattleState): BattleState {
     enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), statuses: u.statuses.map((s) => ({ ...s })) })),
   };
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
     const res = applyDot(nb, u);
     nb = res.battle;
     if (res.unit.hp > 0) tickStatuses(res.unit);
@@ -230,6 +232,7 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
   let nb = b;
   let unit = u;
   for (const s of u.statuses) {
+    if (unit.hp <= 0) break;
     if (s.kind === 'burn' || s.kind === 'poison') {
       const dmg = Math.max(1, s.value);
       unit = { ...unit, hp: Math.max(0, unit.hp - dmg) };
@@ -247,7 +250,10 @@ function tickStatuses(u: Unit): void {
 }
 
 export function pushLog(b: BattleState, msg: string, side: 'player' | 'enemy' | 'info' = 'info'): BattleState {
-  return { ...b, log: [...b.log.slice(-40), { text: msg, side }] };
+  // 附加当下全体血量快照，供 UI 按动画事件逐步展示血量；log 不截断（由 UI 只展示尾部）
+  const hp: Record<string, number> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) hp[u.uid] = u.hp;
+  return { ...b, log: [...b.log, { text: msg, side, hp }] };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
@@ -455,20 +461,6 @@ function tryEnemySwap(b: BattleState, actor: Unit): BattleState | undefined {
   return nb;
 }
 
-/** 敌方阶段：按 enemyAp 逐只自动结算（快敌先动） */
-function enemyPhase(b: BattleState): BattleState {
-  let nb = b;
-  while (nb.phase === 'acting' && nb.enemyAp > 0) {
-    const order = nb.enemyUnits
-      .filter((u) => u.hp > 0 && !u.acted)
-      .sort((a, c) => getEffectiveSpd(c) - getEffectiveSpd(a) || a.uid.localeCompare(c.uid));
-    if (order.length === 0) break;
-    nb = enemyAct(nb, order[0]);
-    nb = checkEnd(nb);
-  }
-  return nb;
-}
-
 function enemyAct(b: BattleState, actor: Unit): BattleState {
   let nb = { ...b, enemyAp: b.enemyAp - 1 };
   if (actor.statuses.some((s) => s.kind === 'stun')) {
@@ -587,23 +579,34 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);
 }
 
-/** 玩家阶段结束后进入敌方阶段（回合收尾） */
+/** 结束指令阶段并统一结算：敌我所有存活单位按速度依次行动，随后进入新回合 */
 export function playerEndTurn(b: BattleState): BattleState {
   if (b.phase !== 'acting') return b;
-  let nb: BattleState = {
-    ...b,
-    playerAp: 0,
-    playerUnits: b.playerUnits.map((u) => (u.hp > 0 && !u.acted ? { ...u, acted: true } : u)),
-  };
-  nb = checkEnd(nb);
-  if (nb.phase !== 'acting') return nb;
-  nb = enemyPhase(nb);
+  let nb: BattleState = { ...b, playerAp: 0 };
+  // 回合结算：所有存活单位（敌我混排）按速度统一行动——
+  // 我方执行已下达的指令，敌方由 AI 自动行动；未下指令的我方单位本回合不出手。
+  for (const uid of computeTurnOrder(nb)) {
+    if (nb.phase !== 'acting') break;
+    const unit = actorFromId(nb, uid);
+    if (!unit || unit.hp <= 0) continue;
+    if (unit.isPlayer) {
+      const order = nb.orders?.[uid];
+      if (order) {
+        // useSkillInner 末尾已含 consumeSkillUse + markActed，这里不再重复扣减
+        nb = useSkillInner(nb, unit, getSkill(order.skillId), order.targetUid);
+      }
+    } else if (!unit.acted) {
+      nb = enemyAct(nb, unit);
+    }
+    nb = checkEnd(nb);
+  }
+  nb = { ...nb, orders: {} };
   if (nb.phase !== 'acting') return nb;
   nb = startRound(nb);
   return checkEnd(nb);
 }
 
-/** 玩家行动后的统一收尾：先结算胜负；未结束时若 AP 用尽或无可行动单位则自动进入敌方阶段 */
+/** 即时行动（换位/药水）后的收尾：先结算胜负；未结束时若 AP 用尽或无可行动单位则自动进入结算 */
 function afterPlayerAction(b: BattleState): BattleState {
   if (b.phase !== 'acting') return b;
   b = checkEnd(b);
@@ -613,16 +616,28 @@ function afterPlayerAction(b: BattleState): BattleState {
   return b;
 }
 
-/** 玩家行动：指定一只宠物使用技能。消耗 1 AP，每只宠物每回合最多行动一次。 */
+/** 玩家行动：给一只宠物下达技能指令（不立即结算）。消耗 1 AP；重复下达视为修改指令，不重复扣 AP。 */
 export function playerSkill(b: BattleState, actorUid: string, skillId: string, targetUid?: string): BattleState {
-  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
+  if (b.phase !== 'acting') return b;
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
-  if (!actor || actor.hp <= 0 || actor.acted) return b;
+  if (!actor || actor.hp <= 0) return b;
   if (actor.statuses.some((s) => s.kind === 'stun')) return b;
+  const skill = getSkill(skillId);
+  if (!skill) return b;
   if (skillUsesLeft(actor, skillId) <= 0) return b;
-  const nb = useRng(b, (_v, b2) => useSkillInner(b2, actor, getSkill(skillId), targetUid));
-  const after = { ...nb, playerAp: nb.playerAp - 1 };
-  return afterPlayerAction(after);
+  // 已下过指令：仅修改指令内容，不重复扣 AP/占用行动
+  if (actor.acted && b.orders?.[actorUid]) {
+    return { ...b, orders: { ...b.orders, [actorUid]: { skillId, targetUid } } };
+  }
+  // 本回合已被即时行动（换位/道具）占用：不能再下指令
+  if (actor.acted) return b;
+  if (b.playerAp <= 0) return b;
+  return {
+    ...b,
+    playerAp: b.playerAp - 1,
+    playerUnits: b.playerUnits.map((u) => (u.uid === actorUid ? { ...u, acted: true } : u)),
+    orders: { ...(b.orders ?? {}), [actorUid]: { skillId, targetUid } },
+  };
 }
 
 /** 玩家行动：交换己方两只宠物的位置（可前后左右）。发起者消耗 1 AP 并占用行动。 */

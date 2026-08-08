@@ -30,7 +30,7 @@
 
 - `src/game/`：纯逻辑、数据驱动、可播种随机（与 UI 完全解耦，可单测）。
   - `types.ts` 全量类型；`rng.ts` 可复现随机；`data/{skills,foods,monsters}.ts` 数据表。
-  - `core/battle.ts` 战斗引擎（createBattle/playerSkill/playerTame/advance/useRng/currentPlayerUnit/isTameable）。
+  - `core/battle.ts` 战斗引擎（createBattle/playerSkill/playerTame/playerEndTurn/useRng/currentPlayerUnit/isTameable）。
   - `state/game.ts` 地图/奖励/成长/融合；`state/reducer.ts` 全局状态机与所有 GameAction。
 - `src/ui/`：React 界面（App.tsx 全界面 + BattleScreen.tsx + components.tsx + styles.css）。
   - 战斗布局：屏幕左侧居中竖向滚动日志面板（`.log-panel`，敌/我/系统分色）；底部操作面板 `.action-panel` 从左到右依次为捕获区（`.capture-panel`）、道具区（`.items-panel`，食物/战斗药水）、技能区（`.skill-column`，3 列网格、行 22px+58px+58px、宽 540px 居左、最多两行无滚动条，按钮=技能名+数值+描述）、回合区（`.end-panel`，⚡ 行动点 + 结束回合）。

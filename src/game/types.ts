@@ -135,6 +135,14 @@ export interface LogEntry {
   text: string;
   /** 消息归属：player=我方行动、enemy=敌方行动、info=通用/系统 */
   side: 'player' | 'enemy' | 'info';
+  /** 本条日志发生时全体单位的血量快照（uid → hp），供战斗动画按事件逐步更新血量显示 */
+  hp?: Record<string, number>;
+}
+
+/** 玩家给某只宠物下达的技能指令（指令阶段记录，结束回合后按速度统一结算） */
+export interface PlayerOrder {
+  skillId: string;
+  targetUid?: string;
 }
 
 export interface BattleState {
@@ -154,6 +162,8 @@ export interface BattleState {
   pendingTame: Unit[];
   seed: number;
   rngCount: number;
+  /** 玩家已下达的技能指令（uid → 指令；结束回合统一结算后清空） */
+  orders?: Record<string, PlayerOrder>;
   /** 被侵蚀节点的暗影 debuff：'spd' 我方速度 -10% | 'dmg' 我方受到伤害 +10% */
   corruptDebuff?: 'spd' | 'dmg';
   /** 车轮战：total 总场数、current 当前上场序号（从 1 开始） */

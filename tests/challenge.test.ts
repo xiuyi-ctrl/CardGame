@@ -3,7 +3,7 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { generateMap, type MapNode } from '../src/game/state/game';
-import { createBattle, currentPlayerUnit, isTameable, makeUnit, playerEndTurn, playerSkill, playerTame, skillUsesLeft } from '../src/game/core/battle';
+import { createBattle, isTameable, makeUnit, playerEndTurn, playerSkill, playerTame, skillUsesLeft } from '../src/game/core/battle';
 import { getSkill } from '../src/game/data/skills';
 import type { BattleState } from '../src/game/types';
 
@@ -15,19 +15,22 @@ function autoPlay(b: BattleState, maxTurns = 400): BattleState {
   let nb = b;
   let guard = 0;
   while (nb.phase === 'acting' && guard < maxTurns) {
-    const cur = currentPlayerUnit(nb);
-    if (!cur) break;
-    const target = nb.enemyUnits.filter((u) => u.hp > 0)[0];
-    const heal = cur.skills.map(getSkill).find((x) => x.kind === 'heal' && skillUsesLeft(cur, x.id) > 0);
-    if (heal && cur.hp / cur.maxHp < 0.5) {
-      nb = playerSkill(nb, cur.uid, heal.id, cur.uid);
-    } else {
-      const best = cur.skills
-        .map(getSkill)
-        .filter((x) => x.target !== 'self' && skillUsesLeft(cur, x.id) > 0)
-        .sort((a, c) => (c.damage ?? 0) - (a.damage ?? 0))[0];
-      nb = playerSkill(nb, cur.uid, best ? best.id : cur.skills[0], target?.uid);
+    // 每回合给所有可行动单位下达指令（残血自疗/最高伤害技能），随后结算
+    const actable = [...nb.playerUnits].filter((u) => u.hp > 0 && !u.acted && !u.statuses.some((s) => s.kind === 'stun'));
+    for (const cur of actable) {
+      const target = nb.enemyUnits.filter((u) => u.hp > 0)[0];
+      const heal = cur.skills.map(getSkill).find((x) => x.kind === 'heal' && skillUsesLeft(cur, x.id) > 0);
+      if (heal && cur.hp / cur.maxHp < 0.5) {
+        nb = playerSkill(nb, cur.uid, heal.id, cur.uid);
+      } else {
+        const best = cur.skills
+          .map(getSkill)
+          .filter((x) => x.target !== 'self' && skillUsesLeft(cur, x.id) > 0)
+          .sort((a, c) => (c.damage ?? 0) - (a.damage ?? 0))[0];
+        nb = playerSkill(nb, cur.uid, best ? best.id : cur.skills[0], target?.uid);
+      }
     }
+    nb = playerEndTurn(nb);
     guard += 1;
   }
   return nb;

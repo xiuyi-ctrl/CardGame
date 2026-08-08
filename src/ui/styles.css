@@ -751,6 +751,70 @@ button.primary {
   opacity: 0.35;
 }
 
+/* === 战斗攻击动画（纯视觉，不影响逻辑） === */
+@keyframes fx-lunge-up {
+  0% { transform: translate(0, 0); }
+  30% { transform: translate(0, -26px) scale(1.06); }
+  60% { transform: translate(0, -26px) scale(1.06); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes fx-lunge-down {
+  0% { transform: translate(0, 0); }
+  30% { transform: translate(0, 26px) scale(1.06); }
+  60% { transform: translate(0, 26px) scale(1.06); }
+  100% { transform: translate(0, 0); }
+}
+.unit-card.fx-attack-up {
+  animation: fx-lunge-up 0.32s ease-out;
+  z-index: 5;
+}
+.unit-card.fx-attack-down {
+  animation: fx-lunge-down 0.32s ease-out;
+  z-index: 5;
+}
+
+@keyframes fx-hit-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.unit-card.fx-hit {
+  animation: fx-hit-shake 0.3s ease;
+  box-shadow: 0 0 0 3px rgba(255, 70, 70, 0.85), 0 0 18px rgba(255, 40, 40, 0.6);
+}
+
+@keyframes fx-heal-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(80, 255, 150, 0); }
+  35% { box-shadow: 0 0 0 3px rgba(80, 255, 150, 0.85), 0 0 18px rgba(80, 255, 150, 0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(80, 255, 150, 0); }
+}
+.unit-card.fx-heal {
+  animation: fx-heal-pulse 0.5s ease;
+}
+
+@keyframes fx-dmg-rise {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to { opacity: 0; transform: translate(-50%, -26px); }
+}
+.dmg-pop {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  font-size: 24px;
+  font-weight: 800;
+  color: #ff6b5e;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 30;
+  white-space: nowrap;
+  animation: fx-dmg-rise 0.55s ease-out forwards;
+}
+.dmg-pop.heal {
+  color: #7dffb0;
+}
+
 .action-panel {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--border);
@@ -795,6 +859,23 @@ button.primary {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+.action-panel .order-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  background: rgba(255, 200, 60, 0.12);
+  border: 1px solid rgba(255, 200, 60, 0.35);
+  border-radius: 8px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.action-panel .skill-btn-current {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  border-radius: 8px;
 }
 
 .action-panel .skill-btn {
