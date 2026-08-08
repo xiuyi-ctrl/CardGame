@@ -473,7 +473,7 @@ function tryEnemySwap(b: BattleState, actor: Unit): BattleState | undefined {
 function enemyAct(b: BattleState, actor: Unit): BattleState {
   let nb = { ...b, enemyAp: b.enemyAp - 1 };
   if (actor.statuses.some((s) => s.kind === 'stun')) {
-    return markActed(nb, actor.uid);
+    return markActed(pushLog(nb, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
   return useRng(nb, (rngVal, b2) => {
     const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0);
@@ -492,8 +492,12 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
       const swapped = tryEnemySwap(b2, actor);
       if (swapped) return swapped;
     }
-    // 攻击：随机选择可用技能（AI 不总是最优，保证难度合理）
-    const chosen = skills[Math.floor(rngVal * skills.length)];
+    // 攻击：随机选择可用技能（AI 不总是最优，保证难度合理）；治疗次数用尽后不再随机选中治疗技能
+    const attackSkills = (b2.enemyHealsLeft ?? 0) <= 0 ? skills.filter((s) => s.kind !== 'heal') : skills;
+    if (attackSkills.length === 0) {
+      return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
+    }
+    const chosen = attackSkills[Math.floor(rngVal * attackSkills.length)];
     return useSkillInner(b2, actor, chosen, undefined);
   });
 }
@@ -521,7 +525,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (skill.kind === 'heal') {
     let r = nb;
     const amt = Math.max(1, skill.heal ?? 0);
-    if (!actor.isPlayer && (r.enemyHealsLeft ?? 0) > 0) {
+    if (!actor.isPlayer) {
+      if ((r.enemyHealsLeft ?? 0) <= 0) {
+        // 防御兜底：敌方治疗次数用尽后拒绝治疗（enemyAct 已避免随机选中，此处防止直接调用）
+        return markActed(pushLog(r, `${actor.name} 的「${skill.name}」施展失败：治疗次数已用完`, sideOf(actor)), actor.uid);
+      }
       r = { ...r, enemyHealsLeft: (r.enemyHealsLeft ?? 0) - 1 };
     }
     for (const t of targets) {
@@ -562,27 +570,28 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           t2 = applyStatusTo(t2, e);
         }
       }
-      let nb2 = replaceUnit(nb, t2);
+      // 攻击日志先记录（快照=攻击后、吸血/反伤前），动画按「攻击→吸血→反伤」真实结算顺序播放
+      nb = replaceUnit(nb, t2);
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害`, sideOf(actor));
       // 吸血：造成伤害后恢复自身
       if (ap?.kind === 'drain') {
-        const healedActor = actorFromId(nb2, actor.uid);
+        const healedActor = actorFromId(nb, actor.uid);
         if (healedActor && healedActor.hp > 0) {
           const maxHp = getEffectiveMaxHp(healedActor);
           const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
-          nb2 = replaceUnit(nb2, healed);
+          nb = replaceUnit(nb, healed);
         }
       }
       // 尖刺：受击者反伤攻击者
       const tp = getUnitPassive(t2);
       if (tp?.kind === 'thorns' && t2.hp > 0) {
-        const attacker = actorFromId(nb2, actor.uid);
+        const attacker = actorFromId(nb, actor.uid);
         if (attacker && attacker.hp > 0) {
           const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
-          nb2 = replaceUnit(nb2, hurt);
-          nb2 = pushLog(nb2, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2));
+          nb = replaceUnit(nb, hurt);
+          nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2));
         }
       }
-      nb = pushLog(nb2, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害`, sideOf(actor));
     }
   }
   return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);
@@ -604,7 +613,7 @@ export function playerEndTurn(b: BattleState): BattleState {
         // useSkillInner 末尾已含 consumeSkillUse + markActed，这里不再重复扣减
         nb = useSkillInner(nb, unit, getSkill(order.skillId), order.targetUid);
       }
-    } else if (!unit.acted) {
+    } else {
       nb = enemyAct(nb, unit);
     }
     nb = checkEnd(nb);

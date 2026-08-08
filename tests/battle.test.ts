@@ -15,7 +15,7 @@ import {
   TAME_THRESHOLD,
   getDamageGuard,
 } from '../src/game/core/battle';
-import type { BattleState } from '../src/game/types';
+import type { BattleState, StatusEffect } from '../src/game/types';
 import { MONSTERS } from '../src/game/data/monsters';
 import { SKILLS } from '../src/game/data/skills';
 
@@ -587,5 +587,43 @@ describe('行动点与前后排', () => {
     expect(two.enemyUnits.length).toBe(2);
     const one = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 1);
     expect(one.enemyUnits.length).toBe(1);
+  });
+});
+
+describe('战斗日志与动画时序', () => {
+  it('反伤日志在攻击日志之后，且攻击快照不含反伤扣血', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'pipi' }], 3);
+    const momoUid = b.playerUnits[0].uid;
+    const momoHp0 = b.playerUnits[0].hp;
+    const after = playerEndTurn(playerSkill(b, momoUid, 'punch', b.enemyUnits[0].uid));
+    const attackIdx = after.log.findIndex((l) => l.text.includes('攻击 皮皮'));
+    const thornIdx = after.log.findIndex((l) => l.text.includes('「尖刺」反伤'));
+    expect(attackIdx).toBeGreaterThanOrEqual(0);
+    expect(thornIdx).toBeGreaterThan(attackIdx);
+    expect(after.log[attackIdx].hp?.[momoUid]).toBe(momoHp0);
+    expect(after.log[thornIdx].hp?.[momoUid]).toBe(momoHp0 - 1);
+  });
+
+  it('敌方治疗次数用尽后不再治疗（即使带治疗技能且残血）', () => {
+    let b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'momo_queen' }], 3);
+    b = { ...b, enemyHealsLeft: 0, enemyUnits: [{ ...b.enemyUnits[0], hp: 6 }] };
+    const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
+    expect(after.log.some((l) => l.text.includes('愈光'))).toBe(false);
+    expect(after.log.some((l) => l.text.includes('施展失败'))).toBe(false);
+  });
+
+  it('敌方治疗次数用尽且仅剩治疗技能时观望', () => {
+    let b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu_king' }], 3);
+    b = { ...b, enemyHealsLeft: 0, enemyUnits: [{ ...b.enemyUnits[0], hp: 6, skills: ['heal_light'] }] };
+    const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
+    expect(after.log.some((l) => l.text.includes('无技能可用，只能观望'))).toBe(true);
+  });
+
+  it('眩晕敌方行动时产生「被眩晕」日志', () => {
+    const stun: StatusEffect = { kind: 'stun', value: 0, turns: 1 };
+    let b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 3);
+    b = { ...b, enemyUnits: b.enemyUnits.map((u) => ({ ...u, statuses: [stun] })) };
+    const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
+    expect(after.log.some((l) => l.text.includes('被眩晕'))).toBe(true);
   });
 });
