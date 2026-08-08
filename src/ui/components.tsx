@@ -101,12 +101,13 @@ export function SkillTag({
   );
 }
 
-const STATUS_ICON: Record<string, string> = {
-  burn: '🔥',
-  poison: '☠️',
-  atkUp: '⬆️',
-  atkDown: '⬇️',
-  stun: '💫',
+const STATUS_ICON: Record<string, { icon: string; label: string }> = {
+  burn: { icon: '🔥', label: '灼烧' },
+  poison: { icon: '☠️', label: '中毒' },
+  atkUp: { icon: '⬆️', label: '攻击提升' },
+  atkDown: { icon: '⬇️', label: '攻击降低' },
+  stun: { icon: '💫', label: '眩晕' },
+  healTick: { icon: '💚', label: '持续治疗' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -123,11 +124,15 @@ export function StatusIcons({ unit }: { unit: Unit }) {
   if (unit.statuses.length === 0) return <span className="statuses" />;
   return (
     <span className="statuses">
-      {unit.statuses.map((s, i) => (
-        <span key={i} title={s.kind}>
-          {STATUS_ICON[s.kind]}
-        </span>
-      ))}
+      {unit.statuses.map((s, i) => {
+        const meta = STATUS_ICON[s.kind];
+        if (!meta) return null;
+        return (
+          <span key={i} title={`${meta.label}（剩余 ${s.turns} 回合）`}>
+            {meta.icon}
+          </span>
+        );
+      })}
     </span>
   );
 }

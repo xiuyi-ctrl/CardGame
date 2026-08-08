@@ -432,6 +432,7 @@ button.primary {
   justify-content: center;
   gap: 4px;
   min-height: 0;
+  position: relative;
 }
 
 .formation-row {
@@ -503,6 +504,70 @@ button.primary {
   border-radius: 10px;
 }
 
+/* 点击敌方生物查看技能：面板定位在该行左侧空白区域 */
+.battle-field .enemy-skill-panel {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(10, 8, 20, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 8px 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(260px, 30%);
+}
+
+.battle-field .enemy-skill-panel-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.battle-field .enemy-skill-panel .skill-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.battle-field .enemy-skill-panel .skill-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.battle-field .enemy-skill-panel .skill-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.battle-field .enemy-skill-panel .skill-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(220px, 100%);
+}
+
+.battle-field .formation-slot.inspectable {
+  cursor: pointer;
+}
+
+.battle-field .formation-slot.inspected .unit-card {
+  outline: 2px solid #b08dff;
+  box-shadow: 0 0 10px rgba(176, 141, 255, 0.4);
+}
+
 .battle-field .formation-empty-slot {
   font-size: 11px;
 }
@@ -522,6 +587,10 @@ button.primary {
 
 .battle-field .card-sub {
   font-size: 10px;
+}
+
+.battle-field .passive-badge {
+  display: none;
 }
 
 .battle-field .side-label {

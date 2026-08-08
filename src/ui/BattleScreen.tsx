@@ -14,7 +14,7 @@ import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { SkillDef, Unit } from '../game/types';
-import { UnitCard, skillBrief } from './components';
+import { UnitCard, skillBrief, SkillTag } from './components';
 import { persistSave } from './persistence';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
@@ -36,6 +36,19 @@ function enemyTargetable(skill: SkillDef, enemy: Unit, enemies: Unit[]): boolean
   return front.length > 0 ? enemy.row === 'front' : true;
 }
 
+function EnemySkillPanel({ unit }: { unit: Unit }) {
+  return (
+    <div className="enemy-skill-panel">
+      <div className="enemy-skill-panel-title">
+        {unit.emoji} {unit.name}
+      </div>
+      {unit.skills.map((sid) => (
+        <SkillTag key={sid} skill={getSkill(sid)} desc />
+      ))}
+    </div>
+  );
+}
+
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
   if (!battle) return null;
@@ -46,6 +59,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [pendingTame, setPendingTame] = useState<string | null>(null);
   const [pendingBattleItem, setPendingBattleItem] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  const [inspectEnemy, setInspectEnemy] = useState<string | null>(null);
 
   const canAct = playerHasMove(b);
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
@@ -56,6 +70,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     setSwapFrom(null);
     setPendingTame(null);
     setPendingBattleItem(null);
+    setInspectEnemy(null);
   }, [battle?.round, battle?.rngCount, battle?.phase]);
 
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
@@ -150,15 +165,22 @@ export function BattleScreen({ state, dispatch }: Props) {
         dispatch({ type: 'PLAYER_TAME', foodId: pendingTame, enemyUid: uid });
         setPendingTame(null);
       }
+      return;
     }
+    setInspectEnemy((prev) => (prev === uid ? null : uid));
   }
 
   function onSkillClick(skill: SkillDef) {
     if (!selected || selected.acted) return;
     if (skill.target === 'single' || skill.target === 'ally') {
+      if (pendingSkill && pendingSkill.skillId === skill.id) {
+        setPendingSkill(null);
+        return;
+      }
       setSwapFrom(null);
       setPendingTame(null);
       setPendingBattleItem(null);
+      setInspectEnemy(null);
       setPendingSkill({ actorUid: selected.uid, skillId: skill.id });
       return;
     }
@@ -169,6 +191,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     setPendingSkill(null);
     setSwapFrom(null);
     setPendingBattleItem(null);
+    setInspectEnemy(null);
     setPendingTame(foodId);
   }
 
@@ -180,6 +203,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     setPendingSkill(null);
     setSwapFrom(null);
     setPendingTame(null);
+    setInspectEnemy(null);
     setPendingBattleItem(itemId);
   }
 
@@ -205,14 +229,17 @@ export function BattleScreen({ state, dispatch }: Props) {
   const enemySlot = (u: Unit | undefined, key: string, topRow: boolean) => {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
     if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
+    const isTarget = validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u));
+    const isInspect = !pendingSkill && !pendingBattleItem && !pendingTame && !swapFrom;
+    const inspected = inspectEnemy === u.uid;
     return (
       <div
         key={key}
-        className={`${extra} ${validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}`}
-        onClick={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? () => onEnemyClick(u.uid) : undefined}
+        className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${isInspect ? 'inspectable' : ''} ${inspected ? 'inspected' : ''}`}
+        onClick={isTarget || isInspect ? () => onEnemyClick(u.uid) : undefined}
         title={pendingTame && isTameable(u) ? tameTip(u) : undefined}
       >
-        <UnitCard unit={u} small topStats className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''} />
+        <UnitCard unit={u} small topStats className={isTarget ? 'valid-target targetable' : ''} />
       </div>
     );
   };
@@ -282,8 +309,20 @@ export function BattleScreen({ state, dispatch }: Props) {
 
       <div className="battle-main">
         <div className="battle-field">
-          <div className="formation-row row-front">{enemyBack.map((u, i) => enemySlot(u, `eb${i}`, true))}</div>
-          <div className="formation-row row-back">{enemyFront.map((u, i) => enemySlot(u, `ef${i}`, false))}</div>
+          <div className="formation-row row-front">
+            {enemyBack.map((u, i) => enemySlot(u, `eb${i}`, true))}
+            {inspectEnemy && (() => {
+              const eu = battle.enemyUnits.find((x) => x.uid === inspectEnemy);
+              return eu && eu.row === 'back' ? <EnemySkillPanel key="insp1" unit={eu} /> : null;
+            })()}
+          </div>
+          <div className="formation-row row-back">
+            {enemyFront.map((u, i) => enemySlot(u, `ef${i}`, false))}
+            {inspectEnemy && (() => {
+              const eu = battle.enemyUnits.find((x) => x.uid === inspectEnemy);
+              return eu && eu.row === 'front' ? <EnemySkillPanel key="insp2" unit={eu} /> : null;
+            })()}
+          </div>
           <div className="battle-divider" />
           <div className="formation-row row-front">{playerFront.map((u, i) => playerSlot(u, `pf${i}`, true))}</div>
           <div className="formation-row row-back">{playerBack.map((u, i) => playerSlot(u, `pb${i}`, false))}</div>
@@ -394,6 +433,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                   setPendingSkill(null);
                   setPendingTame(null);
                   setPendingBattleItem(null);
+                  setInspectEnemy(null);
                   setSwapFrom(selected.uid);
                 }}
                 disabled={alivePlayers.length < 2}
