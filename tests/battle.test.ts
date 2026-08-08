@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   createBattle,
   currentPlayerUnit,
+  getActablePlayerUnits,
   isTameable,
   makeUnit,
+  playerEndTurn,
+  playerHasMove,
   playerSkill,
+  playerSwap,
   playerTame,
   skillUsesLeft,
   tameChance,
@@ -22,7 +26,7 @@ function autoPlay(b: BattleState, maxTurns = 300): BattleState {
     const cur = currentPlayerUnit(nb);
     if (!cur) break;
     const target = nb.enemyUnits.filter((u) => u.hp > 0)[0];
-    nb = playerSkill(nb, cur.skills[0], target?.uid);
+    nb = playerSkill(nb, cur.uid, cur.skills[0], target?.uid);
     guard += 1;
   }
   return nb;
@@ -35,7 +39,7 @@ describe('战斗基础', () => {
     expect(b.phase).toBe('acting');
     const cur = currentPlayerUnit(b)!;
     const hpBefore = b.enemyUnits[0].hp;
-    const after = playerSkill(b, cur.skills[0], b.enemyUnits[0].uid);
+    const after = playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid);
     expect(after.enemyUnits[0].hp).toBeLessThan(hpBefore);
     expect(after.log.length).toBeGreaterThan(b.log.length);
   });
@@ -60,7 +64,7 @@ describe('战斗基础', () => {
       const players = [makeUnit('fifi', true, 0, false)];
       const b = createBattle(players, [{ speciesId: 'momo' }, { speciesId: 'lulu' }], 99);
       const cur = currentPlayerUnit(b)!;
-      return playerSkill(b, cur.skills[0], b.enemyUnits[0].uid);
+      return playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid);
     };
     const a = build();
     const c = build();
@@ -128,7 +132,11 @@ describe('驯服', () => {
     let enemyId = '';
     // 搜索一个首次喂食失败的种子，验证失败次数被记录
     for (let seed = 0; seed < 500; seed++) {
-      let trial = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], seed);
+      let trial = createBattle(
+        [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+        [{ speciesId: 'kiki' }],
+        seed,
+      );
       const u = trial.enemyUnits[0];
       trial = { ...trial, enemyUnits: [{ ...u, hp: Math.max(1, Math.floor(u.maxHp * TAME_THRESHOLD)) }] };
       const id = trial.enemyUnits[0].uid;
@@ -185,8 +193,8 @@ describe('驯服', () => {
       turnOrder: [b.playerUnits[0].uid],
       turnIndex: 0,
     };
-    // 玩家用自我增益（不碰敌人）推进回合：startRound 结算灼烧 → 敌人阵亡 → 应立即 won
-    const after = playerSkill(b, 'roar');
+    // 所有单位已行动，结束回合推进：startRound 结算灼烧 → 敌人阵亡 → 应立即 won
+    const after = playerEndTurn(b);
     expect(after.phase).toBe('won');
     expect(after.enemyUnits.every((u) => u.hp <= 0)).toBe(true);
   });
@@ -235,12 +243,12 @@ describe('技能使用次数', () => {
       ...b,
       playerUnits: b.playerUnits.map((x) => (x.uid === u.uid ? { ...x, hp: 5 } : x)),
     };
-    let after = playerSkill(b, 'heal_light', u.uid);
+    let after = playerSkill(b, u.uid, 'heal_light', u.uid);
     expect(skillUsesLeft(after.playerUnits[0], 'heal_light')).toBe(1);
-    after = playerSkill(after, 'heal_light', u.uid);
+    after = playerSkill(after, u.uid, 'heal_light', u.uid);
     expect(skillUsesLeft(after.playerUnits[0], 'heal_light')).toBe(0);
     const hpBefore = after.playerUnits[0].hp;
-    const rejected = playerSkill(after, 'heal_light', u.uid);
+    const rejected = playerSkill(after, u.uid, 'heal_light', u.uid);
     expect(rejected).toBe(after);
     expect(rejected.playerUnits[0].hp).toBe(hpBefore);
   });
@@ -258,7 +266,8 @@ describe('技能使用次数', () => {
     while (nb.phase === 'acting' && guard < 300) {
       cur = currentPlayerUnit(nb)!;
       const limited = cur.skills.find((id) => skillUsesLeft(cur, id) > 0 && skillUsesLeft(cur, id) < Infinity);
-      nb = playerSkill(nb, limited ?? cur.skills[0], cur.skills.includes(limited ?? '') ? cur.uid : nb.enemyUnits[0].uid);
+      const skillId = limited ?? cur.skills[0];
+      nb = playerSkill(nb, cur.uid, skillId, skillId === 'heal_light' ? cur.uid : nb.enemyUnits[0].uid);
       guard += 1;
     }
     expect(guard).toBeLessThan(300);
@@ -287,14 +296,14 @@ describe('专属被动', () => {
   it('再生被动：每回合开始恢复生命', () => {
     // 露露有水愈（每回合恢复 1）；被毛毛攻击后进入下一回合会触发再生
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu' }], 7);
-    const after = playerSkill(b, 'punch', b.enemyUnits[0].uid);
+    const after = playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid);
     expect(after.enemyUnits[0].hp).toBeGreaterThan(0);
     expect(after.log.some((e) => e.text.includes('「水愈」恢复'))).toBe(true);
   });
 
   it('尖刺反伤：受击反伤攻击者', () => {
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'pipi' }], 3);
-    const after = playerSkill(b, 'punch', b.enemyUnits[0].uid);
+    const after = playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid);
     expect(after.log.some((e) => e.text.includes('「尖刺」反伤'))).toBe(true);
     expect(after.playerUnits[0].hp).toBeLessThan(b.playerUnits[0].hp);
   });
@@ -302,7 +311,7 @@ describe('专属被动', () => {
   it('毒牙：攻击命中附加中毒', () => {
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'mimi' }], 3);
     // 先让敌方行动（咪咪攻击毛毛）→ 触发毒牙
-    const after = playerSkill(b, 'punch', b.enemyUnits[0].uid);
+    const after = playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid);
     expect(after.playerUnits[0].statuses.some((s) => s.kind === 'poison')).toBe(true);
   });
 
@@ -310,5 +319,167 @@ describe('专属被动', () => {
     for (const sp of Object.values(MONSTERS)) {
       expect(sp.passive, `${sp.name} 缺少被动`).toBeDefined();
     }
+  });
+});
+
+describe('行动点与前后排', () => {
+  it('初始行动点 = 存活出战数；每回合重置', () => {
+    const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
+    const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }], 1);
+    expect(b.playerAp).toBe(2);
+    expect(b.enemyAp).toBe(2);
+    expect(playerHasMove(b)).toBe(true);
+  });
+
+  it('行动后消耗 1 AP；AP 用尽自动进入敌方阶段并开始新回合', () => {
+    const players = [makeUnit('momo', true, 0, false)];
+    const b = createBattle(players, [{ speciesId: 'kiki' }], 1);
+    expect(b.playerAp).toBe(1);
+    const after = playerSkill(b, b.playerUnits[0].uid, b.playerUnits[0].skills[0], b.enemyUnits[0].uid);
+    // 1 AP 用完 → 敌方行动 + 新回合，AP 重置
+    expect(after.phase).toBe('acting');
+    expect(after.playerAp).toBe(1);
+    expect(after.playerUnits[0].acted).toBe(false);
+  });
+
+  it('每只宠物每回合最多行动一次', () => {
+    const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
+    const b = createBattle(players, [{ speciesId: 'kiki' }], 1);
+    const first = b.playerUnits[0];
+    const second = b.playerUnits[1];
+    let nb = playerSkill(b, first.uid, first.skills[0], b.enemyUnits[0].uid);
+    expect(nb.playerAp).toBe(1);
+    // 同一宠物再次行动被拒绝
+    const rejected = playerSkill(nb, first.uid, first.skills[0], b.enemyUnits[0].uid);
+    expect(rejected).toBe(nb);
+    // 另一只宠物可以行动
+    nb = playerSkill(nb, second.uid, second.skills[0], b.enemyUnits[0].uid);
+    expect(nb.phase).toBe('acting');
+  });
+
+  it('敌方 4 只时第 4 只站后排', () => {
+    const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false), makeUnit('fifi', true, 2, false), makeUnit('gora', true, 0, false)];
+    const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }, { speciesId: 'mimi' }, { speciesId: 'sisi' }], 1);
+    expect(b.enemyUnits.length).toBe(4);
+    expect(b.enemyUnits.filter((u) => u.row === 'front').length).toBe(3);
+    expect(b.enemyUnits.filter((u) => u.row === 'back').length).toBe(1);
+  });
+
+  it('默认单体技能只能打前排；前排全灭后才能打后排', () => {
+    const players = [
+      makeUnit('momo', true, 0, false),
+      makeUnit('lulu', true, 1, false),
+      makeUnit('fifi', true, 2, false),
+      makeUnit('gora', true, 0, false),
+    ];
+    const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }, { speciesId: 'mimi' }, { speciesId: 'sisi' }], 1);
+    const front = b.enemyUnits.filter((u) => u.row === 'front');
+    const back = b.enemyUnits.filter((u) => u.row === 'back')[0];
+    // 前排存活时：攻击后排的显式目标会被忽略/重定向（这里 punch 会打前排）
+    const after = playerSkill(b, b.playerUnits[0].uid, 'punch', back.uid);
+    expect(after.enemyUnits.find((u) => u.uid === front[0].uid)!.hp).toBeLessThan(front[0].hp);
+    expect(after.enemyUnits.find((u) => u.uid === back.uid)!.hp).toBe(back.hp);
+  });
+
+  it('direct 定位技能可无视前排直击后排', () => {
+    const players = [
+      makeUnit('momo', true, 0, false),
+      makeUnit('lulu', true, 1, false),
+      makeUnit('fifi', true, 2, false),
+      makeUnit('gora', true, 0, false),
+    ];
+    const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }, { speciesId: 'mimi' }, { speciesId: 'sisi' }], 2);
+    const back = b.enemyUnits.filter((u) => u.row === 'back')[0];
+    const backHp = back.hp;
+    const after = playerSkill(b, b.playerUnits[0].uid, 'pierce_strike', back.uid);
+    expect(after.enemyUnits.find((u) => u.uid === back.uid)!.hp).toBeLessThan(backHp);
+  });
+
+  it('pierce 贯穿：命中前排并波及对应列后排', () => {
+    const players = [
+      makeUnit('momo', true, 0, false),
+      makeUnit('lulu', true, 1, false),
+      makeUnit('fifi', true, 2, false),
+      makeUnit('gora', true, 0, false),
+    ];
+    const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }, { speciesId: 'mimi' }, { speciesId: 'sisi' }], 3);
+    const back = b.enemyUnits.filter((u) => u.row === 'back')[0];
+    const frontSameCol = b.enemyUnits.find((u) => u.row === 'front' && u.column === back.column)!;
+    const after = playerSkill(b, b.playerUnits[0].uid, 'shockwave', frontSameCol.uid);
+    expect(after.enemyUnits.find((u) => u.uid === frontSameCol.uid)!.hp).toBeLessThan(frontSameCol.hp);
+    expect(after.enemyUnits.find((u) => u.uid === back.uid)!.hp).toBeLessThan(back.hp);
+  });
+
+  it('back 定位技能跳过前排直击后排', () => {
+    const players = [
+      makeUnit('momo', true, 0, false),
+      makeUnit('lulu', true, 1, false),
+      makeUnit('fifi', true, 2, false),
+      makeUnit('gora', true, 0, false),
+    ];
+    const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }, { speciesId: 'mimi' }, { speciesId: 'sisi' }], 4);
+    const back = b.enemyUnits.filter((u) => u.row === 'back')[0];
+    const backHp = back.hp;
+    const after = playerSkill(b, b.playerUnits[0].uid, 'snipe', back.uid);
+    expect(after.enemyUnits.find((u) => u.uid === back.uid)!.hp).toBeLessThan(backHp);
+    // 前排不受影响
+    expect(after.enemyUnits.filter((u) => u.row === 'front').every((u) => u.hp === u.maxHp)).toBe(true);
+  });
+
+  it('换位：消耗 1 AP 交换两只己方宠物位置', () => {
+    const players = [
+      makeUnit('momo', true, 0, false),
+      makeUnit('lulu', true, 1, false),
+      makeUnit('fifi', true, 2, false),
+      makeUnit('gora', true, 0, false, 'back'),
+    ];
+    const b = createBattle(players, [{ speciesId: 'kiki' }], 1);
+    // momo 在前排，第四只 gora 在后排
+    const a = b.playerUnits[0];
+    const d = b.playerUnits[3];
+    expect(a.row).toBe('front');
+    expect(d.row).toBe('back');
+    const after = playerSwap(b, a.uid, d.uid);
+    const aAfter = after.playerUnits.find((u) => u.uid === a.uid)!;
+    const dAfter = after.playerUnits.find((u) => u.uid === d.uid)!;
+    expect(aAfter.row).toBe('back');
+    expect(dAfter.row).toBe('front');
+    expect(aAfter.column).toBe(d.column);
+    expect(dAfter.column).toBe(a.column);
+    expect(after.playerAp).toBe(b.playerAp - 1);
+    expect(after.playerUnits.find((u) => u.uid === a.uid)!.acted).toBe(true);
+  });
+
+  it('换位：换位后的宠物无法再行动（占行动），其余宠物正常', () => {
+    const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
+    const b = createBattle(players, [{ speciesId: 'kiki' }], 1);
+    const a = b.playerUnits[0];
+    const c = b.playerUnits[1];
+    let nb = playerSwap(b, a.uid, c.uid);
+    expect(getActablePlayerUnits(nb).map((u) => u.uid)).not.toContain(a.uid);
+    // 另一只仍可行动（消耗剩余 AP 后进入敌方阶段）
+    nb = playerSkill(nb, c.uid, c.skills[0], nb.enemyUnits[0].uid);
+    expect(nb.phase).toBe('acting');
+  });
+
+  it('敌方阶段：快敌先动，全部敌人结算后进入新回合', () => {
+    const players = [makeUnit('momo_god', true, 0, false)];
+    const b = createBattle(players, [{ speciesId: 'sisi' }, { speciesId: 'fifi' }], 1);
+    const r0 = b.round;
+    // 玩家结束回合 → 敌方行动 → 新回合
+    const after = playerEndTurn(b);
+    expect(after.round).toBeGreaterThan(r0);
+    expect(after.enemyAp).toBeGreaterThanOrEqual(0);
+  });
+
+  it('斗兽场/车轮战以外的战斗：敌方数量 = 玩家数量（clamp 2~4，单敌遭遇保持 1）', () => {
+    const two = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }, { speciesId: 'pipi' }],
+      1,
+    );
+    expect(two.enemyUnits.length).toBe(2);
+    const one = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 1);
+    expect(one.enemyUnits.length).toBe(1);
   });
 });

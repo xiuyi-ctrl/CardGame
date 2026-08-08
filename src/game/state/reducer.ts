@@ -1,7 +1,7 @@
 import type { GameState, MapNode, RewardChoice } from './game';
 import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
-import { useBattleItem } from '../core/battle';
-import { createBattle, makeUnit, playerSkill, playerTame, type BattleOptions } from '../core/battle';
+import { useBattleItem, playerEndTurn, playerSwap } from '../core/battle';
+import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
@@ -50,7 +50,10 @@ export type GameAction =
   | { type: 'TAME_OVERFLOW_REPLACE'; tameUid: string; discardUid: string }
   | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string }
   | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
-  | { type: 'PLAYER_SKILL'; skillId: string; targetUid?: string }
+  | { type: 'PLAYER_SKILL'; actorUid: string; skillId: string; targetUid?: string }
+  | { type: 'PLAYER_SWAP'; actorUid: string; otherUid: string }
+  | { type: 'END_TURN' }
+  | { type: 'FORMATION_CONFIRM'; units: Unit[] }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
   | { type: 'PICK_REWARD'; rewardId: string }
@@ -89,7 +92,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow'];
+  const screens = ['title', 'starter', 'map', 'formation', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -282,6 +285,18 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
 }
 
 /** 进入一个地图节点：根据节点类型进入对应界面（MOVE 与 DEBUG_JUMP 共用） */
+function fieldUnits(state: GameState): Unit[] {
+  const uids = state.field.length > 0 ? state.field : state.roster.slice(0, FIELD_MAX).map((u) => u.uid);
+  return state.roster.filter((u) => uids.includes(u.uid)).slice(0, FIELD_MAX);
+}
+
+/** 默认自动布阵：前 3 只站前排 0-2 列，第 4 只起站后排 */
+function autoPosition(units: Unit[]): Unit[] {
+  return units.map((u, i) =>
+    i < 3 ? { ...u, row: 'front' as const, column: i as 0 | 1 | 2 } : { ...u, row: 'back' as const, column: (i - 3) as 0 | 1 | 2 },
+  );
+}
+
 function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'rest') return { ...base, screen: 'rest' };
   if (node.type === 'shop') {
@@ -333,17 +348,13 @@ function enterNode(base: GameState, node: MapNode): GameState {
     if (paired) disabled[paired.id] = true;
     return { ...next, map: { ...next.map, disabled }, screen: 'chest', chestResult: opened, currentNodeId: node.id };
   }
-  // 守卫：强力怪物战（不可驯服），击败获得专用钥匙
+  // 守卫：强力怪物战（不可驯服），击败获得专用钥匙；先布阵
   if (node.type === 'guardian') {
     const encounter = base.map.encounter[node.id];
     if (!encounter) return { ...base, screen: 'map' };
-    const battle = createBattle(
-      base.roster.filter((u) => base.field.includes(u.uid)),
-      encounter,
-      base.seed + base.currentRow * 17,
-      { untameable: true },
-    );
-    return { ...base, screen: 'battle', battle };
+    const units = autoPosition(fieldUnits(base));
+    if (units.length === 0) return { ...base, screen: 'map' };
+    return { ...base, screen: 'formation', formation: { units, encounter, nodeId: node.id, options: { untameable: true } } };
   }
   // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
   if (node.type === 'keydoor') {
@@ -361,19 +372,21 @@ function enterNode(base: GameState, node: MapNode): GameState {
     if (base.roster.length === 0) return { ...base, screen: 'map' };
     return { ...base, screen: 'roster', specialPending: { kind: 'arena', uid: '' } };
   }
-  const options: BattleOptions | undefined =
-    node.type === 'gauntlet'
-      ? { gauntlet: true, untameable: true }
-      : node.type === 'corrupted'
-        ? { corruptDebuff: node.corruptDebuff }
-        : undefined;
-  const battle = createBattle(
-    base.roster.filter((u) => base.field.includes(u.uid)),
-    encounter,
-    base.seed + base.currentRow * 17,
-    options,
-  );
-  return { ...base, screen: 'battle', battle };
+  // 车轮战：一次上一只，无需布阵，直接开战
+  if (node.type === 'gauntlet') {
+    const battle = createBattle(
+      fieldUnits(base),
+      encounter,
+      base.seed + base.currentRow * 17,
+      { gauntlet: true, untameable: true },
+    );
+    return { ...base, screen: 'battle', battle };
+  }
+  // 普通/精英/被侵蚀：先布阵选择站位
+  const options = node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : undefined;
+  const units = autoPosition(fieldUnits(base));
+  if (units.length === 0) return { ...base, screen: 'map' };
+  return { ...base, screen: 'formation', formation: { units, encounter, nodeId: node.id, options } };
 }
 
 function bossCleared(state: GameState): boolean {
@@ -687,10 +700,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'FORMATION_CONFIRM': {
+      const f = state.formation;
+      if (!f || action.units.length === 0) return state;
+      const battle = createBattle(action.units, f.encounter, state.seed + state.currentRow * 17, f.options);
+      return { ...state, screen: 'battle', battle, formation: undefined };
+    }
+
     case 'PLAYER_SKILL': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
-      const battle = playerSkill(state.battle, action.skillId, action.targetUid);
+      const battle = playerSkill(state.battle, action.actorUid, action.skillId, action.targetUid);
       return { ...state, battle };
+    }
+
+    case 'PLAYER_SWAP': {
+      if (!state.battle || state.battle.phase !== 'acting') return state;
+      const battle = playerSwap(state.battle, action.actorUid, action.otherUid);
+      return { ...state, battle };
+    }
+
+    case 'END_TURN': {
+      if (!state.battle || state.battle.phase !== 'acting') return state;
+      return { ...state, battle: playerEndTurn(state.battle) };
     }
 
     case 'PLAYER_TAME': {

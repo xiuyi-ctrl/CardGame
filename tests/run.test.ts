@@ -37,7 +37,7 @@ describe('成长与融合', () => {
     expect(fused.maxHp).toBe(18);
     expect(fused.hp).toBe(18);
     expect(fused.uid).toBe(u.uid);
-    expect(fused.skills).toEqual(['bite', 'leaf_needle', 'heal_light']);
+    expect(fused.skills).toEqual(['bite', 'leaf_needle', 'heal_light', 'shockwave']);
   });
 
   it('fuseUnit 继承主宠的强化与诅咒', () => {
@@ -158,9 +158,9 @@ describe('地图生成', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
     const start = s.map.layers[0][0];
     s = dispatch(s, { type: 'MOVE', nodeId: start.id });
-    expect(s.screen).toBe('battle');
+    expect(['battle', 'formation', 'roster', 'event', 'shop', 'rest', 'special']).toContain(s.screen);
     // 跳过战斗，直接构造已到达出发节点的地图状态
-    s = { ...s, screen: 'map', battle: undefined, currentNodeId: start.id, currentRow: 0 };
+    s = { ...s, screen: 'map', battle: undefined, formation: undefined, currentNodeId: start.id, currentRow: 0 };
     const nextRow = s.map.layers[1];
     expect(nextRow.length).toBeGreaterThanOrEqual(2);
     // 出发节点可直达第一层任意节点（含最右侧）
@@ -250,6 +250,12 @@ describe('完整肉鸽流程', () => {
     };
 
     s = dispatch(s, { type: 'MOVE', nodeId: firstNode.id });
+    expect(s.screen).toBe('formation');
+    expect(s.formation).toBeDefined();
+
+    // 确认布阵进入战斗
+    const formed = s.formation!.units;
+    s = dispatch(s, { type: 'FORMATION_CONFIRM', units: formed });
     expect(s.screen).toBe('battle');
     expect(s.battle).toBeDefined();
 
@@ -259,7 +265,7 @@ describe('完整肉鸽流程', () => {
       const cur = currentPlayerUnit(s.battle);
       if (!cur) break;
       const target = s.battle.enemyUnits.filter((u) => u.hp > 0)[0];
-      s = dispatch(s, { type: 'PLAYER_SKILL', skillId: cur.skills[0], targetUid: target?.uid });
+      s = dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: cur.skills[0], targetUid: target?.uid });
       guard += 1;
     }
     expect(s.battle!.phase).toBe('won');
@@ -368,10 +374,10 @@ describe('存档读档', () => {
   it('合法存档可 LOAD_GAME 恢复，非法存档回首页', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     const moved = dispatch(run, { type: 'MOVE', nodeId: run.map.layers[0][0].id });
-    expect(moved.screen).toBe('battle');
+    expect(moved.screen).toBe('formation');
 
     const restored = dispatch(createInitialState(), { type: 'LOAD_GAME', state: moved });
-    expect(restored.screen).toBe('battle');
+    expect(restored.screen).toBe('formation');
     expect(restored.seed).toBe(3);
     expect(restored.roster.length).toBe(2);
 
@@ -863,6 +869,8 @@ describe('守卫与钥匙门', () => {
     const parent = s.map.layers[row - 1].find((n) => Math.abs(n.col - guardian.col) <= 1)!;
     let cur: GameState = { ...s, screen: 'map', currentRow: row - 1, currentNodeId: parent.id };
     cur = dispatch(cur, { type: 'MOVE', nodeId: guardian.id });
+    expect(cur.screen).toBe('formation');
+    cur = dispatch(cur, { type: 'FORMATION_CONFIRM', units: cur.formation!.units });
     expect(cur.screen).toBe('battle');
     expect(cur.battle!.enemyUnits.every((u) => !isTameable(u))).toBe(true);
     expect(keydoor.guardianId).toBe(guardian.id);

@@ -3,7 +3,7 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { generateMap, type MapNode } from '../src/game/state/game';
-import { createBattle, currentPlayerUnit, isTameable, makeUnit, playerSkill, playerTame, skillUsesLeft } from '../src/game/core/battle';
+import { createBattle, currentPlayerUnit, isTameable, makeUnit, playerEndTurn, playerSkill, playerTame, skillUsesLeft } from '../src/game/core/battle';
 import { getSkill } from '../src/game/data/skills';
 import type { BattleState } from '../src/game/types';
 
@@ -20,13 +20,13 @@ function autoPlay(b: BattleState, maxTurns = 400): BattleState {
     const target = nb.enemyUnits.filter((u) => u.hp > 0)[0];
     const heal = cur.skills.map(getSkill).find((x) => x.kind === 'heal' && skillUsesLeft(cur, x.id) > 0);
     if (heal && cur.hp / cur.maxHp < 0.5) {
-      nb = playerSkill(nb, heal.id, cur.uid);
+      nb = playerSkill(nb, cur.uid, heal.id, cur.uid);
     } else {
       const best = cur.skills
         .map(getSkill)
         .filter((x) => x.target !== 'self' && skillUsesLeft(cur, x.id) > 0)
         .sort((a, c) => (c.damage ?? 0) - (a.damage ?? 0))[0];
-      nb = playerSkill(nb, best ? best.id : cur.skills[0], target?.uid);
+      nb = playerSkill(nb, cur.uid, best ? best.id : cur.skills[0], target?.uid);
     }
     guard += 1;
   }
@@ -191,18 +191,18 @@ describe('车轮战（轮换上阵）', () => {
       { speciesId: 'pipi' },
       { speciesId: 'mimi' },
     ];
-    const b = createBattle([p1, p2], enemies, 28, { gauntlet: true });
+    const b = createBattle([p1, p2], enemies, 6, { gauntlet: true });
     // 只有第 1 只上场，第 2 只进入我方替补席
     expect(b.playerUnits.length).toBe(1);
     expect(b.playerUnits[0].uid).toBe(p1.uid);
     expect(b.playerBench?.length).toBe(1);
     expect(b.playerBench?.[0].uid).toBe(p2.uid);
-    // 让第 1 只直接战败 → 自动换第 2 只上场
+    // 让第 1 只直接战败 → 结束回合触发换人 → 自动换第 2 只上场
     const killed: BattleState = {
       ...b,
       playerUnits: b.playerUnits.map((u) => ({ ...u, hp: 0 })),
     };
-    const swapped = autoPlay(killed, 400);
+    const swapped = autoPlay(playerEndTurn(killed), 400);
     expect(swapped.phase).toBe('won');
     // 战败单位已退场（不在上场列表，也不在替补席），当前场上为第 2 只
     expect(swapped.playerUnits.some((u) => u.uid === p1.uid)).toBe(false);
@@ -307,6 +307,9 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
     s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const corrupted = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     s = dispatch(s, { type: 'MOVE', nodeId: corrupted.id });
+    expect(s.screen).toBe('formation');
+    const units = s.formation!.units;
+    s = dispatch(s, { type: 'FORMATION_CONFIRM', units });
     expect(s.screen).toBe('battle');
     expect(s.battle?.corruptDebuff).toBe('dmg');
   });
@@ -316,6 +319,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
     s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const corrupted = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     s = dispatch(s, { type: 'MOVE', nodeId: corrupted.id });
+    s = dispatch(s, { type: 'FORMATION_CONFIRM', units: s.formation!.units });
     const gold0 = s.gold;
     s = { ...s, battle: { ...s.battle!, phase: 'won' } };
     s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
@@ -328,6 +332,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
     const node = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     node.corruptReward = 'food';
     s = dispatch(s, { type: 'MOVE', nodeId: node.id });
+    s = dispatch(s, { type: 'FORMATION_CONFIRM', units: s.formation!.units });
     const gold0 = s.gold;
     s = { ...s, battle: { ...s.battle!, phase: 'won' } };
     s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });

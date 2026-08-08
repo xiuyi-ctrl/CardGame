@@ -40,10 +40,21 @@ function effectText(e: StatusEffect): string {
   }
 }
 
-/** 技能完整描述：基础描述 + 具体 buff 效果数值，如 "攻击单个敌人，附加灼烧（灼烧 2/回合，持续 2 回合）" */
+/** 技能完整描述：定位标注 + 基础描述 + 具体 buff 效果数值，如 "【前排攻击】攻击单个敌人（灼烧 2/回合，持续 2 回合）" */
 export function skillFullDesc(s: SkillDef): string {
   const effects = (s.effects ?? []).map(effectText).join('，');
-  return effects ? `${s.desc}（${effects}）` : s.desc;
+  let reachNote = '';
+  if (s.target === 'all') reachNote = '全体攻击';
+  else if (s.target === 'random') reachNote = '随机攻击';
+  else if (s.kind === 'attack' && s.target === 'single') {
+    if (s.reach === 'pierce') reachNote = '贯穿：命中前排并波及对应后排';
+    else if (s.reach === 'back') reachNote = '后排攻击：跳过前排直击后排';
+    else if (s.reach === 'direct') reachNote = '指定攻击：无视前后排';
+    else reachNote = '前排攻击';
+  }
+  const prefix = reachNote ? `【${reachNote}】` : '';
+  const base = `${prefix}${s.desc}`;
+  return effects ? `${base}（${effects}）` : base;
 }
 
 /** 技能标签：名称 + 效果图标（如 🔥）+ 伤害/治疗数值；desc 模式下追加展示完整描述 */
@@ -170,11 +181,11 @@ export interface UnitCardProps {
   footer?: ReactNode;
 }
 
-export function UnitCard({ unit, className = '', onClick, showSkills = true, showSkillDesc = false, topStats = false, footer }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer }: UnitCardProps) {
   const dead = unit.hp <= 0;
   return (
     <div
-      className={`unit-card ${className} ${dead ? 'dead' : ''} ${onClick ? 'clickable' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
+      className={`unit-card ${small ? 'small' : ''} ${className} ${dead ? 'dead' : ''} ${onClick ? 'clickable' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
       onClick={onClick}
     >
       <div className={`card-top ${topStats ? 'card-top-stats' : ''}`}>
@@ -206,7 +217,7 @@ export function UnitCard({ unit, className = '', onClick, showSkills = true, sho
         <PassiveBadge unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
-      {showSkills && (
+      {showSkills && !small && (
         <div className="skill-list">
           {unit.skills.map((sid) => (
             <SkillTag key={sid} skill={getSkill(sid)} desc={showSkillDesc} />

@@ -10,6 +10,8 @@ export const TAME_THRESHOLD = 0.4;
 export const TAME_FAIL_BONUS = 0.25;
 /** 敌方每场战斗的治疗次数上限，防止治疗无限拉长战斗形成死局 */
 export const ENEMY_HEAL_LIMIT = 3;
+/** 战斗棋盘每排列数（前后排各 3 列 = 6 格） */
+export const FIELD_COLS = 3;
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
@@ -37,6 +39,7 @@ export function makeUnit(
   isPlayer: boolean,
   column: 0 | 1 | 2,
   tameable: boolean,
+  row: 'front' | 'back' = 'front',
 ): Unit {
   const s = getMonster(speciesId);
   const passive = getPassive(s.passive);
@@ -60,6 +63,7 @@ export function makeUnit(
     skillUses,
     statuses: [],
     column,
+    row,
     isPlayer,
     tameable,
     acted: false,
@@ -110,9 +114,10 @@ export function computeTurnOrder(b: BattleState): string[] {
 }
 
 function makeEnemy(e: { speciesId: string }, index: number, untameable = false): Unit {
-  const col = Math.min(2, index) as 0 | 1 | 2;
+  const row: 'front' | 'back' = index < FIELD_COLS ? 'front' : 'back';
+  const col = (index % FIELD_COLS) as 0 | 1 | 2;
   const s = getMonster(e.speciesId);
-  return makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0);
+  return makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
 }
 
 export function createBattle(
@@ -131,7 +136,9 @@ export function createBattle(
     enemyUnits: [],
     turnOrder: [],
     turnIndex: 0,
-    round: 0,
+    round: 1,
+    playerAp: 0,
+    enemyAp: 0,
     phase: 'acting',
     log: [],
     pendingTame: [],
@@ -152,23 +159,31 @@ export function createBattle(
     b.enemyBench = enemyRest.map((e, i) => makeEnemy(e, i + 1, untameable));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
+    // 敌方数量与玩家出战数匹配（最少 2v2；boss/斗兽场等单敌遭遇保留 1 只）
+    const n = preparedPlayer.length;
+    let target = n >= 2 ? Math.min(n, 4) : 1;
+    if (enemySpecies.length === 1) target = 1;
+    const picked = enemySpecies.slice(0, target);
+    while (picked.length < target) picked.push(picked[picked.length % enemySpecies.length] || enemySpecies[0]);
     b.playerUnits = preparedPlayer;
-    b.enemyUnits = enemySpecies.map((e, i) => makeEnemy(e, i, untameable));
+    b.enemyUnits = picked.map((e, i) => makeEnemy(e, i, untameable));
   }
-  return advance(b);
+  b.playerAp = b.playerUnits.filter((u) => u.hp > 0).length;
+  b.enemyAp = b.enemyUnits.filter((u) => u.hp > 0).length;
+  b.turnOrder = computeTurnOrder(b);
+  return checkEnd(b);
 }
 
-/** 开始新回合：重置行动标记、结算持续伤害与状态持续、重新按速度排序 */
+/** 开始新回合：重置行动标记/行动点、结算持续伤害与状态持续、重新按速度排序 */
 function startRound(b: BattleState): BattleState {
-  // 递减战斗药水效果回合数
   let nb = decrementBattleBuffs(b);
   nb = {
     ...nb,
     round: nb.round + 1,
     turnOrder: computeTurnOrder(nb),
     turnIndex: 0,
-    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: false, statuses: u.statuses.map((s) => ({ ...s })) })),
-    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: false, statuses: u.statuses.map((s) => ({ ...s })) })),
+    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), statuses: u.statuses.map((s) => ({ ...s })) })),
+    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), statuses: u.statuses.map((s) => ({ ...s })) })),
   };
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     const res = applyDot(nb, u);
@@ -186,8 +201,14 @@ function startRound(b: BattleState): BattleState {
       nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${p.value} 点生命`, sideOf(u));
     }
   }
+  nb = {
+    ...nb,
+    playerAp: nb.playerUnits.filter((u) => u.hp > 0).length,
+    enemyAp: nb.enemyUnits.filter((u) => u.hp > 0).length,
+  };
   return nb;
 }
+
 function replaceUnit(b: BattleState, unit: Unit): BattleState {
   const side = unit.isPlayer ? 'playerUnits' : 'enemyUnits';
   const list = b[side].map((u) => (u.uid === unit.uid ? unit : u));
@@ -226,41 +247,12 @@ function actorFromId(b: BattleState, uid: string): Unit | undefined {
   return [...b.playerUnits, ...b.enemyUnits].find((u) => u.uid === uid);
 }
 
-function currentActor(b: BattleState): Unit | undefined {
-  if (b.turnOrder.length === 0) return undefined;
-  return actorFromId(b, b.turnOrder[b.turnIndex]);
+function alliesOf(b: BattleState, actor: Unit): Unit[] {
+  return actor.isPlayer ? b.playerUnits.filter((u) => u.hp > 0) : b.enemyUnits.filter((u) => u.hp > 0);
 }
 
-function nextActor(b: BattleState): Unit | undefined {
-  for (let i = 0; i < b.turnOrder.length; i++) {
-    const u = actorFromId(b, b.turnOrder[(b.turnIndex + i) % b.turnOrder.length]);
-    if (u && u.hp > 0 && !u.acted) return u;
-  }
-  return undefined;
-}
-
-/**
- * 推进到「轮到玩家行动」或「战斗结束」。
- * 若当前行动者是敌方，则由 AI 自动结算；回合内全部行动完则开启新回合。
- * 迭代实现，避免深递归栈溢出。
- */
-function advance(b: BattleState): BattleState {
-  let nb = checkEnd(b);
-  let guard = 0;
-  while (nb.phase === 'acting' && guard < 10000) {
-    guard += 1;
-    const actor = nextActor(nb);
-    if (!actor) {
-      nb = checkEnd(startRound(nb));
-      continue;
-    }
-    const idx = nb.turnOrder.indexOf(actor.uid);
-    nb = { ...nb, turnIndex: idx };
-    if (actor.isPlayer) return checkEnd(nb);
-    nb = useRng(nb, (_v, b2) => enemyAct(b2));
-    nb = checkEnd(nb);
-  }
-  return nb;
+function enemiesOf(b: BattleState, actor: Unit): Unit[] {
+  return actor.isPlayer ? b.enemyUnits.filter((u) => u.hp > 0) : b.playerUnits.filter((u) => u.hp > 0);
 }
 
 function checkEnd(b: BattleState): BattleState {
@@ -300,18 +292,6 @@ function checkEnd(b: BattleState): BattleState {
   return b;
 }
 
-function playerTargets(b: BattleState): Unit[] {
-  return b.enemyUnits.filter((u) => u.hp > 0);
-}
-
-function enemyTargets(b: BattleState): Unit[] {
-  return b.playerUnits.filter((u) => u.hp > 0);
-}
-
-function alliesOf(b: BattleState, actor: Unit): Unit[] {
-  return actor.isPlayer ? b.playerUnits.filter((u) => u.hp > 0) : b.enemyUnits.filter((u) => u.hp > 0);
-}
-
 /** 从数组抽 1 个，推进 RNG 计数，返回抽到的元素与更新后的战斗状态 */
 function rngPick<T>(b: BattleState, arr: T[]): { pick?: T; battle: BattleState } {
   if (arr.length === 0) return { pick: undefined, battle: b };
@@ -338,9 +318,19 @@ function randomOf<T>(b: BattleState, arr: T[], count: number): { picks: T[]; bat
   return { picks: out, battle: nb };
 }
 
+/**
+ * 目标解析（含前后排保护规则）：
+ * - 缺省/前端单体：只能选前排存活敌人（前排全灭后可打后排）
+ * - pierce 贯穿：命中前排并波及对应列后排
+ * - back 后排：跳过前排直击后排（后排空则打前排）
+ * - direct 指定：任意位置
+ * - all 群攻 / random 随机 / self / ally 不受前排限制
+ */
 function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): { targets: Unit[]; battle: BattleState } {
-  const enemies = actor.isPlayer ? playerTargets(b) : enemyTargets(b);
+  const enemies = enemiesOf(b, actor);
   const allies = alliesOf(b, actor);
+  const front = enemies.filter((u) => u.row === 'front');
+  const back = enemies.filter((u) => u.row === 'back');
   let nb = b;
   let targets: Unit[] = [];
   switch (skill.target) {
@@ -359,20 +349,53 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       targets = enemies;
       break;
     case 'random': {
-      const res = randomOf(nb, enemies.filter((u) => u.hp > 0), skill.hits ?? 1);
+      const res = randomOf(nb, enemies, skill.hits ?? 1);
       nb = res.battle;
       targets = res.picks;
       break;
     }
     case 'single': {
-      if (explicitTarget) {
-        const t = [...enemies, ...(skill.kind === 'heal' ? allies : [])].find((u) => u.uid === explicitTarget && u.hp > 0);
-        if (t) targets = [t];
-      }
-      if (targets.length === 0) {
-        const res = rngPick(nb, enemies);
-        nb = res.battle;
-        if (res.pick) targets = [res.pick];
+      const reach = skill.reach ?? 'front';
+      if (reach === 'direct') {
+        if (explicitTarget && enemies.some((u) => u.uid === explicitTarget)) {
+          targets = [enemies.find((u) => u.uid === explicitTarget)!];
+        } else {
+          const res = rngPick(nb, front.length > 0 ? front : back);
+          nb = res.battle;
+          if (res.pick) targets = [res.pick];
+        }
+      } else if (reach === 'back') {
+        if (explicitTarget && back.some((u) => u.uid === explicitTarget)) {
+          targets = [back.find((u) => u.uid === explicitTarget)!];
+        } else {
+          const res = rngPick(nb, back.length > 0 ? back : front);
+          nb = res.battle;
+          if (res.pick) targets = [res.pick];
+        }
+      } else if (reach === 'pierce') {
+        let ft: Unit | undefined;
+        if (explicitTarget && front.some((u) => u.uid === explicitTarget)) {
+          ft = front.find((u) => u.uid === explicitTarget)!;
+        } else {
+          const res = rngPick(nb, front.length > 0 ? front : back);
+          nb = res.battle;
+          ft = res.pick;
+        }
+        if (ft) {
+          targets = [ft];
+          if (ft.row === 'front') {
+            const bc = back.find((u) => u.column === ft.column);
+            if (bc) targets.push(bc);
+          }
+        }
+      } else {
+        if (explicitTarget && front.some((u) => u.uid === explicitTarget)) {
+          targets = [front.find((u) => u.uid === explicitTarget)!];
+        } else {
+          const res = rngPick(nb, front.length > 0 ? front : back);
+          nb = res.battle;
+          if (res.pick) targets = [res.pick];
+        }
       }
       break;
     }
@@ -392,25 +415,74 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
   return { ...unit, statuses: [...unit.statuses, { ...effect }] };
 }
 
-function enemyAct(b: BattleState): BattleState {
-  const actor = currentActor(b);
-  if (!actor || actor.hp <= 0) return b;
-  if (actor.statuses.some((s) => s.kind === 'stun')) {
-    return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
-  }
+/** 交换己方两只单位的位置（可前后/左右任意交换） */
+function swapUnits(b: BattleState, uidA: string, uidB: string): BattleState {
+  const a = actorFromId(b, uidA);
+  const c = actorFromId(b, uidB);
+  if (!a || !c || a.uid === c.uid) return b;
+  const aPos = { row: a.row, column: a.column };
+  const repA = { ...a, row: c.row, column: c.column };
+  const repC = { ...c, row: aPos.row, column: aPos.column };
+  const swap = (u: Unit) => (u.uid === uidA ? repA : u.uid === uidB ? repC : u);
+  return {
+    ...b,
+    playerUnits: b.playerUnits.map(swap),
+    enemyUnits: b.enemyUnits.map(swap),
+  };
+}
 
-  return useRng(b, (rngVal, nb) => {
+/** 敌方 AI 尝试把残血前排换到后排（成功返回新状态，失败返回 undefined） */
+function tryEnemySwap(b: BattleState, actor: Unit): BattleState | undefined {
+  if (actor.row !== 'front') return undefined;
+  if (actor.hp / actor.maxHp >= 0.5) return undefined;
+  const backs = alliesOf(b, actor).filter((u) => u.row === 'back' && u.hp / u.maxHp > 0.5);
+  if (backs.length === 0) return undefined;
+  const target = backs.sort((x, y) => y.hp / y.maxHp - x.hp / x.maxHp)[0];
+  let nb = swapUnits(b, actor.uid, target.uid);
+  nb = markActed(nb, actor.uid);
+  nb = pushLog(nb, `${actor.name} 退到后排，${target.name} 顶上`, sideOf(actor));
+  return nb;
+}
+
+/** 敌方阶段：按 enemyAp 逐只自动结算（快敌先动） */
+function enemyPhase(b: BattleState): BattleState {
+  let nb = b;
+  while (nb.phase === 'acting' && nb.enemyAp > 0) {
+    const order = nb.enemyUnits
+      .filter((u) => u.hp > 0 && !u.acted)
+      .sort((a, c) => getEffectiveSpd(c) - getEffectiveSpd(a) || a.uid.localeCompare(c.uid));
+    if (order.length === 0) break;
+    nb = enemyAct(nb, order[0]);
+    nb = checkEnd(nb);
+  }
+  return nb;
+}
+
+function enemyAct(b: BattleState, actor: Unit): BattleState {
+  let nb = { ...b, enemyAp: b.enemyAp - 1 };
+  if (actor.statuses.some((s) => s.kind === 'stun')) {
+    return markActed(nb, actor.uid);
+  }
+  return useRng(nb, (rngVal, b2) => {
     const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0);
     if (skills.length === 0) {
-      return markActed(pushLog(nb, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
+      return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
+    // 治疗：残血且有治疗技能时优先使用（受敌方治疗次数上限约束）
     const healSkills = skills.filter((s) => s.kind === 'heal');
-    let chosen = skills[Math.floor(rngVal * skills.length)];
-    if (healSkills.length > 0 && (nb.enemyHealsLeft ?? 0) > 0 && actor.hp / actor.maxHp < 0.5 && rngVal > 0.4) {
-      chosen = healSkills[0];
+    if (healSkills.length > 0 && (b2.enemyHealsLeft ?? 0) > 0 && actor.hp / actor.maxHp < 0.5 && rngVal > 0.3) {
+      const heal = healSkills[0];
+      const ally = alliesOf(b2, actor).sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
+      return useSkillInner(b2, actor, heal, ally?.uid);
     }
-    const explicit = chosen.target === 'self' || chosen.target === 'ally' ? actor.uid : undefined;
-    return useSkillInner(nb, actor, chosen, explicit);
+    // 换位：残血前排偶尔退到后排
+    if (rngVal < 0.15) {
+      const swapped = tryEnemySwap(b2, actor);
+      if (swapped) return swapped;
+    }
+    // 攻击：随机选择可用技能（AI 不总是最优，保证难度合理）
+    const chosen = skills[Math.floor(rngVal * skills.length)];
+    return useSkillInner(b2, actor, chosen, undefined);
   });
 }
 
@@ -511,15 +583,58 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);
 }
 
-/** 玩家行动：使用技能。自动推进敌方回合直到轮到下一个玩家或战斗结束。 */
-export function playerSkill(b: BattleState, skillId: string, targetUid?: string): BattleState {
-  const actor = currentActor(b);
-  if (!actor || !actor.isPlayer || b.phase !== 'acting') return b;
+/** 玩家阶段结束后进入敌方阶段（回合收尾） */
+export function playerEndTurn(b: BattleState): BattleState {
+  if (b.phase !== 'acting') return b;
+  let nb: BattleState = {
+    ...b,
+    playerAp: 0,
+    playerUnits: b.playerUnits.map((u) => (u.hp > 0 && !u.acted ? { ...u, acted: true } : u)),
+  };
+  nb = checkEnd(nb);
+  if (nb.phase !== 'acting') return nb;
+  nb = enemyPhase(nb);
+  if (nb.phase !== 'acting') return nb;
+  nb = startRound(nb);
+  return checkEnd(nb);
+}
+
+/** 玩家行动后的统一收尾：先结算胜负；未结束时若 AP 用尽或无可行动单位则自动进入敌方阶段 */
+function afterPlayerAction(b: BattleState): BattleState {
+  if (b.phase !== 'acting') return b;
+  b = checkEnd(b);
+  if (b.phase !== 'acting') return b;
+  const canAct = b.playerAp > 0 && b.playerUnits.some((u) => u.hp > 0 && !u.acted);
+  if (!canAct) return playerEndTurn(b);
+  return b;
+}
+
+/** 玩家行动：指定一只宠物使用技能。消耗 1 AP，每只宠物每回合最多行动一次。 */
+export function playerSkill(b: BattleState, actorUid: string, skillId: string, targetUid?: string): BattleState {
+  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
+  const actor = b.playerUnits.find((u) => u.uid === actorUid);
+  if (!actor || actor.hp <= 0 || actor.acted) return b;
+  if (actor.statuses.some((s) => s.kind === 'stun')) return b;
   if (skillUsesLeft(actor, skillId) <= 0) return b;
-  return useRng(b, (_v, nb) => {
-    const after = useSkillInner(nb, actor, getSkill(skillId), targetUid);
-    return advance(after);
-  });
+  const nb = useRng(b, (_v, b2) => useSkillInner(b2, actor, getSkill(skillId), targetUid));
+  const after = { ...nb, playerAp: nb.playerAp - 1 };
+  return afterPlayerAction(after);
+}
+
+/** 玩家行动：交换己方两只宠物的位置（可前后左右）。发起者消耗 1 AP 并占用行动。 */
+export function playerSwap(b: BattleState, actorUid: string, otherUid: string): BattleState {
+  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
+  const actor = b.playerUnits.find((u) => u.uid === actorUid);
+  const other = b.playerUnits.find((u) => u.uid === otherUid);
+  if (!actor || !other || actor.uid === other.uid) return b;
+  if (actor.hp <= 0 || other.hp <= 0) return b;
+  if (actor.acted) return b;
+  if (actor.statuses.some((s) => s.kind === 'stun')) return b;
+  let nb = swapUnits(b, actor.uid, other.uid);
+  nb = markActed(nb, actor.uid);
+  nb = { ...nb, playerAp: nb.playerAp - 1 };
+  nb = pushLog(nb, `${actor.name} 与 ${other.name} 交换了位置`, 'player');
+  return afterPlayerAction(nb);
 }
 
 /** 计算对某敌人使用某食物的捕捉概率（0..1）。不含 1 血/圣果的必定成功判定，由调用方另行判断。 */
@@ -532,8 +647,9 @@ export function tameChance(enemy: Unit, foodId: string): number {
   return Math.min(1, food.baseTame * species.tame.difficulty * hpFactor * (1 + fails * TAME_FAIL_BONUS));
 }
 
-/** 玩家行动：喂食驯服敌人。每次失败会提高该敌人的后续捕捉概率；残血到 1 点时必定捕捉。 */
+/** 玩家行动：喂食驯服敌人（消耗 1 AP）。每次失败会提高该敌人的后续捕捉概率；残血到 1 点时必定捕捉。 */
 export function playerTame(b: BattleState, foodId: string, enemyUid: string): BattleState {
+  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
   const enemy = b.enemyUnits.find((u) => u.uid === enemyUid);
   if (!enemy || enemy.hp <= 0) return b;
   if (!enemy.tameable) {
@@ -545,18 +661,18 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
   const food = getFood(foodId);
   const chance = tameChance(enemy, foodId);
 
-  return useRng(b, (rng, nb) => {
+  const nb = useRng(b, (rng, nb2) => {
     const guaranteed = enemy.hp === 1 || food.guaranteed;
     const success = guaranteed ? true : rng < chance;
-    let after: BattleState = nb;
+    let after: BattleState = nb2;
     if (success) {
       const tamed = makeUnit(enemy.speciesId, true, 2, false);
       tamed.maxHp += food.hpBonus;
       tamed.hp = tamed.maxHp;
       after = {
-        ...nb,
-        enemyUnits: nb.enemyUnits.filter((u) => u.uid !== enemyUid),
-        pendingTame: [...nb.pendingTame, tamed],
+        ...nb2,
+        enemyUnits: nb2.enemyUnits.filter((u) => u.uid !== enemyUid),
+        pendingTame: [...nb2.pendingTame, tamed],
       };
       after = pushLog(
         after,
@@ -565,26 +681,36 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
       );
     } else {
       after = {
-        ...nb,
-        enemyUnits: nb.enemyUnits.map((u) => (u.uid === enemy.uid ? { ...u, tameFails: (u.tameFails ?? 0) + 1 } : u)),
+        ...nb2,
+        enemyUnits: nb2.enemyUnits.map((u) => (u.uid === enemy.uid ? { ...u, tameFails: (u.tameFails ?? 0) + 1 } : u)),
       };
       after = pushLog(after, `喂食${food.name}失败，${enemy.name} 抵抗了驯服（下次捕捉概率提高）`, 'enemy');
     }
-    return advance(after);
+    return after;
   });
+  if (nb.rngCount === b.rngCount) return b;
+  const after = { ...nb, playerAp: nb.playerAp - 1 };
+  return afterPlayerAction(after);
 }
 
+/** 第一个尚未行动的存活玩家单位（供 UI 高亮/测试使用；新模型下玩家自由选择，此函数仅为辅助） */
 export function currentPlayerUnit(b: BattleState): Unit | undefined {
-  const u = currentActor(b);
-  return u && u.isPlayer && b.phase === 'acting' ? u : undefined;
+  return b.playerUnits.find((u) => u.hp > 0 && !u.acted);
+}
+
+/** 本回合玩家可操作的存活单位（未行动、未眩晕） */
+export function getActablePlayerUnits(b: BattleState): Unit[] {
+  if (b.phase !== 'acting') return [];
+  return b.playerUnits.filter((u) => u.hp > 0 && !u.acted && !u.statuses.some((s) => s.kind === 'stun'));
 }
 
 export function isTameable(enemy: Unit): boolean {
   return enemy.tameable && enemy.hp > 0 && enemy.hp / enemy.maxHp <= TAME_THRESHOLD;
 }
 
+/** 玩家是否还有可执行的行动（AP 与可行动单位都满足） */
 export function playerHasMove(b: BattleState): boolean {
-  return b.phase === 'acting' && currentActor(b)?.isPlayer === true;
+  return b.phase === 'acting' && b.playerAp > 0 && getActablePlayerUnits(b).length > 0;
 }
 
 /** 战斗药水临时效果键 */
@@ -601,12 +727,13 @@ const BUFF_MAP: Record<string, BuffKey> = {
 
 const BUFF_DURATION = 3; // 持续 3 回合
 
-/** 使用战斗药水：给指定单位加buff/debuff */
+/** 使用战斗药水：给指定单位加buff/debuff（消耗 1 AP） */
 export function useBattleItem(b: BattleState, itemId: string, targetUid: string): BattleState {
+  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
   const key = BUFF_MAP[itemId];
   if (!key) return b;
 
-  const target = [...b.playerUnits, ...b.enemyUnits].find(u => u.uid === targetUid);
+  const target = [...b.playerUnits, ...b.enemyUnits].find((u) => u.uid === targetUid);
   if (!target) return b;
 
   const isPlayer = target.isPlayer;
@@ -615,23 +742,21 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
   const isDebuff = ['atkDown', 'spdDown', 'hpDown'].includes(key);
   if ((isBuff && !isPlayer) || (isDebuff && isPlayer)) return b;
 
-  return useRng(b, (_rngVal, nb) => {
-    const t = [...nb.playerUnits, ...nb.enemyUnits].find(u => u.uid === targetUid);
-    if (!t) return nb;
+  const nb = useRng(b, (_rngVal, nb2) => {
+    const t = [...nb2.playerUnits, ...nb2.enemyUnits].find((u) => u.uid === targetUid);
+    if (!t) return nb2;
 
     // 生命药水/腐蚀药水即时生效，不加入持续buff
     if (key === 'hpUp') {
       const maxHp = getEffectiveMaxHp(t);
       const heal = Math.round(maxHp * 0.5);
       const healedUnit = { ...t, hp: Math.min(maxHp, t.hp + heal) };
-      const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
-        u.uid === targetUid ? healedUnit : u
-      );
+      const newUnits = [...nb2.playerUnits, ...nb2.enemyUnits].map((u) => (u.uid === targetUid ? healedUnit : u));
       return pushLog(
         {
-          ...nb,
-          playerUnits: newUnits.filter(u => u.isPlayer),
-          enemyUnits: newUnits.filter(u => !u.isPlayer),
+          ...nb2,
+          playerUnits: newUnits.filter((u) => u.isPlayer),
+          enemyUnits: newUnits.filter((u) => !u.isPlayer),
         },
         `对 ${t.name} 使用道具：回复 50% 生命`,
         sideOf(t),
@@ -641,14 +766,12 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
       // 腐蚀药水：当前生命 -30%（至少保留 1 血，不直接致死）
       const hit = Math.max(1, Math.round(t.hp * 0.7));
       const hitUnit = { ...t, hp: Math.max(1, hit) };
-      const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
-        u.uid === targetUid ? hitUnit : u
-      );
+      const newUnits = [...nb2.playerUnits, ...nb2.enemyUnits].map((u) => (u.uid === targetUid ? hitUnit : u));
       return pushLog(
         {
-          ...nb,
-          playerUnits: newUnits.filter(u => u.isPlayer),
-          enemyUnits: newUnits.filter(u => !u.isPlayer),
+          ...nb2,
+          playerUnits: newUnits.filter((u) => u.isPlayer),
+          enemyUnits: newUnits.filter((u) => !u.isPlayer),
         },
         `对 ${t.name} 使用道具：当前生命 -30%`,
         sideOf(t),
@@ -667,26 +790,27 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
       hpDown: '当前生命 -30%',
     };
 
-    const newUnits = [...nb.playerUnits, ...nb.enemyUnits].map(u =>
-      u.uid === targetUid ? { ...u, battleBuffs: unitBuffs } : u
-    );
+    const newUnits = [...nb2.playerUnits, ...nb2.enemyUnits].map((u) => (u.uid === targetUid ? { ...u, battleBuffs: unitBuffs } : u));
 
     return pushLog(
       {
-        ...nb,
-        playerUnits: newUnits.filter(u => u.isPlayer),
-        enemyUnits: newUnits.filter(u => !u.isPlayer),
+        ...nb2,
+        playerUnits: newUnits.filter((u) => u.isPlayer),
+        enemyUnits: newUnits.filter((u) => !u.isPlayer),
       },
       `对 ${t.name} 使用道具：${effectDesc[key]}（持续 ${BUFF_DURATION} 回合）`,
       sideOf(t),
     );
   });
+  if (nb.rngCount === b.rngCount) return b;
+  const after = { ...nb, playerAp: nb.playerAp - 1 };
+  return afterPlayerAction(after);
 }
 
 /** 回合开始时递减所有单位的战斗药水效果回合数 */
 export function decrementBattleBuffs(b: BattleState): BattleState {
   let changed = false;
-  const newUnits = [...b.playerUnits, ...b.enemyUnits].map(u => {
+  const newUnits = [...b.playerUnits, ...b.enemyUnits].map((u) => {
     if (!u.battleBuffs) return u;
     const next: Record<string, number> = {};
     let unitChanged = false;
@@ -708,7 +832,7 @@ export function decrementBattleBuffs(b: BattleState): BattleState {
   });
 
   return changed
-    ? { ...b, playerUnits: newUnits.filter(u => u.isPlayer), enemyUnits: newUnits.filter(u => !u.isPlayer) }
+    ? { ...b, playerUnits: newUnits.filter((u) => u.isPlayer), enemyUnits: newUnits.filter((u) => !u.isPlayer) }
     : b;
 }
 

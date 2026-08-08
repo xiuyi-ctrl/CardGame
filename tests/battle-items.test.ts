@@ -13,7 +13,7 @@ import type { GameState } from '../src/game/state/game';
 import { createInitialState } from '../src/game/state/reducer';
 
 function makeBattleState() {
-  const players = [makeUnit('momo', true, 0, false)];
+  const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
   return createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }], 12345);
 }
 
@@ -144,7 +144,11 @@ describe('USE_BATTLE_ITEM reducer', () => {
   });
 
   it('战斗中 buff 在真实回合推进后仍存在', () => {
-    const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 12345);
+    const battle = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }],
+      12345,
+    );
     const withInv: GameState = {
       ...createInitialState(),
       screen: 'battle',
@@ -155,7 +159,12 @@ describe('USE_BATTLE_ITEM reducer', () => {
     expect(s.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(3);
     const cur = currentPlayerUnit(s.battle!);
     if (cur) {
-      const s2 = gameReducer(s, { type: 'PLAYER_SKILL', skillId: cur.skills[0], targetUid: s.battle!.enemyUnits[0].uid });
+      const s2 = gameReducer(s, {
+        type: 'PLAYER_SKILL',
+        actorUid: cur.uid,
+        skillId: cur.skills[0],
+        targetUid: s.battle!.enemyUnits[0].uid,
+      });
       // 玩家行动后敌人行动、开启新回合，buff 递减 1（仍应存在）
       expect(s2.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(2);
     }

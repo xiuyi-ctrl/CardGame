@@ -12,6 +12,14 @@ export interface SkillDef {
   name: string;
   desc: string;
   target: SkillTarget;
+  /**
+   * 攻击范围定位（作用于 single/random 攻击技能）：
+   * - 缺省 = 前排（默认单体只能攻击前排，前排全灭后可打后排）
+   * - 'pierce' = 贯穿：命中前排目标并波及对应位置后排
+   * - 'back' = 后排：跳过前排直接攻击后排
+   * - 'direct' = 指定：可攻击任意位置（无视前排保护）
+   */
+  reach?: 'pierce' | 'back' | 'direct';
   /** 攻击技能固定伤害值（整数，不经任何属性倍率） */
   damage?: number;
   /** 治疗技能固定回复值（整数） */
@@ -93,8 +101,10 @@ export interface Unit {
   spd: number;
   skills: string[];
   statuses: StatusEffect[];
-  /** 0=前 1=中 2=后 */
+  /** 站位列（0-2）；战斗棋盘 6 格 = 前排3列 + 后排3列 */
   column: 0 | 1 | 2;
+  /** 站位排：前排 / 后排 */
+  row: 'front' | 'back';
   isPlayer: boolean;
   /** 敌方专用：是否可被驯服 */
   tameable: boolean;
@@ -133,6 +143,10 @@ export interface BattleState {
   turnOrder: string[];
   turnIndex: number;
   round: number;
+  /** 玩家剩余行动点数（每回合 = 场上存活宠物数，用于技能/换位/驯服/道具） */
+  playerAp: number;
+  /** 敌方剩余行动点数（AI 每回合同样 = 场上存活数） */
+  enemyAp: number;
   phase: 'acting' | 'won' | 'lost';
   log: LogEntry[];
   pendingTame: Unit[];

@@ -57,7 +57,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   momo_queen: {
     id: 'momo_queen', name: '毛毛王后', emoji: '🐹',
     baseHp: 18, baseSpd: 4,
-    skills: ['bite', 'leaf_needle', 'heal_light'],
+    skills: ['bite', 'leaf_needle', 'heal_light', 'shockwave'],
     desc: '毛毛的融合形态，攻守兼备且带治疗，全队核心。',
     passive: 'brute',
     evolutions: [{ to: 'momo_god' }],
@@ -75,9 +75,8 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   fifi_king: {
     id: 'fifi_king', name: '菲菲王', emoji: '🐲',
     baseHp: 15, baseSpd: 5,
-    skills: ['ember', 'double_hit', 'roar'],
-    desc: '菲菲的融合形态，高输出高速度的爆发刺客。',
-    passive: 'hot_flame',
+    skills: ['ember', 'double_hit', 'roar', 'shockwave'],
+    desc: '菲菲的融合形态，高输出高速度的爆发刺客。',    passive: 'hot_flame',
     evolutions: [{ to: 'fifi_god' }],
     tame: { difficulty: 0.4 }, rank: 2,
   },
@@ -92,7 +91,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   gora: {
     id: 'gora', name: '甲兽', emoji: '🐊',
     baseHp: 19, baseSpd: 2,
-    skills: ['steel_spike', 'roar', 'tail'],
+    skills: ['steel_spike', 'roar', 'tail', 'shockwave'],
     desc: '基基的融合形态，高血铁壁，还能打全体。',
     passive: 'hard_armor',
     tame: { difficulty: 0.4 }, rank: 2,
@@ -100,7 +99,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   momo_god: {
     id: 'momo_god', name: '毛毛神', emoji: '🐉',
     baseHp: 30, baseSpd: 6,
-    skills: ['bite', 'leaf_needle', 'heal_light', 'roar'],
+    skills: ['bite', 'leaf_needle', 'heal_light', 'roar', 'shockwave'],
     desc: '毛毛最终形态，生命与速度全面碾压，自带治疗与强化。',
     passive: 'fury',
     tame: { difficulty: 0.3 }, rank: 3,
@@ -116,7 +115,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   fifi_god: {
     id: 'fifi_god', name: '菲菲神', emoji: '🐉',
     baseHp: 26, baseSpd: 6,
-    skills: ['ember', 'double_hit', 'roar', 'flame_burst'],
+    skills: ['ember', 'double_hit', 'roar', 'flame_burst', 'shockwave'],
     desc: '菲菲最终形态，顶级爆发兼范围灼烧。',
     passive: 'dragon_power',
     tame: { difficulty: 0.3 }, rank: 3,
@@ -124,7 +123,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_vine: {
     id: 'boss_vine', name: '古树之主', emoji: '🌳',
     baseHp: 34, baseSpd: 4,
-    skills: ['tail', 'leaf_needle', 'heal_light', 'roar'],
+    skills: ['tail', 'leaf_needle', 'heal_light', 'roar', 'shockwave'],
     desc: '会自我治疗的站桩树王，注意优先集火压低血量。',
     passive: 'tree_regen',
     tame: { difficulty: 0 }, rank: 4,
@@ -132,7 +131,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_dark: {
     id: 'boss_dark', name: '暗影之王', emoji: '😈',
     baseHp: 38, baseSpd: 5,
-    skills: ['shadow_claw', 'double_hit', 'poison_sting'],
+    skills: ['shadow_claw', 'double_hit', 'poison_sting', 'pierce_strike'],
     desc: '多段爆发+中毒，脆皮主力慎接。',
     passive: 'shadow_power',
     tame: { difficulty: 0 }, rank: 4,
@@ -164,7 +163,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_moss: {
     id: 'boss_moss', name: '苔藓领主', emoji: '🍄',
     baseHp: 46, baseSpd: 4,
-    skills: ['leaf_needle', 'poison_sting', 'tail', 'roar'],
+    skills: ['leaf_needle', 'poison_sting', 'tail', 'roar', 'snipe'],
     desc: '全首领最高血量之一，中毒+随机攻击拖长战线。',
     passive: 'spore_venom',
     tame: { difficulty: 0 }, rank: 4,
@@ -172,7 +171,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_ghost: {
     id: 'boss_ghost', name: '幽灵船长', emoji: '👻',
     baseHp: 42, baseSpd: 6,
-    skills: ['aqua_shot', 'double_hit', 'dark_shock', 'roar'],
+    skills: ['aqua_shot', 'double_hit', 'dark_shock', 'roar', 'snipe'],
     desc: '高输出高速，首轮即可压血线。',
     passive: 'ghost_step',
     tame: { difficulty: 0 }, rank: 4,
@@ -180,7 +179,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_dragon: {
     id: 'boss_dragon', name: '玄铁渊龙', emoji: '🐉',
     baseHp: 60, baseSpd: 7,
-    skills: ['steel_spike', 'double_hit', 'tail', 'roar'],
+    skills: ['steel_spike', 'double_hit', 'tail', 'roar', 'shockwave'],
     desc: '最终幕最肉首领，数值怪。',
     passive: 'dragon_thorns',
     tame: { difficulty: 0 }, rank: 4,
@@ -188,7 +187,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_demon: {
     id: 'boss_demon', name: '炼狱魔君', emoji: '😈',
     baseHp: 55, baseSpd: 8,
-    skills: ['shadow_claw', 'dark_shock', 'double_hit', 'roar'],
+    skills: ['shadow_claw', 'dark_shock', 'double_hit', 'roar', 'pierce_strike'],
     desc: '全游戏最高攻击与速度，挑战时优先保生存。',
     passive: 'demon_frenzy',
     tame: { difficulty: 0 }, rank: 4,
@@ -213,7 +212,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   custom_gale: {
     id: 'custom_gale', name: '迅风兽', emoji: '🕊️',
     baseHp: 15, baseSpd: 8,
-    skills: ['leaf_needle', 'aqua_shot', 'shadow_claw', 'double_hit', 'poison_sting'],
+    skills: ['leaf_needle', 'aqua_shot', 'shadow_claw', 'double_hit', 'poison_sting', 'snipe'],
     desc: '奇遇关「造物」的高速模板，速度全场最高，抢先手压制。',
     passive: 'swift_wind',
     tame: { difficulty: 0.3 }, rank: 3,

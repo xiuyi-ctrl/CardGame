@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Dispatch } from 'react';
+import type { Dispatch, WheelEvent as ReactWheelEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
-import { currentPlayerUnit, isTameable, tameChance, TAME_THRESHOLD, skillUsesLeft } from '../game/core/battle';
+import {
+  isTameable,
+  playerHasMove,
+  skillUsesLeft,
+  tameChance,
+  TAME_THRESHOLD,
+} from '../game/core/battle';
 import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
+import { getPassive } from '../game/data/passives';
 import type { SkillDef, Unit } from '../game/types';
 import { UnitCard, skillBrief } from './components';
 import { persistSave } from './persistence';
@@ -17,112 +24,172 @@ interface Props {
   dispatch: Dispatch<GameAction>;
 }
 
+/** 判断单体攻击技能能否命中该敌人（前后排保护规则） */
+function enemyTargetable(skill: SkillDef, enemy: Unit, enemies: Unit[]): boolean {
+  if (skill.target !== 'single') return false;
+  const front = enemies.filter((u) => u.hp > 0 && u.row === 'front');
+  const back = enemies.filter((u) => u.hp > 0 && u.row === 'back');
+  const reach = skill.reach ?? 'front';
+  if (reach === 'direct') return true;
+  if (reach === 'back') return back.length > 0 ? enemy.row === 'back' : true;
+  if (reach === 'pierce') return front.length > 0 ? enemy.row === 'front' : true;
+  return front.length > 0 ? enemy.row === 'front' : true;
+}
+
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
   if (!battle) return null;
+  const b = battle;
 
-  const [pendingSkill, setPendingSkill] = useState<{ skillId: string; target?: string } | null>(null);
+  const [pendingSkill, setPendingSkill] = useState<{ actorUid: string; skillId: string } | null>(null);
+  const [swapFrom, setSwapFrom] = useState<string | null>(null);
   const [pendingTame, setPendingTame] = useState<string | null>(null);
   const [pendingBattleItem, setPendingBattleItem] = useState<string | null>(null);
-  const [hoverEnemy, setHoverEnemy] = useState<string | null>(null);
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
 
-  const current = currentPlayerUnit(battle);
-  const actorUid = current?.uid;
+  const canAct = playerHasMove(b);
+  const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
+  const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0);
 
   useEffect(() => {
     setPendingSkill(null);
+    setSwapFrom(null);
     setPendingTame(null);
     setPendingBattleItem(null);
-  }, [actorUid, battle?.rngCount]);
+  }, [battle?.round, battle?.rngCount, battle?.phase]);
 
-  const skills: SkillDef[] = useMemo(() => (current ? current.skills.map((id) => getSkill(id)) : []), [current]);
+  const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
+  const selectedSkills: SkillDef[] = useMemo(
+    () => (selected && !selected.acted && selected.hp > 0 ? selected.skills.map((id) => getSkill(id)) : []),
+    [selected],
+  );
+
   const foods = currentFoodList(state);
-  const battleItems = BATTLE_ITEM_IDS
-    .map((id) => getItem(id))
-    .filter((it) => (state.inventory[it.id] ?? 0) > 0);
+  const battleItems = BATTLE_ITEM_IDS.map((id) => getItem(id)).filter((it) => (state.inventory[it.id] ?? 0) > 0);
 
   const nodeType = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.type;
   const isChallenge = nodeType === 'arena' || nodeType === 'gauntlet';
-
-  const enemyUnits = [...battle.enemyUnits].sort((a, b) => a.column - b.column);
-  const playerUnits = [...battle.playerUnits].sort((a, b) => a.column - b.column);
 
   const validEnemyTargets = useMemo(() => {
     const targets = new Set<string>();
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
       if (skill.target === 'single') {
-        enemyUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
+        aliveEnemies.forEach((u) => {
+          if (enemyTargetable(skill, u, aliveEnemies)) targets.add(u.uid);
+        });
       }
     }
     if (pendingBattleItem) {
       const isDebuff = ['atk_down', 'spd_down', 'hp_down'].includes(pendingBattleItem);
-      if (isDebuff) {
-        enemyUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
-      }
+      if (isDebuff) aliveEnemies.forEach((u) => targets.add(u.uid));
     }
     return targets;
-  }, [pendingSkill, pendingBattleItem, battle.rngCount, enemyUnits]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSkill, pendingBattleItem, battle?.rngCount]);
 
   const validAllyTargets = useMemo(() => {
     const targets = new Set<string>();
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
-      if (skill.target === 'ally') {
-        battle.playerUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
-      }
+      if (skill.target === 'ally') alivePlayers.forEach((u) => targets.add(u.uid));
     }
+    if (swapFrom) alivePlayers.filter((u) => u.uid !== swapFrom).forEach((u) => targets.add(u.uid));
+    if (pendingBattleItem) {
+      const isBuff = ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
+      if (isBuff) alivePlayers.forEach((u) => targets.add(u.uid));
+    }
+    return targets;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSkill, swapFrom, pendingBattleItem, battle?.rngCount]);
+
+  function onPlayerClick(uid: string) {
+    if (pendingSkill) {
+      const skill = getSkill(pendingSkill.skillId);
+      if (skill.target === 'ally') {
+        dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
+        setPendingSkill(null);
+      }
+      return;
+    }
+    if (swapFrom) {
+      dispatch({ type: 'PLAYER_SWAP', actorUid: swapFrom, otherUid: uid });
+      setSwapFrom(null);
+      return;
+    }
+    if (pendingTame) return;
     if (pendingBattleItem) {
       const isBuff = ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
       if (isBuff) {
-        battle.playerUnits.filter((u) => u.hp > 0).forEach((u) => targets.add(u.uid));
+        dispatch({ type: 'USE_BATTLE_ITEM', itemId: pendingBattleItem, targetUid: uid });
+        setPendingBattleItem(null);
       }
-    }
-    return targets;
-  }, [pendingSkill, pendingBattleItem, battle.rngCount]);
-
-  function onSkillClick(skill: SkillDef) {
-    if (!current) return;
-    if (skill.target === 'single' || skill.target === 'ally') {
-      setPendingTame(null);
-      setPendingSkill({ skillId: skill.id });
       return;
     }
-    dispatch({ type: 'PLAYER_SKILL', skillId: skill.id });
+    const u = b.playerUnits.find((x) => x.uid === uid);
+    if (u && u.hp > 0 && !u.acted) setSelectedUid(selectedUid === uid ? null : uid);
   }
 
-  function onTargetClick(uid: string, isEnemy: boolean) {
+  function onEnemyClick(uid: string) {
     if (pendingSkill) {
-      dispatch({ type: 'PLAYER_SKILL', skillId: pendingSkill.skillId, targetUid: uid });
+      dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
       setPendingSkill(null);
       return;
     }
     if (pendingBattleItem) {
       const isBuff = ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
-      const isDebuff = ['atk_down', 'spd_down', 'hp_down'].includes(pendingBattleItem);
-      // 验证目标合法性：buff只能给友方，debuff只能给敌方
-      if ((isBuff && isEnemy) || (isDebuff && !isEnemy)) return;
-      dispatch({ type: 'USE_BATTLE_ITEM', itemId: pendingBattleItem, targetUid: uid });
-      setPendingBattleItem(null);
+      if (!isBuff) {
+        dispatch({ type: 'USE_BATTLE_ITEM', itemId: pendingBattleItem, targetUid: uid });
+        setPendingBattleItem(null);
+      }
       return;
     }
-    if (pendingTame && isEnemy) {
-      dispatch({ type: 'PLAYER_TAME', foodId: pendingTame, enemyUid: uid });
-      setPendingTame(null);
+    if (pendingTame) {
+      const enemy = b.enemyUnits.find((u) => u.uid === uid);
+      if (enemy && isTameable(enemy)) {
+        dispatch({ type: 'PLAYER_TAME', foodId: pendingTame, enemyUid: uid });
+        setPendingTame(null);
+      }
     }
   }
 
+  function onSkillClick(skill: SkillDef) {
+    if (!selected || selected.acted) return;
+    if (skill.target === 'single' || skill.target === 'ally') {
+      setSwapFrom(null);
+      setPendingTame(null);
+      setPendingBattleItem(null);
+      setPendingSkill({ actorUid: selected.uid, skillId: skill.id });
+      return;
+    }
+    dispatch({ type: 'PLAYER_SKILL', actorUid: selected.uid, skillId: skill.id });
+  }
+
   function onFoodClick(foodId: string) {
-    if (!current) return;
     setPendingSkill(null);
+    setSwapFrom(null);
+    setPendingBattleItem(null);
     setPendingTame(foodId);
   }
 
   function onBattleItemClick(itemId: string) {
-    if (!current) return;
+    if (pendingBattleItem === itemId) {
+      setPendingBattleItem(null);
+      return;
+    }
     setPendingSkill(null);
+    setSwapFrom(null);
     setPendingTame(null);
     setPendingBattleItem(itemId);
+  }
+
+  /** 网格超出 3 行时，悬停滚动（滚轮纵向滚动，隐藏滚动条） */
+  function onPanelBtnsWheel(e: ReactWheelEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    if (el.scrollHeight > el.clientHeight) {
+      el.scrollTop += e.deltaY;
+      e.preventDefault();
+    }
   }
 
   function tameTip(u: Unit): string {
@@ -135,11 +202,60 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const logItems = battle.log.slice(-6);
 
+  const enemySlot = (u: Unit | undefined, key: string, topRow: boolean) => {
+    const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
+    if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
+    return (
+      <div
+        key={key}
+        className={`${extra} ${validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}`}
+        onClick={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? () => onEnemyClick(u.uid) : undefined}
+        title={pendingTame && isTameable(u) ? tameTip(u) : undefined}
+      >
+        <UnitCard unit={u} small topStats className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''} />
+      </div>
+    );
+  };
+
+  const playerSlot = (u: Unit | undefined, key: string, topRow: boolean) => {
+    const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
+    if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
+    const sel = selectedUid === u.uid;
+    const clickable = validAllyTargets.has(u.uid) || (u.hp > 0 && !u.acted);
+    return (
+      <div
+        key={key}
+        className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
+        onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
+      >
+        <UnitCard unit={u} small showSkills={false} topStats className={clickable || sel ? 'valid-target targetable' : ''} />
+      </div>
+    );
+  };
+
+  const enemyBack = [battle.enemyUnits.find((u) => u.row === 'back' && u.column === 0), battle.enemyUnits.find((u) => u.row === 'back' && u.column === 1), battle.enemyUnits.find((u) => u.row === 'back' && u.column === 2)];
+  const enemyFront = [battle.enemyUnits.find((u) => u.row === 'front' && u.column === 0), battle.enemyUnits.find((u) => u.row === 'front' && u.column === 1), battle.enemyUnits.find((u) => u.row === 'front' && u.column === 2)];
+  const playerFront = [battle.playerUnits.find((u) => u.row === 'front' && u.column === 0), battle.playerUnits.find((u) => u.row === 'front' && u.column === 1), battle.playerUnits.find((u) => u.row === 'front' && u.column === 2)];
+  const playerBack = [battle.playerUnits.find((u) => u.row === 'back' && u.column === 0), battle.playerUnits.find((u) => u.row === 'back' && u.column === 1), battle.playerUnits.find((u) => u.row === 'back' && u.column === 2)];
+
+  const hint = pendingSkill
+    ? `⚡ ${getSkill(pendingSkill.skillId).name}：请选择目标`
+    : pendingTame
+      ? '🍖 选择血量低于 40% 的敌人进行驯服'
+      : pendingBattleItem
+        ? `🧪 ${getItem(pendingBattleItem).name}：选择目标使用`
+        : swapFrom
+          ? '↔ 请选择要交换位置的己方宠物'
+          : selected
+            ? `⚔️ ${selected.emoji} ${selected.name}：选择技能或换位`
+            : canAct
+              ? '点击一只未行动的己方宠物，再选择技能或换位'
+              : '敌方行动中…';
+
   return (
     <div className="screen">
       <div className="hud">
         <span className="act">第 {state.act} 层 · 回合 {battle.round}</span>
-        <span>{current ? `轮到 ${current.name} 行动` : '战斗进行中…'}</span>
         {battle.gauntlet && (
           <span className="chip" title="敌方轮换上阵，一只倒下另一只顶替">
             🔥 车轮战 {battle.gauntlet.current}/{battle.gauntlet.total}
@@ -165,6 +281,14 @@ export function BattleScreen({ state, dispatch }: Props) {
       </div>
 
       <div className="battle-main">
+        <div className="battle-field">
+          <div className="formation-row row-front">{enemyBack.map((u, i) => enemySlot(u, `eb${i}`, true))}</div>
+          <div className="formation-row row-back">{enemyFront.map((u, i) => enemySlot(u, `ef${i}`, false))}</div>
+          <div className="battle-divider" />
+          <div className="formation-row row-front">{playerFront.map((u, i) => playerSlot(u, `pf${i}`, true))}</div>
+          <div className="formation-row row-back">{playerBack.map((u, i) => playerSlot(u, `pb${i}`, false))}</div>
+        </div>
+
         <div className="log-panel">
           <div className="log-title">⚔️ 战斗记录</div>
           <div className="log-box">
@@ -175,69 +299,18 @@ export function BattleScreen({ state, dispatch }: Props) {
             ))}
           </div>
         </div>
-
-        <div className="battle-grid">
-          <div>
-            <div className="side-label">敌 方</div>
-            <div className="side enemy">
-              {enemyUnits.map((u) => (
-                <div
-                  key={u.uid}
-                  className="enemy-slot"
-                  onMouseEnter={() => setHoverEnemy(u.uid)}
-                  onMouseLeave={() => setHoverEnemy(null)}
-                >
-                  <UnitCard
-                    unit={u}
-                    topStats
-                    className={validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u)) ? 'valid-target targetable' : ''}
-                    onClick={
-                      validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u))
-                        ? () => onTargetClick(u.uid, true)
-                        : undefined
-                    }
-                  />
-                  {pendingTame && hoverEnemy === u.uid && <div className="tame-tip">{tameTip(u)}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="side-label">我 方</div>
-            <div className="side">
-              {playerUnits.map((u) => (
-                <UnitCard
-                  key={u.uid}
-                  unit={u}
-                  showSkills={false}
-                  topStats
-                  className={validAllyTargets.has(u.uid) ? 'valid-target targetable' : ''}
-                  onClick={validAllyTargets.has(u.uid) ? () => onTargetClick(u.uid, false) : undefined}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="hint-bar">
-        {pendingSkill ? (
-          <span className="pending-hint">
-            ⚡ <span className="hint-skill">{getSkill(pendingSkill.skillId).name}</span>：请选择一个目标
-          </span>
-        ) : pendingTame ? (
-          <span className="pending-hint">🍖 选择血量低于 {Math.round(TAME_THRESHOLD * 100)}% 的敌人进行驯服</span>
-        ) : pendingBattleItem ? (
-          <span className="pending-hint">🧪 {getItem(pendingBattleItem).name}：选择目标使用</span>
-        ) : (
-          <span className="pending-hint idle">⚔️ 选择技能、食物或战斗道具开始行动</span>
-        )}
+        <span className={`pending-hint ${pendingSkill || pendingTame || pendingBattleItem || swapFrom || selected || !canAct ? '' : 'idle'}`}>
+          {hint}
+        </span>
       </div>
 
       <div className="action-panel">
         <div className="capture-panel">
           <span className="panel-label">🍖 捕获</span>
-          <div className="panel-btns">
+          <div className="panel-btns" onWheel={onPanelBtnsWheel}>
             {foods.length === 0 && <span className="card-sub">没有食物</span>}
             {foods.map((f) => {
               const count = state.inventory[f.id] ?? 0;
@@ -245,7 +318,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                 <button
                   key={f.id}
                   onClick={() => onFoodClick(f.id)}
-                  disabled={count <= 0 || !battle.enemyUnits.some((u) => isTameable(u))}
+                  disabled={count <= 0 || !canAct || !aliveEnemies.some((u) => isTameable(u))}
                   title={`${f.desc}（拥有 ${count} 个）`}
                 >
                   {f.emoji} {f.name}×{count}
@@ -254,12 +327,46 @@ export function BattleScreen({ state, dispatch }: Props) {
             })}
           </div>
         </div>
+        <div className="items-panel">
+          <span className="panel-label">🧪 道具</span>
+          <div className="panel-btns" onWheel={onPanelBtnsWheel}>
+            {battleItems.length === 0 ? (
+              <span className="card-sub">没有战斗道具</span>
+            ) : (
+              battleItems.map((it) => {
+                const count = state.inventory[it.id] ?? 0;
+                const isPending = pendingBattleItem === it.id;
+                return (
+                  <button
+                    key={it.id}
+                    onClick={() => onBattleItemClick(it.id)}
+                    className={isPending ? 'primary' : ''}
+                    disabled={!canAct}
+                    title={`${it.desc}（拥有 ${count} 个）`}
+                  >
+                    {it.emoji} {it.name}×{count}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
         <div className="skill-column">
-          <span className="who">{current ? `${current.emoji} ${current.name}` : '—'}</span>
-          {current ? (
+          {selected && !selected.acted ? (
             <>
-              {skills.map((s) => {
-                const left = current ? skillUsesLeft(current, s.id) : 0;
+              <span className="who">
+                {selected.emoji} {selected.name}
+                {(() => {
+                  const p = selected.passive && getPassive(selected.passive);
+                  return p ? (
+                    <span className="who-passive" title={`被动「${p.name}」：${p.desc}`}>
+                      💠{p.name}：{p.desc}
+                    </span>
+                  ) : null;
+                })()}
+              </span>
+              {selectedSkills.map((s) => {
+                const left = skillUsesLeft(selected, s.id);
                 const limited = Number.isFinite(left);
                 const exhausted = limited && left <= 0;
                 return (
@@ -281,43 +388,45 @@ export function BattleScreen({ state, dispatch }: Props) {
                   </button>
                 );
               })}
+              <button
+                className="skill-btn swap-btn"
+                onClick={() => {
+                  setPendingSkill(null);
+                  setPendingTame(null);
+                  setPendingBattleItem(null);
+                  setSwapFrom(selected.uid);
+                }}
+                disabled={alivePlayers.length < 2}
+                title="与另一只己方宠物交换前后/左右位置（消耗 1 行动点）"
+              >
+                <span className="skill-btn-main">↔ 换位</span>
+                <span className="skill-desc">交换位置（1 行动点）</span>
+              </button>
             </>
           ) : (
-            <span className="card-sub">
-              {battle.phase === 'won'
-                ? isChallenge
-                  ? '挑战胜利！'
-                  : '战斗胜利！'
-                : battle.phase === 'lost'
+            <>
+              <span className="who">{selected && selected.acted ? `${selected.emoji} ${selected.name}（已行动）` : '—'}</span>
+              <span className="card-sub">
+                {battle.phase === 'won'
                   ? isChallenge
-                    ? '挑战失败…'
-                    : '全队阵亡…'
-                  : '本回合结束'}
-            </span>
+                    ? '挑战胜利！'
+                    : '战斗胜利！'
+                  : battle.phase === 'lost'
+                    ? isChallenge
+                      ? '挑战失败…'
+                      : '全队阵亡…'
+                    : canAct
+                      ? '先点击一只未行动的己方宠物'
+                      : '敌方行动中…'}
+              </span>
+            </>
           )}
         </div>
-        <div className="items-panel">
-          <span className="panel-label">🧪 道具</span>
-          <div className="panel-btns">
-            {battleItems.length === 0 ? (
-              <span className="card-sub">没有战斗道具</span>
-            ) : (
-              battleItems.map((it) => {
-                const count = state.inventory[it.id] ?? 0;
-                const isPending = pendingBattleItem === it.id;
-                return (
-                  <button
-                    key={it.id}
-                    onClick={() => onBattleItemClick(it.id)}
-                    className={isPending ? 'primary' : ''}
-                    title={`${it.desc}（拥有 ${count} 个）`}
-                  >
-                    {it.emoji} {it.name}×{count}
-                  </button>
-                );
-              })
-            )}
-          </div>
+        <div className="end-panel">
+          <span className="end-ap">⚡ 行动点 {battle.playerAp}</span>
+          <button className="primary end-turn-btn" onClick={() => dispatch({ type: 'END_TURN' })} disabled={!canAct}>
+            结束回合
+          </button>
         </div>
       </div>
 

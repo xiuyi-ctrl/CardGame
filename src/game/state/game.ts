@@ -133,6 +133,7 @@ export type Screen =
   | 'title'
   | 'starter'
   | 'map'
+  | 'formation'
   | 'battle'
   | 'reward'
   | 'roster'
@@ -194,6 +195,13 @@ export interface GameState {
   visitedNodeIds?: string[];
   /** 队伍已满（ROSTER_MAX）时捕捉溢出、等待玩家处理的宠物（替换/融合/放弃） */
   tameOverflow?: Unit[];
+  /** 布阵：进入普通/精英/被侵蚀/守卫战斗前选择站位（FORMATION_CONFIRM 确认后创建战斗） */
+  formation?: {
+    units: Unit[];
+    encounter: { speciesId: string }[];
+    nodeId: string;
+    options?: { corruptDebuff?: 'spd' | 'dmg'; untameable?: boolean };
+  };
   /** 侦查符使用结果：查看指定节点情报（背包界面展示） */
   scoutResult?: { nodeId: string; title: string; detail: string } | null;
   /** 侦查选择模式：打开背包使用侦查符后跳回地图，点击任意节点查看情报 */
@@ -205,7 +213,8 @@ export interface GameState {
 }
 
 export const ROSTER_MAX = 8;
-export const FIELD_MAX = 3;
+/** 出战宠物上限（2v2/3v3/4v4，roster≥5 时可能 4v4） */
+export const FIELD_MAX = 4;
 
 /** 地图节点图标（UI 与侦查/瞭望共用） */
 export const NODE_ICON: Record<NodeType, string> = {

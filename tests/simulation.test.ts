@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { currentPlayerUnit, isTameable, skillUsesLeft } from '../src/game/core/battle';
+import { getActablePlayerUnits, isTameable, playerHasMove, skillUsesLeft } from '../src/game/core/battle';
 import { canStepTo, canTameEnemy, nextStage, ROSTER_MAX, type MapNode } from '../src/game/state/game';
 import { getSkill } from '../src/game/data/skills';
 import { FOODS } from '../src/game/data/foods';
@@ -11,12 +11,15 @@ function dispatch(s: GameState, a: GameAction): GameState {
   return gameReducer(s, a);
 }
 
-/** 自动玩家：选择单体伤害最高的技能，集火血量最低的敌人，低血敌可驯则驯 */
+/** 自动玩家：按 AP 模型选择单体伤害最高的技能，集火血量最低的可达敌人，低血敌可驯则驯 */
 function botBattleStep(s: GameState): GameState {
   const b = s.battle!;
   if (b.phase === 'won' || b.phase === 'lost') return s;
-  const cur = currentPlayerUnit(b);
-  if (!cur) return s;
+  if (!playerHasMove(b)) {
+    return dispatch(s, { type: 'END_TURN' });
+  }
+  const cur = getActablePlayerUnits(b)[0];
+  if (!cur) return dispatch(s, { type: 'END_TURN' });
 
   const tameTarget = b.enemyUnits
     .filter((u) => u.hp > 0 && canTameEnemy(u) && isTameable(u) && u.hp / u.maxHp <= 0.25)
@@ -33,7 +36,7 @@ function botBattleStep(s: GameState): GameState {
       .filter((u) => u.hp > 0)
       .sort((a, c) => a.hp / a.maxHp - c.hp / c.maxHp)[0];
     if (ally && ally.hp / ally.maxHp < 0.5) {
-      return dispatch(s, { type: 'PLAYER_SKILL', skillId: heal.id, targetUid: ally.uid });
+      return dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: heal.id, targetUid: ally.uid });
     }
   }
 
@@ -45,12 +48,28 @@ function botBattleStep(s: GameState): GameState {
   const chosen =
     skillIds[0] ??
     (usableFallback ? { id: usableFallback, def: getSkill(usableFallback) } : { id: cur.skills[0], def: getSkill(cur.skills[0]) });
-  const targets = b.enemyUnits.filter((u) => u.hp > 0);
   if (chosen.def.target === 'all') {
-    return dispatch(s, { type: 'PLAYER_SKILL', skillId: chosen.id });
+    return dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: chosen.id });
   }
-  const victim = [...targets].sort((a, c) => a.hp - c.hp)[0];
-  return dispatch(s, { type: 'PLAYER_SKILL', skillId: chosen.id, targetUid: victim?.uid });
+  // 选择可达目标（考虑前后排保护与定位技能）
+  const enemies = b.enemyUnits.filter((u) => u.hp > 0);
+  const front = enemies.filter((u) => u.row === 'front');
+  const back = enemies.filter((u) => u.row === 'back');
+  const reach = chosen.def.reach ?? 'front';
+  const pool =
+    chosen.def.target === 'single'
+      ? reach === 'direct'
+        ? enemies
+        : reach === 'back'
+          ? back.length > 0
+            ? back
+            : front
+          : front.length > 0
+            ? front
+            : back
+      : enemies;
+  const victim = [...pool].sort((a, c) => a.hp - c.hp)[0];
+  return dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: chosen.id, targetUid: victim?.uid });
 }
 
 function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; detail: string; specials: number } {
@@ -115,6 +134,10 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
           break;
         }
         s = botBattleStep(s);
+        break;
+      }
+      case 'formation': {
+        s = dispatch(s, { type: 'FORMATION_CONFIRM', units: s.formation!.units });
         break;
       }
       case 'reward': {

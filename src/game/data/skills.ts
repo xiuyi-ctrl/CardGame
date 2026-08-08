@@ -62,6 +62,18 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'dark_shock', name: '暗影冲击', desc: '重击单个敌人',
     target: 'single', kind: 'attack', damage: 9,
   },
+  shockwave: {
+    id: 'shockwave', name: '冲击波', desc: '贯穿攻击前排敌人并波及对应位置后排',
+    target: 'single', kind: 'attack', damage: 4, reach: 'pierce',
+  },
+  snipe: {
+    id: 'snipe', name: '狙击', desc: '跳过前排，直接攻击后排敌人',
+    target: 'single', kind: 'attack', damage: 8, reach: 'back',
+  },
+  pierce_strike: {
+    id: 'pierce_strike', name: '穿刺', desc: '无视前后排，指定攻击任意位置敌人',
+    target: 'single', kind: 'attack', damage: 6, reach: 'direct',
+  },
 };
 
 export function getSkill(id: string): SkillDef {
