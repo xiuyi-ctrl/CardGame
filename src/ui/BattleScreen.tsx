@@ -192,8 +192,12 @@ export function BattleScreen({ state, dispatch }: Props) {
   function onEnemyClick(uid: string) {
     if (animating) return;
     if (pendingSkill) {
-      dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
-      setPendingSkill(null);
+      const skill = getSkill(pendingSkill.skillId);
+      // 治疗等 ally 技能只能点己方单位，点敌方直接忽略（保持待定状态）
+      if (skill.target === 'single') {
+        dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
+        setPendingSkill(null);
+      }
       return;
     }
     if (pendingBattleItem) {

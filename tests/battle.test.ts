@@ -626,4 +626,33 @@ describe('战斗日志与动画时序', () => {
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
     expect(after.log.some((l) => l.text.includes('被眩晕'))).toBe(true);
   });
+
+  it('治疗等 ally 技能指向敌方会被拒绝（不扣 AP、不下指令）', () => {
+    const b = createBattle([makeUnit('momo_queen', true, 0, false)], [{ speciesId: 'kiki' }], 3);
+    const actor = b.playerUnits[0];
+    const after = playerSkill(b, actor.uid, 'heal_light', b.enemyUnits[0].uid);
+    expect(after).toBe(b);
+    expect(after.playerAp).toBe(b.playerAp);
+    expect(after.orders?.[actor.uid]).toBeUndefined();
+    // 合法目标（指向自己）正常下达
+    const ok = playerSkill(b, actor.uid, 'heal_light', actor.uid);
+    expect(ok.playerAp).toBe(b.playerAp - 1);
+    expect(ok.orders?.[actor.uid]).toBeDefined();
+  });
+
+  it('随机多段技能打单体时所有段命中同一目标（叶针 2 段全结算）', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'momo_queen' }], 3);
+    const hp0 = b.enemyUnits[0].hp;
+    const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'leaf_needle', b.enemyUnits[0].uid));
+    expect(after.enemyUnits[0].hp).toBe(hp0 - 6);
+  });
+
+  it('随机多段技能打多个目标时每段命中不同目标', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)], [{ speciesId: 'mimi' }, { speciesId: 'fifi' }], 3);
+    const before = b.enemyUnits.map((u) => u.hp);
+    const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'leaf_needle', undefined));
+    const afterHps = after.enemyUnits.map((u) => u.hp);
+    expect(afterHps[0]).toBe(before[0] - 3);
+    expect(afterHps[1]).toBe(before[1] - 3);
+  });
 });

@@ -368,9 +368,15 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       targets = enemies;
       break;
     case 'random': {
-      const res = randomOf(nb, enemies, skill.hits ?? 1);
-      nb = res.battle;
-      targets = res.picks;
+      const hits = skill.hits ?? 1;
+      if (enemies.length <= 1) {
+        // 目标唯一时所有段命中同一目标（如叶针单体 2 段），避免随机多段打单体只结算 1 段
+        targets = enemies.length === 1 ? Array.from({ length: hits }, () => enemies[0]) : [];
+      } else {
+        const res = randomOf(nb, enemies, hits);
+        nb = res.battle;
+        targets = res.picks;
+      }
       break;
     }
     case 'single': {
@@ -643,6 +649,8 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   const skill = getSkill(skillId);
   if (!skill) return b;
   if (skillUsesLeft(actor, skillId) <= 0) return b;
+  // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝（不扣 AP），避免结算时静默回退成治疗自己
+  if (skill.target === 'ally' && targetUid && !b.playerUnits.some((u) => u.uid === targetUid)) return b;
   // 已下过指令：仅修改指令内容，不重复扣 AP/占用行动
   if (actor.acted && b.orders?.[actorUid]) {
     return { ...b, orders: { ...b.orders, [actorUid]: { skillId, targetUid } } };
