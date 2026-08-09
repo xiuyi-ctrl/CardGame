@@ -139,7 +139,7 @@ export interface LogEntry {
   hp?: Record<string, number>;
 }
 
-/** 玩家给某只宠物下达的技能指令（指令阶段记录，结束回合后按速度统一结算） */
+/** 玩家给某只宠物下达的指令（指令阶段记录，结束回合后按速度统一结算）。`skillId === 'rest'` 表示「休息」（本回合不行动，不消耗 AP，可再次点击取消） */
 export interface PlayerOrder {
   skillId: string;
   targetUid?: string;

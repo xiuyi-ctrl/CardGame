@@ -5,12 +5,16 @@ import {
   getActablePlayerUnits,
   isTameable,
   makeUnit,
+  playerCancelOrder,
   playerEndTurn,
   playerHasMove,
+  playerRest,
   playerSkill,
   playerSwap,
   playerTame,
+  REST_SKILL_ID,
   skillUsesLeft,
+  splitDamage,
   tameChance,
   TAME_THRESHOLD,
   getDamageGuard,
@@ -352,6 +356,38 @@ describe('连击（多段命中）', () => {
     expect(hpBefore - e2.hp).toBe(7); // 4×2 - 1
   });
 
+  it('连击动画：总伤害拆成多段日志，逐段扣血（8 → 两段 4）', () => {
+    const p = makeUnit('momo', true, 0, false);
+    p.skills = ['double_hit'];
+    const b = createBattle([p], [{ speciesId: 'momo' }], 5);
+    const enemy = b.enemyUnits[0];
+    const hpBefore = enemy.hp;
+    const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
+    const attackLogs = after.log.filter((l) => l.text.includes('使用「连击」攻击'));
+    expect(attackLogs.length).toBe(2);
+    expect(attackLogs.map((l) => l.text)).toEqual([
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 4 伤害`,
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 4 伤害`,
+    ]);
+    // 每段日志的血量快照逐段推进：第一段 -4、第二段 -8
+    const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
+    expect(hpBefore - e2.hp).toBe(8);
+    expect(attackLogs[0].hp?.[enemy.uid]).toBe(hpBefore - 4);
+    expect(attackLogs[1].hp?.[enemy.uid]).toBe(hpBefore - 8);
+  });
+
+  it('连击受守卫减伤时仍拆段，各段求和等于总伤害', () => {
+    const p = makeUnit('momo', true, 0, false);
+    p.skills = ['double_hit'];
+    const b = createBattle([p], [{ speciesId: 'kiki' }], 6); // 铁壁 -1
+    const enemy = b.enemyUnits[0];
+    const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
+    const attackLogs = after.log.filter((l) => l.text.includes('使用「连击」攻击'));
+    expect(attackLogs.length).toBe(2);
+    const sum = attackLogs.reduce((s, l) => s + Number(/(\d+) 伤害$/.exec(l.text)?.[1] ?? 0), 0);
+    expect(sum).toBe(7);
+  });
+
   it('普通单体技能 hits 缺省时仍只造成单次伤害', () => {
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'momo' }], 3);
     const p = b.playerUnits[0];
@@ -360,6 +396,164 @@ describe('连击（多段命中）', () => {
     const after = playerEndTurn(playerSkill(b, p.uid, 'punch', enemy.uid));
     const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
     expect(hpBefore - e2.hp).toBe(5); // 爪击 5
+  });
+});
+
+describe('splitDamage（连击拆段）', () => {
+  it('拆分求和等于总量，且段数为 hits', () => {
+    expect(splitDamage(8, 2)).toEqual([4, 4]);
+    expect(splitDamage(7, 2)).toEqual([4, 3]);
+    expect(splitDamage(6, 3)).toEqual([2, 2, 2]);
+    expect(splitDamage(5, 3)).toEqual([2, 2, 1]);
+    expect(splitDamage(4, 1)).toEqual([4]);
+    expect(splitDamage(2, 3).reduce((s, v) => s + v, 0)).toBe(2);
+  });
+});
+
+describe('休息（本回合不行动）', () => {
+  it('休息写入特殊指令、标记已行动、不消耗行动点', () => {
+    const b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }, { speciesId: 'mimi' }],
+      1,
+    );
+    const actor = b.playerUnits[0];
+    const apBefore = b.playerAp;
+    const after = playerRest(b, actor.uid);
+    expect(after.playerAp).toBe(apBefore);
+    expect(after.playerUnits[0].acted).toBe(true);
+    expect(after.orders?.[actor.uid]).toEqual({ skillId: REST_SKILL_ID });
+  });
+
+  it('已选择休息后再次点击取消（不消耗行动点、恢复未行动）', () => {
+    const b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }, { speciesId: 'mimi' }],
+      1,
+    );
+    const actor = b.playerUnits[0];
+    const rested = playerRest(b, actor.uid);
+    const after = playerRest(rested, actor.uid);
+    expect(after.playerAp).toBe(b.playerAp);
+    expect(after.playerUnits[0].acted).toBe(false);
+    expect(after.orders?.[actor.uid]).toBeUndefined();
+  });
+
+  it('休息后改点技能需重新扣 1 行动点（防免费改指令）', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 2);
+    const actor = b.playerUnits[0];
+    const rested = playerRest(b, actor.uid);
+    const apBefore = rested.playerAp;
+    const after = playerSkill(rested, actor.uid, actor.skills[0], b.enemyUnits[0].uid);
+    expect(after.playerAp).toBe(apBefore - 1);
+    expect(after.orders?.[actor.uid]?.skillId).toBe(actor.skills[0]);
+  });
+
+  it('技能指令与休息互斥：已有技能指令时不能点休息', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 2);
+    const actor = b.playerUnits[0];
+    const acted = playerSkill(b, actor.uid, actor.skills[0], b.enemyUnits[0].uid);
+    expect(playerRest(acted, actor.uid)).toBe(acted);
+  });
+
+  it('已行动/死亡/眩晕单位不能休息', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 2);
+    const acted = playerSkill(b, b.playerUnits[0].uid, b.playerUnits[0].skills[0], b.enemyUnits[0].uid);
+    expect(playerRest(acted, b.playerUnits[0].uid)).toBe(acted);
+    const dead = { ...b, playerUnits: [{ ...b.playerUnits[0], hp: 0 }] };
+    expect(playerRest(dead, b.playerUnits[0].uid)).toBe(dead);
+    const stun: StatusEffect = { kind: 'stun', value: 0, turns: 1 };
+    const stunned = { ...b, playerUnits: [{ ...b.playerUnits[0], statuses: [stun] }] };
+    expect(playerRest(stunned, b.playerUnits[0].uid)).toBe(stunned);
+  });
+
+  it('结算时休息单位不出手；未选休息的其他单位正常出手', () => {
+    const p1 = makeUnit('momo', true, 0, false);
+    const p2 = makeUnit('lulu', true, 1, false);
+    p1.skills = ['punch'];
+    const b = createBattle([p1, p2], [{ speciesId: 'momo' }, { speciesId: 'mimi' }], 3);
+    const enemy0 = b.enemyUnits[0];
+    const hp0 = enemy0.hp;
+    const ordered = playerSkill(b, p1.uid, 'punch', enemy0.uid);
+    const rested = playerRest(ordered, p2.uid);
+    const after = playerEndTurn(rested);
+    // p1 出手、p2 休息不出手 → 敌方 0 号仅掉 5 血（爪击）
+    const e0 = after.enemyUnits.find((u) => u.uid === enemy0.uid)!;
+    expect(hp0 - e0.hp).toBe(5);
+    expect(after.round).toBe(2);
+    expect(after.playerUnits.every((u) => !u.acted)).toBe(true);
+  });
+
+  it('全体休息后本回合我方无单位出手，下一回合恢复行动', () => {
+    const b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }, { speciesId: 'mimi' }],
+      3,
+    );
+    const enemyHp0 = b.enemyUnits.map((u) => u.hp);
+    let nb = b;
+    for (const u of [...nb.playerUnits]) nb = playerRest(nb, u.uid);
+    // 休息不自动结束回合，玩家仍手动执行指令结算
+    const after = playerEndTurn(nb);
+    expect(after.enemyUnits.map((u) => u.hp)).toEqual(enemyHp0);
+    expect(after.round).toBe(2);
+    expect(after.playerUnits.every((u) => !u.acted)).toBe(true);
+  });
+});
+
+describe('取消已选指令', () => {
+  it('取消技能指令：清空指令、恢复未行动、退还 1 行动点', () => {
+    const b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }],
+      2,
+    );
+    const actor = b.playerUnits[0];
+    const ordered = playerSkill(b, actor.uid, actor.skills[0], b.enemyUnits[0].uid);
+    expect(ordered.playerAp).toBe(1);
+    const after = playerCancelOrder(ordered, actor.uid);
+    expect(after.playerAp).toBe(2);
+    expect(after.playerUnits[0].acted).toBe(false);
+    expect(after.orders?.[actor.uid]).toBeUndefined();
+    expect(after.phase).toBe('acting');
+  });
+
+  it('取消后可重新下达技能指令（再次正常扣行动点）', () => {
+    const b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }],
+      2,
+    );
+    const actor = b.playerUnits[0];
+    const after = playerSkill(playerCancelOrder(playerSkill(b, actor.uid, actor.skills[0], b.enemyUnits[0].uid), actor.uid), actor.uid, actor.skills[1], b.enemyUnits[0].uid);
+    expect(after.playerAp).toBe(1);
+    expect(after.orders?.[actor.uid]?.skillId).toBe(actor.skills[1]);
+    expect(after.playerUnits[0].acted).toBe(true);
+  });
+
+  it('取消指令不影响其他单位的指令', () => {
+    const b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
+      [{ speciesId: 'kiki' }],
+      2,
+    );
+    const first = b.playerUnits[0];
+    const second = b.playerUnits[1];
+    const nb = playerSkill(playerSkill(b, first.uid, first.skills[0], b.enemyUnits[0].uid), second.uid, second.skills[0], b.enemyUnits[0].uid);
+    const after = playerCancelOrder(nb, second.uid);
+    expect(after.orders?.[first.uid]).toBeDefined();
+    expect(after.orders?.[second.uid]).toBeUndefined();
+    expect(after.playerAp).toBe(1);
+    expect(after.playerUnits.find((u) => u.uid === second.uid)!.acted).toBe(false);
+  });
+
+  it('休息指令不能用取消技能取消（用 playerRest 取消），无指令时取消无效', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 2);
+    const actor = b.playerUnits[0];
+    const rested = playerRest(b, actor.uid);
+    expect(playerCancelOrder(rested, actor.uid)).toBe(rested);
+    expect(playerRest(playerCancelOrder(rested, actor.uid), actor.uid).orders?.[actor.uid]).toBeUndefined();
+    expect(playerCancelOrder(b, actor.uid)).toBe(b);
   });
 });
 

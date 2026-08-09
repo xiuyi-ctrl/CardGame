@@ -922,6 +922,10 @@ button.primary {
   cursor: not-allowed;
 }
 
+.action-panel .skill-btn.rest-btn .skill-btn-main {
+  color: #c8c8a0;
+}
+
 /* 捕获物（最左）、道具与技能栏：竖向排列、无滚动条，可收缩 */
 .action-panel .capture-panel,
 .action-panel .items-panel {

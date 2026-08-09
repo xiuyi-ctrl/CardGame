@@ -103,9 +103,29 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const timers = useRef<number[]>([]);
 
   useEffect(() => {
-    if (!battle) return;
+    if (!battle) {
+      // 战斗被清空（如返回首页）：立即停止动画并重置基线，避免残留 timer/animating
+      timers.current.forEach((t) => window.clearTimeout(t));
+      timers.current = [];
+      prevBattle.current = null;
+      prevLen.current = 0;
+      setAnimating(false);
+      setHpMap(null);
+      setFx({});
+      setPops([]);
+      setHiddenStatuses({});
+      setEndingStatuses({});
+      return;
+    }
     const prevBattleBefore = prevBattle.current;
     prevBattle.current = battle;
+    // 首次遇到该战斗（含从存档/继续游戏恢复的中途战斗）：只初始化基线、不重播既有日志。
+    // 否则会把整场战斗的日志全部当作新事件重播，动画长时间停在「战斗结算中」。
+    if (prevBattleBefore === null) {
+      prevLen.current = battle.log.length;
+      setAnimating(false);
+      return;
+    }
     const newEntries = battle.log.slice(prevLen.current);
     prevLen.current = battle.log.length;
     if (newEntries.length === 0) return;
@@ -149,10 +169,16 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     }
     setEndingStatuses(endingStatuses);
 
-    // 每个单位的新状态在攻击它的第一个动画事件触发时揭示（即状态应用的那次攻击播放时）
+    // 每个单位的新状态在攻击它的最后一个动画事件触发时揭示（连击时状态在所有段命中后才附加）
     const revealAt: Record<number, string[]> = {};
     for (const uid of Object.keys(newStatuses)) {
-      const i = events.findIndex((ev) => ev.targetUid === uid);
+      let i = -1;
+      for (let k = events.length - 1; k >= 0; k--) {
+        if (events[k].targetUid === uid) {
+          i = k;
+          break;
+        }
+      }
       if (i >= 0) (revealAt[i] ??= []).push(uid);
     }
 

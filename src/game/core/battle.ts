@@ -12,6 +12,8 @@ export const TAME_FAIL_BONUS = 0.25;
 export const ENEMY_HEAL_LIMIT = 3;
 /** 战斗棋盘每排列数（前后排各 3 列 = 6 格） */
 export const FIELD_COLS = 3;
+/** 休息指令的特殊 skillId（orders 里用它表示「本回合不行动」，可再次点击取消） */
+export const REST_SKILL_ID = 'rest';
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
@@ -567,7 +569,16 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (t.isPlayer && nb.corruptDebuff === 'dmg') {
         finalDmg += 1;
       }
-      let t2 = { ...t, hp: Math.max(0, t.hp - finalDmg) };
+      // 连击（hits>1）：总伤害拆成 count 段，逐段扣血并逐段写日志，
+      // 动画表现为多段伤害飘字（如 8 拆成两段 4），总和与单条结算完全一致
+      const segments = splitDamage(finalDmg, count);
+      let t2 = t;
+      for (const seg of segments) {
+        if (seg <= 0) continue;
+        t2 = { ...t2, hp: Math.max(0, t2.hp - seg) };
+        nb = replaceUnit(nb, t2);
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor));
+      }
       const ap = getUnitPassive(actor);
       if (ap?.kind === 'venom') t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
       if (ap?.kind === 'scorch') t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
@@ -576,9 +587,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           t2 = applyStatusTo(t2, e);
         }
       }
-      // 攻击日志先记录（快照=攻击后、吸血/反伤前），动画按「攻击→吸血→反伤」真实结算顺序播放
+      // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
       nb = replaceUnit(nb, t2);
-      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${finalDmg} 伤害`, sideOf(actor));
       // 吸血：造成伤害后恢复自身
       if (ap?.kind === 'drain') {
         const healedActor = actorFromId(nb, actor.uid);
@@ -616,8 +626,12 @@ export function playerEndTurn(b: BattleState): BattleState {
     if (unit.isPlayer) {
       const order = nb.orders?.[uid];
       if (order) {
-        // useSkillInner 末尾已含 consumeSkillUse + markActed，这里不再重复扣减
-        nb = useSkillInner(nb, unit, getSkill(order.skillId), order.targetUid);
+        if (order.skillId === REST_SKILL_ID) {
+          // 休息：本回合不行动（不消耗 AP）
+        } else {
+          // useSkillInner 末尾已含 consumeSkillUse + markActed，这里不再重复扣减
+          nb = useSkillInner(nb, unit, getSkill(order.skillId), order.targetUid);
+        }
       }
     } else {
       nb = enemyAct(nb, unit);
@@ -651,18 +665,62 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   if (skillUsesLeft(actor, skillId) <= 0) return b;
   // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝（不扣 AP），避免结算时静默回退成治疗自己
   if (skill.target === 'ally' && targetUid && !b.playerUnits.some((u) => u.uid === targetUid)) return b;
-  // 已下过指令：仅修改指令内容，不重复扣 AP/占用行动
-  if (actor.acted && b.orders?.[actorUid]) {
+  const curOrder = b.orders?.[actorUid];
+  // 已下过技能指令：仅修改指令内容，不重复扣 AP/占用行动（休息指令不在此列，改技能需重新扣 AP）
+  if (actor.acted && curOrder && curOrder.skillId !== REST_SKILL_ID) {
     return { ...b, orders: { ...b.orders, [actorUid]: { skillId, targetUid } } };
   }
-  // 本回合已被即时行动（换位/道具）占用：不能再下指令
-  if (actor.acted) return b;
+  // 本回合已被即时行动（换位/道具）占用：不能再下指令（休息改技能除外，见上）
+  if (actor.acted && !curOrder) return b;
   if (b.playerAp <= 0) return b;
   return {
     ...b,
     playerAp: b.playerAp - 1,
     playerUnits: b.playerUnits.map((u) => (u.uid === actorUid ? { ...u, acted: true } : u)),
     orders: { ...(b.orders ?? {}), [actorUid]: { skillId, targetUid } },
+  };
+}
+
+/** 玩家行动：让一只宠物「休息」（本回合不行动）。不消耗行动点，记入特殊指令（可再次点击取消）。 */
+export function playerRest(b: BattleState, actorUid: string): BattleState {
+  if (b.phase !== 'acting') return b;
+  const actor = b.playerUnits.find((u) => u.uid === actorUid);
+  if (!actor || actor.hp <= 0) return b;
+  if (actor.statuses.some((s) => s.kind === 'stun')) return b;
+  const curOrder = b.orders?.[actorUid];
+  // 已有技能指令：与休息互斥，保持原指令
+  if (curOrder && curOrder.skillId !== REST_SKILL_ID) return b;
+  // 已选择休息：再次点击取消（0 AP 无消耗，完全反悔）
+  if (curOrder) {
+    const { [actorUid]: _removed, ...restOrders } = b.orders ?? {};
+    return {
+      ...b,
+      playerUnits: b.playerUnits.map((u) => (u.uid === actorUid ? { ...u, acted: false } : u)),
+      orders: restOrders,
+    };
+  }
+  // 本回合已被即时行动（换位/道具）占用：不能再休息
+  if (actor.acted) return b;
+  return {
+    ...b,
+    playerUnits: b.playerUnits.map((u) => (u.uid === actorUid ? { ...u, acted: true } : u)),
+    orders: { ...(b.orders ?? {}), [actorUid]: { skillId: REST_SKILL_ID } },
+  };
+}
+
+/** 玩家行动：取消某只宠物已下达的技能指令（退还 1 AP、恢复未行动状态）。休息指令请用 playerRest 取消。 */
+export function playerCancelOrder(b: BattleState, actorUid: string): BattleState {
+  if (b.phase !== 'acting') return b;
+  const order = b.orders?.[actorUid];
+  if (!order || order.skillId === REST_SKILL_ID) return b;
+  const actor = b.playerUnits.find((u) => u.uid === actorUid);
+  if (!actor || actor.hp <= 0) return b;
+  const { [actorUid]: _removed, ...restOrders } = b.orders ?? {};
+  return {
+    ...b,
+    playerAp: Math.min(b.playerApMax, b.playerAp + 1),
+    playerUnits: b.playerUnits.map((u) => (u.uid === actorUid ? { ...u, acted: false } : u)),
+    orders: restOrders,
   };
 }
 
@@ -915,4 +973,22 @@ export function getEffectiveSpd(u: Unit): number {
 /** 获取单位的有效最大生命（含临时buff） */
 export function getEffectiveMaxHp(u: Unit): number {
   return u.maxHp;
+}
+
+/**
+ * 把一次技能的多次命中（连击）拆成多段伤害：总和不变、每段 ≥ 1（防御性兜底），
+ * 供战斗引擎逐段写日志、动画逐段显示飘字（如 8 拆成 4+4）。
+ */
+export function splitDamage(total: number, hits: number): number[] {
+  if (hits <= 1) return [total];
+  if (total <= 0) return Array.from({ length: hits }, () => 0);
+  const base = Math.floor(total / hits);
+  const rem = total - base * hits;
+  if (base < 1) {
+    // 总伤小于段数：前 total 段各 1，其余为 0（0 段不产生飘字/日志）
+    return Array.from({ length: hits }, (_, i) => (i < total ? 1 : 0));
+  }
+  const segs = Array.from({ length: hits }, () => base);
+  for (let i = 0; i < rem; i++) segs[i] += 1;
+  return segs;
 }

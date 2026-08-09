@@ -1,6 +1,6 @@
 import type { GameState, MapNode, RewardChoice } from './game';
 import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
-import { useBattleItem, playerEndTurn, playerSwap } from '../core/battle';
+import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
@@ -51,6 +51,8 @@ export type GameAction =
   | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string }
   | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
   | { type: 'PLAYER_SKILL'; actorUid: string; skillId: string; targetUid?: string }
+  | { type: 'PLAYER_REST'; actorUid: string }
+  | { type: 'PLAYER_CANCEL_ORDER'; actorUid: string }
   | { type: 'PLAYER_SWAP'; actorUid: string; otherUid: string }
   | { type: 'END_TURN' }
   | { type: 'FORMATION_CONFIRM'; units: Unit[] }
@@ -713,6 +715,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!state.battle || state.battle.phase !== 'acting') return state;
       const battle = playerSkill(state.battle, action.actorUid, action.skillId, action.targetUid);
       return { ...state, battle };
+    }
+
+    case 'PLAYER_REST': {
+      if (!state.battle || state.battle.phase !== 'acting') return state;
+      return { ...state, battle: playerRest(state.battle, action.actorUid) };
+    }
+
+    case 'PLAYER_CANCEL_ORDER': {
+      if (!state.battle || state.battle.phase !== 'acting') return state;
+      return { ...state, battle: playerCancelOrder(state.battle, action.actorUid) };
     }
 
     case 'PLAYER_SWAP': {

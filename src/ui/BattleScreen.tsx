@@ -222,6 +222,16 @@ export function BattleScreen({ state, dispatch }: Props) {
   function onSkillClick(skill: SkillDef) {
     if (animating) return;
     if (!selected || selected.hp <= 0) return;
+    const isSelected = selectedOrder?.skillId === skill.id;
+    // 已选择该技能：再次点击取消选择（退还行动点、恢复未行动状态）
+    if (isSelected) {
+      if (pendingSkill?.skillId === skill.id) {
+        setPendingSkill(null);
+      } else {
+        dispatch({ type: 'PLAYER_CANCEL_ORDER', actorUid: selected.uid });
+      }
+      return;
+    }
     if (skill.target === 'single' || skill.target === 'ally') {
       if (pendingSkill && pendingSkill.skillId === skill.id) {
         setPendingSkill(null);
@@ -478,7 +488,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                   ) : null;
                 })()}
                 {selectedOrder ? (
-                  <span className="order-badge" title="该宠物已选择技能，可再次点击技能修改">
+                  <span className="order-badge" title="该宠物已选择指令，可再次点击技能或休息修改/取消">
                     ⚡ 已选择
                   </span>
                 ) : selected.acted ? (
@@ -526,6 +536,32 @@ export function BattleScreen({ state, dispatch }: Props) {
               >
                 <span className="skill-btn-main">↔ 换位</span>
                 <span className="skill-desc">交换位置（1 行动点）</span>
+              </button>
+              <button
+                className={`skill-btn rest-btn ${selectedOrder?.skillId === 'rest' ? 'skill-btn-current' : ''}`}
+                onClick={() => {
+                  setPendingSkill(null);
+                  setSwapFrom(null);
+                  setPendingTame(null);
+                  setPendingBattleItem(null);
+                  setInspectEnemy(null);
+                  dispatch({ type: 'PLAYER_REST', actorUid: selected.uid });
+                }}
+                disabled={
+                  !canAct ||
+                  (selected.acted && !selectedOrder) ||
+                  (selectedOrder !== undefined && selectedOrder.skillId !== 'rest')
+                }
+                title={
+                  selectedOrder?.skillId === 'rest'
+                    ? '已选择休息：本回合不行动（0 行动点），再次点击取消'
+                    : '本回合不行动（0 行动点）；点击后提示「已选择」，可再次点击取消或改点技能'
+                }
+              >
+                <span className="skill-btn-main">😴 休息</span>
+                <span className="skill-desc">
+                  {selectedOrder?.skillId === 'rest' ? '已选择，点击取消' : '跳过本回合（0 行动点）'}
+                </span>
               </button>
             </>
           ) : (
