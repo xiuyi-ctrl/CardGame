@@ -296,7 +296,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     pops
       .filter((p) => p.uid === uid)
       .map((p) => (
-        <span key={p.id} className={`dmg-pop ${p.heal ? 'heal' : ''}`}>
+        <span key={p.id} className={`dmg-pop ${p.heal ? 'heal' : ''} ${p.buff ? 'buff' : ''}`}>
           {p.text}
         </span>
       ));

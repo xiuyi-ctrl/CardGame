@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BattleState, LogEntry } from '../game/types';
+import { SKILLS } from '../game/data/skills';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
 interface FxEvent {
-  kind: 'attack' | 'heal' | 'dot' | 'thorn';
+  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff';
   actorUid?: string;
   targetUid?: string;
   value: number;
@@ -12,20 +13,34 @@ interface FxEvent {
   hp?: Record<string, number>;
   /** dot 事件对应的状态 kind（burn/poison），用于定位状态标签消失时机 */
   statusKind?: string;
+  /** buff/治疗事件使用的技能名，用于飘字文案（如战吼→「攻击↑」） */
+  skillName?: string;
 }
 
-/** 伤害/治疗飘字 */
+/** 伤害/治疗/buff 飘字 */
 export interface PopItem {
   id: number;
   uid: string;
   text: string;
   heal: boolean;
+  buff?: boolean;
 }
 
 const RE_ATTACK = /^(.+?) 使用「(.+?)」攻击 (.+?)，造成 (\d+) 伤害$/;
 const RE_HEAL = /^(.+?) 使用「(.+?)」，治愈 (.+?) (\d+) 点生命$/;
 const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
+const RE_BUFF = /^(.+?) 使用「(.+?)」，强化自身$/;
+
+/** buff 技能飘字：按技能施加的状态显示，如战吼→「攻击↑」；无法识别时兜底「强化」 */
+function buffText(skillName: string): string {
+  const skill = Object.values(SKILLS).find((s) => s.name === skillName);
+  if (skill?.kind === 'buff') {
+    const e = skill.effects?.[0];
+    if (e?.kind === 'atkUp') return '攻击↑';
+  }
+  return '强化';
+}
 
 function unitsOf(b: BattleState, side: 'player' | 'enemy') {
   return side === 'player' ? b.playerUnits : b.enemyUnits;
@@ -60,7 +75,17 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     };
   }
   if ((m = text.match(RE_HEAL))) {
-    return { kind: 'heal', targetUid: findUid(b, side, m[3]), value: Number(m[4]), hp: entry.hp };
+    return {
+      kind: 'heal',
+      actorUid: findUid(b, side, m[1]),
+      targetUid: findUid(b, side, m[3]),
+      value: Number(m[4]),
+      hp: entry.hp,
+    };
+  }
+  if ((m = text.match(RE_BUFF))) {
+    const uid = findUid(b, side, m[1]);
+    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: m[2], hp: entry.hp };
   }
   if ((m = text.match(RE_DOT))) {
     return {
@@ -251,9 +276,16 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
             }
           } else if (ev.kind === 'heal') {
+            if (actorUid) setFx((p) => ({ ...p, [actorUid]: 'fx-cast' }));
             if (targetUid) {
               setFx((p) => ({ ...p, [targetUid]: 'fx-heal' }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `+${ev.value}`, heal: true }]);
+            }
+          } else if (ev.kind === 'buff') {
+            if (actorUid) setFx((p) => ({ ...p, [actorUid]: 'fx-cast' }));
+            if (targetUid) {
+              setFx((p) => ({ ...p, [targetUid]: 'fx-buff' }));
+              setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: true }]);
             }
           } else if (targetUid) {
             setFx((p) => ({ ...p, [targetUid]: 'fx-hit' }));
