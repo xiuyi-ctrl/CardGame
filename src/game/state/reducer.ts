@@ -1,7 +1,8 @@
-import type { GameState, MapNode, RewardChoice } from './game';
-import { applyCorruptFoodReward, buildPunishmentEvent, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
+import type { GameState, MapNode, RewardChoice, RunMap } from './game';
+import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
+import type { BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { getFood, FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
@@ -17,6 +18,9 @@ function hasKeyFor(state: GameState, node: MapNode): boolean {
   if (!node.guardianId) return false;
   return (state.inventory[`key_${node.guardianId}`] ?? 0) > 0;
 }
+
+/** 自定义测试：需要选择宠物的战斗类关卡（非战斗类直接进入对应内容） */
+const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrupted', 'guardian', 'arena', 'gauntlet'];
 
 /** 字符串简单哈希（用于按节点 id 派生可复现随机） */
 function hashStr(s: string): number {
@@ -69,6 +73,11 @@ export type GameAction =
   | { type: 'OPEN_WATCHTOWER'; nodeId?: string }
   | { type: 'CLOSE_WATCHTOWER' }
   | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
+  | { type: 'DEBUG_CUSTOM_TEST' }
+  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg'; corruptReward?: 'gold' | 'food' }
+  | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
+  | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
+  | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
   | { type: 'RETRY'; seed: number }
   | { type: 'TITLE' };
 
@@ -95,7 +104,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'test-type', 'test-pick', 'test-config'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -462,6 +471,105 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return enterNode(base, node);
     }
 
+    case 'DEBUG_CUSTOM_TEST': {
+      // 点「⚙ 自定义测试」：先进入关卡类型选择界面
+      return { ...state, screen: 'test-type', testRun: undefined, testPick: undefined, pendingBattle: undefined, formation: undefined };
+    }
+
+    case 'TEST_TYPE_PICK': {
+      const nodeType = action.nodeType;
+      const nodeId = 'custom_test';
+      const node: MapNode = { id: nodeId, type: nodeType, label: labelOf(nodeType, 0), col: 0 };
+      if (nodeType === 'corrupted') {
+        node.corruptDebuff = action.corruptDebuff ?? 'spd';
+        node.corruptReward = action.corruptReward ?? 'gold';
+      }
+      const map: RunMap = { layers: [[node]], encounter: {}, boss: {}, events: {}, specials: {} };
+      const needsPets = TEST_BATTLE_TYPES.includes(nodeType);
+      // 非战斗类：默认携带 3 只初始宠物（御三家），供进化之光/属性强化等选择类内容使用
+      const starters = needsPets ? [] : ['momo', 'lulu', 'fifi'].map((id, i) => makeUnit(id, true, i as 0 | 1 | 2, false));
+      const base: GameState = {
+        ...state,
+        seed: 1,
+        act: 1,
+        map,
+        currentRow: 0,
+        currentNodeId: nodeId,
+        roster: starters,
+        field: starters.map((u) => u.uid),
+        rewards: [],
+        battle: undefined,
+        specialPending: undefined,
+        shopBought: false,
+        testRun: undefined,
+        pendingBattle: undefined,
+        testPick: needsPets
+          ? { side: 'player', nodeType, corruptDebuff: node.corruptDebuff, corruptReward: node.corruptReward }
+          : undefined,
+        log: [`[自定义测试] ${labelOf(nodeType, 0)}${needsPets ? '：选择我方宠物' : '：默认携带 3 只初始宠物'}`, ...state.log].slice(0, 20),
+      };
+      // 非战斗类：预生成事件/奇遇/钥匙，进入对应界面时展示
+      if (nodeType === 'event') {
+        base.map.events[nodeId] = buildEvent(createRng(1 * 7 + 3));
+      } else if (nodeType === 'special') {
+        base.map.specials[nodeId] = buildSpecial(createRng(1 * 7 + 3));
+      } else if (nodeType === 'keydoor') {
+        // 钥匙门：自动配发对应钥匙，进入即开启高级宝箱
+        node.guardianId = nodeId;
+        base.inventory = { ...base.inventory, [`key_${nodeId}`]: 1 };
+      }
+      // 不需要宠物的关卡：跳过选宠，直接进入对应内容
+      if (!needsPets) return enterNode(base, node);
+      return { ...base, screen: 'test-pick' };
+    }
+
+    case 'TEST_PICK_PLAYER_CONFIRM': {
+      const tp = state.testPick;
+      if (!tp || tp.side !== 'player' || action.units.length === 0) return state;
+      return {
+        ...state,
+        testPick: { ...tp, side: 'enemy', playerUnits: action.units },
+        log: [`[自定义测试] 我方 ${action.units.map((u) => u.name).join('、')}，选择敌方宠物`, ...state.log].slice(0, 20),
+      };
+    }
+
+    case 'TEST_PICK_ENEMY_CONFIRM': {
+      const tp = state.testPick;
+      if (!tp || tp.side !== 'enemy' || !tp.playerUnits || action.units.length === 0) return state;
+      const encounter = action.units.map((u) => ({ speciesId: u.speciesId }));
+      const map: RunMap = { ...state.map };
+      if (tp.nodeType === 'boss') {
+        map.boss = { ...map.boss, [state.currentNodeId]: encounter };
+      } else {
+        map.encounter = { ...map.encounter, [state.currentNodeId]: encounter };
+      }
+      // 战斗参数按节点类型生成
+      let units = tp.playerUnits;
+      let options: BattleOptions = { enemyExact: true };
+      if (tp.nodeType === 'corrupted') options.corruptDebuff = tp.corruptDebuff;
+      if (tp.nodeType === 'guardian') options.untameable = true;
+      if (tp.nodeType === 'arena') {
+        // 斗兽场：1v1 单挑，只取第 1 只上阵
+        units = tp.playerUnits.slice(0, 1);
+        options = { untameable: true };
+      } else if (tp.nodeType === 'gauntlet') {
+        // 车轮战：按棋盘槽位顺序轮换
+        options = { gauntlet: true, untameable: true };
+      }
+      return {
+        ...state,
+        map,
+        testPick: undefined,
+        screen: 'test-config',
+        testRun: true,
+        pendingBattle: { units, encounter, seed: 1, options, nodeType: tp.nodeType },
+        log: [
+          `[自定义测试] ${labelOf(tp.nodeType, 0)}：${units.map((u) => u.name).join('、')} vs ${encounter.map((e) => getMonster(e.speciesId).name).join('、')}`,
+          ...state.log,
+        ].slice(0, 20),
+      };
+    }
+
     case 'EVENT_CHOICE': {
       if (state.screen !== 'event') return state;
       const ev = state.map.events[state.currentNodeId];
@@ -769,8 +877,40 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, battle };
     }
 
+    case 'TEST_ITEMS_CONFIRM': {
+      if (!state.testRun || !state.pendingBattle) return state;
+      const pb = state.pendingBattle;
+      const seed = action.seed > 0 ? Math.floor(action.seed) : 1;
+      const battle = createBattle(pb.units, pb.encounter, seed, pb.options);
+      const inventory: Record<string, number> = {};
+      for (const [k, v] of Object.entries(action.inventory)) {
+        const n = Math.floor(v);
+        if (n > 0) inventory[k] = n;
+      }
+      return {
+        ...state,
+        screen: 'battle',
+        battle,
+        inventory,
+        gold: Math.max(0, Math.floor(action.gold) || 0),
+        pendingBattle: undefined,
+        formation: undefined,
+        specialPending: undefined,
+        gauntletOrder: undefined,
+        gauntletSize: undefined,
+        log: [
+          `[自定义测试] 战斗开始：${pb.units.map((u) => u.name).join('、')} vs ${pb.encounter.map((e) => getMonster(e.speciesId).name).join('、')}`,
+          ...state.log,
+        ].slice(0, 20),
+      };
+    }
+
     case 'BATTLE_END_CONFIRM': {
       if (!state.battle) return state;
+      // 自定义测试：胜负确认后直接回首页，不进入正常结算流程
+      if (state.testRun) {
+        return { ...createInitialState(), screen: 'title' };
+      }
       if (state.battle.phase === 'won') return resolveBattle(state, state.battle);
       if (state.battle.phase === 'lost') {
         const node = currentNode(state);

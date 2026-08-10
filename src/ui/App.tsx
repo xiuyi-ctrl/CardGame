@@ -1,16 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
-import type { Dispatch } from 'react';
+import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, type MapNode, type SpecialReward } from '../game/state/game';
+import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTING_CHOICES, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
-import { computeStats } from '../game/core/battle';
+import { computeStats, makeUnit } from '../game/core/battle';
 import { UnitCard, SkillTag, DragScrollRow } from './components';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
@@ -55,6 +56,9 @@ export default function App() {
       {state.screen === 'chest' && <ChestScreen state={state} dispatch={dispatch} />}
       {state.screen === 'backpack' && <BackpackScreen state={state} dispatch={dispatch} />}
       {state.screen === 'tame-overflow' && <TameOverflowScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'test-type' && <TestTypeScreen dispatch={dispatch} />}
+      {state.screen === 'test-pick' && <TestPickScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
     </div>
   );
 }
@@ -192,6 +196,283 @@ function FuseDiscardConfirm({
   );
 }
 
+/** 自定义测试可选的全部关卡类型（战斗类需选敌我双方，非战斗类直接进入对应界面） */
+const CUSTOM_TYPES: { value: MapNode['type']; label: string }[] = [
+  { value: 'battle', label: '⚔ 战斗' },
+  { value: 'arena', label: '🆚 斗兽场' },
+  { value: 'gauntlet', label: '🔁 车轮战' },
+  { value: 'corrupted', label: '☠ 被侵蚀' },
+  { value: 'elite', label: '⭐ 精英' },
+  { value: 'boss', label: '👑 首领' },
+  { value: 'guardian', label: '🛡 守卫' },
+  { value: 'rest', label: '🔥 休息' },
+  { value: 'shop', label: '🏪 商店' },
+  { value: 'event', label: '❓ 事件' },
+  { value: 'special', label: '🎁 奇遇' },
+  { value: 'watchtower', label: '🔭 瞭望塔' },
+  { value: 'sync', label: '📦 双生宝箱' },
+  { value: 'keydoor', label: '🗝 钥匙门' },
+];
+
+/** 自定义测试需要选宠的战斗类关卡（非战斗类跳过选宠直接进入） */
+const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'arena', 'gauntlet', 'corrupted', 'elite', 'boss', 'guardian'];
+
+function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+  const [sel, setSel] = useState<MapNode['type']>('battle');
+  const [debuff, setDebuff] = useState<'spd' | 'dmg'>('spd');
+  const [reward, setReward] = useState<'gold' | 'food'>('gold');
+  return (
+    <div className="screen center-col">
+      <div className="hud">
+        <span className="act">⚙ 自定义测试 · 选择关卡类型</span>
+        <button className="home-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+          ↩ 返回首页
+        </button>
+      </div>
+      <div className="side-label">先选择关卡类型，再进入布阵界面依次选我方 / 敌方宠物（同种可上多只）</div>
+      <div className="test-type-grid">
+        {CUSTOM_TYPES.map((t) => (
+          <button
+            key={t.value}
+            className={`debug-cell big-tap ${sel === t.value ? 'selected' : ''}`}
+            onClick={() => setSel(t.value)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sel === 'corrupted' && (
+        <div className="debug-row">
+          <label>侵蚀</label>
+          <select value={debuff} onChange={(e) => setDebuff(e.target.value as 'spd' | 'dmg')}>
+            <option value="spd">速度 -1</option>
+            <option value="dmg">受伤 +1</option>
+          </select>
+          <label>胜利奖励</label>
+          <select value={reward} onChange={(e) => setReward(e.target.value as 'gold' | 'food')}>
+            <option value="gold">金币</option>
+            <option value="food">食物</option>
+          </select>
+        </div>
+      )}
+      <div className="formation-footer">
+        <button
+          className="primary big-btn"
+          onClick={() =>
+            dispatch({
+              type: 'TEST_TYPE_PICK',
+              nodeType: sel,
+              corruptDebuff: sel === 'corrupted' ? debuff : undefined,
+              corruptReward: sel === 'corrupted' ? reward : undefined,
+            })
+          }
+        >
+          下一步：{TEST_BATTLE_TYPES.includes(sel) ? '选择宠物' : '进入关卡'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const tp = state.testPick;
+  if (!tp) return null;
+  const isPlayerSide = tp.side === 'player';
+  const [units, setUnits] = useState<Unit[]>([]);
+
+  const maxSlots = isPlayerSide ? FIELD_MAX : 6;
+  const fieldCount = units.length;
+  const bySlot: Record<string, Unit | undefined> = {};
+  for (const u of units) bySlot[`${u.row}-${u.column}`] = u;
+
+  function firstEmpty(): { row: FormationRow; column: 0 | 1 | 2 } | null {
+    for (const row of ['front', 'back'] as const) {
+      for (const col of [0, 1, 2] as const) {
+        if (!bySlot[`${row}-${col}`]) return { row, column: col };
+      }
+    }
+    return null;
+  }
+
+  function addSpecies(speciesId: string) {
+    if (fieldCount >= maxSlots) return;
+    const slot = firstEmpty();
+    if (!slot) return;
+    const u = makeUnit(speciesId, isPlayerSide, slot.column, false, slot.row);
+    setUnits((prev) => [...prev, u]);
+  }
+
+  function onSlotClick(row: FormationRow, col: 0 | 1 | 2) {
+    const existing = bySlot[`${row}-${col}`];
+    if (existing) setUnits((prev) => prev.filter((u) => u.uid !== existing.uid));
+  }
+
+  function onSlotDrop(e: DragEvent<HTMLDivElement>, row: FormationRow, col: 0 | 1 | 2) {
+    e.preventDefault();
+    const uid = e.dataTransfer.getData('text/plain');
+    const from = units.find((u) => u.uid === uid);
+    if (!from) return;
+    const target = bySlot[`${row}-${col}`];
+    setUnits((prev) =>
+      prev.map((u) => {
+        if (u.uid === uid) return { ...u, row, column: col };
+        if (target && u.uid === target.uid) return { ...u, row: from.row, column: from.column };
+        return u;
+      }),
+    );
+  }
+
+  function confirm() {
+    const ordered = [...units].sort((a, b) => {
+      const ia = (a.row === 'front' ? 0 : 3) + a.column;
+      const ib = (b.row === 'front' ? 0 : 3) + b.column;
+      return ia - ib;
+    });
+    if (isPlayerSide) {
+      dispatch({ type: 'TEST_PICK_PLAYER_CONFIRM', units: ordered });
+    } else {
+      dispatch({ type: 'TEST_PICK_ENEMY_CONFIRM', units: ordered });
+    }
+  }
+
+  const countBySpecies: Record<string, number> = {};
+  for (const u of units) countBySpecies[u.speciesId] = (countBySpecies[u.speciesId] ?? 0) + 1;
+
+  return (
+    <div className="screen">
+      <div className="hud">
+        <span className="act">⚙ 自定义测试 · {labelOf(tp.nodeType, 0)} · {isPlayerSide ? '选择我方出战' : '选择敌方阵容'}</span>
+        <span className="chip">👥 已选 {fieldCount}/{maxSlots} 只</span>
+        <button className="home-btn" onClick={() => dispatch({ type: 'DEBUG_CUSTOM_TEST' })}>
+          ↩ 重新选关卡
+        </button>
+      </div>
+
+      <div className="formation-main">
+        <div className="formation-left">
+          <div className="side-label">
+            {isPlayerSide
+              ? '点击下方宠物池即可上阵（同种可多点几只）；点击棋盘上的宠物下阵，拖拽可调整站位'
+              : '选择敌方宠物（同种可多点几只），敌方数量决定战斗规模；点击下阵、拖拽调整'}
+          </div>
+          <div className="formation-board">
+            {(['front', 'back'] as const).map((row) => (
+              <div key={row} className={`formation-row ${row === 'front' ? 'row-front' : 'row-back'}`}>
+                <span className="formation-row-label">{row === 'front' ? '前 排' : '后 排'}</span>
+                {([0, 1, 2] as const).map((col) => {
+                  const u = bySlot[`${row}-${col}`];
+                  return (
+                    <div
+                      key={`${row}-${col}`}
+                      className={`formation-slot ${u ? '' : 'empty'}`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => onSlotDrop(e, row, col)}
+                      onClick={() => onSlotClick(row, col)}
+                    >
+                      {u ? (
+                        <div
+                          draggable
+                          title="拖拽调整站位，点击下阵"
+                          onDragStart={(e) => e.dataTransfer.setData('text/plain', u.uid)}
+                        >
+                          <UnitCard unit={u} small showSkills={false} topStats />
+                        </div>
+                      ) : (
+                        <span className="formation-empty-slot">空</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="formation-list">
+          <div className="side-label">宠物池（点击上阵，同种可多只）</div>
+          <div className="test-pool">
+            {Object.values(MONSTERS).map((m) => {
+              const cnt = countBySpecies[m.id] ?? 0;
+              const full = fieldCount >= maxSlots;
+              return (
+                <button
+                  key={m.id}
+                  className={`test-pool-item ${full ? 'disabled' : ''} ${cnt > 0 ? 'has-count' : ''}`}
+                  onClick={() => addSpecies(m.id)}
+                  title={m.name}
+                >
+                  <span className="test-pool-emoji">{m.emoji}</span>
+                  <span className="test-pool-name">{m.name}</span>
+                  {cnt > 0 && <span className="test-pool-count">×{cnt}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="formation-footer">
+        <button className="primary big-btn" disabled={fieldCount === 0} onClick={confirm}>
+          {isPlayerSide ? '⚔️ 确认我方出战' : '⚔️ 确认敌方阵容'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const pb = state.pendingBattle;
+  if (!pb) return null;
+  const [gold, setGold] = useState(state.gold);
+  const [seed, setSeed] = useState(1);
+  const [items, setItems] = useState<Record<string, number>>(() => ({ ...state.inventory }));
+  const CT_ITEMS: { id: string; label: string }[] = [
+    ...Object.keys(FOODS).map((id) => ({ id, label: FOODS[id].name })),
+    ...Object.keys(ITEMS).map((id) => ({ id, label: ITEMS[id].name })),
+  ];
+  const enemyDesc = pb.encounter.map((e) => `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}`).join('、');
+  return (
+    <div className="screen center-col">
+      <div className="hud">
+        <span className="act">⚙ 自定义测试 · {labelOf(pb.nodeType, 0)} · 配置战斗</span>
+        <button className="home-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+          ↩ 返回首页
+        </button>
+      </div>
+      <div className="test-items">
+        <div className="side-label">敌方：{enemyDesc}</div>
+        <div className="side-label">我方出战：{pb.units.map((u) => u.name).join('、')}</div>
+        <div className="debug-row">
+          <label>金币</label>
+          <input type="number" min={0} value={gold} onChange={(e) => setGold(Number(e.target.value))} style={{ width: 80 }} />
+          <label>种子</label>
+          <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} style={{ width: 80 }} />
+        </div>
+        <div className="side-label">调整本次战斗携带的食物/道具数量，确认后开战</div>
+        <div className="debug-grid">
+          {CT_ITEMS.map((it) => (
+            <label key={it.id} className="debug-cell">
+              <span className="debug-cell-name">{it.label}</span>
+              <input
+                type="number"
+                min={0}
+                value={items[it.id] ?? 0}
+                onChange={(e) => setItems((v) => ({ ...v, [it.id]: Number(e.target.value) }))}
+              />
+            </label>
+          ))}
+        </div>
+        <button
+          className="primary big-btn"
+          onClick={() => dispatch({ type: 'TEST_ITEMS_CONFIRM', inventory: items, gold, seed })}
+        >
+          ⚔ 开始战斗
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [hasSave, setHasSave] = useState<boolean | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -308,6 +589,9 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
             直接进入
           </button>
           <div className="debug-hint">调试模式：自动配备 3 只强宠、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
+          <button className="debug-sub-toggle" onClick={() => dispatch({ type: 'DEBUG_CUSTOM_TEST' })}>
+            ⚙ 自定义测试（选关卡 → 选我方 → 选敌方 → 配置 → 开战）
+          </button>
         </div>
       )}
       {showCodex && <CodexScreen onClose={() => setShowCodex(false)} />}

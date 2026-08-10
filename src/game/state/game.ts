@@ -149,7 +149,10 @@ export type Screen =
   | 'watchtower'
   | 'chest'
   | 'backpack'
-  | 'tame-overflow';
+  | 'tame-overflow'
+  | 'test-type'
+  | 'test-pick'
+  | 'test-config';
 
 export interface RewardChoice {
   id: string;
@@ -217,6 +220,24 @@ export interface GameState {
   skipSelecting?: boolean;
   /** 打开背包前所在的界面（关闭背包时返回） */
   backpackFrom?: Screen;
+  /** 自定义测试进行中：战斗结束后直接回首页 */
+  testRun?: boolean;
+  /** 自定义测试流程暂存：当前阶段（选我方/选敌方）、关卡类型、我方已选宠物 */
+  testPick?: {
+    side: 'player' | 'enemy';
+    nodeType: MapNode['type'];
+    corruptDebuff?: 'spd' | 'dmg';
+    corruptReward?: 'gold' | 'food';
+    playerUnits?: Unit[];
+  };
+  /** 自定义测试：选宠确认后、开战前暂存的战斗数据（test-config 界面确认后创建战斗） */
+  pendingBattle?: {
+    units: Unit[];
+    encounter: { speciesId: string }[];
+    seed: number;
+    options?: { corruptDebuff?: 'spd' | 'dmg'; gauntlet?: boolean; untameable?: boolean; enemyExact?: boolean };
+    nodeType: NodeType;
+  };
 }
 
 export const ROSTER_MAX = 8;

@@ -23,6 +23,8 @@ export interface BattleOptions {
   gauntlet?: boolean;
   /** 敌方不可驯服（斗兽场/车轮战） */
   untameable?: boolean;
+  /** 敌方按指定数量原样创建（自定义测试用）：不按我方数量压缩、不复制补齐 */
+  enemyExact?: boolean;
 }
 
 export function computeStats(speciesId: string) {
@@ -167,12 +169,16 @@ export function createBattle(
     b.enemyBench = enemyRest.map((e, i) => makeEnemy(e, i + 1, untameable));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
-    // 敌方数量与玩家出战数匹配（最少 2v2；boss/斗兽场等单敌遭遇保留 1 只）
+    // 敌方数量与玩家出战数匹配（最少 2v2；boss/斗兽场等单敌遭遇保留 1 只）；
+    // enemyExact（自定义测试）时敌方按指定数量原样创建：不压缩、不复制补齐
     const n = preparedPlayer.length;
-    let target = n >= 2 ? Math.min(n, 4) : 1;
-    if (enemySpecies.length === 1) target = 1;
+    const exact = options?.enemyExact === true;
+    let target = exact ? enemySpecies.length : n >= 2 ? Math.min(n, 4) : 1;
+    if (!exact && enemySpecies.length === 1) target = 1;
     const picked = enemySpecies.slice(0, target);
-    while (picked.length < target) picked.push(picked[picked.length % enemySpecies.length] || enemySpecies[0]);
+    if (!exact) {
+      while (picked.length < target) picked.push(picked[picked.length % enemySpecies.length] || enemySpecies[0]);
+    }
     b.playerUnits = preparedPlayer;
     b.enemyUnits = picked.map((e, i) => makeEnemy(e, i, untameable));
     // 只有一个敌人时，默认前排居中显示
