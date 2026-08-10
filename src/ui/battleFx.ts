@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BattleState, LogEntry } from '../game/types';
 import { SKILLS } from '../game/data/skills';
 
@@ -15,6 +15,8 @@ interface FxEvent {
   statusKind?: string;
   /** buff/治疗事件使用的技能名，用于飘字文案（如战吼→「攻击↑」） */
   skillName?: string;
+  /** 攻击事件：本次攻击附加给 target 的状态 kind（来自日志 addsStatus），用于在该攻击动画播放时揭示 */
+  addsStatus?: string[];
 }
 
 /** 伤害/治疗/buff 飘字 */
@@ -24,6 +26,61 @@ export interface PopItem {
   text: string;
   heal: boolean;
   buff?: boolean;
+}
+
+/** 揭示目标：事件 i 播放时揭示 uid 上的指定状态 kind */
+export interface RevealEntry {
+  uid: string;
+  kinds: string[];
+}
+
+/** 计算每个新增状态的揭示时机：绑定到「附加它的那次攻击动画」，而非目标被攻击的首个事件。
+ *  攻击类状态（灼烧/中毒/减防/眩晕）标记在对应攻击日志上（addsStatus），按其攻击顺序依次揭示——
+ *  每只宠物攻击动画播放时立即显示它附加的状态；连击多段时标记在最后一段（状态在全部段后才生效）。
+ *  仅匹配攻击事件——同一轮结算里攻击日志后紧跟的 dot（灼烧/中毒掉血）日志 targetUid 相同，若也参与匹配，
+ *  灼烧会被推迟到 dot 动画才显示，而非「我方攻击、敌人扣血动画」同时出现。
+ *  匹配不到归属（如状态由治疗/强化产生）时，归入该单位作为目标的第一个事件（随施法/治疗动画揭示）；
+ *  目标从未出现在事件中才兜底第一个事件，保证不迟于动画开始显示 */
+export function computeRevealAt(
+  events: readonly { targetUid?: string; kind?: string; addsStatus?: string[] }[],
+  newStatuses: Record<string, string[]>,
+): Record<number, RevealEntry[]> {
+  const revealAt: Record<number, RevealEntry[]> = {};
+  const add = (i: number, uid: string, kinds: string[]) => {
+    if (kinds.length === 0) return;
+    const existing = revealAt[i]?.find((e) => e.uid === uid);
+    if (existing) existing.kinds.push(...kinds);
+    else (revealAt[i] ??= []).push({ uid, kinds: [...kinds] });
+  };
+  for (const uid of Object.keys(newStatuses)) {
+    const kinds = [...newStatuses[uid]];
+    const assigned = new Array<boolean>(kinds.length).fill(false);
+    // 1) 精确匹配：该 kind 由某次攻击附加，随那次攻击动画揭示
+    for (let k = 0; k < kinds.length; k++) {
+      const i = events.findIndex(
+        (ev) => ev.targetUid === uid && ev.kind === 'attack' && (ev.addsStatus ?? []).includes(kinds[k]),
+      );
+      if (i >= 0) {
+        add(i, uid, [kinds[k]]);
+        assigned[k] = true;
+      }
+    }
+    // 2) 未归属的状态：归入该单位作为目标的第一个事件（buff 施法/治疗等），保证随对应动画出现
+    const rest = kinds.filter((_, k) => !assigned[k]);
+    if (rest.length > 0) {
+      const j = events.findIndex((ev) => ev.targetUid === uid);
+      if (j >= 0) add(j, uid, rest);
+      else if (events.length > 0) add(0, uid, rest);
+    }
+  }
+  return revealAt;
+}
+
+/** 把新增状态全部标记为已揭示（用于无动画事件 / 动画全部播放完的场合） */
+export function allRevealed(newStatuses: Record<string, string[]>): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const uid of Object.keys(newStatuses)) out[uid] = [...newStatuses[uid]];
+  return out;
 }
 
 const RE_ATTACK = /^(.+?) 使用「(.+?)」攻击 (.+?)，造成 (\d+) 伤害$/;
@@ -71,6 +128,7 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
       value: Number(m[4]),
       actorIsPlayer: side === 'player',
+      addsStatus: entry.addsStatus,
       hp: entry.hp,
     };
   }
@@ -123,7 +181,8 @@ export interface FxAnim {
 /**
  * 战斗动画：监听 battle.log 增量，把新日志按顺序播放为冲刺/受击/飘字，
  * 并在每个事件播放时同步推进血量显示（hpMap，动画结束后清空恢复真实血量）。
- * 新增的灼烧/中毒等状态标签在攻击动画触发时才显示（hiddenStatuses 先隐藏、事件播放时揭示）；
+ * 新增的灼烧/中毒等状态标签在攻击动画触发时才显示（渲染期派生 hiddenStatuses 先隐藏，
+ * 事件播放时通过 revealedKinds 标记揭示，不触发多余重渲染）；
  * 回合结算中消失的状态（turns 用尽）延迟到其最后一次掉血动画播放时才移除（endingStatuses），
  * 与飘字、血量条下降同步。
  * 返回 fx（uid → 动画 class）、pops（飘字）、hpMap（当前应显示的血量）、
@@ -134,12 +193,48 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [fx, setFx] = useState<Record<string, FxAnim>>({});
   const [pops, setPops] = useState<PopItem[]>([]);
   const [hpMap, setHpMap] = useState<Record<string, number> | null>(null);
-  const [hiddenStatuses, setHiddenStatuses] = useState<Record<string, string[]>>({});
+  const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
   const [animating, setAnimating] = useState(false);
   const prevLen = useRef(0);
   const prevBattle = useRef<BattleState | null | undefined>(null);
+  const prevStatusRef = useRef<BattleState | null | undefined>(null);
   const timers = useRef<number[]>([]);
+
+  // 每次渲染后把当前 battle 记入 ref；渲染期读取到的是「上一快照」，用于计算新增状态。
+  // 必须在 useEffect 里更新（而非 useMemo 工厂内），否则 StrictMode 双调用 useMemo 时
+  // 第二次会读到已被污染的 prev===当前 battle，差集为空导致新增状态不隐藏、动画前就显示。
+  useEffect(() => {
+    prevStatusRef.current = battle;
+  });
+  // 渲染期计算：相比上一快照新增的状态（结算后新挂上的灼烧/中毒等），用于动画播放前隐藏
+  const newStatuses = useMemo(() => {
+    const prev = prevStatusRef.current;
+    if (!battle || !prev) return {};
+    const prevKinds = new Map<string, Set<string>>();
+    for (const u of [...prev.playerUnits, ...prev.enemyUnits]) {
+      prevKinds.set(u.uid, new Set(u.statuses.map((s) => s.kind)));
+    }
+    const result: Record<string, string[]> = {};
+    for (const u of [...battle.playerUnits, ...battle.enemyUnits]) {
+      const pk = prevKinds.get(u.uid);
+      if (!pk) continue;
+      const added = u.statuses.filter((s) => !pk.has(s.kind)).map((s) => s.kind);
+      if (added.length > 0) result[u.uid] = added;
+    }
+    return result;
+  }, [battle]);
+
+  // 尚未揭示的新增状态：动画触发揭示（写入 revealedKinds）后从派生值中消失
+  const hiddenStatuses = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    for (const uid of Object.keys(newStatuses)) {
+      const revealed = revealedKinds[uid];
+      const hidden = newStatuses[uid].filter((k) => !revealed || !revealed.includes(k));
+      if (hidden.length > 0) result[uid] = hidden;
+    }
+    return result;
+  }, [newStatuses, revealedKinds]);
 
   useEffect(() => {
     if (!battle) {
@@ -152,7 +247,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setHpMap(null);
       setFx({});
       setPops([]);
-      setHiddenStatuses({});
+      setRevealedKinds({});
       setEndingStatuses({});
       return;
     }
@@ -176,22 +271,6 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     }
     const prevHp = prevBattleBefore ? hpOfUnits(prevBattleBefore) : hpOfUnits(battle);
 
-    // 新增状态：结算后相比上一快照新出现的灼烧/中毒等，动画播放前先隐藏
-    const newStatuses: Record<string, string[]> = {};
-    if (prevBattleBefore) {
-      const prevKinds = new Map<string, Set<string>>();
-      for (const u of [...prevBattleBefore.playerUnits, ...prevBattleBefore.enemyUnits]) {
-        prevKinds.set(u.uid, new Set(u.statuses.map((s) => s.kind)));
-      }
-      for (const u of [...battle.playerUnits, ...battle.enemyUnits]) {
-        const pk = prevKinds.get(u.uid);
-        if (!pk) continue;
-        const added = u.statuses.filter((s) => !pk.has(s.kind)).map((s) => s.kind);
-        if (added.length > 0) newStatuses[u.uid] = added;
-      }
-    }
-    setHiddenStatuses(newStatuses);
-
     // 到期消失的状态：上一快照存活单位有、当前没有的状态 kind，动画播放期间先继续显示
     const endingStatuses: Record<string, string[]> = {};
     if (prevBattleBefore) {
@@ -208,18 +287,10 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     }
     setEndingStatuses(endingStatuses);
 
-    // 每个单位的新状态在攻击它的最后一个动画事件触发时揭示（连击时状态在所有段命中后才附加）
-    const revealAt: Record<number, string[]> = {};
-    for (const uid of Object.keys(newStatuses)) {
-      let i = -1;
-      for (let k = events.length - 1; k >= 0; k--) {
-        if (events[k].targetUid === uid) {
-          i = k;
-          break;
-        }
-      }
-      if (i >= 0) (revealAt[i] ??= []).push(uid);
-    }
+    // 每个单位的新状态在「附加它的那次攻击动画」播放时揭示（攻击日志 addsStatus 标记归属；
+    // 同一目标被多只宠物先后附加不同状态时按攻击顺序依次揭示，连击等状态标在最后一段）；
+    // 匹配不到归属（buff 施法/治疗产生）时归入该单位作为目标的第一个事件，目标从未出现才兜底第一个事件
+    const revealAt = computeRevealAt(events, newStatuses);
 
     // 到期状态在其最后一次对应 dot 掉血动画播放时移除（与飘字/血条下降同步）；无对应事件则随动画结束移除
     const hideAt: Record<number, Record<string, string[]>> = {};
@@ -235,11 +306,11 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setFx({});
     setPops([]);
 
-    // 无血量变化事件（如纯状态/换位）则不进入动画，状态立即显示
+    // 无血量变化事件（如纯状态/换位）则不进入动画，新增状态立即全部显示
     if (events.length === 0) {
       setAnimating(false);
       setHpMap(null);
-      setHiddenStatuses({});
+      setRevealedKinds(allRevealed(newStatuses));
       setEndingStatuses({});
       return;
     }
@@ -253,14 +324,17 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           const popId = ++popSeq;
           const actorUid = ev.actorUid;
           const targetUid = ev.targetUid;
-          // 该事件的动画触发后揭示目标的新增状态标签
+          // 该事件的动画触发后揭示它附加给目标的新增状态标签（按 kind 增量写入 revealedKinds，
+          // 同一目标不同攻击附加的状态可分别在各自的攻击动画时依次显示）
           if (revealAt[i]) {
-            setHiddenStatuses((p) => {
+            setRevealedKinds((p) => {
               const next = { ...p };
               let changed = false;
-              for (const uid of revealAt[i]) {
-                if (next[uid]) {
-                  delete next[uid];
+              for (const { uid, kinds } of revealAt[i]) {
+                const cur = next[uid] ?? [];
+                const missing = kinds.filter((k) => !cur.includes(k));
+                if (missing.length > 0) {
+                  next[uid] = [...cur, ...missing];
                   changed = true;
                 }
               }
@@ -331,7 +405,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       () => {
         setAnimating(false);
         setHpMap(null);
-        setHiddenStatuses({});
+        setRevealedKinds(allRevealed(newStatuses));
         setEndingStatuses({});
       },
       events.length * STEP_MS + CLEAR_MS,

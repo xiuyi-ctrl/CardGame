@@ -259,11 +259,12 @@ export function pushLog(
   side: 'player' | 'enemy' | 'info' = 'info',
   actorUid?: string,
   targetUid?: string,
+  addsStatus?: string[],
 ): BattleState {
   // 附加当下全体血量快照，供 UI 按动画事件逐步展示血量；log 不截断（由 UI 只展示尾部）
   const hp: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) hp[u.uid] = u.hp;
-  return { ...b, log: [...b.log, { text: msg, side, hp, actorUid, targetUid }] };
+  return { ...b, log: [...b.log, { text: msg, side, hp, actorUid, targetUid, addsStatus }] };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
@@ -579,19 +580,38 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       // 动画表现为多段伤害飘字（如 8 拆成两段 4），总和与单条结算完全一致
       const segments = splitDamage(finalDmg, count);
       let t2 = t;
-      for (const seg of segments) {
-        if (seg <= 0) continue;
-        t2 = { ...t2, hp: Math.max(0, t2.hp - seg) };
-        nb = replaceUnit(nb, t2);
-        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, t.uid);
-      }
+      // 先计算本次攻击附加的状态（被动 venom/scorch + 技能 effects 的灼烧/中毒/减防/眩晕）。
+      // 状态在全部攻击段结算后才生效，故标记在最后一段攻击日志上，供动画在该宠物攻击动画播放时揭示
+      const addedKinds: string[] = [];
       const ap = getUnitPassive(actor);
-      if (ap?.kind === 'venom') t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
-      if (ap?.kind === 'scorch') t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
+      if (ap?.kind === 'venom') {
+        t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
+        addedKinds.push('poison');
+      }
+      if (ap?.kind === 'scorch') {
+        t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
+        addedKinds.push('burn');
+      }
       for (const e of skill.effects ?? []) {
         if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
           t2 = applyStatusTo(t2, e);
+          addedKinds.push(e.kind);
         }
+      }
+      const finalAdds = addedKinds.length > 0 ? addedKinds : undefined;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg <= 0) continue;
+        t2 = { ...t2, hp: Math.max(0, t2.hp - seg) };
+        nb = replaceUnit(nb, t2);
+        nb = pushLog(
+          nb,
+          `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`,
+          sideOf(actor),
+          actor.uid,
+          t.uid,
+          i === segments.length - 1 ? finalAdds : undefined,
+        );
       }
       // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
       nb = replaceUnit(nb, t2);

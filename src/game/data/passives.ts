@@ -4,9 +4,9 @@ export const PASSIVES: Record<string, PassiveDef> = {
   // —— 基础（御三家/常见野怪）——
   quick: { id: 'quick', name: '迅捷', desc: '战斗开始速度 +1', kind: 'spd', value: 1 },
   watery_regen: { id: 'watery_regen', name: '水愈', desc: '每回合开始恢复 1 点生命', kind: 'regen', value: 1 },
-  heat: { id: 'heat', name: '炽热', desc: '攻击命中附加灼烧 1（2 回合）', kind: 'scorch', value: 1 },
+  heat: { id: 'heat', name: '炽热', desc: '攻击命中附加灼烧 2（2 回合）', kind: 'scorch', value: 2 },
   iron_guard: { id: 'iron_guard', name: '铁壁', desc: '受到的所有伤害 -1', kind: 'guard', value: 1 },
-  venom_fang: { id: 'venom_fang', name: '毒牙', desc: '攻击命中附加中毒 1（2 回合）', kind: 'venom', value: 1 },
+  venom_fang: { id: 'venom_fang', name: '毒牙', desc: '攻击命中附加中毒 2（2 回合）', kind: 'venom', value: 2 },
   spike: { id: 'spike', name: '尖刺', desc: '受到攻击时反伤 1 点', kind: 'thorns', value: 1 },
 
   // —— 第一阶进化 ——
