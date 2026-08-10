@@ -3,6 +3,8 @@ import { createInitialState, gameReducer, type GameAction } from '../src/game/st
 import type { GameState } from '../src/game/state/game';
 import type { NodeType } from '../src/game/state/game';
 import { nextStage, SPECIAL_REWARDS } from '../src/game/state/game';
+import { FOODS } from '../src/game/data/foods';
+import { ITEMS } from '../src/game/data/items';
 import { createBattle, makeUnit } from '../src/game/core/battle';
 import type { Unit } from '../src/game/types';
 
@@ -60,6 +62,14 @@ describe('自定义测试：battle enemyExact', () => {
 });
 
 describe('自定义测试：完整流程', () => {
+  it('默认携带全部食物与道具各 2 个', () => {
+    const s = startTest('battle');
+    const expected: Record<string, number> = {};
+    for (const id of Object.keys(FOODS)) expected[id] = 2;
+    for (const id of Object.keys(ITEMS)) expected[id] = 2;
+    expect(s.inventory).toEqual(expected);
+  });
+
   it('普通战斗：选我方 → 选敌方 → 配置（金币/道具/种子）→ 开战', () => {
     let s = startTest('battle');
     // 选我方：3 只，含同种两只 fifi（允许重复）

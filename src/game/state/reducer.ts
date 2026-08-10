@@ -488,6 +488,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const needsPets = TEST_BATTLE_TYPES.includes(nodeType);
       // 非战斗类：默认携带 3 只初始宠物（御三家），供进化之光/属性强化等选择类内容使用
       const starters = needsPets ? [] : ['momo', 'lulu', 'fifi'].map((id, i) => makeUnit(id, true, i as 0 | 1 | 2, false));
+      // 默认携带全部食物与道具各 2 个，供测试各关卡内容
+      const testInventory: Record<string, number> = {};
+      for (const id of Object.keys(FOODS)) testInventory[id] = 2;
+      for (const id of Object.keys(ITEMS)) testInventory[id] = 2;
       const base: GameState = {
         ...state,
         seed: 1,
@@ -497,6 +501,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         currentNodeId: nodeId,
         roster: starters,
         field: starters.map((u) => u.uid),
+        inventory: testInventory,
         rewards: [],
         battle: undefined,
         specialPending: undefined,
