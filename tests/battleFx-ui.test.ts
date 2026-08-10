@@ -410,3 +410,73 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     vi.useRealTimers();
   });
 });
+
+describe('useBattleFx：战斗记录随攻击动画逐条揭示', () => {
+  it('新回合日志不一次性全显示，随动画事件逐条出现', () => {
+    vi.useFakeTimers();
+    const a = makeUnit(SPECIES[0], true, 1, false);
+    const k = makeUnit(SPECIES[1], false, 1, false);
+
+    const battle0 = makeBattle([], [], a, k);
+    const battle1 = makeBattle(
+      [
+        { text: '回合开始', side: 'info' },
+        {
+          text: `${a.name} 使用「烈焰」攻击 ${k.name}，造成 8 伤害`,
+          side: 'player',
+          hp: { [a.uid]: a.hp, [k.uid]: 12 },
+          actorUid: a.uid,
+          targetUid: k.uid,
+        },
+        {
+          text: `${k.name} 受到灼烧 2 点伤害`,
+          side: 'enemy',
+          hp: { [a.uid]: a.hp, [k.uid]: 10 },
+          targetUid: k.uid,
+        },
+      ],
+      [],
+      a,
+      k,
+    );
+
+    const { result, rerender } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
+      initialProps: { b: battle0 },
+    });
+    expect(result.current.revealedLogLen).toBe(0);
+
+    // 结算：新日志先全部隐藏（不一次性全显示）
+    act(() => rerender({ b: battle1 }));
+    expect(result.current.revealedLogLen).toBe(0);
+
+    // 事件0（0ms）：攻击动画 → 揭示到第 2 条（info 与攻击一并显示）
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current.revealedLogLen).toBe(2);
+
+    // 事件1（800ms）：dot 动画 → 全部揭示
+    act(() => vi.advanceTimersByTime(800));
+    expect(result.current.revealedLogLen).toBe(3);
+
+    // 动画结束：保持全部
+    act(() => vi.advanceTimersByTime(800 + 1300));
+    expect(result.current.revealedLogLen).toBe(3);
+    vi.useRealTimers();
+  });
+
+  it('进入中途战斗（存档恢复）：既有日志全部显示，不重播', () => {
+    vi.useFakeTimers();
+    const a = makeUnit(SPECIES[0], true, 1, false);
+    const k = makeUnit(SPECIES[1], false, 1, false);
+    const battle = makeBattle(
+      [{ text: `${a.name} 使用「烈焰」攻击 ${k.name}，造成 8 伤害`, side: 'player' }],
+      [],
+      a,
+      k,
+    );
+    const { result } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
+      initialProps: { b: battle },
+    });
+    expect(result.current.revealedLogLen).toBe(1);
+    vi.useRealTimers();
+  });
+});

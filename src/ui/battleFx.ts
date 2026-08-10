@@ -207,6 +207,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
   const [animating, setAnimating] = useState(false);
+  const [revealedLogLen, setRevealedLogLen] = useState(0);
   const prevLen = useRef(0);
   const prevBattle = useRef<BattleState | null | undefined>(null);
   const prevStatusRef = useRef<BattleState | null | undefined>(null);
@@ -260,6 +261,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       prevBattle.current = null;
       prevLen.current = 0;
       setAnimating(false);
+      setRevealedLogLen(0);
       setHpMap(null);
       setFx({});
       setPops([]);
@@ -273,18 +275,24 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     // 否则会把整场战斗的日志全部当作新事件重播，动画长时间停在「战斗结算中」。
     if (prevBattleBefore === null) {
       prevLen.current = battle.log.length;
+      setRevealedLogLen(battle.log.length);
       setAnimating(false);
       return;
     }
-    const newEntries = battle.log.slice(prevLen.current);
+    const startLen = prevLen.current;
+    const newEntries = battle.log.slice(startLen);
     prevLen.current = battle.log.length;
     if (newEntries.length === 0) return;
 
     const events: FxEvent[] = [];
-    for (const e of newEntries) {
+    const eventSrcIdx: number[] = [];
+    newEntries.forEach((e, idx) => {
       const ev = parseEvent(battle, e);
-      if (ev) events.push(ev);
-    }
+      if (ev) {
+        events.push(ev);
+        eventSrcIdx.push(idx);
+      }
+    });
     const prevHp = prevBattleBefore ? hpOfUnits(prevBattleBefore) : hpOfUnits(battle);
 
     // 到期消失的状态：上一快照存活单位有、当前没有的状态 kind，动画播放期间先继续显示
@@ -328,15 +336,19 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setHpMap(null);
       setRevealedKinds(allRevealed(newStatuses));
       setEndingStatuses({});
+      setRevealedLogLen(battle.log.length);
       return;
     }
 
-    // 动画开始：先显示结算前的血量，随后按事件逐个推进到对应快照
+    // 动画开始：先显示结算前的血量，随后按事件逐个推进到对应快照；
+    // 战斗记录同步逐条揭示——事件 i 播放时显示到对应日志（含其前的无事件日志，如系统提示）
     setAnimating(true);
     setHpMap(prevHp);
+    setRevealedLogLen(startLen);
     events.forEach((ev, i) => {
       const t = window.setTimeout(
         () => {
+          setRevealedLogLen((cur) => Math.max(cur, startLen + eventSrcIdx[i] + 1));
           const popId = ++popSeq;
           const actorUid = ev.actorUid;
           const targetUid = ev.targetUid;
@@ -423,6 +435,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
         setHpMap(null);
         setRevealedKinds(allRevealed(newStatuses));
         setEndingStatuses({});
+        setRevealedLogLen(battle.log.length);
       },
       events.length * STEP_MS + CLEAR_MS,
     );
@@ -431,5 +444,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending };
+  return { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
 }

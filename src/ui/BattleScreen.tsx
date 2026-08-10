@@ -60,7 +60,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending } = useBattleFx(battle);
+  const { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -297,7 +297,8 @@ export function BattleScreen({ state, dispatch }: Props) {
     return `捕捉概率 ${Math.round(tameChance(u, pendingTame) * 100)}%`;
   }
 
-  const logItems = battle.log.slice(-6);
+  // 战斗记录只显示已揭示的条目（随攻击动画逐条出现），最多 6 条
+  const logItems = battle.log.slice(Math.max(0, revealedLogLen - 6), revealedLogLen);
 
   const popOverlay = (uid: string) =>
     pops
