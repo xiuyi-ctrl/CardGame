@@ -60,7 +60,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
+  const { fx, pops, hpMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -76,9 +76,13 @@ export function BattleScreen({ state, dispatch }: Props) {
   // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）；车轮战待换人时也禁止，等替补自动上场
   const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap;
 
-  /** 动画期间按 hpMap 覆盖显示血量，血量随动画事件推进逐步生效；新增状态标签在对应攻击动画触发后才显示，到期状态标签在对应掉血动画触发时才移除 */
+  /** 动画期间按 hpMap/statusMap 覆盖显示血量与状态，随动画事件逐步推进（状态层数随事件回放，
+   *  如攻击附加灼烧 5 层→dot 结算后 2 层）；新增状态标签在对应攻击动画触发后才显示，
+   *  到期状态标签在对应掉血动画触发时才移除 */
   const shownUnit = (u: Unit): Unit => {
     let next = hpMap ? { ...u, hp: hpMap[u.uid] ?? u.hp } : u;
+    const sm = statusMap ? statusMap[u.uid] : undefined;
+    if (sm) next = { ...next, statuses: sm.map((s) => ({ ...s })) };
     const hidden = hiddenStatuses[u.uid];
     if (hidden && hidden.length > 0) {
       next = { ...next, statuses: next.statuses.filter((s) => !hidden.includes(s.kind)) };

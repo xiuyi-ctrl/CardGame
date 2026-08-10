@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { BattleState, LogEntry } from '../game/types';
+import type { BattleState, LogEntry, StatusEffect } from '../game/types';
 import { SKILLS } from '../game/data/skills';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
@@ -11,6 +11,8 @@ interface FxEvent {
   actorIsPlayer?: boolean;
   /** 该事件发生时的全体血量快照（uid → hp） */
   hp?: Record<string, number>;
+  /** 该事件发生时的全员状态快照（uid → 状态数组），用于按事件回放状态层数（如灼烧 5 层→dot 后 2 层） */
+  statuses?: Record<string, StatusEffect[]>;
   /** dot 事件对应的状态 kind（burn/poison），用于定位状态标签消失时机 */
   statusKind?: string;
   /** buff/治疗事件使用的技能名，用于飘字文案（如战吼→「攻击↑」） */
@@ -124,6 +126,12 @@ function hpOfUnits(b: BattleState): Record<string, number> {
   return hp;
 }
 
+function statusesOfUnits(b: BattleState): Record<string, StatusEffect[]> {
+  const out: Record<string, StatusEffect[]> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) out[u.uid] = u.statuses.map((s) => ({ ...s }));
+  return out;
+}
+
 /** 解析一条战斗日志为动画事件；无法识别或名字找不到目标时返回 null */
 function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const text = entry.text;
@@ -141,6 +149,7 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       actorIsPlayer: side === 'player',
       addsStatus: entry.addsStatus,
       hp: entry.hp,
+      statuses: entry.statuses,
     };
   }
   if ((m = text.match(RE_HEAL))) {
@@ -150,11 +159,12 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       targetUid: entry.targetUid ?? findUid(b, side, m[3]),
       value: Number(m[4]),
       hp: entry.hp,
+      statuses: entry.statuses,
     };
   }
   if ((m = text.match(RE_BUFF))) {
     const uid = entry.actorUid ?? entry.targetUid ?? findUid(b, side, m[1]);
-    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: m[2], hp: entry.hp };
+    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: m[2], hp: entry.hp, statuses: entry.statuses };
   }
   if ((m = text.match(RE_DOT))) {
     return {
@@ -163,6 +173,7 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       value: Number(m[3]),
       statusKind: m[2] === '灼烧' ? 'burn' : 'poison',
       hp: entry.hp,
+      statuses: entry.statuses,
     };
   }
   if ((m = text.match(RE_THORN))) {
@@ -172,6 +183,7 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
       value: Number(m[4]),
       hp: entry.hp,
+      statuses: entry.statuses,
     };
   }
   return null;
@@ -191,12 +203,13 @@ export interface FxAnim {
 
 /**
  * 战斗动画：监听 battle.log 增量，把新日志按顺序播放为冲刺/受击/飘字，
- * 并在每个事件播放时同步推进血量显示（hpMap，动画结束后清空恢复真实血量）。
+ * 并在每个事件播放时同步推进血量与状态层数显示（hpMap/statusMap，动画结束后清空恢复真实值）。
  * 新增的灼烧/中毒等状态标签在攻击动画触发时才显示（渲染期派生 hiddenStatuses 先隐藏，
  * 事件播放时通过 revealedKinds 标记揭示，不触发多余重渲染）；
  * 回合结算中消失的状态（turns 用尽）延迟到其最后一次掉血动画播放时才移除（endingStatuses），
  * 与飘字、血量条下降同步。
  * 返回 fx（uid → 动画 class）、pops（飘字）、hpMap（当前应显示的血量）、
+ * statusMap（当前应显示的状态快照，随事件推进，如攻击时灼烧 5 层、dot 后 2 层）、
  * hiddenStatuses（uid → 尚未揭示的新增状态）、endingStatuses（uid → 尚未移除的到期状态）、
  * animating（结算动画播放中）、logPending（日志中还有未播放的动画事件）。
  */
@@ -204,6 +217,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [fx, setFx] = useState<Record<string, FxAnim>>({});
   const [pops, setPops] = useState<PopItem[]>([]);
   const [hpMap, setHpMap] = useState<Record<string, number> | null>(null);
+  const [statusMap, setStatusMap] = useState<Record<string, StatusEffect[]> | null>(null);
   const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
   const [animating, setAnimating] = useState(false);
@@ -263,6 +277,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setAnimating(false);
       setRevealedLogLen(0);
       setHpMap(null);
+      setStatusMap(null);
       setFx({});
       setPops([]);
       setRevealedKinds({});
@@ -294,6 +309,10 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       }
     });
     const prevHp = prevBattleBefore ? hpOfUnits(prevBattleBefore) : hpOfUnits(battle);
+    const prevStatuses = prevBattleBefore ? statusesOfUnits(prevBattleBefore) : statusesOfUnits(battle);
+    // 仅当日志带状态快照（真实战斗 pushLog 均会写入）时才启用状态回放；
+    // 测试手搓的日志无 statuses 字段时保持原有「直接读最终状态」行为
+    const hasStatusSnapshots = newEntries.some((e) => e.statuses !== undefined);
 
     // 到期消失的状态：上一快照存活单位有、当前没有的状态 kind，动画播放期间先继续显示
     const endingStatuses: Record<string, string[]> = {};
@@ -334,16 +353,18 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     if (events.length === 0) {
       setAnimating(false);
       setHpMap(null);
+      setStatusMap(null);
       setRevealedKinds(allRevealed(newStatuses));
       setEndingStatuses({});
       setRevealedLogLen(battle.log.length);
       return;
     }
 
-    // 动画开始：先显示结算前的血量，随后按事件逐个推进到对应快照；
+    // 动画开始：先显示结算前的血量与状态，随后按事件逐个推进到对应快照；
     // 战斗记录同步逐条揭示——事件 i 播放时显示到对应日志（含其前的无事件日志，如系统提示）
     setAnimating(true);
     setHpMap(prevHp);
+    if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
     events.forEach((ev, i) => {
       const t = window.setTimeout(
@@ -408,6 +429,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
           }
           if (ev.hp) setHpMap(ev.hp);
+          if (ev.statuses) setStatusMap(ev.statuses);
 
           const clear = window.setTimeout(
             () => {
@@ -433,6 +455,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       () => {
         setAnimating(false);
         setHpMap(null);
+        setStatusMap(null);
         setRevealedKinds(allRevealed(newStatuses));
         setEndingStatuses({});
         setRevealedLogLen(battle.log.length);
@@ -444,5 +467,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
+  return { fx, pops, hpMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
 }

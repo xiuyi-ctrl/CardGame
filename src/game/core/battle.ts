@@ -1,4 +1,4 @@
-import type { BattleState, PassiveDef, SkillDef, Unit } from '../types';
+import type { BattleState, PassiveDef, SkillDef, StatusEffect, Unit } from '../types';
 import { getSkill } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
@@ -277,7 +277,10 @@ export function pushLog(
   // 附加当下全体血量快照，供 UI 按动画事件逐步展示血量；log 不截断（由 UI 只展示尾部）
   const hp: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) hp[u.uid] = u.hp;
-  return { ...b, log: [...b.log, { text: msg, side, hp, actorUid, targetUid, addsStatus }] };
+  // 附加当下全员状态快照（深拷贝，防 tickStatuses 原地递减污染历史），供 UI 按动画事件回放状态层数
+  const statuses: Record<string, StatusEffect[]> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) statuses[u.uid] = u.statuses.map((s) => ({ ...s }));
+  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, actorUid, targetUid, addsStatus }] };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
