@@ -599,19 +599,22 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
       }
       const finalAdds = addedKinds.length > 0 ? addedKinds : undefined;
+      let lastHitLog: number | undefined;
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         if (seg <= 0) continue;
+        // 目标已在前面某段被击杀（如一段清掉唯一敌人）：后续段不再命中、不产生攻击日志，
+        // 对应动画（前冲/受击/飘字）也随之不再播放
+        if (t2.hp <= 0) break;
         t2 = { ...t2, hp: Math.max(0, t2.hp - seg) };
         nb = replaceUnit(nb, t2);
-        nb = pushLog(
-          nb,
-          `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`,
-          sideOf(actor),
-          actor.uid,
-          t.uid,
-          i === segments.length - 1 ? finalAdds : undefined,
-        );
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, t.uid);
+        lastHitLog = nb.log.length - 1;
+      }
+      // 状态（毒/灼烧等）在全部攻击段结算后才生效：标记在最后一次实际命中的段上，
+      // 供动画在最后一段攻击动画播放时揭示（若目标中途阵亡提前结束，则标在最后一段命中日志）
+      if (finalAdds && lastHitLog !== undefined) {
+        nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: finalAdds } : l)) };
       }
       // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
       nb = replaceUnit(nb, t2);
