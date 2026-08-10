@@ -78,4 +78,47 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
       `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
     ]);
   });
+
+  it('尖刺反伤对多段每段都触发（连击 2 段反 2 次）', () => {
+    const a = makeUnit('fifi_king', true, 0, false);
+    const b0 = createBattle([a], [{ speciesId: 'pipi' }], 3); // 皮皮 尖刺反伤 1
+    const b1 = playerEndTurn(playerSkill(b0, a.uid, 'double_hit', b0.enemyUnits[0].uid));
+    const attackLogsArr = attackLogs(b1, a.uid, '连击');
+    const thornLogs = b1.log.filter((l) => l.text.includes('「尖刺」反伤'));
+    expect(attackLogsArr.length).toBe(2);
+    expect(thornLogs.length).toBe(2);
+    // 每次反伤日志时的血量快照：每段攻击后玩家被反 1（第一段后 -1、第二段后 -2）
+    expect(thornLogs[0].hp?.[a.uid]).toBe(a.maxHp - 1);
+    expect(thornLogs[1].hp?.[a.uid]).toBe(a.maxHp - 2);
+  });
+
+  it('潮汐吸噬吸血对多段每段都触发（连击 2 段吸 2 次）', () => {
+    const a = makeUnit('boss_crab', true, 0, false); // 潮汐吸噬 吸血 2
+    a.hp = 10;
+    const b0 = createBattle([a], [{ speciesId: 'lulu' }], 3);
+    const b1 = playerEndTurn(playerSkill(b0, a.uid, 'double_hit', b0.enemyUnits[0].uid));
+    // 攻击日志快照在吸血前：第一段日志玩家仍 10；第二段日志已含第一段吸血（12）
+    const attackLogsArr = attackLogs(b1, a.uid, '连击');
+    expect(attackLogsArr.length).toBe(2);
+    expect(attackLogsArr[0].hp?.[a.uid]).toBe(10);
+    expect(attackLogsArr[1].hp?.[a.uid]).toBe(12);
+    // 两段吸血全部完成后玩家为 14（10 + 2×2）：敌方反击日志快照（扣血后）= 14 - 本次反击伤害
+    const luluAtk = b1.log.find((l) => l.text.includes(`${b0.enemyUnits[0].name} 使用「`))!;
+    const luluDmg = Number(/造成 (\d+) 伤害/.exec(luluAtk.text)?.[1] ?? 0);
+    expect(luluAtk.hp?.[a.uid]).toBe(14 - luluDmg);
+  });
+
+  it('侵蚀「伤害加深」对多段每段生效（连击 2 段各 +1）', () => {
+    const p = makeUnit('lulu', true, 0, false);
+    p.spd = 1; // 让敌方先手
+    const raw = createBattle([p], [{ speciesId: 'boss_crab' }], 5, { corruptDebuff: 'dmg' });
+    const enemy = { ...raw.enemyUnits[0], skills: ['double_hit'] };
+    const b0 = { ...raw, enemyUnits: [enemy] };
+    const b1 = playerEndTurn(b0);
+    const logs = b1.log.filter((l) => l.text.includes('使用「连击」攻击'));
+    expect(logs.map((l) => l.text)).toEqual([
+      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 5 伤害`,
+      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 5 伤害`,
+    ]);
+  });
 });

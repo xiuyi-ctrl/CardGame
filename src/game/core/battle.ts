@@ -571,13 +571,13 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const t = actorFromId(nb, uid);
       if (!t || t.hp <= 0) continue;
       const base = Math.max(1, (skill.damage ?? 0) + getDamageBonus(actor));
-      // 减伤（守卫被动「受到的所有伤害 -N」）对每一段都生效：
-      // 每段基础伤害先扣减伤（每段最低 1）再乘以命中次数，多段打高防目标每段都被减免
-      const perHitDmg = Math.max(1, base - getDamageGuard(t));
-      let finalDmg = perHitDmg * count;
+      // 减伤（守卫被动「受到的所有伤害 -N」）与侵蚀「伤害加深」均对每一段生效：
+      // 每段基础伤害先扣减伤（每段最低 1），再叠加侵蚀 +1，乘以命中次数得总伤害
+      let perHitDmg = Math.max(1, base - getDamageGuard(t));
       if (t.isPlayer && nb.corruptDebuff === 'dmg') {
-        finalDmg += 1;
+        perHitDmg += 1;
       }
+      const finalDmg = perHitDmg * count;
       // 连击（hits>1）：总伤害拆成 count 段，逐段扣血并逐段写日志，
       // 动画表现为多段伤害飘字（如 8 拆成两段 4），总和与单条结算完全一致
       const segments = splitDamage(finalDmg, count);
@@ -612,6 +612,27 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         nb = replaceUnit(nb, t2);
         nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, t.uid);
         lastHitLog = nb.log.length - 1;
+        // 吸血：每次命中造成伤害后恢复自身（多段每段都触发）
+        if (ap?.kind === 'drain') {
+          const healedActor = actorFromId(nb, actor.uid);
+          if (healedActor && healedActor.hp > 0) {
+            const maxHp = getEffectiveMaxHp(healedActor);
+            const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
+            nb = replaceUnit(nb, healed);
+          }
+        }
+        // 尖刺：受击者每次命中都反伤攻击者（多段每段都触发）
+        if (t2.hp > 0) {
+          const tp = getUnitPassive(t2);
+          if (tp?.kind === 'thorns') {
+            const attacker = actorFromId(nb, actor.uid);
+            if (attacker && attacker.hp > 0) {
+              const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
+              nb = replaceUnit(nb, hurt);
+              nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
+            }
+          }
+        }
       }
       // 状态（毒/灼烧等）在全部攻击段结算后才生效：标记在最后一次实际命中的段上，
       // 供动画在最后一段攻击动画播放时揭示（若目标中途阵亡提前结束，则标在最后一段命中日志）
@@ -620,25 +641,6 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       }
       // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
       nb = replaceUnit(nb, t2);
-      // 吸血：造成伤害后恢复自身
-      if (ap?.kind === 'drain') {
-        const healedActor = actorFromId(nb, actor.uid);
-        if (healedActor && healedActor.hp > 0) {
-          const maxHp = getEffectiveMaxHp(healedActor);
-          const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
-          nb = replaceUnit(nb, healed);
-        }
-      }
-      // 尖刺：受击者反伤攻击者
-      const tp = getUnitPassive(t2);
-      if (tp?.kind === 'thorns' && t2.hp > 0) {
-        const attacker = actorFromId(nb, actor.uid);
-        if (attacker && attacker.hp > 0) {
-          const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
-          nb = replaceUnit(nb, hurt);
-          nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
-        }
-      }
     }
   }
   return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);
