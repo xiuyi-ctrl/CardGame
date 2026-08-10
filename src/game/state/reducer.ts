@@ -234,7 +234,10 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   if (corruptNode && node?.corruptReward === 'food') {
     rewards = applyCorruptFoodReward(rewards, state.seed * 11 + state.currentRow * 7);
   }
-  return { ...settled, roster: healed, rewards };
+  const result: GameState = { ...settled, roster: healed, rewards };
+  // 最后一幕（act 3）首领战胜利：直接进入通关界面，不再弹出战利品/队伍管理等中间界面
+  if (bossNode && state.act >= 3) return { ...result, screen: 'victory' };
+  return result;
 }
 
 /** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+40% 概率道具，其中净化药水固定 20% 概率单独判定）。结果文本进 chestResult */

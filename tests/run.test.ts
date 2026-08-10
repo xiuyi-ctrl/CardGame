@@ -361,6 +361,30 @@ describe('完整肉鸽流程', () => {
     s = dispatch(s, { type: 'NEXT_NODE' });
     expect(s.screen).toBe('victory');
   });
+
+  it('最后一幕首领战胜利直接进入通关界面，不再弹出战利品/队伍界面', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 13 });
+    s = { ...s, act: 3, currentRow: 4, currentNodeId: 'boss1' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_fire' }] } } };
+    const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'boss_fire' }], 13);
+    const aliveEnemy = battle.enemyUnits.find((u) => u.hp > 0)!;
+    aliveEnemy.hp = 0;
+    s = { ...s, screen: 'battle', battle: { ...battle, phase: 'won' as const } };
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+    expect(s.screen).toBe('victory');
+  });
+
+  it('前两幕首领战胜利仍走正常结算（战利品界面）', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 14 });
+    s = { ...s, act: 2, currentRow: 4, currentNodeId: 'boss1' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_dark' }] } } };
+    const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'boss_dark' }], 14);
+    const aliveEnemy = battle.enemyUnits.find((u) => u.hp > 0)!;
+    aliveEnemy.hp = 0;
+    s = { ...s, screen: 'battle', battle: { ...battle, phase: 'won' as const } };
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+    expect(s.screen).toBe('reward');
+  });
 });
 
 describe('队伍上限', () => {
