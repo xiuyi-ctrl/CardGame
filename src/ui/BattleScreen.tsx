@@ -73,8 +73,8 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0);
-  // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）
-  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating;
+  // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）；车轮战待换人时也禁止，等替补自动上场
+  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap;
 
   /** 动画期间按 hpMap 覆盖显示血量，血量随动画事件推进逐步生效；新增状态标签在对应攻击动画触发后才显示，到期状态标签在对应掉血动画触发时才移除 */
   const shownUnit = (u: Unit): Unit => {
@@ -114,6 +114,13 @@ export function BattleScreen({ state, dispatch }: Props) {
       cur && battle.playerUnits.some((u) => u.uid === cur && u.hp > 0 && !u.acted) ? cur : actable.uid,
     );
   }, [battle?.gauntlet, battle?.round, battle?.playerUnits]);
+
+  // 车轮战：替补单位死亡动画播完后自动换人（GAUNTLET_SWAP）
+  useEffect(() => {
+    if (!battle?.pendingSwap || battle.phase !== 'acting') return;
+    if (logPending || animating) return;
+    dispatch({ type: 'GAUNTLET_SWAP' });
+  }, [battle?.pendingSwap, battle?.phase, logPending, animating]);
 
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
   const selectedSkills: SkillDef[] = useMemo(

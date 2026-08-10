@@ -3,7 +3,7 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import { generateMap, type MapNode } from '../src/game/state/game';
-import { createBattle, isTameable, makeUnit, playerEndTurn, playerSkill, playerTame, skillUsesLeft } from '../src/game/core/battle';
+import { createBattle, isTameable, makeUnit, performGauntletSwap, playerEndTurn, playerSkill, playerTame, skillUsesLeft } from '../src/game/core/battle';
 import { getSkill } from '../src/game/data/skills';
 import type { BattleState } from '../src/game/types';
 
@@ -15,6 +15,11 @@ function autoPlay(b: BattleState, maxTurns = 400): BattleState {
   let nb = b;
   let guard = 0;
   while (nb.phase === 'acting' && guard < maxTurns) {
+    // 车轮战：场上一方全灭待换人 → 先换人（模拟 UI 在死亡动画播完后自动触发）
+    if (nb.pendingSwap?.player || nb.pendingSwap?.enemy) {
+      nb = performGauntletSwap(nb);
+      continue;
+    }
     // 每回合给所有可行动单位下达指令（残血自疗/最高伤害技能），随后结算
     const actable = [...nb.playerUnits].filter((u) => u.hp > 0 && !u.acted && !u.statuses.some((s) => s.kind === 'stun'));
     for (const cur of actable) {
@@ -212,6 +217,96 @@ describe('车轮战（轮换上阵）', () => {
     expect(swapped.playerBench?.length ?? 0).toBe(0);
     expect(swapped.playerDown?.some((u) => u.uid === p1.uid)).toBe(true);
     expect(swapped.gauntlet?.current).toBe(2);
+  });
+
+  it('阵亡后不立即换人：标记 pendingSwap，等 GAUNTLET_SWAP 才按序顶替（动画时序）', () => {
+    const p1 = makeUnit('momo_queen', true, 0, false);
+    const p2 = makeUnit('momo_god', true, 1, false);
+    const enemies = [
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
+    ];
+    const b = createBattle([p1, p2], enemies, 6, { gauntlet: true });
+    const killed: BattleState = {
+      ...b,
+      playerUnits: b.playerUnits.map((u) => ({ ...u, hp: 0 })),
+    };
+    // 结束回合结算：敌方行动完发现我方全灭 → 不立即换人，仅标记 pendingSwap（阵亡单位仍留在场上供动画展示）
+    const afterTurn = playerEndTurn(killed);
+    expect(afterTurn.phase).toBe('acting');
+    expect(afterTurn.pendingSwap?.player).toBe(true);
+    expect(afterTurn.playerUnits.some((u) => u.uid === p1.uid)).toBe(true);
+    // 死亡动画播完触发换人：阵亡单位退场、替补按序上场并开启新回合
+    const swapped = performGauntletSwap(afterTurn);
+    expect(swapped.pendingSwap).toBeUndefined();
+    expect(swapped.playerUnits.some((u) => u.uid === p1.uid)).toBe(false);
+    expect(swapped.playerUnits.some((u) => u.uid === p2.uid)).toBe(true);
+    expect(swapped.playerBench?.length ?? 0).toBe(0);
+    expect(swapped.playerDown?.some((u) => u.uid === p1.uid)).toBe(true);
+    expect(swapped.gauntlet?.current).toBe(1);
+    expect(swapped.round).toBe(b.round + 1);
+    expect(swapped.playerAp).toBe(1);
+  });
+
+  it('敌方全灭也标记 pendingSwap.enemy，换人后本回合继续（保留剩余 AP）', () => {
+    const b = createBattle([makeUnit('momo_queen', true, 0, false)], [
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
+    ], 6, { gauntlet: true });
+    // 手动构造敌方全灭 + 待换人标记（等价于 checkEnd 在战斗中的产出）
+    const marked: BattleState = {
+      ...b,
+      enemyUnits: b.enemyUnits.map((u) => ({ ...u, hp: 0 })),
+      playerAp: 2,
+      pendingSwap: { player: false, enemy: true },
+    };
+    const swapped = performGauntletSwap(marked);
+    expect(swapped.enemyUnits[0].speciesId).toBe('pipi');
+    expect(swapped.gauntlet?.current).toBe(2);
+    expect(swapped.pendingSwap).toBeUndefined();
+    // 仅敌方换人：回合继续、玩家剩余 AP 保留（不开启新回合）
+    expect(swapped.playerAp).toBe(2);
+    expect(swapped.round).toBe(b.round);
+  });
+
+  it('敌方替补切入后本回合不出手，下回合才行动（本回合玩家仍有剩余 AP）', () => {
+    const b = createBattle([makeUnit('momo_queen', true, 0, false)], [
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
+    ], 6, { gauntlet: true });
+    const marked: BattleState = {
+      ...b,
+      enemyUnits: b.enemyUnits.map((u) => ({ ...u, hp: 0 })),
+      playerAp: 1,
+      pendingSwap: { player: false, enemy: true },
+    };
+    const swapped = performGauntletSwap(marked);
+    expect(swapped.enemyUnits[0].speciesId).toBe('pipi');
+    expect(swapped.enemyUnits[0].acted).toBe(true); // 切入当回合不出手
+    // 玩家结束本回合：新敌人不行动（不产生攻击/技能日志），随后进入新回合
+    const afterEnd = playerEndTurn(swapped);
+    expect(afterEnd.round).toBe(swapped.round + 1);
+    expect(afterEnd.enemyUnits[0].acted).toBe(false); // 新回合重置，可正常行动
+    expect(afterEnd.log.slice(swapped.log.length).some((l) => l.text.includes('pipi 使用'))).toBe(false);
+  });
+
+  it('敌方替补切入（本回合 AP 已尽）也不会立即出手，等下回合才行动', () => {
+    const b = createBattle([makeUnit('momo_queen', true, 0, false)], [
+      { speciesId: 'kiki' },
+      { speciesId: 'pipi' },
+    ], 6, { gauntlet: true });
+    const marked: BattleState = {
+      ...b,
+      enemyUnits: b.enemyUnits.map((u) => ({ ...u, hp: 0 })),
+      playerAp: 0,
+      pendingSwap: { player: false, enemy: true },
+    };
+    // playerAp=0 → performGauntletSwap 自动结束本回合：新敌人本回合不行动，直接进入新回合
+    const swapped = performGauntletSwap(marked);
+    expect(swapped.enemyUnits[0].speciesId).toBe('pipi');
+    expect(swapped.enemyUnits[0].acted).toBe(false); // 已进入新回合（startRound 重置）
+    expect(swapped.round).toBe(b.round + 1);
+    expect(swapped.log.slice(b.log.length).some((l) => l.text.includes('pipi 使用'))).toBe(false);
   });
 
   it('失败不 Game Over：进入坏事件惩罚，全队保留', () => {

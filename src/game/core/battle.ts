@@ -290,40 +290,74 @@ function enemiesOf(b: BattleState, actor: Unit): Unit[] {
 }
 
 function checkEnd(b: BattleState): BattleState {
-  // 车轮战：场上敌方全灭但还有后备 → 下一只上场（上一只死亡单位不再显示）
-  if (b.gauntlet && b.enemyBench && b.enemyBench.length > 0 && b.enemyUnits.every((u) => u.hp <= 0)) {
+  // 车轮战：场上某侧全灭但还有后备 → 不立即换人，标记 pendingSwap 等待死亡动画播完，
+  // 由 UI/测试通过 GAUNTLET_SWAP（performGauntletSwap）按序顶替；无后备才真正结算胜负
+  const playersAlive = b.playerUnits.some((u) => u.hp > 0);
+  const enemiesAlive = b.enemyUnits.some((u) => u.hp > 0);
+  const playerHasBench = !!b.gauntlet && !!b.playerBench && b.playerBench.length > 0;
+  const enemyHasBench = !!b.gauntlet && !!b.enemyBench && b.enemyBench.length > 0;
+  if (!enemiesAlive && !playersAlive) {
+    // 同回合双方全灭：能换则都换（敌先我后），不能换的一侧直接判胜/负
+    if (!enemyHasBench) return { ...b, phase: 'won' };
+    if (!playerHasBench) return { ...b, phase: 'lost', turnOrder: b.turnOrder, turnIndex: 0 };
+    return { ...b, phase: 'acting', pendingSwap: { player: true, enemy: true } };
+  }
+  if (!enemiesAlive) {
+    if (enemyHasBench) {
+      return { ...b, phase: 'acting', pendingSwap: { player: !!b.pendingSwap?.player, enemy: true } };
+    }
+    return { ...b, phase: 'won' };
+  }
+  if (!playersAlive) {
+    if (playerHasBench) {
+      return { ...b, phase: 'acting', pendingSwap: { player: true, enemy: !!b.pendingSwap?.enemy } };
+    }
+    return { ...b, phase: 'lost', turnOrder: b.turnOrder, turnIndex: 0 };
+  }
+  return b;
+}
+
+/** 车轮战：场上一方全灭且仍有替补时，由 UI/测试在死亡动画播完后调用——换下阵亡单位、按序顶替替补并写日志。
+ *  仅敌方换人时本回合继续（保留玩家剩余行动点，AP 已尽则自动结束回合）；
+ *  我方换人说明上一回合结算已结束，直接开启新回合让替补获得行动点。 */
+export function performGauntletSwap(b: BattleState): BattleState {
+  let nb = b;
+  const g = b.gauntlet;
+  const wantsEnemy = !!b.pendingSwap?.enemy;
+  const wantsPlayer = !!b.pendingSwap?.player;
+  if (wantsEnemy && g && b.enemyBench && b.enemyBench.length > 0 && b.enemyUnits.every((u) => u.hp <= 0)) {
     const next = b.enemyBench[0];
-    const nextUnit = { ...next, acted: false, statuses: [], row: 'front' as const, column: 1 as const };
-    b = {
-      ...b,
+    // 刚切入场的敌方替补本回合不出手（acted=true，回合结算跳过、下回合 startRound 重置）
+    const nextUnit = { ...next, acted: true, statuses: [], row: 'front' as const, column: 1 as const };
+    nb = {
+      ...nb,
       enemyUnits: [nextUnit],
       enemyBench: b.enemyBench.slice(1),
-      gauntlet: { ...b.gauntlet, current: b.gauntlet.current + 1 },
+      gauntlet: { total: g.total, current: g.current + 1 },
     };
-    b = pushLog(b, `敌方派出下一只：${next.name}！`, 'enemy');
+    nb = pushLog(nb, `敌方派出下一只：${next.name}！`, 'enemy');
   }
-  // 车轮战：场上我方全灭但还有后备 → 当前单位战败退场（不再显示），下一只顶替上场
-  if (b.gauntlet && b.playerBench && b.playerBench.length > 0 && b.playerUnits.every((u) => u.hp <= 0)) {
+  if (wantsPlayer && g && b.playerBench && b.playerBench.length > 0 && b.playerUnits.every((u) => u.hp <= 0)) {
     const next = b.playerBench[0];
     const nextUnit = { ...next, acted: false, statuses: [], row: 'front' as const, column: 1 as const };
     const down = b.playerUnits.filter((u) => u.hp <= 0);
-    b = {
-      ...b,
+    nb = {
+      ...nb,
       playerUnits: [nextUnit],
       playerBench: b.playerBench.slice(1),
-      playerDown: [...(b.playerDown ?? []), ...down],
+      playerDown: [...(nb.playerDown ?? []), ...down],
     };
-    b = pushLog(b, `我方派出下一只：${next.name}！`, 'player');
+    nb = pushLog(nb, `我方派出下一只：${next.name}！`, 'player');
   }
-  const playersAlive = b.playerUnits.some((u) => u.hp > 0);
-  const enemiesAlive = b.enemyUnits.some((u) => u.hp > 0);
-  if (!playersAlive) {
-    return { ...b, phase: 'lost', turnOrder: b.turnOrder, turnIndex: 0 };
+  nb = { ...nb, pendingSwap: undefined };
+  nb = checkEnd(nb);
+  if (nb.phase !== 'acting') return nb;
+  if (wantsPlayer) {
+    nb = startRound(nb);
+    return checkEnd(nb);
   }
-  if (!enemiesAlive) {
-    return { ...b, phase: 'won' };
-  }
-  return b;
+  if (nb.playerAp <= 0) return playerEndTurn(nb);
+  return nb;
 }
 
 /** 从数组抽 1 个，推进 RNG 计数，返回抽到的元素与更新后的战斗状态 */
@@ -655,6 +689,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
 /** 结束指令阶段并统一结算：敌我所有存活单位按速度依次行动，随后进入新回合 */
 export function playerEndTurn(b: BattleState): BattleState {
   if (b.phase !== 'acting') return b;
+  // 车轮战：场上一方全灭待换人——先等替补动画播完（GAUNTLET_SWAP）再结算/开新回合，避免在空场上重复结算
+  if (b.pendingSwap?.player || b.pendingSwap?.enemy) return b;
   let nb: BattleState = { ...b, playerAp: 0 };
   // 回合结算：所有存活单位（敌我混排）按速度统一行动——
   // 我方执行已下达的指令，敌方由 AI 自动行动；未下指令的我方单位本回合不出手。
@@ -673,12 +709,17 @@ export function playerEndTurn(b: BattleState): BattleState {
         }
       }
     } else {
+      // 车轮战：上一只阵亡后刚切入场的敌方替补本回合不出手，等下回合（startRound 重置 acted）再行动；
+      // 眩晕单位仍走 enemyAct 正常打出「被眩晕」日志（startRound 也把它们标记为 acted）
+      if (unit.acted && !unit.statuses.some((s) => s.kind === 'stun')) continue;
       nb = enemyAct(nb, unit);
     }
     nb = checkEnd(nb);
   }
   nb = { ...nb, orders: {} };
   if (nb.phase !== 'acting') return nb;
+  // 车轮战：结算中一方全灭待换人 → 不开新回合，等死亡动画播完由 GAUNTLET_SWAP 换人
+  if (nb.pendingSwap?.player || nb.pendingSwap?.enemy) return nb;
   nb = startRound(nb);
   return checkEnd(nb);
 }
@@ -688,6 +729,8 @@ function afterPlayerAction(b: BattleState): BattleState {
   if (b.phase !== 'acting') return b;
   b = checkEnd(b);
   if (b.phase !== 'acting') return b;
+  // 车轮战：场上全灭待换人——停止操作，等死亡动画播完换人后再继续
+  if (b.pendingSwap?.player || b.pendingSwap?.enemy) return b;
   const canAct = b.playerAp > 0 && b.playerUnits.some((u) => u.hp > 0 && !u.acted);
   if (!canAct) return playerEndTurn(b);
   return b;

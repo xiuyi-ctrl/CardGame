@@ -1,6 +1,6 @@
 import type { GameState, MapNode, RewardChoice, RunMap } from './game';
 import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
-import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap } from '../core/battle';
+import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
@@ -59,6 +59,7 @@ export type GameAction =
   | { type: 'PLAYER_CANCEL_ORDER'; actorUid: string }
   | { type: 'PLAYER_SWAP'; actorUid: string; otherUid: string }
   | { type: 'END_TURN' }
+  | { type: 'GAUNTLET_SWAP' }
   | { type: 'FORMATION_CONFIRM'; units: Unit[] }
   | { type: 'GAUNTLET_ORDER_CONFIRM'; units: Unit[] }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
@@ -852,6 +853,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'END_TURN': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
       return { ...state, battle: playerEndTurn(state.battle) };
+    }
+
+    case 'GAUNTLET_SWAP': {
+      if (!state.battle?.pendingSwap) return state;
+      return { ...state, battle: performGauntletSwap(state.battle) };
     }
 
     case 'PLAYER_TAME': {

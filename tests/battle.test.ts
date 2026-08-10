@@ -18,6 +18,7 @@ import {
   tameChance,
   TAME_THRESHOLD,
   getDamageGuard,
+  performGauntletSwap,
 } from '../src/game/core/battle';
 import type { BattleState, StatusEffect } from '../src/game/types';
 import { MONSTERS } from '../src/game/data/monsters';
@@ -28,6 +29,11 @@ function autoPlay(b: BattleState, maxTurns = 300): BattleState {
   let nb = b;
   let guard = 0;
   while (nb.phase === 'acting' && guard < maxTurns) {
+    // 车轮战：场上一方全灭待换人 → 先换人（模拟 UI 在死亡动画播完后自动触发）
+    if (nb.pendingSwap?.player || nb.pendingSwap?.enemy) {
+      nb = performGauntletSwap(nb);
+      continue;
+    }
     for (const u of getActablePlayerUnits(nb)) {
       const target = nb.enemyUnits.filter((x) => x.hp > 0)[0];
       if (!target) break;

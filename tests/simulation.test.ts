@@ -15,6 +15,10 @@ function dispatch(s: GameState, a: GameAction): GameState {
 function botBattleStep(s: GameState): GameState {
   const b = s.battle!;
   if (b.phase === 'won' || b.phase === 'lost') return s;
+  // 车轮战：场上一方全灭待换人 → 先换人（模拟 UI 在死亡动画播完后自动触发）
+  if (b.pendingSwap?.player || b.pendingSwap?.enemy) {
+    return dispatch(s, { type: 'GAUNTLET_SWAP' });
+  }
   if (!playerHasMove(b)) {
     return dispatch(s, { type: 'END_TURN' });
   }
