@@ -67,8 +67,8 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if ((m = text.match(RE_ATTACK))) {
     return {
       kind: 'attack',
-      actorUid: findUid(b, side, m[1]),
-      targetUid: findUid(b, opposite, m[3]),
+      actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
       value: Number(m[4]),
       actorIsPlayer: side === 'player',
       hp: entry.hp,
@@ -77,27 +77,33 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if ((m = text.match(RE_HEAL))) {
     return {
       kind: 'heal',
-      actorUid: findUid(b, side, m[1]),
-      targetUid: findUid(b, side, m[3]),
+      actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, side, m[3]),
       value: Number(m[4]),
       hp: entry.hp,
     };
   }
   if ((m = text.match(RE_BUFF))) {
-    const uid = findUid(b, side, m[1]);
+    const uid = entry.actorUid ?? entry.targetUid ?? findUid(b, side, m[1]);
     return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: m[2], hp: entry.hp };
   }
   if ((m = text.match(RE_DOT))) {
     return {
       kind: 'dot',
-      targetUid: findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, side, m[1]),
       value: Number(m[3]),
       statusKind: m[2] === '灼烧' ? 'burn' : 'poison',
       hp: entry.hp,
     };
   }
   if ((m = text.match(RE_THORN))) {
-    return { kind: 'thorn', targetUid: findUid(b, opposite, m[3]), value: Number(m[4]), hp: entry.hp };
+    return {
+      kind: 'thorn',
+      actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
+      value: Number(m[4]),
+      hp: entry.hp,
+    };
   }
   return null;
 }
@@ -105,6 +111,14 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
 const STEP_MS = 800;
 const CLEAR_MS = 1300;
 let popSeq = 0;
+/** 动画序号：每次触发动画自增，作为 UnitCard 的 key 强制重挂载，保证连续命中（连击/随机多段）每次动画都重新播放 */
+let fxSeq = 0;
+
+/** 单个单位当前播放的动画：cls 为 CSS class，seq 供 UI 用 key 强制重启动画 */
+export interface FxAnim {
+  cls: string;
+  seq: number;
+}
 
 /**
  * 战斗动画：监听 battle.log 增量，把新日志按顺序播放为冲刺/受击/飘字，
@@ -117,7 +131,7 @@ let popSeq = 0;
  * animating（结算动画播放中）。
  */
 export function useBattleFx(battle: BattleState | null | undefined) {
-  const [fx, setFx] = useState<Record<string, string>>({});
+  const [fx, setFx] = useState<Record<string, FxAnim>>({});
   const [pops, setPops] = useState<PopItem[]>([]);
   const [hpMap, setHpMap] = useState<Record<string, number> | null>(null);
   const [hiddenStatuses, setHiddenStatuses] = useState<Record<string, string[]>>({});
@@ -270,25 +284,25 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             });
           }
           if (ev.kind === 'attack') {
-            if (actorUid) setFx((p) => ({ ...p, [actorUid]: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down' }));
+            if (actorUid) setFx((p) => ({ ...p, [actorUid]: { cls: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down', seq: ++fxSeq } }));
             if (targetUid) {
-              setFx((p) => ({ ...p, [targetUid]: 'fx-hit' }));
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: ++fxSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
             }
           } else if (ev.kind === 'heal') {
-            if (actorUid) setFx((p) => ({ ...p, [actorUid]: 'fx-cast' }));
+            if (actorUid) setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: ++fxSeq } }));
             if (targetUid) {
-              setFx((p) => ({ ...p, [targetUid]: 'fx-heal' }));
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-heal', seq: ++fxSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `+${ev.value}`, heal: true }]);
             }
           } else if (ev.kind === 'buff') {
-            if (actorUid) setFx((p) => ({ ...p, [actorUid]: 'fx-cast' }));
+            if (actorUid) setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: ++fxSeq } }));
             if (targetUid) {
-              setFx((p) => ({ ...p, [targetUid]: 'fx-buff' }));
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-buff', seq: ++fxSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: true }]);
             }
           } else if (targetUid) {
-            setFx((p) => ({ ...p, [targetUid]: 'fx-hit' }));
+            setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: ++fxSeq } }));
             setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
           }
           if (ev.hp) setHpMap(ev.hp);

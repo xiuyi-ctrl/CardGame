@@ -137,6 +137,10 @@ export interface LogEntry {
   side: 'player' | 'enemy' | 'info';
   /** 本条日志发生时全体单位的血量快照（uid → hp），供战斗动画按事件逐步更新血量显示 */
   hp?: Record<string, number>;
+  /** 本条日志涉及的行动者 uid（攻击/治疗/buff/反伤等），供动画精确定位（同名单位也能区分） */
+  actorUid?: string;
+  /** 本条日志涉及的目标 uid（受击/被治疗/被强化等），供动画精确定位（同名单位也能区分） */
+  targetUid?: string;
 }
 
 /** 玩家给某只宠物下达的指令（指令阶段记录，结束回合后按速度统一结算）。`skillId === 'rest'` 表示「休息」（本回合不行动，不消耗 AP，可再次点击取消） */

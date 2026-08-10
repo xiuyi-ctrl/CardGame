@@ -308,14 +308,14 @@ export function BattleScreen({ state, dispatch }: Props) {
     const isInspect = !pendingSkill && !pendingBattleItem && !pendingTame && !swapFrom;
     const inspected = inspectEnemy === u.uid;
     const showTameTip = pendingTame && isTameable(u);
-    const fxCls = fx[u.uid];
+    const fxInfo = fx[u.uid];
     return (
       <div
         key={key}
         className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${isInspect ? 'inspectable' : ''} ${inspected ? 'inspected' : ''}`}
         onClick={isTarget || isInspect ? () => onEnemyClick(u.uid) : undefined}
       >
-        <UnitCard unit={shownUnit(u)} small topStats className={`${fxCls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small topStats className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} />
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
         {popOverlay(u.uid)}
       </div>
@@ -327,14 +327,14 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
     const sel = selectedUid === u.uid;
     const clickable = validAllyTargets.has(u.uid) || u.hp > 0;
-    const fxCls = fx[u.uid];
+    const fxInfo = fx[u.uid];
     return (
       <div
         key={key}
         className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
       >
-        <UnitCard unit={shownUnit(u)} small showSkills={false} topStats className={`${fxCls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small showSkills={false} topStats className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} />
         {popOverlay(u.uid)}
       </div>
     );

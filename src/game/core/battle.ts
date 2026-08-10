@@ -212,7 +212,7 @@ function startRound(b: BattleState): BattleState {
       const maxHp = getEffectiveMaxHp(u);
       const healed = { ...u, hp: Math.min(maxHp, u.hp + p.value) };
       nb = replaceUnit(nb, healed);
-      nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${p.value} 点生命`, sideOf(u));
+      nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${p.value} 点生命`, sideOf(u), u.uid);
     }
   }
   nb = {
@@ -240,7 +240,7 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
       unit = { ...unit, hp: Math.max(0, unit.hp - dmg) };
       // 先写回再记录日志，让日志血量快照包含本次掉血，动画里飘字与血量条下降同步
       nb = replaceUnit(nb, unit);
-      nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit));
+      nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit), undefined, unit.uid);
     }
   }
   return { unit, battle: nb };
@@ -253,11 +253,17 @@ function tickStatuses(u: Unit): void {
   u.statuses = u.statuses.filter((s) => s.turns > 0);
 }
 
-export function pushLog(b: BattleState, msg: string, side: 'player' | 'enemy' | 'info' = 'info'): BattleState {
+export function pushLog(
+  b: BattleState,
+  msg: string,
+  side: 'player' | 'enemy' | 'info' = 'info',
+  actorUid?: string,
+  targetUid?: string,
+): BattleState {
   // 附加当下全体血量快照，供 UI 按动画事件逐步展示血量；log 不截断（由 UI 只展示尾部）
   const hp: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) hp[u.uid] = u.hp;
-  return { ...b, log: [...b.log, { text: msg, side, hp }] };
+  return { ...b, log: [...b.log, { text: msg, side, hp, actorUid, targetUid }] };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
@@ -544,7 +550,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const maxHp = getEffectiveMaxHp(t);
       const healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
       r = replaceUnit(r, healed);
-      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`, sideOf(actor));
+      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`, sideOf(actor), actor.uid, t.uid);
     }
     nb = r;
   } else if (skill.kind === 'buff') {
@@ -553,7 +559,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (!e) continue;
       const buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns });
       nb = replaceUnit(nb, buffed);
-      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor));
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor), actor.uid, t.uid);
     }
   } else {
     const perTarget = new Map<string, number>();
@@ -577,7 +583,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         if (seg <= 0) continue;
         t2 = { ...t2, hp: Math.max(0, t2.hp - seg) };
         nb = replaceUnit(nb, t2);
-        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor));
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, t.uid);
       }
       const ap = getUnitPassive(actor);
       if (ap?.kind === 'venom') t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
@@ -605,7 +611,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         if (attacker && attacker.hp > 0) {
           const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
           nb = replaceUnit(nb, hurt);
-          nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2));
+          nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
         }
       }
     }
