@@ -613,7 +613,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         </div>
       )}
 
-      {battle.phase === 'lost' && (
+      {battle.phase === 'lost' && !animating && (
         <div className="overlay">
           <div className="overlay-box">
             <div style={{ fontSize: 48 }}>{isChallenge ? '⚠️' : '💀'}</div>
