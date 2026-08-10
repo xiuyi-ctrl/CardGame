@@ -345,7 +345,7 @@ describe('连击（多段命中）', () => {
     expect(hpBefore - e2.hp).toBe(8); // 4×2
   });
 
-  it('连击受守卫减免前先按次数累计伤害', () => {
+  it('连击守卫减伤对每段生效', () => {
     const p = makeUnit('momo', true, 0, false);
     p.skills = ['double_hit'];
     const b = createBattle([p], [{ speciesId: 'kiki' }], 2); // 基基 铁壁 -1
@@ -353,7 +353,7 @@ describe('连击（多段命中）', () => {
     const hpBefore = enemy.hp;
     const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
     const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
-    expect(hpBefore - e2.hp).toBe(7); // 4×2 - 1
+    expect(hpBefore - e2.hp).toBe(6); // (4-1)×2，每段都扣减伤
   });
 
   it('连击动画：总伤害拆成多段日志，逐段扣血（8 → 两段 4）', () => {
@@ -376,7 +376,7 @@ describe('连击（多段命中）', () => {
     expect(attackLogs[1].hp?.[enemy.uid]).toBe(hpBefore - 8);
   });
 
-  it('连击受守卫减伤时仍拆段，各段求和等于总伤害', () => {
+  it('连击受守卫减伤时仍拆段，每段均扣减伤', () => {
     const p = makeUnit('momo', true, 0, false);
     p.skills = ['double_hit'];
     const b = createBattle([p], [{ speciesId: 'kiki' }], 6); // 铁壁 -1
@@ -384,8 +384,10 @@ describe('连击（多段命中）', () => {
     const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
     const attackLogs = after.log.filter((l) => l.text.includes('使用「连击」攻击'));
     expect(attackLogs.length).toBe(2);
-    const sum = attackLogs.reduce((s, l) => s + Number(/(\d+) 伤害$/.exec(l.text)?.[1] ?? 0), 0);
-    expect(sum).toBe(7);
+    expect(attackLogs.map((l) => l.text)).toEqual([
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 3 伤害`,
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 3 伤害`,
+    ]);
   });
 
   it('普通单体技能 hits 缺省时仍只造成单次伤害', () => {

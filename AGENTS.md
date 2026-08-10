@@ -41,7 +41,7 @@
 
 ## 核心设计约定
 
-- 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`），无随机浮动。`getEffectiveSpd` 含药水 ±1。
+- 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`），无随机浮动；**受击减伤被动（guard）对多段技能的每一段都生效**（每段最低 1）。`getEffectiveSpd` 含药水 ±1。
 - 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+3 / 速度+1。
 - 战斗日志为结构化 `LogEntry[]`（`{ text, side, hp, actorUid?, targetUid?, addsStatus? }`）：`pushLog(b, msg, side, actorUid?, targetUid?, addsStatus?)` 带阵营，技能/状态/道具按行动者或受击者阵营，系统消息用 info；`hp` 为该条日志时全体血量快照，`addsStatus` 标记本次攻击附加的状态 kind（灼烧/中毒/减防/眩晕，仅标在攻击日志最后一段，无附加则为 undefined）。UI 左侧日志面板按 side 分色。
 - 战斗动画（`src/ui/battleFx.ts`）按日志事件排队播放；新增状态标签在**附加它的那次行动动画**播放时才揭示（攻击类状态按 `addsStatus` 精确归属，同一目标多只宠物附加不同状态时按攻击顺序依次显示；连击多段标在最后一段、在最后一段动画揭示；**连击若一段即清掉目标（敌方全灭）则后续段不再命中、不产生攻击日志，对应动画不播放**；**buff 状态（如战吼 atkUp）归入该单位施放 buff 技能的施法动画**，即便该单位本回合先受 dot 掉血也不提前），到期状态在其最后一次掉血动画时移除。胜负结算弹窗在动画全部播放完后再显示——我方全灭时先播完死亡动画才弹失败界面（`BattleScreen` 的 `won`/`lost` 弹窗均带 `!animating` 条件）。

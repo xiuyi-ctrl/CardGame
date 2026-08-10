@@ -65,4 +65,17 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     // 两段命中后的血量快照：11 - 4 - 4 = 3（后续敌方行动/灼烧/regen 结算不改连击日志本身）
     expect(logs[1].hp?.[b1.enemyUnits[0].uid]).toBe(3);
   });
+
+  it('高减伤（磐岩护甲 -3）：多段每段都扣减伤，每段保底 1', () => {
+    const a = makeUnit('fifi_king', true, 0, false);
+    const raw = createBattle([a], [{ speciesId: 'boss_golem' }], 9);
+    const enemy = raw.enemyUnits[0];
+    const b1 = playerEndTurn(playerSkill(raw, a.uid, 'double_hit', enemy.uid));
+    const logs = attackLogs(b1, a.uid, '连击');
+    expect(logs.length).toBe(2);
+    expect(logs.map((l) => l.text)).toEqual([
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
+    ]);
+  });
 });

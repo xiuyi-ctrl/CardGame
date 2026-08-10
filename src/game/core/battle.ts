@@ -571,8 +571,10 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const t = actorFromId(nb, uid);
       if (!t || t.hp <= 0) continue;
       const base = Math.max(1, (skill.damage ?? 0) + getDamageBonus(actor));
-      const total = base * count;
-      let finalDmg = Math.max(1, total - getDamageGuard(t));
+      // 减伤（守卫被动「受到的所有伤害 -N」）对每一段都生效：
+      // 每段基础伤害先扣减伤（每段最低 1）再乘以命中次数，多段打高防目标每段都被减免
+      const perHitDmg = Math.max(1, base - getDamageGuard(t));
+      let finalDmg = perHitDmg * count;
       if (t.isPlayer && nb.corruptDebuff === 'dmg') {
         finalDmg += 1;
       }
