@@ -26,9 +26,9 @@ function effectText(e: StatusEffect): string {
   const turns = e.turns > 0 ? `，持续 ${e.turns} 回合` : '';
   switch (e.kind) {
     case 'burn':
-      return `灼烧 ${e.value}/回合${turns}`;
+      return `灼烧 ${e.value} 层`;
     case 'poison':
-      return `中毒 ${e.value}/回合${turns}`;
+      return `中毒 ${e.value} 层`;
     case 'atkUp':
       return `伤害 +${e.value}${turns}`;
     case 'atkDown':
@@ -127,8 +127,12 @@ export function StatusIcons({ unit }: { unit: Unit }) {
       {unit.statuses.map((s, i) => {
         const meta = STATUS_ICON[s.kind];
         if (!meta) return null;
+        const tip =
+          s.kind === 'burn' || s.kind === 'poison'
+            ? `${meta.label}（${s.value} 层，每回合结算一半）`
+            : `${meta.label}（剩余 ${s.turns} 回合）`;
         return (
-          <span key={i} title={`${meta.label}（剩余 ${s.turns} 回合）`}>
+          <span key={i} title={tip}>
             {meta.icon}
           </span>
         );

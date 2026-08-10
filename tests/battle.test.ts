@@ -200,14 +200,14 @@ describe('驯服', () => {
       playerUnits: b.playerUnits.map((u) => ({ ...u, acted: true })),
       enemyUnits: b.enemyUnits.map((u) => ({
         ...u,
-        hp: 2,
+        hp: 1,
         acted: true,
         statuses: [{ kind: 'burn', value: 2, turns: 2 }],
       })),
       turnOrder: [b.playerUnits[0].uid],
       turnIndex: 0,
     };
-    // 所有单位已行动，结束回合推进：startRound 结算灼烧 → 敌人阵亡 → 应立即 won
+    // 所有单位已行动，结束回合推进：startRound 结算灼烧（2 层 → 1 伤）→ 敌人阵亡 → 应立即 won
     const after = playerEndTurn(b);
     expect(after.phase).toBe('won');
     expect(after.enemyUnits.every((u) => u.hp <= 0)).toBe(true);
@@ -257,8 +257,47 @@ describe('驯服', () => {
     const after = playerEndTurn(b);
     const dotLog = after.log.find((l) => l.text.includes(`${e.name} 受到灼烧`));
     expect(dotLog).toBeDefined();
-    expect(dotLog!.hp![e.uid]).toBe(before - 2);
-    expect(after.enemyUnits[0].hp).toBe(before - 2);
+    // 2 层灼烧每回合结算 ceil(2/2)=1 层 → 掉 1 血
+    expect(dotLog!.hp![e.uid]).toBe(before - 1);
+    expect(after.enemyUnits[0].hp).toBe(before - 1);
+  });
+
+  it('灼烧/中毒可叠加层数：同一目标再次附加则层数相加', () => {
+    const a = makeUnit('fifi_god', true, 0, false); // 有火花技能，无灼烧被动（技能附加 2 层）；龙力被动伤害 +2
+    const raw = createBattle([a], [{ speciesId: 'pipi' }], 1);
+    const b: BattleState = {
+      ...raw,
+      enemyUnits: raw.enemyUnits.map((u) => ({
+        ...u,
+        hp: 100,
+        acted: true,
+        statuses: [{ kind: 'burn', value: 2, turns: 2 }],
+      })),
+    };
+    // 已带 2 层灼烧的目标再被火花命中（+2 层 = 4 层）：火花 6+2 伤、灼烧 4 层结算一半 2 伤
+    const after = playerEndTurn(playerSkill(b, a.uid, 'ember', b.enemyUnits[0].uid));
+    const burn = after.enemyUnits[0].statuses.find((s) => s.kind === 'burn');
+    expect(burn).toBeDefined();
+    // 4 层每回合结算一半 → 剩 2 层（若按旧「取 max」则只会剩 1 层）
+    expect(burn!.value).toBe(2);
+    expect(after.enemyUnits[0].hp).toBe(100 - 8 - 2);
+  });
+
+  it('灼烧按层数结算：每回合掉一半（向上进位）直至清空', () => {
+    let b = createBattle([makeUnit('momo_god', true, 0, false)], [{ speciesId: 'pipi' }], 1);
+    b = {
+      ...b,
+      playerUnits: b.playerUnits.map((u) => ({ ...u, acted: true })),
+      enemyUnits: b.enemyUnits.map((u) => ({ ...u, acted: true, hp: 100, statuses: [{ kind: 'burn', value: 3, turns: 2 }] })),
+    };
+    const after1 = playerEndTurn(b);
+    // 第一回合：ceil(3/2)=2 → 掉 2 血、剩 1 层
+    expect(after1.enemyUnits[0].hp).toBe(98);
+    expect(after1.enemyUnits[0].statuses.find((s) => s.kind === 'burn')?.value).toBe(1);
+    // 第二回合：ceil(1/2)=1 → 掉 1 血、清空
+    const after2 = playerEndTurn(after1);
+    expect(after2.enemyUnits[0].hp).toBe(97);
+    expect(after2.enemyUnits[0].statuses.some((s) => s.kind === 'burn')).toBe(false);
   });
 });
 

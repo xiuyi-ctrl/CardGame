@@ -239,24 +239,31 @@ function replaceUnit(b: BattleState, unit: Unit): BattleState {
 function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } {
   let nb = b;
   let unit = u;
+  // 灼烧/中毒按层数结算：每回合掉 ceil(层数/2) 层（向上进位），扣血并消耗等量层数，归 0 移除
   for (const s of u.statuses) {
     if (unit.hp <= 0) break;
-    if (s.kind === 'burn' || s.kind === 'poison') {
-      const dmg = Math.max(1, s.value);
-      unit = { ...unit, hp: Math.max(0, unit.hp - dmg) };
-      // 先写回再记录日志，让日志血量快照包含本次掉血，动画里飘字与血量条下降同步
-      nb = replaceUnit(nb, unit);
-      nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit), undefined, unit.uid);
-    }
+    if (s.kind !== 'burn' && s.kind !== 'poison') continue;
+    const dmg = Math.ceil(s.value / 2);
+    const left = s.value - dmg;
+    unit = {
+      ...unit,
+      hp: Math.max(0, unit.hp - dmg),
+      statuses: left > 0 ? unit.statuses.map((x) => (x === s ? { ...x, value: left } : x)) : unit.statuses.filter((x) => x !== s),
+    };
+    // 先写回再记录日志，让日志血量快照包含本次掉血，动画里飘字与血量条下降同步
+    nb = replaceUnit(nb, unit);
+    nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit), undefined, unit.uid);
   }
   return { unit, battle: nb };
 }
 
 function tickStatuses(u: Unit): void {
   for (const s of u.statuses) {
+    // 灼烧/中毒由层数结算管理生命周期，不按回合数递减
+    if (s.kind === 'burn' || s.kind === 'poison') continue;
     s.turns -= 1;
   }
-  u.statuses = u.statuses.filter((s) => s.turns > 0);
+  u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.turns > 0);
 }
 
 export function pushLog(
@@ -490,7 +497,12 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
   const idx = unit.statuses.findIndex((s) => s.kind === effect.kind);
   if (idx >= 0) {
     const next = [...unit.statuses];
-    next[idx] = { ...next[idx], value: Math.max(next[idx].value, effect.value), turns: Math.max(next[idx].turns, effect.turns) };
+    if (effect.kind === 'burn' || effect.kind === 'poison') {
+      // 灼烧/中毒可叠加：层数相加（可挂多层）
+      next[idx] = { ...next[idx], value: next[idx].value + effect.value };
+    } else {
+      next[idx] = { ...next[idx], value: Math.max(next[idx].value, effect.value), turns: Math.max(next[idx].turns, effect.turns) };
+    }
     return { ...unit, statuses: next };
   }
   return { ...unit, statuses: [...unit.statuses, { ...effect }] };

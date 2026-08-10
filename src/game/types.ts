@@ -1,7 +1,8 @@
 export interface StatusEffect {
   kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick';
-  /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为固定持续伤害值 */
+  /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
+  /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
   turns: number;
 }
 
