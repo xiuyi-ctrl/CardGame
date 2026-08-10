@@ -752,7 +752,7 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   if (actor.acted && curOrder && curOrder.skillId !== REST_SKILL_ID) {
     return { ...b, orders: { ...b.orders, [actorUid]: { skillId, targetUid } } };
   }
-  // 本回合已被即时行动（换位/道具）占用：不能再下指令（休息改技能除外，见上）
+  // 本回合已被即时行动（换位）占用：不能再下指令（休息改技能除外，见上）
   if (actor.acted && !curOrder) return b;
   if (b.playerAp <= 0) return b;
   return {
@@ -781,7 +781,7 @@ export function playerRest(b: BattleState, actorUid: string): BattleState {
       orders: restOrders,
     };
   }
-  // 本回合已被即时行动（换位/道具）占用：不能再休息
+  // 本回合已被即时行动（换位）占用：不能再休息
   if (actor.acted) return b;
   return {
     ...b,
@@ -911,9 +911,9 @@ const BUFF_MAP: Record<string, BuffKey> = {
 
 const BUFF_DURATION = 3; // 持续 3 回合
 
-/** 使用战斗药水：给指定单位加buff/debuff（消耗 1 AP） */
+/** 使用战斗药水：给指定单位加buff/debuff。不消耗行动点、不占用宠物行动（本回合宠物仍可出手） */
 export function useBattleItem(b: BattleState, itemId: string, targetUid: string): BattleState {
-  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
+  if (b.phase !== 'acting') return b;
   const key = BUFF_MAP[itemId];
   if (!key) return b;
 
@@ -987,8 +987,7 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
     );
   });
   if (nb.rngCount === b.rngCount) return b;
-  const after = { ...nb, playerAp: nb.playerAp - 1 };
-  return afterPlayerAction(after);
+  return afterPlayerAction(nb);
 }
 
 /** 回合开始时递减所有单位的战斗药水效果回合数 */

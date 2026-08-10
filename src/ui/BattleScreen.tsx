@@ -472,7 +472,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     onClick={() => onBattleItemClick(it.id)}
                     className={isPending ? 'primary' : ''}
                     disabled={!canAct}
-                    title={`${it.desc}（拥有 ${count} 个）`}
+                    title={`${it.desc}（拥有 ${count} 个，使用不消耗行动点）`}
                   >
                     {it.emoji} {it.name}×{count}
                   </button>

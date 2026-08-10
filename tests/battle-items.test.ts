@@ -5,6 +5,8 @@ import {
   getDamageBonus,
   getEffectiveSpd,
   makeUnit,
+  playerEndTurn,
+  playerSkill,
   useBattleItem,
 } from '../src/game/core/battle';
 import { gameReducer, type GameAction } from '../src/game/state/reducer';
@@ -55,6 +57,29 @@ describe('战斗药水：增益', () => {
     const after = useBattleItem(b, 'atk_up', enemy.uid);
     expect(after.rngCount).toBe(rc0);
     expect(after.enemyUnits[0].battleBuffs).toBeUndefined();
+  });
+
+  it('使用药水不消耗行动点、不占用行动：单宠使用后本回合仍可出手', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 12345);
+    const target = b.playerUnits[0];
+    const after = useBattleItem(b, 'atk_up', target.uid);
+    expect(after.playerAp).toBe(1); // 不消耗 AP
+    expect(after.playerUnits[0].acted).toBe(false); // 不占用行动
+    // 仍可下达技能并结束回合：宠物正常出手造成伤害
+    const enemyHp = after.enemyUnits[0].hp;
+    const ended = playerEndTurn(playerSkill(after, target.uid, target.skills[0], after.enemyUnits[0].uid));
+    expect(ended.enemyUnits[0].hp).toBeLessThan(enemyHp);
+  });
+
+  it('行动点耗尽（宠物已行动）后仍可使用药水补buff', () => {
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 12345);
+    const target = b.playerUnits[0];
+    const exhausted = { ...b, playerAp: 0, playerUnits: [{ ...target, acted: true }] };
+    const rc0 = exhausted.rngCount;
+    const after = useBattleItem(exhausted, 'spd_up', target.uid);
+    expect(after.rngCount).toBeGreaterThan(rc0); // 生效（未被 AP=0 拒绝）
+    // 药水生效为 3 回合；随后 AP=0 自动结束本回合进入新回合，回合初 buff 递减 1 → 2
+    expect(after.playerUnits[0].battleBuffs?.spdUp).toBe(2);
   });
 });
 
