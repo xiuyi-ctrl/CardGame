@@ -34,15 +34,17 @@ export interface RevealEntry {
   kinds: string[];
 }
 
-/** 计算每个新增状态的揭示时机：绑定到「附加它的那次攻击动画」，而非目标被攻击的首个事件。
+/** 计算每个新增状态的揭示时机：绑定到「附加它的那次行动动画」，而非目标被攻击的首个事件。
  *  攻击类状态（灼烧/中毒/减防/眩晕）标记在对应攻击日志上（addsStatus），按其攻击顺序依次揭示——
  *  每只宠物攻击动画播放时立即显示它附加的状态；连击多段时标记在最后一段（状态在全部段后才生效）。
  *  仅匹配攻击事件——同一轮结算里攻击日志后紧跟的 dot（灼烧/中毒掉血）日志 targetUid 相同，若也参与匹配，
  *  灼烧会被推迟到 dot 动画才显示，而非「我方攻击、敌人扣血动画」同时出现。
- *  匹配不到归属（如状态由治疗/强化产生）时，归入该单位作为目标的第一个事件（随施法/治疗动画揭示）；
+ *  buff 类状态（战吼附加的 atkUp 等）由该单位施放 buff 技能产生，随该单位施法动画揭示——
+ *  精确匹配 kind==='buff' 且 actorUid===该单位，避免被更早的 dot 掉血/其他「目标事件」提前。
+ *  仍匹配不到归属（如治疗/药水产生）时，归入该单位作为目标的第一个事件（随施法/治疗动画揭示）；
  *  目标从未出现在事件中才兜底第一个事件，保证不迟于动画开始显示 */
 export function computeRevealAt(
-  events: readonly { targetUid?: string; kind?: string; addsStatus?: string[] }[],
+  events: readonly { targetUid?: string; kind?: string; addsStatus?: string[]; actorUid?: string }[],
   newStatuses: Record<string, string[]>,
 ): Record<number, RevealEntry[]> {
   const revealAt: Record<number, RevealEntry[]> = {};
@@ -65,7 +67,16 @@ export function computeRevealAt(
         assigned[k] = true;
       }
     }
-    // 2) 未归属的状态：归入该单位作为目标的第一个事件（buff 施法/治疗等），保证随对应动画出现
+    // 2) buff 施法归属：buff 状态（如战吼附加的 atkUp）随该单位施放 buff 技能的施法动画揭示
+    for (let k = 0; k < kinds.length; k++) {
+      if (assigned[k]) continue;
+      const i = events.findIndex((ev) => ev.kind === 'buff' && ev.actorUid === uid);
+      if (i >= 0) {
+        add(i, uid, [kinds[k]]);
+        assigned[k] = true;
+      }
+    }
+    // 3) 兜底：未归属状态归入该单位作为目标的第一个事件（buff 施法/治疗等），保证随对应动画出现
     const rest = kinds.filter((_, k) => !assigned[k]);
     if (rest.length > 0) {
       const j = events.findIndex((ev) => ev.targetUid === uid);

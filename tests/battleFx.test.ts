@@ -64,6 +64,28 @@ describe('computeRevealAt：新增状态按附加它的攻击动画揭示', () =
     expect(kindsAt(revealAt, 1, 'enemy-1')).toEqual(['atkUp']);
   });
 
+  it('buff 状态精确归入该单位的施法事件：即使该单位先受 dot 掉血，也不被提前到 dot 动画', () => {
+    const events = [
+      { targetUid: 'enemy-1', kind: 'dot', statusKind: 'burn' },
+      { targetUid: 'enemy-1', kind: 'buff', actorUid: 'enemy-1' },
+    ];
+    const revealAt = computeRevealAt(events, { 'enemy-1': ['atkUp'] });
+    expect(revealAt[0]).toBeUndefined();
+    expect(kindsAt(revealAt, 1, 'enemy-1')).toEqual(['atkUp']);
+  });
+
+  it('buff 状态优先匹配施法事件而非更早的受击事件（如铁刺减防反向反伤）', () => {
+    const events = [
+      { targetUid: 'enemy-1', kind: 'thorn' },
+      { targetUid: 'enemy-2', kind: 'attack' },
+      { targetUid: 'enemy-1', kind: 'buff', actorUid: 'enemy-1' },
+    ];
+    const revealAt = computeRevealAt(events, { 'enemy-1': ['atkUp'] });
+    expect(revealAt[0]).toBeUndefined();
+    expect(revealAt[1]).toBeUndefined();
+    expect(kindsAt(revealAt, 2, 'enemy-1')).toEqual(['atkUp']);
+  });
+
   it('目标从未出现在任何事件时兜底归入第一个事件，保证不迟于动画开始显示', () => {
     const events = [{ targetUid: 'enemy-1', kind: 'dot', statusKind: 'burn' }];
     const revealAt = computeRevealAt(events, { 'enemy-1': ['atkDown'] });

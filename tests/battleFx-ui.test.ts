@@ -279,4 +279,134 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     expect(result.current.hiddenStatuses).toEqual({});
     vi.useRealTimers();
   });
+
+  it('敌人战吼强化自身：atkUp 状态在敌人施法动画播放时揭示', () => {
+    vi.useFakeTimers();
+    const a = makeUnit(SPECIES[0], true, 1, false);
+    const k = makeUnit(SPECIES[1], false, 1, false);
+    const atkUp: StatusEffect = { kind: 'atkUp', value: 2, turns: 2 };
+
+    const battle0 = makeBattle([], [], a, k);
+    const battle1 = makeBattle(
+      [
+        {
+          text: `${k.name} 使用「战吼」，强化自身`,
+          side: 'enemy',
+          hp: { [a.uid]: a.hp, [k.uid]: k.hp },
+          actorUid: k.uid,
+          targetUid: k.uid,
+        },
+      ],
+      [atkUp],
+      a,
+      k,
+    );
+
+    const { result, rerender } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
+      initialProps: { b: battle0 },
+    });
+    expect(result.current.hiddenStatuses).toEqual({});
+
+    act(() => rerender({ b: battle1 }));
+    expect(result.current.hiddenStatuses).toEqual({ [k.uid]: ['atkUp'] });
+
+    // 敌人施法动画（0ms）触发：atkUp 揭示，与施法动画同步
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current.hiddenStatuses).toEqual({});
+    vi.useRealTimers();
+  });
+
+  it('敌人战吼后该回合仍攻击：atkUp 在战吼施法动画时揭示，不会等到攻击动画', () => {
+    vi.useFakeTimers();
+    const a = makeUnit(SPECIES[0], true, 1, false);
+    const k = makeUnit(SPECIES[1], false, 1, false);
+    const atkUp: StatusEffect = { kind: 'atkUp', value: 2, turns: 2 };
+
+    const battle0 = makeBattle([], [], a, k);
+    const battle1 = makeBattle(
+      [
+        {
+          text: `${k.name} 使用「战吼」，强化自身`,
+          side: 'enemy',
+          hp: { [a.uid]: a.hp, [k.uid]: k.hp },
+          actorUid: k.uid,
+          targetUid: k.uid,
+        },
+        {
+          text: `${k.name} 使用「爪击」攻击 ${a.name}，造成 5 伤害`,
+          side: 'enemy',
+          hp: { [a.uid]: a.hp - 5, [k.uid]: k.hp },
+          actorUid: k.uid,
+          targetUid: a.uid,
+        },
+      ],
+      [atkUp],
+      a,
+      k,
+    );
+
+    const { result, rerender } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
+      initialProps: { b: battle0 },
+    });
+
+    act(() => rerender({ b: battle1 }));
+    expect(result.current.hiddenStatuses).toEqual({ [k.uid]: ['atkUp'] });
+
+    // 事件0（0ms）：战吼施法动画 → 揭示 atkUp
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current.hiddenStatuses).toEqual({});
+
+    // 事件1（800ms）：攻击动画播放后仍保持显示
+    act(() => vi.advanceTimersByTime(800));
+    expect(result.current.hiddenStatuses).toEqual({});
+    vi.useRealTimers();
+  });
+
+  it('敌人带灼烧先掉血再战吼：atkUp 在战吼施法动画时揭示，不被更早的 dot 掉血动画提前', () => {
+    vi.useFakeTimers();
+    const a = makeUnit(SPECIES[0], true, 1, false);
+    const k = makeUnit(SPECIES[1], false, 1, false);
+    const burn: StatusEffect = { kind: 'burn', value: 2, turns: 2 };
+    const atkUp: StatusEffect = { kind: 'atkUp', value: 2, turns: 2 };
+
+    // battle0：敌人已带灼烧（上一回合附加，非本次新增）
+    const battle0 = makeBattle([], [burn], a, k);
+    const battle1 = makeBattle(
+      [
+        {
+          text: `${k.name} 受到灼烧 2 点伤害`,
+          side: 'enemy',
+          hp: { [a.uid]: a.hp, [k.uid]: k.hp - 2 },
+          targetUid: k.uid,
+        },
+        {
+          text: `${k.name} 使用「战吼」，强化自身`,
+          side: 'enemy',
+          hp: { [a.uid]: a.hp, [k.uid]: k.hp - 2 },
+          actorUid: k.uid,
+          targetUid: k.uid,
+        },
+      ],
+      [burn, atkUp],
+      a,
+      k,
+    );
+
+    const { result, rerender } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
+      initialProps: { b: battle0 },
+    });
+    expect(result.current.hiddenStatuses).toEqual({});
+
+    act(() => rerender({ b: battle1 }));
+    expect(result.current.hiddenStatuses).toEqual({ [k.uid]: ['atkUp'] });
+
+    // 事件0（0ms）：dot 掉血动画 → atkUp 仍隐藏（不归入 dot 事件）
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current.hiddenStatuses).toEqual({ [k.uid]: ['atkUp'] });
+
+    // 事件1（800ms）：战吼施法动画 → 揭示 atkUp
+    act(() => vi.advanceTimersByTime(800));
+    expect(result.current.hiddenStatuses).toEqual({});
+    vi.useRealTimers();
+  });
 });
