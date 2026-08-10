@@ -198,7 +198,7 @@ export interface FxAnim {
  * 与飘字、血量条下降同步。
  * 返回 fx（uid → 动画 class）、pops（飘字）、hpMap（当前应显示的血量）、
  * hiddenStatuses（uid → 尚未揭示的新增状态）、endingStatuses（uid → 尚未移除的到期状态）、
- * animating（结算动画播放中）。
+ * animating（结算动画播放中）、logPending（日志中还有未播放的动画事件）。
  */
 export function useBattleFx(battle: BattleState | null | undefined) {
   const [fx, setFx] = useState<Record<string, FxAnim>>({});
@@ -211,6 +211,11 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const prevBattle = useRef<BattleState | null | undefined>(null);
   const prevStatusRef = useRef<BattleState | null | undefined>(null);
   const timers = useRef<number[]>([]);
+
+  // 渲染期同步派生：日志里还有尚未播放的动画事件（prevLen 在 effect 中才推进）。
+  // 用于结算帧兜底——phase 已变 won/lost 但动画 effect 尚未运行（animating 仍为 false）的那一帧，
+  // 用本值拦截「弹窗提前闪出又消失」：结算帧 logPending=true 不弹，动画播完 prevLen 已推进才弹。
+  const logPending = battle ? battle.log.length > prevLen.current : false;
 
   // 每次渲染后把当前 battle 记入 ref；渲染期读取到的是「上一快照」，用于计算新增状态。
   // 必须在 useEffect 里更新（而非 useMemo 工厂内），否则 StrictMode 双调用 useMemo 时
@@ -426,5 +431,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating };
+  return { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending };
 }

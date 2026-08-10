@@ -60,7 +60,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating } = useBattleFx(battle);
+  const { fx, pops, hpMap, hiddenStatuses, endingStatuses, animating, logPending } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -613,7 +613,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         </div>
       )}
 
-      {battle.phase === 'lost' && !animating && (
+      {battle.phase === 'lost' && !animating && !logPending && (
         <div className="overlay">
           <div className="overlay-box">
             <div style={{ fontSize: 48 }}>{isChallenge ? '⚠️' : '💀'}</div>
