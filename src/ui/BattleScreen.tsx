@@ -255,6 +255,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       setPendingSkill({ actorUid: selected.uid, skillId: skill.id });
       return;
     }
+    setPendingSkill(null);
     dispatch({ type: 'PLAYER_SKILL', actorUid: selected.uid, skillId: skill.id });
   }
 
