@@ -250,11 +250,17 @@ export interface GameState {
     options?: { corruptDebuff?: 'spd' | 'dmg'; gauntlet?: boolean; untameable?: boolean; enemyExact?: boolean };
     nodeType: NodeType;
   };
+  /** 战斗胜利后进入队伍管理界面：禁止选择出战，只能释放/融合 */
+  postBattle?: boolean;
 }
 
 export const ROSTER_MAX = 8;
-/** 出战宠物上限（2v2/3v3/4v4，roster≥5 时可能 4v4） */
-export const FIELD_MAX = 4;
+/** 出战宠物上限（最大 5 只，实际受敌方数量限制：敌方 n 只时玩家最多 n+1 只） */
+export const FIELD_MAX = 5;
+/** 根据敌方数量计算我方出战上限（n+1，不超过 FIELD_MAX） */
+export function maxFieldForEnemy(enemyCount: number): number {
+  return Math.min(enemyCount + 1, FIELD_MAX);
+}
 
 /** 地图节点图标（UI 与侦查/瞭望共用） */
 export const NODE_ICON: Record<NodeType, string> = {
@@ -432,19 +438,51 @@ function buildEncounter(
     const count = act === 1 ? 1 : 1 + Math.floor(rng() * 2);
     return Array.from({ length: count }, () => one(pool));
   }
-  // battle
-  const early = progress < 0.2;
-  const late = progress > 0.6;
-  if (act === 1) {
-    const count = early ? 1 : late ? 2 + Math.floor(rng() * 2) : 2;
-    return Array.from({ length: count }, () => one(ACT1_BATTLE_POOL));
+  // battle — 基于方案B的概率表：按幕数+行进度决定敌人规模（数量×种类）
+  // 第一行(progress=0)强制1v1；第二行(progress≈0.11)30% 1v1、70% 2v2；其余行按概率表
+  const pool = act === 1 ? ACT1_BATTLE_POOL : act === 2 ? ACT2_BATTLE_POOL : ACT3_BATTLE_POOL;
+  if (progress === 0) {
+    return [one(pool)];
   }
-  if (act === 2) {
-    const count = early ? 2 : 2 + Math.floor(rng() * 2);
-    return Array.from({ length: count }, () => one(ACT2_BATTLE_POOL));
+  if (progress < 0.15) {
+    const roll = rng() * 100;
+    if (roll < 30) return [one(pool)]; // 30% 1v1
+    // 70% 2v2
+    const shuffled = [...pool].sort(() => rng() - 0.5);
+    return [{ speciesId: shuffled[0] }, { speciesId: shuffled[1] || shuffled[0] }];
   }
-  const count = early ? 2 : 2 + Math.floor(rng() * 2);
-  return Array.from({ length: count }, () => one(ACT3_BATTLE_POOL));
+  // 概率表：Act1 (70% 2/2, 30% 3/3), Act2 (40% 2/2, 40% 3/3, 20% 4/4), Act3 (10% 2/2, 40% 3/3, 50% 4/4)
+  // progress 修正：前期(progress<0.3)偏向小规模，后期(progress>0.7)偏向大规模
+  const baseWeights: Record<number, [number, number, number]> = {
+    1: [70, 30, 0],   // [2/2权重, 3/3权重, 4/4权重]
+    2: [40, 40, 20],
+    3: [10, 40, 50],
+  };
+  const [w22, w33, w44] = baseWeights[act];
+  let adjustedW22 = w22;
+  let adjustedW33 = w33;
+  let adjustedW44 = w44;
+  if (progress < 0.3) {
+    adjustedW22 += 20;
+    adjustedW33 -= 10;
+    adjustedW44 -= 10;
+  } else if (progress > 0.7) {
+    adjustedW22 -= 20;
+    adjustedW33 += 5;
+    adjustedW44 += 15;
+  }
+  const roll = rng() * 100;
+  let size: { count: number; kinds: number };
+  if (roll < adjustedW22) {
+    size = { count: 2, kinds: 2 };
+  } else if (roll < adjustedW22 + adjustedW33) {
+    size = { count: 3, kinds: 3 };
+  } else {
+    size = { count: 4, kinds: 4 };
+  }
+  const shuffled = [...pool].sort(() => rng() - 0.5);
+  const kinds = shuffled.slice(0, size.kinds);
+  return Array.from({ length: size.count }, (_, i) => ({ speciesId: kinds[i % kinds.length] }));
 }
 
 /** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */export function buildEvent(rng: () => number): EventNode {
@@ -961,7 +999,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
   }
   // 第 1 行（出发）奖励必含招募，保证前期扩员
   if (state.currentRow === 0 && !options.some((o) => o.kind === 'recruit')) {
-    options.unshift({
+    options.push({
       id: 'r-recruit',
       label: '招募',
       desc: '随机一只普通宠物加入队伍',
@@ -969,7 +1007,20 @@ export function generateRewards(state: GameState): RewardChoice[] {
       monsterId: pick(rng, ['kiki', 'mimi', 'pipi', 'momo', 'lulu', 'fifi']),
     });
   }
-  return shuffle(rng, options).slice(0, 2);
+  const shuffled = shuffle(rng, options);
+  // 出发层：确保招募选项一定出现在最终结果中
+  if (state.currentRow === 0) {
+    const hasRecruit = shuffled.slice(0, 2).some((o) => o.kind === 'recruit');
+    if (!hasRecruit) {
+      const recruitIdx = shuffled.findIndex((o) => o.kind === 'recruit');
+      if (recruitIdx >= 0) {
+        const recruit = shuffled[recruitIdx];
+        shuffled.splice(recruitIdx, 1);
+        shuffled.unshift(recruit);
+      }
+    }
+  }
+  return shuffled.slice(0, 2);
 }
 
 /** 被侵蚀节点奖励翻倍：把奖励池中的食物选项数量翻倍；若无食物选项则强制加入一个双份食物奖励 */

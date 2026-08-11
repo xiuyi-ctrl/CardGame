@@ -144,7 +144,7 @@ describe('斗兽场（1v1 单挑）', () => {
     const damage = ev.choices.find((c) => c.kind === 'damage')!;
     const hpBefore = s.roster[0].hp;
     const after = dispatch(s, { type: 'EVENT_CHOICE', choiceId: damage.id });
-    expect(after.screen).toBe('roster');
+    expect(after.screen).toBe('map');
     expect(after.roster[0].hp).toBeGreaterThanOrEqual(1);
     expect(after.roster[0].hp).toBeLessThan(hpBefore);
   });
@@ -166,7 +166,7 @@ describe('斗兽场（1v1 单挑）', () => {
     s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: goldChoice.id });
     expect(s.gold).toBeLessThan(before);
     expect(s.gold).toBeGreaterThanOrEqual(0);
-    expect(s.screen).toBe('roster');
+    expect(s.screen).toBe('map');
   });
 });
 

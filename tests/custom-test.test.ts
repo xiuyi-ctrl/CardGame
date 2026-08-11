@@ -55,9 +55,9 @@ describe('自定义测试：battle enemyExact', () => {
     expect(b.playerUnits).toHaveLength(1);
   });
 
-  it('未开 enemyExact 时 1 我方对多敌方压缩为 1 只', () => {
+  it('未开 enemyExact 时敌人数量保持原始（不再压缩）', () => {
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'fifi' }, { speciesId: 'lulu' }], 1);
-    expect(b.enemyUnits).toHaveLength(1);
+    expect(b.enemyUnits).toHaveLength(2);
   });
 });
 
@@ -114,7 +114,7 @@ describe('自定义测试：完整流程', () => {
   });
 
   it('斗兽场：只取我方第 1 只上阵，敌方 1v1 且不可驯服', () => {
-    const s = runToBattle('arena', ['momo', 'lulu', 'fifi'], ['fifi', 'kiki']);
+    const s = runToBattle('arena', ['momo', 'lulu', 'fifi'], ['fifi']);
     expect(s.battle!.playerUnits).toHaveLength(1);
     expect(s.battle!.playerUnits[0].speciesId).toBe('momo');
     expect(s.battle!.enemyUnits).toHaveLength(1);

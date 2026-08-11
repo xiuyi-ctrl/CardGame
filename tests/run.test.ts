@@ -236,14 +236,14 @@ describe('地图生成', () => {
       ev.choices[0];
     const goldBefore = s.gold;
     s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: choice.id });
-    expect(s.screen).toBe('roster');
+    expect(s.screen).toBe('map');
     if (choice.kind === 'gold') expect(s.gold).toBeGreaterThan(goldBefore);
     // 伤害选项不会杀死宠物
     const damageEv = { ...ev, choices: [{ id: 'x', label: '损伤', desc: '', kind: 'damage' as const, amount: 100 }] };
     s = { ...s, screen: 'event', map: { ...s.map, events: { ...s.map.events, [s.currentNodeId]: damageEv } } };
     const hpBefore = s.roster.map((u) => u.hp);
     s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: 'x' });
-    expect(s.screen).toBe('roster');
+    expect(s.screen).toBe('map');
     s.roster.forEach((u) => expect(u.hp).toBeGreaterThanOrEqual(1));
     expect(s.roster.some((u, i) => u.hp < hpBefore[i])).toBe(true);
   });
@@ -267,7 +267,6 @@ describe('完整肉鸽流程', () => {
         encounter: {
           ...s.map.encounter,
           [firstNode.id]: [
-            { speciesId: 'kiki' },
             { speciesId: 'kiki' },
           ],
         },

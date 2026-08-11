@@ -3,7 +3,7 @@ import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTING_CHOICES, getMonster } from '../game/data/monsters';
@@ -105,7 +105,7 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
   );
 }
 
-type PetConfirm = { kind: 'fuse' | 'discard' | 'notice'; uid?: string; msg?: string } | null;
+type PetConfirm = { kind: 'fuse' | 'discard' | 'notice' | 'replace' | 'tame-fuse'; uid?: string; msg?: string; gold?: number; tameUid?: string } | null;
 
 /** 宠物卡片底部操作区：融合 / 释放（点击弹出确认框，材料不足时提示） */
 function PetCardFooter({
@@ -167,10 +167,13 @@ function FuseDiscardConfirm({
   const target = confirm.uid ? state.roster.find((x) => x.uid === confirm.uid) : undefined;
   const isFuse = confirm.kind === 'fuse';
   const isDiscard = confirm.kind === 'discard';
+  const isReplace = confirm.kind === 'replace';
+  const isTameFuse = confirm.kind === 'tame-fuse';
+  const tameTarget = isTameFuse ? state.tameOverflow?.[0] : undefined;
   return (
     <div className="confirm-overlay" onClick={() => setConfirm(null)}>
       <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-        <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : '提示'}</div>
+        <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : isReplace ? '确认替换' : isTameFuse ? '确认融合' : '提示'}</div>
         {isFuse && target && (
           <p>
             确定要融合「{target.name}」吗？将与同物种宠物融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>，继承强化/诅咒，生命回满。
@@ -181,15 +184,30 @@ function FuseDiscardConfirm({
             确定要释放「{target.name}」吗？将获得 <b>{5 * getMonster(target.speciesId).rank} 金币</b>，宠物将被永久移除。
           </p>
         )}
+        {isReplace && target && (
+          <p>
+            确定要放生「{target.name}」吗？将获得 <b>{confirm.gold ?? 0} 金币</b>，然后「{state.tameOverflow?.[0]?.name ?? '新宠物'}」加入队伍。
+          </p>
+        )}
+        {isTameFuse && target && tameTarget && (
+          <p>
+            确定要将「{tameTarget.name}」作为材料，与「{target.name}」融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>？继承强化/诅咒，生命回满。
+          </p>
+        )}
         {confirm.kind === 'notice' && <p>{confirm.msg}</p>}
         <div className="panel-row" style={{ justifyContent: 'center' }}>
-          {isFuse || isDiscard ? (
+          {(isFuse || isDiscard || isReplace || isTameFuse) ? (
             <>
               <button
                 className="primary"
                 onClick={() => {
                   if (isFuse) dispatch({ type: 'FUSE', primaryUid: confirm.uid! });
-                  else dispatch({ type: 'DISCARD', uid: confirm.uid! });
+                  else if (isDiscard) dispatch({ type: 'DISCARD', uid: confirm.uid! });
+                  else if (isReplace && state.tameOverflow?.[0]) {
+                    dispatch({ type: 'TAME_OVERFLOW_REPLACE', tameUid: state.tameOverflow[0].uid, discardUid: confirm.uid! });
+                  } else if (isTameFuse && confirm.tameUid) {
+                    dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: confirm.tameUid, primaryUid: confirm.uid! });
+                  }
                   setConfirm(null);
                 }}
               >
@@ -1038,11 +1056,17 @@ function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 
 function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const toggleField = (uid: string) => {
+    // 战斗胜利后禁止选择出战
+    if (state.postBattle) return;
     const inField = state.field.includes(uid);
     if (inField) {
       dispatch({ type: 'SET_FIELD', uids: state.field.filter((u) => u !== uid) });
-    } else if (state.field.length < FIELD_MAX) {
-      dispatch({ type: 'SET_FIELD', uids: [...state.field, uid] });
+    } else {
+      const enemyCount = state.formation?.encounter?.length ?? 1;
+      const maxField = maxFieldForEnemy(enemyCount);
+      if (state.field.length < maxField) {
+        dispatch({ type: 'SET_FIELD', uids: [...state.field, uid] });
+      }
     }
   };
 
@@ -1051,6 +1075,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const boostMode = pending?.kind === 'boost';
   const arenaMode = pending?.kind === 'arena';
   const [confirm, setConfirm] = useState<PetConfirm>(null);
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const title = evolveMode
     ? pending.super
       ? '超进化：选择要进化的宠物（会附带随机负面诅咒）'
@@ -1059,13 +1084,15 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
       ? '属性强化：选择要强化的宠物'
       : arenaMode
         ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
-        : `队伍管理（${state.field.length}/${FIELD_MAX} 出战，上限 ${ROSTER_MAX} 只）`;
+        : state.postBattle
+          ? '战后休整（只能释放或融合宠物）'
+          : `队伍管理（上限 ${ROSTER_MAX} 只）`;
 
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">{title}</div>
-      {!evolveMode && !boostMode && !arenaMode && (
+      {!evolveMode && !boostMode && !arenaMode && !state.postBattle && (
         <div className="panel-row" style={{ marginBottom: 10 }}>
           <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
           {state.field.map((uid) => {
@@ -1076,7 +1103,6 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
       )}
       <div className="roster-list">
         {state.roster.map((u) => {
-          const inField = state.field.includes(u.uid);
           const canEvolve = nextStage(u.speciesId) !== undefined;
           const onCard = evolveMode
             ? canEvolve
@@ -1086,12 +1112,15 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
               ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
               : arenaMode
                 ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
-                : () => toggleField(u.uid);
+                : state.postBattle
+                  ? () => setSelectedUid(selectedUid === u.uid ? null : u.uid)
+                  : () => toggleField(u.uid);
+          const isPostBattleSelected = state.postBattle && selectedUid === u.uid;
           return (
         <div key={u.uid} className="roster-item">
           <UnitCard
             unit={u}
-            className={`roster-card ${inField ? 'selected' : ''} ${(evolveMode && canEvolve) || boostMode || arenaMode ? 'clickable' : ''}`}
+            className={`roster-card ${(evolveMode && canEvolve) || boostMode || arenaMode || state.postBattle ? 'clickable' : ''} ${isPostBattleSelected ? 'selected' : ''}`}
             onClick={onCard}
             showSkillDesc
             topStats
@@ -1360,7 +1389,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
       </DragScrollRow>
 
       <div className="section-sub" style={{ marginTop: 30 }}>
-        宠物（{state.roster.length}/{ROSTER_MAX}，出战 {state.field.length}/{FIELD_MAX}）
+        宠物（{state.roster.length}/{ROSTER_MAX}）
       </div>
       <DragScrollRow className="bag-pets">
         {state.roster.map((u) => {
@@ -1404,73 +1433,76 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
 function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const tame = (state.tameOverflow ?? [])[0];
   if (!tame) return null;
-  const fuseCandidates = state.roster.filter((u) => {
-    if (u.speciesId !== tame.speciesId) return false;
-    if (!nextStage(u.speciesId)) return false;
-    const need = fusionNeedCount(u.speciesId);
-    const same = state.roster.filter((x) => x.speciesId === u.speciesId);
-    return same.length + 1 >= need;
-  });
   const remaining = state.tameOverflow!.length;
+  const [confirm, setConfirm] = useState<PetConfirm>(null);
   return (
     <div className="screen">
       <div className="section-title">队伍已满（{state.roster.length}/{ROSTER_MAX}）</div>
       <p className="card-sub" style={{ maxWidth: 560, textAlign: 'center', margin: '0 auto 8px' }}>
-        你驯服了新的宠物，但队伍已满。三选一：<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（作为材料与同物种宠物进化）／<b>放生</b>（丢弃）。
+        你驯服了新的宠物，但队伍已满。选择：<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（同物种足够可直接进化）／<b>放生</b>（丢弃）。
       </p>
       <div className="center-col" style={{ flex: '0 0 auto', padding: '8px 0' }}>
         <UnitCard unit={tame} />
       </div>
 
       <div className="section-sub">
-        一、替换：放生一只现有宠物，让「{tame.name}」加入（还有 {remaining} 只需要处理）
+        选择操作（还有 {remaining} 只需要处理）：
       </div>
       <div className="roster-list">
-        {state.roster.map((u) => (
-          <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <UnitCard unit={u} />
-            <div style={{ textAlign: 'center' }}>
-              <button
-                className="primary"
-                onClick={() => dispatch({ type: 'TAME_OVERFLOW_REPLACE', tameUid: tame.uid, discardUid: u.uid })}
-              >
-                替换：放生 {u.name}（+{5 * getMonster(u.speciesId).rank}💰）
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {fuseCandidates.length > 0 && (
-        <>
-          <div className="section-sub">二、融合：与同物种宠物融合进化（消耗「{tame.name}」作为材料）</div>
-          <div className="roster-list">
-            {fuseCandidates.map((u) => {
-              const stage = nextStage(u.speciesId)!;
-              const need = fusionNeedCount(u.speciesId);
-              return (
-                <div key={u.uid} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <UnitCard unit={u} />
-                  <div style={{ textAlign: 'center' }}>
-                    <button
-                      className="primary"
-                      onClick={() => dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: tame.uid, primaryUid: u.uid })}
-                    >
-                      融合 → {getMonster(stage).name}（需 {need} 只同物种）
-                    </button>
-                  </div>
+        {state.roster.map((u) => {
+          const stage = nextStage(u.speciesId);
+          const need = stage ? fusionNeedCount(u.speciesId) : 0;
+          const sameCount = state.roster.filter((x) => x.speciesId === u.speciesId).length;
+          const canFuseAlone = stage !== undefined && sameCount >= need;
+          return (
+          <div key={u.uid} className="roster-item">
+            <UnitCard
+              unit={u}
+              className="roster-card"
+              topStats
+              showSkillDesc
+              footer={
+                <div className="unit-card-actions">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const gold = 5 * getMonster(u.speciesId).rank;
+                      setConfirm({ kind: 'replace', uid: u.uid, gold });
+                    }}
+                  >
+                    替换
+                  </button>
+                  <button
+                    title={stage ? (canFuseAlone ? `融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : `同物种不足（${sameCount}/${need}）`) : '该宠物已是最终形态，无法融合'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!stage) {
+                        setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
+                      } else if (!canFuseAlone) {
+                        setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
+                      } else {
+                        dispatch({ type: 'FUSE_IN_OVERFLOW', uid: u.uid });
+                      }
+                    }}
+                  >
+                    融合
+                  </button>
                 </div>
-              );
-            })}
+              }
+            />
           </div>
-        </>
-      )}
+          );
+        })}
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
         <button className="big-btn" onClick={() => dispatch({ type: 'TAME_OVERFLOW_DISCARD', tameUid: tame.uid })}>
           放生「{tame.name}」（不加入队伍）
         </button>
       </div>
+      {confirm && (
+        <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />
+      )}
     </div>
   );
 }

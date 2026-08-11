@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap } from './game';
-import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -47,6 +47,7 @@ export type GameAction =
   | { type: 'TAME_OVERFLOW_REPLACE'; tameUid: string; discardUid: string }
   | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string }
   | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
+  | { type: 'FUSE_IN_OVERFLOW'; uid: string }
   | { type: 'PLAYER_SKILL'; actorUid: string; skillId: string; targetUid?: string }
   | { type: 'PLAYER_REST'; actorUid: string }
   | { type: 'PLAYER_CANCEL_ORDER'; actorUid: string }
@@ -296,9 +297,10 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
 }
 
 /** 进入一个地图节点：根据节点类型进入对应界面（MOVE 与 DEBUG_JUMP 共用） */
-function fieldUnits(state: GameState): Unit[] {
-  const uids = state.field.length > 0 ? state.field : state.roster.slice(0, FIELD_MAX).map((u) => u.uid);
-  return state.roster.filter((u) => uids.includes(u.uid)).slice(0, FIELD_MAX);
+function fieldUnits(state: GameState, maxCount?: number): Unit[] {
+  const limit = maxCount ?? FIELD_MAX;
+  const uids = state.field.length > 0 ? state.field : state.roster.slice(0, limit).map((u) => u.uid);
+  return state.roster.filter((u) => uids.includes(u.uid)).slice(0, limit);
 }
 
 /** 默认自动布阵：前 3 只站前排 0-2 列，第 4 只起站后排 */
@@ -328,7 +330,8 @@ function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'boss') {
     const encounter = base.map.boss[node.id];
     if (!encounter || base.roster.length === 0) return { ...base, screen: 'map' };
-    const initial = autoPosition(fieldUnits(base));
+    const maxField = maxFieldForEnemy(encounter.length);
+    const initial = autoPosition(fieldUnits(base, maxField));
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id } };
   }
   // 同步双节点（双生宝箱）：抵达开箱；持有双生符（加速道具）时消耗 1 个、同时开启两个宝箱（侦察符只用于查看情报，不双开）
@@ -361,7 +364,8 @@ function enterNode(base: GameState, node: MapNode): GameState {
     const encounter = base.map.encounter[node.id];
     if (!encounter) return { ...base, screen: 'map' };
     if (base.roster.length === 0) return { ...base, screen: 'map' };
-    const initial = autoPosition(fieldUnits(base));
+    const maxField = maxFieldForEnemy(encounter.length);
+    const initial = autoPosition(fieldUnits(base, maxField));
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true } } };
   }
   // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
@@ -382,14 +386,16 @@ function enterNode(base: GameState, node: MapNode): GameState {
   }
   // 车轮战：一次上一只，先让玩家选择出战顺序（n v n，只选 n 只）
   if (node.type === 'gauntlet') {
-    const units = fieldUnits(base);
+    const maxField = maxFieldForEnemy(encounter.length);
+    const units = fieldUnits(base, maxField);
     if (units.length === 0) return { ...base, screen: 'map' };
     return { ...base, screen: 'gauntlet-order', gauntletOrder: units, gauntletSize: encounter.length };
   }
   // 普通/精英/被侵蚀：先布阵选择站位（棋盘默认放自动出战宠物，列表为全部宠物池）
   const options = node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : undefined;
   if (base.roster.length === 0) return { ...base, screen: 'map' };
-  const initial = autoPosition(fieldUnits(base));
+  const maxField = maxFieldForEnemy(encounter.length);
+  const initial = autoPosition(fieldUnits(base, maxField));
   return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options } };
 }
 
@@ -579,7 +585,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!choice) return state;
       // 花费类选项若金币不足则视为无效选择（kind='gold' 的负数扣款选项除外，可直接为负扣款）
       if (choice.kind !== 'gold' && state.gold + (choice.goldDelta ?? 0) < 0) return state;
-      let next: GameState = { ...state, screen: 'roster', gold: state.gold + (choice.goldDelta ?? 0) };
+      let next: GameState = { ...state, screen: 'map', gold: state.gold + (choice.goldDelta ?? 0), postBattle: undefined };
       if (choice.kind === 'heal') {
         next = healRoster(next, (choice.amount ?? 0) / 100);
       } else if (choice.kind === 'gold') {
@@ -947,7 +953,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'PICK_REWARD': {
       const reward = state.rewards.find((r) => r.id === action.rewardId);
       if (!reward) return state;
-      let next: GameState = { ...state, screen: 'roster', rewards: [] };
+      let next: GameState = { ...state, screen: 'roster', rewards: [], postBattle: true };
       if (reward.kind === 'food' && reward.foodId) {
         const amt = reward.amount ?? 1;
         next = { ...next, inventory: { ...next.inventory, [reward.foodId]: (next.inventory[reward.foodId] ?? 0) + amt } };
@@ -967,7 +973,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'SET_FIELD': {
-      const uids = action.uids.filter((uid) => state.roster.some((u) => u.uid === uid)).slice(0, FIELD_MAX);
+      const enemyCount = state.formation?.encounter?.length ?? 1;
+      const maxField = maxFieldForEnemy(enemyCount);
+      const uids = action.uids.filter((uid) => state.roster.some((u) => u.uid === uid)).slice(0, maxField);
       return { ...state, field: uids };
     }
 
@@ -1074,6 +1082,31 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : next;
     }
 
+    case 'FUSE_IN_OVERFLOW': {
+      if (state.screen !== 'tame-overflow') return state;
+      const primary = state.roster.find((u) => u.uid === action.uid);
+      if (!primary) return state;
+      if (!nextStage(primary.speciesId)) return state;
+      const need = fusionNeedCount(primary.speciesId);
+      const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
+      if (same.length < need) return state;
+      const evolved = fuseUnit(primary);
+      if (!evolved) return state;
+      const materials = same.filter((u) => u.uid !== primary.uid).slice(0, need - 1);
+      const materialUids = materials.map((u) => u.uid);
+      const roster = state.roster
+        .filter((u) => !materialUids.includes(u.uid))
+        .map((u) => (u.uid === primary.uid ? evolved : u));
+      const overflow = (state.tameOverflow ?? []).filter((u) => roster.some((r) => r.uid === u.uid) || u.uid !== primary.uid);
+      const next: GameState = {
+        ...state,
+        roster,
+        field: state.field.filter((uid) => roster.some((u) => u.uid === uid)),
+        log: [`融合！${materials.map((m) => m.name).join('+')} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
+      };
+      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : { ...next, tameOverflow: overflow };
+    }
+
     case 'SHOP_BUY': {
       // 支持食物与道具两种商品（价格不同）
       const food = FOODS[action.foodId];
@@ -1157,11 +1190,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           screen: 'map',
           gauntletOrder: undefined,
           gauntletSize: undefined,
+          postBattle: undefined,
         };
       }
       const nextRow = state.currentRow + 1;
       if (nextRow < state.map.layers.length) {
-        return { ...state, screen: 'map', chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined };
+        return { ...state, screen: 'map', chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined, postBattle: undefined };
       }
       return { ...state, screen: 'victory' };
     }

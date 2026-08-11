@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Dispatch, DragEvent } from 'react';
 import type { GameState } from '../game/state/game';
-import { FIELD_MAX } from '../game/state/game';
+import { maxFieldForEnemy } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { getMonster } from '../game/data/monsters';
 import { placeUnit } from '../game/state/formation';
@@ -47,13 +47,16 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   }
 
   const fieldCount = Object.keys(positions).filter((k) => positions[k]).length;
+  /** 敌方数量 → 我方出战上限（n+1，不超过 FIELD_MAX） */
+  const enemyCount = fb.encounter?.length ?? 1;
+  const maxField = maxFieldForEnemy(enemyCount);
   /** 宠物池 = 全部宠物中未上场的 */
   const pool = fb.units.filter((u) => !positions[u.uid]);
 
   function moveToSlot(uid: string, row: FormationRow, col: 0 | 1 | 2) {
     const key = `${row}-${col}`;
     const existing = bySlot[key];
-    if (!existing && !positions[uid] && fieldCount >= FIELD_MAX) return;
+    if (!existing && !positions[uid] && fieldCount >= maxField) return;
     setPositions(placeUnit(positions, uid, { row, column: col }));
     setSelected(null);
   }
@@ -123,7 +126,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     <div className="screen">
       <div className="hud">
         <span className="act">第 {state.act} 层 · {title}</span>
-        <span className="chip">👥 出战 {fieldCount}/{FIELD_MAX} 只</span>
+        <span className="chip">👥 出战 {fieldCount}/{maxField} 只</span>
         <button className="home-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
           ↩ 返回地图
         </button>
@@ -131,8 +134,8 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
 
       <div className="formation-main">
         <div className="formation-left">
-          <div className="side-label">敌方情报：{enemyDesc}</div>
-          <div className="side-label">把宠物拖到 6 格中上场（有宠物则交换、空位则移动）；点击场上宠物放回宠物池；最多出战 {FIELD_MAX} 只</div>
+          <div className="side-label">敌方情报：{enemyDesc}（{enemyCount} 只）</div>
+          <div className="side-label">把宠物拖到 6 格中上场（有宠物则交换、空位则移动）；点击场上宠物放回宠物池；敌方 {enemyCount} 只，我方最多 {maxField} 只</div>
           <div className="formation-board">
             {ROWS.map(({ row, label }) => (
               <div key={row} className={`formation-row ${row === 'front' ? 'row-front' : 'row-back'}`}>

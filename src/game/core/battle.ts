@@ -169,16 +169,10 @@ export function createBattle(
     b.enemyBench = enemyRest.map((e, i) => makeEnemy(e, i + 1, untameable));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
-    // 敌方数量与玩家出战数匹配（最少 2v2；boss/斗兽场等单敌遭遇保留 1 只）；
-    // enemyExact（自定义测试）时敌方按指定数量原样创建：不压缩、不复制补齐
-    const n = preparedPlayer.length;
+    // 敌方数量固定为 encounter 原始数量（不再复制补齐）；
+    // 玩家出战数由布阵界面限制（≤ 敌方数量+1，最多 FIELD_MAX）
     const exact = options?.enemyExact === true;
-    let target = exact ? enemySpecies.length : n >= 2 ? Math.min(n, 4) : 1;
-    if (!exact && enemySpecies.length === 1) target = 1;
-    const picked = enemySpecies.slice(0, target);
-    if (!exact) {
-      while (picked.length < target) picked.push(picked[picked.length % enemySpecies.length] || enemySpecies[0]);
-    }
+    const picked = exact ? [...enemySpecies] : [...enemySpecies];
     b.playerUnits = preparedPlayer;
     b.enemyUnits = picked.map((e, i) => makeEnemy(e, i, untameable));
     // 只有一个敌人时，默认前排居中显示

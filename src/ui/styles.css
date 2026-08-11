@@ -1499,6 +1499,15 @@ button.primary {
   height: 350px;
 }
 
+.roster-card.clickable {
+  cursor: pointer;
+}
+
+.roster-card.clickable.selected {
+  outline: 3px solid var(--gold);
+  box-shadow: 0 0 12px rgba(232, 194, 106, 0.45);
+}
+
 .roster-card .card-top-stats {
   justify-content: flex-start;
   gap: 6px;
