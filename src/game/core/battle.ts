@@ -631,25 +631,21 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       // 动画表现为多段伤害飘字（如 8 拆成两段 4），总和与单条结算完全一致
       const segments = splitDamage(finalDmg, count);
       let t2 = t;
-      // 先计算本次攻击附加的状态（被动 venom/scorch + 技能 effects 的灼烧/中毒/减防/眩晕）。
-      // 状态在全部攻击段结算后才生效，故标记在最后一段攻击日志上，供动画在该宠物攻击动画播放时揭示
-      const addedKinds: string[] = [];
+      // 先计算被动附加的状态（venom/scorch），在攻击前生效一次
+      const passiveAdds: string[] = [];
       const ap = getUnitPassive(actor);
       if (ap?.kind === 'venom') {
         t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
-        addedKinds.push('poison');
+        passiveAdds.push('poison');
       }
       if (ap?.kind === 'scorch') {
         t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
-        addedKinds.push('burn');
+        passiveAdds.push('burn');
       }
-      for (const e of skill.effects ?? []) {
-        if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
-          t2 = applyStatusTo(t2, e);
-          addedKinds.push(e.kind);
-        }
-      }
-      const finalAdds = addedKinds.length > 0 ? addedKinds : undefined;
+      // 技能效果种类（用于每段攻击日志标记 addsStatus）
+      const skillEffectKinds: string[] = (skill.effects ?? [])
+        .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun')
+        .map((e) => e.kind);
       let lastHitLog: number | undefined;
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
@@ -658,8 +654,16 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         // 对应动画（前冲/受击/飘字）也随之不再播放
         if (t2.hp <= 0) break;
         t2 = { ...t2, hp: Math.max(0, t2.hp - seg) };
+        // 技能效果（灼烧/中毒/减防/眩晕）：每段攻击都触发（含击杀段），先于日志以便快照包含状态
+        for (const e of skill.effects ?? []) {
+          if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
+            t2 = applyStatusTo(t2, e);
+          }
+        }
         nb = replaceUnit(nb, t2);
-        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, t.uid);
+        // 每段攻击日志标记技能效果（供动画在该段播放时揭示状态标签）
+        const hitAdds = skillEffectKinds.length > 0 ? skillEffectKinds : undefined;
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, t.uid, hitAdds);
         lastHitLog = nb.log.length - 1;
         // 吸血：每次命中造成伤害后恢复自身（多段每段都触发）
         if (ap?.kind === 'drain') {
@@ -668,6 +672,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             const maxHp = getEffectiveMaxHp(healedActor);
             const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
             nb = replaceUnit(nb, healed);
+            nb = pushLog(nb, `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`, sideOf(healedActor), healedActor.uid, healedActor.uid);
           }
         }
         // 尖刺：受击者每次命中都反伤攻击者（多段每段都触发）
@@ -683,13 +688,22 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           }
         }
       }
-      // 状态（毒/灼烧等）在全部攻击段结算后才生效：标记在最后一次实际命中的段上，
-      // 供动画在最后一段攻击动画播放时揭示（若目标中途阵亡提前结束，则标在最后一段命中日志）
-      if (finalAdds && lastHitLog !== undefined) {
-        nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: finalAdds } : l)) };
+      // 被动效果（毒/灼烧）标记在最后一段攻击日志上，供动画揭示
+      if (passiveAdds.length > 0 && lastHitLog !== undefined) {
+        nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: [...(l.addsStatus ?? []), ...passiveAdds] } : l)) };
       }
       // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
       nb = replaceUnit(nb, t2);
+    }
+    // 攻击技能附带自愈（如 tidal_slam）：所有目标结算后恢复自身
+    if (skill.heal && skill.heal > 0) {
+      const healedActor = actorFromId(nb, actor.uid);
+      if (healedActor && healedActor.hp > 0) {
+        const maxHp = getEffectiveMaxHp(healedActor);
+        const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + skill.heal) };
+        nb = replaceUnit(nb, healed);
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」恢复 ${skill.heal} 点生命`, sideOf(actor), actor.uid, actor.uid);
+      }
     }
   }
   return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);

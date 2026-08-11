@@ -97,7 +97,8 @@ export function allRevealed(newStatuses: Record<string, string[]>): Record<strin
 }
 
 const RE_ATTACK = /^(.+?) 使用「(.+?)」攻击 (.+?)，造成 (\d+) 伤害$/;
-const RE_HEAL = /^(.+?) 使用「(.+?)」，治愈 (.+?) (\d+) 点生命$/;
+const RE_HEAL = /^(.+?) 使用「(.+?)」(?:，治愈|恢复) (.+?) (\d+) 点生命$/;
+const RE_PASSIVE_HEAL = /^(.+?) 的「(.+?)」(?:恢复|治愈) (\d+) 点生命$/;
 const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化自身$/;
@@ -161,6 +162,10 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       hp: entry.hp,
       statuses: entry.statuses,
     };
+  }
+  if ((m = text.match(RE_PASSIVE_HEAL))) {
+    const uid = entry.actorUid ?? entry.targetUid ?? findUid(b, side, m[1]);
+    return { kind: 'heal', actorUid: uid, targetUid: uid, value: Number(m[3]), hp: entry.hp, statuses: entry.statuses };
   }
   if ((m = text.match(RE_BUFF))) {
     const uid = entry.actorUid ?? entry.targetUid ?? findUid(b, side, m[1]);

@@ -178,6 +178,10 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     act(() => vi.advanceTimersByTime(800));
     expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(2);
 
+    // 再生被动事件（2400ms）：灼烧仍为 2 层（regen heal 不影响灼烧层数）
+    act(() => vi.advanceTimersByTime(800));
+    expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(2);
+
     // 动画播放完：回退到真实最终状态
     act(() => vi.advanceTimersByTime(2100));
     expect(result.current.statusMap).toBeNull();
