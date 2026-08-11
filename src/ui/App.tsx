@@ -762,7 +762,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   // 路线预览：默认显示当前节点 → 下一步可达；悬停某节点时显示该节点的下一步可达
   const nextRow = state.map.layers[optionsRow] ?? EMPTY_ROW;
   const nearIds = useMemo(
-    () => new Set(nextRow.filter((n) => canStepTo(state.currentRow, currentCol, n)).map((n) => n.id)),
+    () => new Set(nextRow.filter((n) => canStepTo(state.currentRow, currentCol, n, state.map)).map((n) => n.id)),
     [nextRow, state.currentRow, currentCol],
   );
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -773,7 +773,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   const hoverReachIds = useMemo(
     () =>
       hoverNode
-        ? new Set(hoverNextRow.filter((m) => canStepTo(hoverRow, hoverNode.col, m)).map((m) => m.id))
+        ? new Set(hoverNextRow.filter((m) => canStepTo(hoverRow, hoverNode.col, m, state.map)).map((m) => m.id))
         : new Set<string>(),
     [hoverNode, hoverRow, hoverNextRow],
   );
@@ -1296,7 +1296,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
                 {f.name} ×{count}
               </div>
               <div className="rdesc">
-                {f.desc}（{f.baseTame}% 驯服率）
+                {f.desc}（{Math.round(f.baseTame * 100)}% 驯服率）
               </div>
             </div>
           );

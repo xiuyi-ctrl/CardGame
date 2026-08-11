@@ -7,8 +7,10 @@ import {
   type GameAction,
 } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { generateMap, fuseUnit, fusionNeedCount, nextStage, recomputeStats, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
+import { generateMap, fuseUnit, fusionNeedCount, nextStage, nodeInfo, recomputeStats, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
 import { createBattle, makeUnit, isTameable } from '../src/game/core/battle';
+import { FOODS } from '../src/game/data/foods';
+import { ITEMS } from '../src/game/data/items';
 
 function dispatch(state: GameState, action: GameAction): GameState {
   return gameReducer(state, action);
@@ -185,6 +187,29 @@ describe('地图生成', () => {
     const near2 = row2.find((n) => Math.abs(n.col - (mid.col ?? 0)) <= 1)!;
     const moved = dispatch(s, { type: 'MOVE', nodeId: near2.id });
     expect(moved.currentNodeId).toBe(near2.id);
+  });
+
+  it('MOVE 后清除跳关/侦查选择态，避免模式残留', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
+    const start = s.map.layers[0][0];
+    s = dispatch(s, { type: 'MOVE', nodeId: start.id });
+    s = { ...s, screen: 'backpack', battle: undefined, formation: undefined, currentNodeId: start.id, currentRow: 0, inventory: { ...s.inventory, skip: 1, scout: 1 } };
+    s = dispatch(s, { type: 'OPEN_SKIP' });
+    expect(s.skipSelecting).toBe(true);
+    const t1 = s.map.layers[1][0];
+    s = dispatch(s, { type: 'MOVE', nodeId: t1.id });
+    expect(s.skipSelecting).toBe(false);
+    expect(s.scoutSelecting).toBe(false);
+    expect(s.currentNodeId).toBe(t1.id);
+    s = { ...s, screen: 'backpack', currentRow: s.currentRow, currentNodeId: s.currentNodeId };
+    s = dispatch(s, { type: 'OPEN_SCOUT' });
+    expect(s.scoutSelecting).toBe(true);
+    const cur = s.map.layers[s.currentRow].find((n) => n.id === s.currentNodeId);
+    const row2 = s.map.layers[s.currentRow + 1];
+    const t2 = row2.find((n) => Math.abs(n.col - (cur?.col ?? 0)) <= 1) ?? row2[0];
+    s = dispatch(s, { type: 'MOVE', nodeId: t2.id });
+    expect(s.scoutSelecting).toBe(false);
+    expect(s.skipSelecting).toBe(false);
   });
 
   it('奇遇节点可进入并做出抉择', () => {
@@ -964,5 +989,22 @@ describe('守卫与钥匙门', () => {
     s = dispatch(s, { type: 'SHOP_BUY', foodId: buyId });
     expect(s.inventory[buyId]).toBe(invBefore + 1);
     expect(s.gold).toBeLessThan(before);
+  });
+
+  it('侦查/瞭望塔的商店情报与实际库存一致（含价格与休整说明）', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
+    const row = run.map.layers.findIndex((r) => r.includes(shopNode));
+    const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
+    let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 100 };
+    s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
+    const info = nodeInfo(s, shopNode);
+    expect(info.title).toBe('商店');
+    expect(info.detail).toContain('休整');
+    // 情报展示的商品名必须与本次实际库存一致（同一 seed 公式）
+    for (const id of s.shopStock ?? []) {
+      const name = (FOODS[id] ?? ITEMS[id])?.name;
+      expect(info.detail).toContain(name);
+    }
   });
 });

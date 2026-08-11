@@ -1,8 +1,16 @@
 import type { BattleState, FoodDef, Unit } from '../types';
 import { getMonster, fusionNeed } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
+import { ITEMS } from '../data/items';
 import { createRng, pick, randInt, shuffle } from '../rng';
 import { computeStats, makeUnit } from '../core/battle';
+
+/** 字符串简单哈希（用于按节点 id 派生可复现随机） */
+export function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 
 export type NodeType =
   | 'battle'
@@ -290,12 +298,26 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
         detail: e ? `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}（首领）` : '—',
       };
     }
-    case 'shop':
+    case 'shop': {
+      // 与进入商店时的库存生成保持一致（同一 seed 公式），保证侦查/瞭望塔看到的就是实际可购商品
+      const row = state.map.layers.findIndex((r) => r.includes(n));
+      const rng = createRng(state.seed * 7919 + row * 104729 + hashStr(n.id));
+      const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
+      const stock = shuffle(rng, pool).slice(0, 4);
+      const goods = stock
+        .map((id) => {
+          const f = FOODS[id];
+          if (f) return `${f.emoji} ${f.name} ${f.price} 金`;
+          const it = ITEMS[id];
+          return `${it.emoji} ${it.name} ${it.price} 金`;
+        })
+        .join('、');
       return {
         icon: NODE_ICON.shop,
         title: '商店',
-        detail: '🍓 浆果 5 金 · 🍖 鲜肉 9 金 · 💎 秘晶 14 金（每店每种限购 1 次）',
+        detail: `本店出售：${goods}（每种限购 1 次，花 5 金可休整）`,
       };
+    }
     case 'event': {
       const ev = state.map.events[n.id];
       return { icon: NODE_ICON.event, title: ev?.title ?? '事件', detail: ev ? ev.choices.map((c) => c.label).join(' ／ ') : '—' };

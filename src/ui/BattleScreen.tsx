@@ -608,7 +608,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         </div>
       </div>
 
-      {battle.phase === 'won' && !animating && (
+      {battle.phase === 'won' && !animating && !logPending && (
         <div className="overlay">
           <div className="overlay-box">
             <div style={{ fontSize: 48 }}>🏆</div>

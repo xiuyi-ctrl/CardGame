@@ -494,6 +494,38 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
     expect(foodReward).toBeDefined();
     expect(foodReward!.amount).toBe(2);
   });
+
+  it('跳关普通战斗：食物不翻倍、无食物奖励时也不强制塞暗影战利品', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    s = { ...stateAtNode(s, 1, 'battle', [{ speciesId: 'kiki' }]), inventory: { ...s.inventory, skip: 1 } };
+    const b = s.map.layers[1].find((n) => n.type === 'battle')!;
+    const gold0 = s.gold;
+    s = dispatch(s, { type: 'USE_SKIP', nodeId: b.id });
+    expect(s.screen).toBe('reward');
+    expect(s.gold).toBe(gold0 + 8);
+    const foodReward = s.rewards.find((r) => r.kind === 'food');
+    if (foodReward) {
+      expect(foodReward.amount).toBeUndefined();
+      expect(foodReward.desc).toBe('获得 1 个随机食物');
+    }
+    expect(s.rewards.some((r) => r.id === 'r-food-x2')).toBe(false);
+  });
+
+  it('跳关精英：金币 16、食物不翻倍', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    s = { ...stateAtNode(s, 1, 'elite', [{ speciesId: 'gora' }]), inventory: { ...s.inventory, skip: 1 } };
+    const e = s.map.layers[1].find((n) => n.type === 'elite')!;
+    const gold0 = s.gold;
+    s = dispatch(s, { type: 'USE_SKIP', nodeId: e.id });
+    expect(s.screen).toBe('reward');
+    expect(s.gold).toBe(gold0 + 16);
+    const foodReward = s.rewards.find((r) => r.kind === 'food');
+    if (foodReward) {
+      expect(foodReward.amount).toBeUndefined();
+      expect(foodReward.desc).toBe('获得 1 个随机食物');
+    }
+    expect(s.rewards.some((r) => r.id === 'r-food-x2')).toBe(false);
+  });
 });
 
 describe('DEBUG_JUMP（测试关卡直达）', () => {

@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap } from './game';
-import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -21,13 +21,6 @@ function hasKeyFor(state: GameState, node: MapNode): boolean {
 
 /** 自定义测试：需要选择宠物的战斗类关卡（非战斗类直接进入对应内容） */
 const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrupted', 'guardian', 'arena', 'gauntlet'];
-
-/** 字符串简单哈希（用于按节点 id 派生可复现随机） */
-function hashStr(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
 
 export type GameAction =
   | { type: 'START_RUN'; starterId: string; seed: number }
@@ -432,7 +425,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (node.type === 'keydoor' && !hasKeyFor(state, node)) return state;
       const visitedNodeIds = [...(state.visitedNodeIds ?? [])];
       if (!visitedNodeIds.includes(action.nodeId)) visitedNodeIds.push(action.nodeId);
-      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false, visitedNodeIds };
+      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false, visitedNodeIds, skipSelecting: false, scoutSelecting: false };
       return enterNode(base, node);
     }
 
@@ -802,8 +795,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         // 挑战节点跳关：直接领取 3 选 1 挑战奖励
         rewards = generateChallengeRewards(base, node.type as 'arena' | 'gauntlet');
       } else {
+        // 金币：战斗 8 / 精英 16 / 侵蚀金币型翻倍 16（与关卡图鉴「跳关结算 8→16」一致）
         goldGain = node.type === 'elite' ? 16 : corrupt && node.corruptReward === 'gold' ? 16 : 8;
-        rewards = applyCorruptFoodReward(generateRewards(base), base.seed * 11 + base.currentRow * 7);
+        // 食物翻倍仅在「被侵蚀 + 食物型」时生效，与真实战斗结算对齐（普通/精英节点不翻倍）
+        rewards = generateRewards(base);
+        if (corrupt && node.corruptReward === 'food') {
+          rewards = applyCorruptFoodReward(rewards, base.seed * 11 + base.currentRow * 7);
+        }
       }
       const withRewards: GameState = { ...base, screen: 'reward', gold: base.gold + goldGain, rewards };
       return {
