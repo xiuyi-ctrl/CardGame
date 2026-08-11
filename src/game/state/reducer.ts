@@ -1144,7 +1144,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'RETRY':
-      return { ...createInitialState(), screen: 'starter' };
+      return freshRun('momo', action.seed);
 
     case 'CLEAR_TOAST':
       return { ...state, toast: undefined };
