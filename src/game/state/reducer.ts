@@ -28,6 +28,9 @@ export type GameAction =
   | { type: 'LOAD_GAME'; state: GameState }
   | { type: 'MOVE'; nodeId: string }
   | { type: 'EVENT_CHOICE'; choiceId: string }
+  | { type: 'EVENT_HATCH_PREVIEW'; choiceId: string; monsterId: string }
+  | { type: 'EVENT_HATCH_CONFIRM' }
+  | { type: 'EVENT_HATCH_CANCEL' }
   | { type: 'SPECIAL_CHOICE'; rewardId: string }
   | { type: 'EVOLVE_ONE'; uid: string }
   | { type: 'SPECIAL_TARGET'; uid: string }
@@ -517,7 +520,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
       // 非战斗类：预生成事件/奇遇/钥匙，进入对应界面时展示
       if (nodeType === 'event') {
-        base.map.events[nodeId] = buildEvent(createRng(1 * 7 + 3));
+        base.map.events[nodeId] = buildEvent(createRng(1 * 7 + 3), base.act);
       } else if (nodeType === 'special') {
         base.map.specials[nodeId] = buildSpecial(createRng(1 * 7 + 3));
       } else if (nodeType === 'keydoor') {
@@ -603,6 +606,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         };
       }
       return { ...next, log: [choice.label, ...next.log].slice(0, 20) };
+    }
+
+    case 'EVENT_HATCH_PREVIEW': {
+      if (state.screen !== 'event') return state;
+      return { ...state, pendingEventHatch: { choiceId: action.choiceId, monsterId: action.monsterId } };
+    }
+
+    case 'EVENT_HATCH_CONFIRM': {
+      if (state.screen !== 'event' || !state.pendingEventHatch) return state;
+      const { choiceId } = state.pendingEventHatch;
+      let next: GameState = { ...state, screen: 'map', pendingEventHatch: undefined, postBattle: undefined };
+      const ev = state.map.events[state.currentNodeId];
+      const choice = ev?.choices.find((x) => x.id === choiceId);
+      if (choice && choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
+        next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
+      }
+      return { ...next, log: [choice?.label ?? '孵化', ...next.log].slice(0, 20) };
+    }
+
+    case 'EVENT_HATCH_CANCEL': {
+      if (state.screen !== 'event') return state;
+      const hatch = state.pendingEventHatch;
+      const goldReward = hatch ? (getMonster(hatch.monsterId).rank === 1 ? 5 : getMonster(hatch.monsterId).rank === 2 ? 10 : getMonster(hatch.monsterId).rank === 3 ? 15 : 20) : 0;
+      return { ...state, pendingEventHatch: undefined, screen: 'map', postBattle: undefined, gold: state.gold + goldReward, log: [`放生获得 ${goldReward} 金币`, ...state.log].slice(0, 20) };
     }
 
     case 'SPECIAL_CHOICE': {
@@ -1120,18 +1147,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         gold: state.gold - price,
-        shopBought: true,
         shopBoughtItems: [...(state.shopBoughtItems ?? []), action.foodId],
         inventory: { ...state.inventory, [action.foodId]: (state.inventory[action.foodId] ?? 0) + 1 },
       };
     }
 
     case 'SHOP_REST': {
-      if (state.screen !== 'shop' || state.shopBought === true) return state;
+      if (state.screen !== 'shop') return state;
       return {
         ...healRoster(state, 1),
         screen: 'shop',
-        shopBought: true,
+        toast: { msg: '全队已回满血！', kind: 'success' },
         log: ['立即休整，全队回满血（诅咒未解除）', ...state.log].slice(0, 20),
       };
     }

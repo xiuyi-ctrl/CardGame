@@ -244,3 +244,8 @@ export function fusionDepth(id: string): number {
 export function fusionNeed(id: string): number {
   return fusionDepth(id) + 2;
 }
+
+/** 按进化阶段划分的物种池（用于事件招募） */
+export const BASE_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+export const EVO1_POOL = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora'];
+export const EVO2_POOL = ['momo_god', 'lulu_god', 'fifi_god'];

@@ -630,12 +630,11 @@ describe('商人·立即休整', () => {
     const after = dispatch(s, { type: 'SHOP_REST' });
     expect(after.screen).toBe('shop');
     expect(after.gold).toBe(gold0);
-    expect(after.shopBought).toBe(true);
     expect(after.roster.every((u) => u.hp === u.maxHp)).toBe(true);
     expect(after.roster.find((u) => u.curse)?.curse).toBe('atkDown');
   });
 
-  it('购买食物后不可再休整，休整后被拒仍停留商店', () => {
+  it('购买食物后仍可休整', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
@@ -643,7 +642,7 @@ describe('商人·立即休整', () => {
     let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 30 };
     s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
     s = dispatch(s, { type: 'SHOP_BUY', foodId: s.shopStock![0] });
-    expect(s.shopBought).toBe(true);
+    expect(s.shopBought).toBe(false);
     const after = dispatch(s, { type: 'SHOP_REST' });
     expect(after.screen).toBe('shop');
     expect(after.gold).toBe(s.gold);

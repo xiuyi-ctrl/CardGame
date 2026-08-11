@@ -1,5 +1,5 @@
 import type { BattleState, FoodDef, Unit } from '../types';
-import { getMonster, fusionNeed } from '../data/monsters';
+import { getMonster, fusionNeed, BASE_POOL, EVO1_POOL, EVO2_POOL } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
 import { ITEMS } from '../data/items';
 import { createRng, pick, randInt, shuffle } from '../rng';
@@ -252,6 +252,8 @@ export interface GameState {
   };
   /** 战斗胜利后进入队伍管理界面：禁止选择出战，只能释放/融合 */
   postBattle?: boolean;
+  /** 孵化预览：点击「孵化它」后暂存，弹出确认弹窗显示将孵化的宠物 */
+  pendingEventHatch?: { choiceId: string; monsterId: string };
 }
 
 export const ROSTER_MAX = 8;
@@ -485,10 +487,8 @@ function buildEncounter(
   return Array.from({ length: size.count }, (_, i) => ({ speciesId: kinds[i % kinds.length] }));
 }
 
-/** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */export function buildEvent(rng: () => number): EventNode {
+/** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */export function buildEvent(rng: () => number, act: number): EventNode {
   const roll = rng();
-  const foodId = pick(rng, Object.keys(FOODS));
-  const monsterId = pick(rng, RECRUIT_POOL);
   const c = (id: number, label: string, desc: string, kind: EventChoice['kind'], extra?: Partial<EventChoice>): EventChoice => ({
     id: `e${id}`,
     label,
@@ -519,22 +519,47 @@ function buildEncounter(
     };
   }
   if (roll < 0.6) {
+    // 随机选择：食物（不含圣果）或道具
+    const isItem = rng() < 0.5;
+    const shopFoodPool = Object.keys(FOODS).filter((id) => id !== 'golden_fruit');
+    const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
+    let tradeChoice: EventChoice;
+    if (isItem) {
+      const itemId = pick(rng, shopItemPool);
+      tradeChoice = c(1, '购买补给', `损失 15 金币，获得 1 个${ITEMS[itemId].name}`, 'item', { itemId, goldDelta: -15 });
+    } else {
+      const foodId2 = pick(rng, shopFoodPool);
+      tradeChoice = c(1, '购买补给', `损失 15 金币，获得 1 个${FOODS[foodId2].name}`, 'food', { foodId: foodId2, goldDelta: -15 });
+    }
     return {
       title: '流浪商人',
       desc: '一位背着鼓鼓行囊的商人在路边歇脚，愿意与你交易。',
       choices: [
-        c(1, '购买补给', `损失 15 金币，获得 1 个${FOODS[foodId].name}`, 'food', { foodId, goldDelta: -15 }),
+        tradeChoice,
         c(2, '打探消息', '获得 20 金币', 'gold', { amount: 20 }),
         c(3, '离开', '继续赶路', 'none'),
       ],
     };
   }
   if (roll < 0.8) {
+    // 按幕数概率选择不同进化阶段的宠物
+    let pool: string[];
+    const r = rng();
+    if (act <= 1) {
+      pool = BASE_POOL;
+    } else if (act === 2) {
+      pool = r < 0.7 ? EVO1_POOL : BASE_POOL;
+    } else {
+      if (r < 0.6) pool = EVO2_POOL;
+      else if (r < 0.9) pool = EVO1_POOL;
+      else pool = BASE_POOL;
+    }
+    const eggMonsterId = pick(rng, pool);
     return {
       title: '神秘蛋',
       desc: '一颗布满奇异纹路的蛋静静躺在草丛中，轻轻颤动。',
       choices: [
-        c(1, '孵化它', '一只神秘生物破壳而出，加入队伍', 'recruit', { monsterId }),
+        c(1, '孵化它', '一只神秘生物破壳而出，加入队伍', 'recruit', { monsterId: eggMonsterId }),
         c(2, '敲开蛋壳', '里面散落出 15 金币', 'gold', { amount: 15 }),
         c(3, '离开', '让命运保持神秘', 'none'),
       ],
@@ -845,7 +870,7 @@ export function generateMap(seed: number, act: number): RunMap {
       else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, undefined, n.gauntletSize);
       else if (n.type === 'corrupted') encounter[n.id] = buildEncounter(rng, 'battle', act, progress);
       else if (n.type === 'guardian') encounter[n.id] = buildEncounter(rng, 'guardian', act, progress);
-      else if (n.type === 'event') events[n.id] = buildEvent(rng);
+      else if (n.type === 'event') events[n.id] = buildEvent(rng, act);
       else if (n.type === 'special') specials[n.id] = buildSpecial(rng);
     }
   }

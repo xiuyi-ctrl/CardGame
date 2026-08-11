@@ -1168,7 +1168,6 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 }
 
 function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const bought = state.shopBought === true;
   const boughtItems = state.shopBoughtItems ?? [];
   const stock = (state.shopStock ?? []).filter((id) => FOODS[id] || ITEMS[id]);
   const refreshCount = state.shopRefreshCount ?? 0;
@@ -1179,7 +1178,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">商人 🏪</div>
       <p className="card-sub" style={{ textAlign: 'center' }}>
-        本店随机出售 4 种商品，或免费立即休整（回满血·不解诅咒）；{bought ? '已购买过商品，本节点不可再休整。' : '本节点购物与休整二选一。'}
+        本店随机出售 4 种商品，可免费立即休整（回满血·不解诅咒）。
       </p>
       <div className="reward-cards">
         {stock.map((id) => {
@@ -1199,7 +1198,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
                 <span className="chip">💰 {price}</span>
                 <button
                   className="primary"
-                  disabled={bought || soldOut || state.gold < price}
+                  disabled={soldOut || state.gold < price}
                   onClick={() => dispatch({ type: 'SHOP_BUY', foodId: id })}
                 >
                   {soldOut ? '已购买' : '购买'}
@@ -1208,17 +1207,17 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
             </div>
           );
         })}
-        <div className={`reward-card ${bought ? 'dim' : ''}`}>
+        <div className="reward-card">
           <div className="ricon">🛌</div>
           <div className="rtitle">立即休整</div>
           <div className="rdesc">免费让全队回满血（不解超进化诅咒）</div>
           <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
             <button
               className="primary"
-              disabled={bought}
+              disabled={state.roster.every((u) => u.hp >= u.maxHp)}
               onClick={() => dispatch({ type: 'SHOP_REST' })}
             >
-              休整
+              {state.roster.every((u) => u.hp >= u.maxHp) ? '已满血' : '休整'}
             </button>
           </div>
         </div>
@@ -1510,6 +1509,8 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
 function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const ev = state.map.events[state.currentNodeId];
   if (!ev) return null;
+  const hatch = state.pendingEventHatch;
+  const hatchMonster = hatch ? getMonster(hatch.monsterId) : null;
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
@@ -1520,7 +1521,17 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
         </p>
         <div className="reward-cards">
           {ev.choices.map((c) => (
-            <div key={c.id} className="reward-card" onClick={() => dispatch({ type: 'EVENT_CHOICE', choiceId: c.id })}>
+            <div
+              key={c.id}
+              className="reward-card"
+              onClick={() => {
+                if (c.kind === 'recruit' && c.monsterId) {
+                  dispatch({ type: 'EVENT_HATCH_PREVIEW', choiceId: c.id, monsterId: c.monsterId });
+                } else {
+                  dispatch({ type: 'EVENT_CHOICE', choiceId: c.id });
+                }
+              }}
+            >
               <div className="ricon">
                 {c.kind === 'heal' && '❤️'}
                 {c.kind === 'gold' && '💰'}
@@ -1536,6 +1547,21 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
           ))}
         </div>
       </div>
+      {hatch && hatchMonster && (
+        <div className="confirm-overlay" onClick={() => dispatch({ type: 'EVENT_HATCH_CANCEL' })}>
+          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{hatchMonster.emoji}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>孵化出了 {hatchMonster.name}！</div>
+            <div className="card-sub" style={{ marginBottom: 4, justifyContent: 'center' }}>
+              ❤️ {hatchMonster.baseHp} &nbsp; ⚡ {hatchMonster.baseSpd}
+            </div>
+            <div className="panel-row" style={{ marginTop: 12, justifyContent: 'center' }}>
+              <button className="primary" onClick={() => dispatch({ type: 'EVENT_HATCH_CONFIRM' })}>收下</button>
+              <button onClick={() => dispatch({ type: 'EVENT_HATCH_CANCEL' })}>放生</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
