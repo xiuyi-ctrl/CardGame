@@ -606,9 +606,9 @@ describe('取消已选指令', () => {
 
 describe('专属被动', () => {
   it('makeUnit 应用速度/生命被动加成并记录被动', () => {
-    const quick = makeUnit('momo', true, 0, false); // 迅捷：速度+1
+    const quick = makeUnit('momo', true, 0, false); // 迅捷：速度+2
     expect(quick.passive).toBe('quick');
-    expect(quick.spd).toBe(MONSTERS.momo.baseSpd + 1);
+    expect(quick.spd).toBe(MONSTERS.momo.baseSpd + 2);
     const water = makeUnit('lulu', true, 1, false);
     expect(water.passive).toBe('watery_regen');
     expect(water.spd).toBe(MONSTERS.lulu.baseSpd);
@@ -842,7 +842,7 @@ describe('战斗日志与动画时序', () => {
     expect(attackIdx).toBeGreaterThanOrEqual(0);
     expect(thornIdx).toBeGreaterThan(attackIdx);
     expect(after.log[attackIdx].hp?.[momoUid]).toBe(momoHp0);
-    expect(after.log[thornIdx].hp?.[momoUid]).toBe(momoHp0 - 1);
+    expect(after.log[thornIdx].hp?.[momoUid]).toBe(momoHp0 - 2);
   });
 
   it('敌方治疗次数用尽后不再治疗（即使带治疗技能且残血）', () => {
@@ -882,7 +882,7 @@ describe('战斗日志与动画时序', () => {
   });
 
   it('随机多段技能打单体时所有段命中同一目标（叶针 2 段全结算）', () => {
-    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'momo_queen' }], 3);
+    const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'pipi' }], 3);
     const hp0 = b.enemyUnits[0].hp;
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'leaf_needle', b.enemyUnits[0].uid));
     expect(after.enemyUnits[0].hp).toBe(hp0 - 6);

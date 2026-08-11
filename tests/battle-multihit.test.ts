@@ -62,8 +62,8 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     const logs = attackLogs(b1, a.uid, '连击');
     expect(logs.length).toBe(2);
     expect(logs[1].addsStatus).toEqual(['burn']);
-    // 两段命中后的血量快照：11 - 4 - 4 = 3（后续敌方行动/灼烧/regen 结算不改连击日志本身）
-    expect(logs[1].hp?.[b1.enemyUnits[0].uid]).toBe(3);
+    // 两段命中后的血量快照：14 - 4 - 4 = 6（后续敌方行动/灼烧/regen 结算不改连击日志本身）
+    expect(logs[1].hp?.[b1.enemyUnits[0].uid]).toBe(6);
   });
 
   it('高减伤（磐岩护甲 -3）：多段每段都扣减伤，每段保底 1', () => {
@@ -87,9 +87,9 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     const thornLogs = b1.log.filter((l) => l.text.includes('「尖刺」反伤'));
     expect(attackLogsArr.length).toBe(2);
     expect(thornLogs.length).toBe(2);
-    // 每次反伤日志时的血量快照：每段攻击后玩家被反 1（第一段后 -1、第二段后 -2）
-    expect(thornLogs[0].hp?.[a.uid]).toBe(a.maxHp - 1);
-    expect(thornLogs[1].hp?.[a.uid]).toBe(a.maxHp - 2);
+    // 每次反伤日志时的血量快照：每段攻击后玩家被反 2（第一段后 -2、第二段后 -4）
+    expect(thornLogs[0].hp?.[a.uid]).toBe(a.maxHp - 2);
+    expect(thornLogs[1].hp?.[a.uid]).toBe(a.maxHp - 4);
   });
 
   it('潮汐吸噬吸血对多段每段都触发（连击 2 段吸 2 次）', () => {
