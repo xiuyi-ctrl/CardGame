@@ -316,7 +316,7 @@ function enterNode(base: GameState, node: MapNode): GameState {
     const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
     const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
     const stock = shuffle(rng, pool).slice(0, 4);
-    return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock };
+    return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0 };
   }
   if (node.type === 'event') return { ...base, screen: 'event' };
   if (node.type === 'special') return { ...base, screen: 'special' };
@@ -330,7 +330,7 @@ function enterNode(base: GameState, node: MapNode): GameState {
   if (node.type === 'boss') {
     const encounter = base.map.boss[node.id];
     if (!encounter || base.roster.length === 0) return { ...base, screen: 'map' };
-    const maxField = maxFieldForEnemy(encounter.length);
+    const maxField = FIELD_MAX;
     const initial = autoPosition(fieldUnits(base, maxField));
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id } };
   }
@@ -973,8 +973,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'SET_FIELD': {
+      const isBoss = !!state.map.boss[state.currentNodeId];
       const enemyCount = state.formation?.encounter?.length ?? 1;
-      const maxField = maxFieldForEnemy(enemyCount);
+      const maxField = isBoss ? FIELD_MAX : maxFieldForEnemy(enemyCount);
       const uids = action.uids.filter((uid) => state.roster.some((u) => u.uid === uid)).slice(0, maxField);
       return { ...state, field: uids };
     }
@@ -1126,20 +1127,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'SHOP_REST': {
-      if (state.screen !== 'shop' || state.shopBought === true || state.gold < 5) return state;
+      if (state.screen !== 'shop' || state.shopBought === true) return state;
       return {
         ...healRoster(state, 1),
-        screen: 'roster',
-        gold: state.gold - 5,
-        shopBought: false,
-        log: ['花 5 金币立即休整，全队回满血（诅咒未解除）', ...state.log].slice(0, 20),
+        screen: 'shop',
+        shopBought: true,
+        log: ['立即休整，全队回满血（诅咒未解除）', ...state.log].slice(0, 20),
       };
     }
 
     case 'SHOP_REFRESH': {
       if (state.screen !== 'shop') return state;
       const count = state.shopRefreshCount ?? 0;
-      if (count >= 3) return state;
+      if (count >= 3) return { ...state, toast: { msg: '刷新次数已用尽', kind: 'error' } };
       const cost = 5 + count * 5;
       if (state.gold < cost) return state;
       // 重新生成商店库存

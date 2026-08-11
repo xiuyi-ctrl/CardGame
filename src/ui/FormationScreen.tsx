@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Dispatch, DragEvent } from 'react';
 import type { GameState } from '../game/state/game';
-import { maxFieldForEnemy } from '../game/state/game';
+import { FIELD_MAX, maxFieldForEnemy } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { getMonster } from '../game/data/monsters';
 import { placeUnit } from '../game/state/formation';
@@ -47,9 +47,10 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   }
 
   const fieldCount = Object.keys(positions).filter((k) => positions[k]).length;
-  /** 敌方数量 → 我方出战上限（n+1，不超过 FIELD_MAX） */
+  /** 敌方数量 → 我方出战上限（n+1，不超过 FIELD_MAX）；Boss 战固定 5 只 */
+  const isBoss = !!state.map.boss[state.currentNodeId];
   const enemyCount = fb.encounter?.length ?? 1;
-  const maxField = maxFieldForEnemy(enemyCount);
+  const maxField = isBoss ? FIELD_MAX : maxFieldForEnemy(enemyCount);
   /** 宠物池 = 全部宠物中未上场的 */
   const pool = fb.units.filter((u) => !positions[u.uid]);
 

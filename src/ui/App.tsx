@@ -1062,8 +1062,9 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
     if (inField) {
       dispatch({ type: 'SET_FIELD', uids: state.field.filter((u) => u !== uid) });
     } else {
+      const isBoss = !!state.map.boss[state.currentNodeId];
       const enemyCount = state.formation?.encounter?.length ?? 1;
-      const maxField = maxFieldForEnemy(enemyCount);
+      const maxField = isBoss ? FIELD_MAX : maxFieldForEnemy(enemyCount);
       if (state.field.length < maxField) {
         dispatch({ type: 'SET_FIELD', uids: [...state.field, uid] });
       }
@@ -1178,7 +1179,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">商人 🏪</div>
       <p className="card-sub" style={{ textAlign: 'center' }}>
-        本店随机出售 4 种商品，或花 5 金币立即休整（回满血·不解诅咒）；{bought ? '已购买过商品，本节点不可再休整。' : '本节点购物与休整二选一。'}
+        本店随机出售 4 种商品，或免费立即休整（回满血·不解诅咒）；{bought ? '已购买过商品，本节点不可再休整。' : '本节点购物与休整二选一。'}
       </p>
       <div className="reward-cards">
         {stock.map((id) => {
@@ -1198,7 +1199,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
                 <span className="chip">💰 {price}</span>
                 <button
                   className="primary"
-                  disabled={soldOut || state.gold < price}
+                  disabled={bought || soldOut || state.gold < price}
                   onClick={() => dispatch({ type: 'SHOP_BUY', foodId: id })}
                 >
                   {soldOut ? '已购买' : '购买'}
@@ -1210,12 +1211,11 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
         <div className={`reward-card ${bought ? 'dim' : ''}`}>
           <div className="ricon">🛌</div>
           <div className="rtitle">立即休整</div>
-          <div className="rdesc">花费 5 金币让全队回满血（不解超进化诅咒）</div>
+          <div className="rdesc">免费让全队回满血（不解超进化诅咒）</div>
           <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-            <span className="chip">💰 5</span>
             <button
               className="primary"
-              disabled={state.gold < 5 || bought}
+              disabled={bought}
               onClick={() => dispatch({ type: 'SHOP_REST' })}
             >
               休整
@@ -1225,9 +1225,9 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
         <div className="reward-card">
           <div className="ricon">🔄</div>
           <div className="rtitle">刷新商品</div>
-          <div className="rdesc">花费 {refreshCost} 金币刷新全部商品（剩余 {3 - refreshCount} 次）</div>
+          <div className="rdesc">{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币刷新全部商品（剩余 ${3 - refreshCount} 次）`}</div>
           <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-            <span className="chip">💰 {refreshCost}</span>
+            {refreshCount < 3 && <span className="chip">💰 {refreshCost}</span>}
             <button
               className="primary"
               disabled={!canRefresh}

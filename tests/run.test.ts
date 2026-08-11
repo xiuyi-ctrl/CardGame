@@ -628,8 +628,9 @@ describe('商人·立即休整', () => {
     };
     const gold0 = s.gold;
     const after = dispatch(s, { type: 'SHOP_REST' });
-    expect(after.screen).toBe('roster');
-    expect(after.gold).toBe(gold0 - 5);
+    expect(after.screen).toBe('shop');
+    expect(after.gold).toBe(gold0);
+    expect(after.shopBought).toBe(true);
     expect(after.roster.every((u) => u.hp === u.maxHp)).toBe(true);
     expect(after.roster.find((u) => u.curse)?.curse).toBe('atkDown');
   });
