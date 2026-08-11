@@ -62,6 +62,7 @@ export type GameAction =
   | { type: 'DISCARD'; uid: string }
   | { type: 'SHOP_BUY'; foodId: string }
   | { type: 'SHOP_REST' }
+  | { type: 'SHOP_REFRESH' }
   | { type: 'REST_HEAL' }
   | { type: 'NEXT_NODE' }
   | { type: 'OPEN_WATCHTOWER'; nodeId?: string }
@@ -1099,6 +1100,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         gold: state.gold - 5,
         shopBought: false,
         log: ['花 5 金币立即休整，全队回满血（诅咒未解除）', ...state.log].slice(0, 20),
+      };
+    }
+
+    case 'SHOP_REFRESH': {
+      if (state.screen !== 'shop') return state;
+      const count = state.shopRefreshCount ?? 0;
+      if (count >= 3) return state;
+      const cost = 5 + count * 5;
+      if (state.gold < cost) return state;
+      // 重新生成商店库存
+      const currentNode = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
+      if (!currentNode) return state;
+      const rng = createRng(state.seed * 7919 + state.currentRow * 104729 + hashStr(currentNode.id) + count + 1);
+      const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
+      const newStock = shuffle(rng, pool).slice(0, 4);
+      return {
+        ...state,
+        gold: state.gold - cost,
+        shopStock: newStock,
+        shopRefreshCount: count + 1,
+        shopBoughtItems: [],
+        log: [`刷新商店商品（花费 ${cost} 金币）`, ...state.log].slice(0, 20),
       };
     }
 

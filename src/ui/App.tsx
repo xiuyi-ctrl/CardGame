@@ -1141,6 +1141,9 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
   const bought = state.shopBought === true;
   const boughtItems = state.shopBoughtItems ?? [];
   const stock = (state.shopStock ?? []).filter((id) => FOODS[id] || ITEMS[id]);
+  const refreshCount = state.shopRefreshCount ?? 0;
+  const refreshCost = 5 + refreshCount * 5;
+  const canRefresh = refreshCount < 3 && state.gold >= refreshCost;
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
@@ -1187,6 +1190,21 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
               onClick={() => dispatch({ type: 'SHOP_REST' })}
             >
               休整
+            </button>
+          </div>
+        </div>
+        <div className="reward-card">
+          <div className="ricon">🔄</div>
+          <div className="rtitle">刷新商品</div>
+          <div className="rdesc">花费 {refreshCost} 金币刷新全部商品（剩余 {3 - refreshCount} 次）</div>
+          <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
+            <span className="chip">💰 {refreshCost}</span>
+            <button
+              className="primary"
+              disabled={!canRefresh}
+              onClick={() => dispatch({ type: 'SHOP_REFRESH' })}
+            >
+              {refreshCount >= 3 ? '已用完' : '刷新'}
             </button>
           </div>
         </div>

@@ -197,6 +197,8 @@ export interface GameState {
   shopBoughtItems?: string[];
   /** 本次商人节点在售的 4 个随机物品 id（按节点确定性生成，重进同一商店不变） */
   shopStock?: string[];
+  /** 本次商人节点已刷新次数（0-3，刷新费用递增） */
+  shopRefreshCount?: number;
   /** 宝箱/钥匙门开启结果（chest 界面展示的文本列表） */
   chestResult?: string[];
   /** 本幕已访问的瞭望塔节点 ID 列表 */
@@ -635,9 +637,15 @@ export function generateMap(seed: number, act: number): RunMap {
   // 候选节点：非强制战斗行的普通战斗节点（保证逻辑不破坏 row1 纯战斗）
   const candidateBattles = () => mid.filter((n) => n.type === 'battle' && !forcedRows.has(layers.findIndex((r) => r.includes(n))));
   const countOf = (t: NodeType) => mid.filter((n) => n.type === t).length;
-  // 奇遇关每幕最多 1 个：多余转为战斗
+  // 奇遇关每幕最多 1 个：多余转为战斗；前 5 层不出现奇遇关
   const spNodes = mid.filter((n) => n.type === 'special');
-  if (spNodes.length > 1) spNodes.slice(1).forEach((n) => setType(n, 'battle'));
+  const earlySpNodes = spNodes.filter((n) => {
+    const row = layers.findIndex((r) => r.includes(n));
+    return row < 5;
+  });
+  earlySpNodes.forEach((n) => setType(n, 'battle'));
+  const remainingSp = mid.filter((n) => n.type === 'special');
+  if (remainingSp.length > 1) remainingSp.slice(1).forEach((n) => setType(n, 'battle'));
   const evTarget = 3 + Math.floor(rng() * 3); // 3~5
   const shopTarget = 2 + Math.floor(rng() * 3); // 2~4
   // 超出上限的转回战斗
@@ -655,6 +663,14 @@ export function generateMap(seed: number, act: number): RunMap {
   };
   ensure('event', evTarget);
   ensure('shop', shopTarget);
+  // 第一层（row 2）商店/事件各不超过 4 个：超出转为战斗
+  const firstRow = layers[2];
+  if (firstRow) {
+    const firstRowShops = firstRow.filter((n) => n.type === 'shop');
+    if (firstRowShops.length > 4) firstRowShops.slice(4).forEach((n) => setType(n, 'battle'));
+    const firstRowEvents = firstRow.filter((n) => n.type === 'event');
+    if (firstRowEvents.length > 4) firstRowEvents.slice(4).forEach((n) => setType(n, 'battle'));
+  }
   // 全部战斗的行数上限 2（row1 强制 + 至多 1 行随机巧合）：超出则把靠后的整行战斗行改为事件/商人（仍不超出上限）
   const allBattleRows = () =>
     layers.slice(1, -1).map((row, idx) => ({ row, idx: idx + 1 })).filter(({ row }) => row.every((n) => n.type === 'battle'));
@@ -678,11 +694,16 @@ export function generateMap(seed: number, act: number): RunMap {
 
   // 同步双节点：每幕 1~2 对。同一行两个相邻节点改写为「双生宝箱」（虚线相连，二选一；
   // 持侦察/加速道具可同时开启两个）。只覆盖普通战斗/精英节点，不破坏事件/商人数量保证。
+  // 第一层（row 2）sync+watchtower 总数不超过 2，后面层不超过 3。
   const syncPairs = randInt(rng, 1, 2);
   let syncMade = 0;
   for (let attempt = 0; attempt < syncPairs * 4 && syncMade < syncPairs; attempt++) {
     const row = randInt(rng, 2, lastRow - 1);
     const rowNodes = layers[row];
+    // 统计该行已有的 sync+watchtower 数量
+    const specialCount = rowNodes.filter((n) => n.type === 'sync' || n.type === 'watchtower').length;
+    const limit = row <= 2 ? 2 : 3;
+    if (specialCount >= limit) continue;
     for (let i = 0; i + 1 < rowNodes.length; i++) {
       const a = rowNodes[i];
       const b = rowNodes[i + 1];
@@ -724,8 +745,13 @@ export function generateMap(seed: number, act: number): RunMap {
 
   // 瞭望塔：首领关前 3 行内每一行以 20% 概率把该行一个战斗类节点（战斗/精英/被侵蚀）改写为瞭望塔
   // 不覆盖事件/商人/奇遇，也不动强制战斗行 1（此循环从第 2 行开始）
+  // 第一层（row 2）sync+watchtower 总数不超过 2，后面层不超过 3。
   for (let row = Math.max(2, lastRow - 3); row < lastRow; row++) {
     if (rng() < 0.2) {
+      // 统计该行已有的 sync+watchtower 数量
+      const specialCount = layers[row].filter((n) => n.type === 'sync' || n.type === 'watchtower').length;
+      const limit = row <= 2 ? 2 : 3;
+      if (specialCount >= limit) continue;
       const candidates = layers[row].filter(
         (n) => n.type === 'battle' || n.type === 'elite' || n.type === 'corrupted',
       );
@@ -751,6 +777,23 @@ export function generateMap(seed: number, act: number): RunMap {
       n.corruptDebuff = rng() < 0.5 ? 'spd' : 'dmg';
       n.corruptReward = rng() < 0.5 ? 'gold' : 'food';
       lastCorruptRow = row;
+    }
+  }
+
+  // 降低除普通战斗外，每种节点在中间层的相邻层连续出现的概率（降低 20%）
+  const nonBattleTypes: NodeType[] = ['event', 'shop', 'elite', 'special', 'watchtower', 'corrupted'];
+  for (const t of nonBattleTypes) {
+    for (let row = 2; row < lastRow; row++) {
+      const prevRow = row - 1;
+      const currCount = layers[row].filter((n) => n.type === t).length;
+      const prevCount = layers[prevRow].filter((n) => n.type === t).length;
+      // 如果相邻两行都有该类型节点，且当前行数量超过1个，则有10%概率将一个转为战斗
+      if (currCount > 0 && prevCount > 0 && currCount > 1 && rng() < 0.2) {
+        const target = layers[row].find((n) => n.type === t);
+        if (target) {
+          setType(target, 'battle');
+        }
+      }
     }
   }
 

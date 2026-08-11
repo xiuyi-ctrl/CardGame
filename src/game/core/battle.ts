@@ -962,6 +962,23 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
       );
     }
     if (key === 'hpDown') {
+      // 对 boss 使用腐蚀药水：造成已损失生命值 30% 的伤害（至少 10 点）
+      if (t.speciesId.startsWith('boss_')) {
+        const maxHp = getEffectiveMaxHp(t);
+        const lostHp = maxHp - t.hp;
+        const dmg = Math.max(5, Math.round(lostHp * 0.3));
+        const hitUnit = { ...t, hp: Math.max(1, t.hp - dmg) };
+        const newUnits = [...nb2.playerUnits, ...nb2.enemyUnits].map((u) => (u.uid === targetUid ? hitUnit : u));
+        return pushLog(
+          {
+            ...nb2,
+            playerUnits: newUnits.filter((u) => u.isPlayer),
+            enemyUnits: newUnits.filter((u) => !u.isPlayer),
+          },
+          `对 ${t.name} 使用道具：造成 ${dmg} 点伤害（已损失生命×30%）`,
+          sideOf(t),
+        );
+      }
       // 腐蚀药水：当前生命 -30%（至少保留 1 血，不直接致死）
       const hit = Math.max(1, Math.round(t.hp * 0.7));
       const hitUnit = { ...t, hp: Math.max(1, hit) };

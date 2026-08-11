@@ -192,6 +192,10 @@ export interface UnitCardProps {
 
 export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer }: UnitCardProps) {
   const dead = unit.hp <= 0;
+  // 计算有效速度（含临时 buff）
+  const buffSpd = (unit.battleBuffs?.spdUp ? 1 : 0) - (unit.battleBuffs?.spdDown ? 1 : 0);
+  const effectiveSpd = Math.max(1, unit.spd + buffSpd);
+  const spdColor = buffSpd > 0 ? 'var(--hp-good)' : buffSpd < 0 ? 'var(--hp-low)' : undefined;
   return (
     <div
       className={`unit-card ${small ? 'small' : ''} ${className} ${dead ? 'dead' : ''} ${onClick ? 'clickable' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
@@ -201,7 +205,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
         <span className="emoji">{unit.emoji}</span>
         {topStats && (
           <div className="card-stats">
-            <div className="card-stat">⚡{unit.spd}</div>
+            <div className="card-stat" style={spdColor ? { color: spdColor } : undefined}>⚡{effectiveSpd}</div>
           </div>
         )}
       </div>
@@ -209,7 +213,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
         <div>
           <div className="card-name">{unit.name}</div>
           <div className="card-sub">
-            <span>⚡{unit.spd}</span>
+            <span style={spdColor ? { color: spdColor } : undefined}>⚡{effectiveSpd}</span>
           </div>
         </div>
       )}
