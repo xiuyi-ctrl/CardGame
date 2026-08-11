@@ -34,6 +34,13 @@ export default function App() {
     }
   }, [state]);
 
+  useEffect(() => {
+    if (state.toast) {
+      const t = setTimeout(() => dispatch({ type: 'CLEAR_TOAST' }), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [state.toast]);
+
   return (
     <div className="screen">
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} />}
@@ -59,6 +66,11 @@ export default function App() {
       {state.screen === 'test-type' && <TestTypeScreen dispatch={dispatch} />}
       {state.screen === 'test-pick' && <TestPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
+      {state.toast && (
+        <div className={`toast ${state.toast.kind ?? 'info'}`}>
+          {state.toast.msg}
+        </div>
+      )}
     </div>
   );
 }

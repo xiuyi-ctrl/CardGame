@@ -73,6 +73,7 @@ export type GameAction =
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
   | { type: 'RETRY'; seed: number }
+  | { type: 'CLEAR_TOAST' }
   | { type: 'TITLE' };
 
 export function createInitialState(): GameState {
@@ -947,13 +948,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!reward) return state;
       let next: GameState = { ...state, screen: 'roster', rewards: [] };
       if (reward.kind === 'food' && reward.foodId) {
-        next = { ...next, inventory: { ...next.inventory, [reward.foodId]: (next.inventory[reward.foodId] ?? 0) + (reward.amount ?? 1) } };
+        const amt = reward.amount ?? 1;
+        next = { ...next, inventory: { ...next.inventory, [reward.foodId]: (next.inventory[reward.foodId] ?? 0) + amt } };
+        const fname = FOODS[reward.foodId]?.name ?? reward.foodId;
+        next = { ...next, toast: { msg: `获得 ${fname} ×${amt}`, kind: 'success' } };
       } else if (reward.kind === 'heal') {
         next = healRoster(next, (reward.amount ?? 30) / 100);
       } else if (reward.kind === 'recruit' && reward.monsterId) {
         if (next.roster.length < ROSTER_MAX) {
           const u = makeUnit(reward.monsterId, true, 0, false);
-          next = { ...next, roster: [...next.roster, u] };
+          next = { ...next, roster: [...next.roster, u], toast: { msg: `招募了 ${u.name}！`, kind: 'success' } };
         }
       } else if (reward.kind === 'gold') {
         next = { ...next, gold: next.gold + (reward.amount ?? 0) };
@@ -1140,7 +1144,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'RETRY':
-      return freshRun('momo', action.seed);
+      return { ...createInitialState(), screen: 'starter' };
+
+    case 'CLEAR_TOAST':
+      return { ...state, toast: undefined };
 
     case 'TITLE':
       return { ...createInitialState(), screen: 'title' };

@@ -226,6 +226,8 @@ export interface GameState {
   scoutSelecting?: boolean;
   /** 跳关选择模式：打开背包使用跳关道具后跳回地图，点击可达的战斗类节点直接获得奖励 */
   skipSelecting?: boolean;
+  /** 全局toast提示：选择奖励后显示获得的食物/宠物等信息 */
+  toast?: { msg: string; kind?: 'info' | 'success' | 'error' };
   /** 打开背包前所在的界面（关闭背包时返回） */
   backpackFrom?: Screen;
   /** 自定义测试进行中：战斗结束后直接回首页 */

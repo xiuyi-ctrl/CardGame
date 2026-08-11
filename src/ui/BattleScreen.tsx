@@ -636,12 +636,17 @@ export function BattleScreen({ state, dispatch }: Props) {
                 确认承受代价
               </button>
             ) : (
-              <button
-                className="primary big-btn"
-                onClick={() => dispatch({ type: 'RETRY', seed: Math.floor(Math.random() * 1e9) })}
-              >
-                重新开始
-              </button>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  className="primary big-btn"
+                  onClick={() => dispatch({ type: 'RETRY', seed: Math.floor(Math.random() * 1e9) })}
+                >
+                  重新选择宠物再来
+                </button>
+                <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+                  返回主界面
+                </button>
+              </div>
             )}
           </div>
         </div>
