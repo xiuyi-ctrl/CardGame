@@ -445,6 +445,17 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
           break;
         }
       }
+      // 嘲讽反向限制：己方被嘲讽时，攻击技能强制以嘲讽来源为目标
+      if (actor.isPlayer && skill.kind === 'attack') {
+        const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
+        if (tauntSrc?.sourceUid) {
+          const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
+          if (src) {
+            targets = Array.from({ length: skill.hits ?? 1 }, () => src);
+            break;
+          }
+        }
+      }
       const reach = skill.reach ?? 'front';
       if (reach === 'pierce') {
         let ft: Unit | undefined;
@@ -502,7 +513,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   return { targets, battle: nb };
 }
 
-function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number }): Unit {
+function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number; sourceUid?: string }): Unit {
   const idx = unit.statuses.findIndex((s) => s.kind === effect.kind);
   if (idx >= 0) {
     const next = [...unit.statuses];
@@ -689,7 +700,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns });
             nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
           } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown') {
-            t2 = applyStatusTo(t2, e);
+            t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e);
           }
         }
         nb = replaceUnit(nb, t2);

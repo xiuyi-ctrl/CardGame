@@ -4,6 +4,8 @@ export interface StatusEffect {
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
   turns: number;
+  /** 嘲讽来源：记录施加嘲讽的单位 UID，被嘲讽者只能攻击该来源 */
+  sourceUid?: string;
 }
 
 export type SkillTarget = 'single' | 'all' | 'random' | 'self' | 'ally';
