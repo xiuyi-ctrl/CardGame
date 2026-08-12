@@ -491,7 +491,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       () => {
         setAnimating(false);
         setHpMap(null);
-        setShieldMap(null);
+        // 不清理 shieldMap，保留最后事件快照，防止新动画启动时 prevShields 与真实值的跳变导致盾图标闪烁
         setStatusMap(null);
         setRevealedKinds(allRevealed(newStatuses));
         setEndingStatuses({});
