@@ -60,7 +60,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
+  const { fx, pops, hpMap, shieldMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -81,6 +81,7 @@ export function BattleScreen({ state, dispatch }: Props) {
    *  到期状态标签在对应掉血动画触发时才移除 */
   const shownUnit = (u: Unit): Unit => {
     let next = hpMap ? { ...u, hp: hpMap[u.uid] ?? u.hp } : u;
+    if (shieldMap) next = { ...next, shield: shieldMap[u.uid] ?? next.shield };
     const sm = statusMap ? statusMap[u.uid] : undefined;
     if (sm) next = { ...next, statuses: sm.map((s) => ({ ...s })) };
     const hidden = hiddenStatuses[u.uid];

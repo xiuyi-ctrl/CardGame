@@ -143,6 +143,8 @@ export interface LogEntry {
   /** 本条日志发生时全体单位的状态快照（uid → 状态数组，深拷贝），供战斗动画按事件逐步回放状态层数
    *  （如攻击附加灼烧 5 层、随后 dot 结算剩 2 层，各自对应各自日志快照） */
   statuses?: Record<string, StatusEffect[]>;
+  /** 本条日志发生时全体单位的护盾快照（uid → shield），供战斗动画按事件逐步更新护盾显示 */
+  shields?: Record<string, number>;
   /** 本条日志涉及的行动者 uid（攻击/治疗/buff/反伤等），供动画精确定位（同名单位也能区分） */
   actorUid?: string;
   /** 本条日志涉及的目标 uid（受击/被治疗/被强化等），供动画精确定位（同名单位也能区分） */

@@ -275,7 +275,10 @@ export function pushLog(
   // 附加当下全员状态快照（深拷贝，防 tickStatuses 原地递减污染历史），供 UI 按动画事件回放状态层数
   const statuses: Record<string, StatusEffect[]> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) statuses[u.uid] = u.statuses.map((s) => ({ ...s }));
-  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, actorUid, targetUid, addsStatus }] };
+  // 附加当下全员护盾快照，供 UI 按动画事件逐步更新护盾显示
+  const shields: Record<string, number> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) shields[u.uid] = u.shield;
+  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus }] };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
