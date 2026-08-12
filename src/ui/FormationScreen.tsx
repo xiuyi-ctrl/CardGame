@@ -128,7 +128,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
       <div className="hud">
         <span className="act">第 {state.act} 层 · {title}</span>
         <span className="chip">👥 出战 {fieldCount}/{maxField} 只</span>
-        <button className="home-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
+        <button className="home-btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
           ↩ 返回地图
         </button>
       </div>

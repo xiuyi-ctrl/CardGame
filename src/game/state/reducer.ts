@@ -69,6 +69,7 @@ export type GameAction =
   | { type: 'SHOP_REFRESH' }
   | { type: 'REST_HEAL' }
   | { type: 'NEXT_NODE' }
+  | { type: 'BACK_TO_MAP' }
   | { type: 'OPEN_WATCHTOWER'; nodeId?: string }
   | { type: 'CLOSE_WATCHTOWER' }
   | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
@@ -1224,6 +1225,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...state, screen: 'map', chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined, postBattle: undefined };
       }
       return { ...state, screen: 'victory' };
+    }
+
+    case 'BACK_TO_MAP': {
+      return { ...state, screen: 'map', formation: undefined, gauntletOrder: undefined, gauntletSize: undefined };
     }
 
     case 'RETRY':

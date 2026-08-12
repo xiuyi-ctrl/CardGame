@@ -98,7 +98,7 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
       <div className="hud">
         <span className="act">第 {state.act} 层 · 车轮战出战顺序</span>
         <span className="chip">🔥 轮换上阵</span>
-        <button className="home-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
+        <button className="home-btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
           ↩ 返回地图
         </button>
       </div>
