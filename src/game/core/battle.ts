@@ -206,6 +206,18 @@ function startRound(b: BattleState): BattleState {
     if (res.unit.hp > 0) tickStatuses(res.unit);
     nb = replaceUnit(nb, res.unit);
   }
+  // 清除来源已死亡的嘲讽
+  const allUnits = [...nb.playerUnits, ...nb.enemyUnits];
+  for (const u of allUnits) {
+    if (u.hp <= 0) continue;
+    const taunt = u.statuses.find((s) => s.kind === 'taunt');
+    if (taunt?.sourceUid) {
+      const src = allUnits.find((x) => x.uid === taunt.sourceUid);
+      if (!src || src.hp <= 0) {
+        nb = replaceUnit(nb, { ...u, statuses: u.statuses.filter((s) => s.kind !== 'taunt') });
+      }
+    }
+  }
   // 被动再生：每回合开始恢复（存活且未满血）
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     const p = getUnitPassive(u);
@@ -409,6 +421,17 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   const back = enemies.filter((u) => u.row === 'back');
   let nb = b;
   let targets: Unit[] = [];
+  // 嘲讽统一约束：被嘲讽者的所有非 self/ally 技能强制以嘲讽来源为目标
+  if (skill.target !== 'self' && skill.target !== 'ally') {
+    const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
+    if (tauntSrc?.sourceUid) {
+      const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
+      if (src) {
+        targets = Array.from({ length: skill.hits ?? 1 }, () => src);
+        return { targets, battle: nb };
+      }
+    }
+  }
   switch (skill.target) {
     case 'self':
       targets = [actor];
@@ -437,35 +460,6 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       break;
     }
     case 'single': {
-      // 嘲讽：敌方攻击时，若我方有带嘲讽的存活单位，强制以该单位为目标
-      if (!actor.isPlayer && skill.kind === 'attack') {
-        const taunted = enemies.find((u) => u.hp > 0 && u.statuses.some((s) => s.kind === 'taunt'));
-        if (taunted) {
-          targets = Array.from({ length: skill.hits ?? 1 }, () => taunted);
-          break;
-        }
-      }
-      // 嘲讽反向限制：己方被嘲讽时，所有技能强制以嘲讽来源为目标
-      if (actor.isPlayer) {
-        const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
-        if (tauntSrc?.sourceUid) {
-          const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
-          if (src) {
-            targets = Array.from({ length: skill.hits ?? 1 }, () => src);
-            break;
-          }
-        }
-      } else {
-        // 嘲讽反向限制：敌方被嘲讽时，所有技能强制以嘲讽来源为目标
-        const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
-        if (tauntSrc?.sourceUid) {
-          const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
-          if (src) {
-            targets = Array.from({ length: skill.hits ?? 1 }, () => src);
-            break;
-          }
-        }
-      }
       const reach = skill.reach ?? 'front';
       if (reach === 'pierce') {
         let ft: Unit | undefined;
@@ -531,7 +525,12 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
       // 灼烧/中毒可叠加：层数相加（可挂多层）
       next[idx] = { ...next[idx], value: next[idx].value + effect.value };
     } else {
-      next[idx] = { ...next[idx], value: Math.max(next[idx].value, effect.value), turns: Math.max(next[idx].turns, effect.turns) };
+      next[idx] = {
+        ...next[idx],
+        value: Math.max(next[idx].value, effect.value),
+        turns: Math.max(next[idx].turns, effect.turns),
+        ...(effect.kind === 'taunt' ? { sourceUid: effect.sourceUid } : {}),
+      };
     }
     return { ...unit, statuses: next };
   }
