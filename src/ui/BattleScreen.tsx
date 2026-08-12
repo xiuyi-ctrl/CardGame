@@ -236,9 +236,8 @@ export function BattleScreen({ state, dispatch }: Props) {
     const isSelected = selectedOrder?.skillId === skill.id;
     // 已选择该技能：再次点击取消选择（退还行动点、恢复未行动状态）
     if (isSelected) {
-      if (pendingSkill?.skillId === skill.id) {
-        setPendingSkill(null);
-      } else {
+      setPendingSkill(null);
+      if (pendingSkill?.skillId !== skill.id) {
         dispatch({ type: 'PLAYER_CANCEL_ORDER', actorUid: selected.uid });
       }
       return;
@@ -358,21 +357,23 @@ export function BattleScreen({ state, dispatch }: Props) {
   const playerFront = [battle.playerUnits.find((u) => u.row === 'front' && u.column === 0), battle.playerUnits.find((u) => u.row === 'front' && u.column === 1), battle.playerUnits.find((u) => u.row === 'front' && u.column === 2)];
   const playerBack = [battle.playerUnits.find((u) => u.row === 'back' && u.column === 0), battle.playerUnits.find((u) => u.row === 'back' && u.column === 1), battle.playerUnits.find((u) => u.row === 'back' && u.column === 2)];
 
-  const hint = pendingSkill
-    ? `⚡ ${getSkill(pendingSkill.skillId).name}：请选择目标`
-    : pendingTame
-      ? '🍖 选择血量低于 40% 的敌人进行驯服'
-      : pendingBattleItem
-        ? `🧪 ${getItem(pendingBattleItem).name}：选择目标使用`
-        : swapFrom
-          ? '↔ 请选择要交换位置的己方宠物'
-          : selected
-            ? `⚔️ ${selected.emoji} ${selected.name}：选择技能或换位`
-            : animating
-              ? '战斗结算中…'
-              : canAct
-                ? '给每只宠物下达技能指令，点「⚡ 结束回合」后按速度统一结算'
-                : '敌方行动中…';
+  const hint = selectedOrder
+    ? `⚡ ${getSkill(selectedOrder.skillId).name}技能已选择`
+    : pendingSkill
+      ? `⚡ ${getSkill(pendingSkill.skillId).name}：请选择目标`
+      : pendingTame
+        ? '🍖 选择血量低于 40% 的敌人进行驯服'
+        : pendingBattleItem
+          ? `🧪 ${getItem(pendingBattleItem).name}：选择目标使用`
+          : swapFrom
+            ? '↔ 请选择要交换位置的己方宠物'
+            : selected
+              ? `⚔️ ${selected.emoji} ${selected.name}：选择技能或换位`
+              : animating
+                ? '战斗结算中…'
+                : canAct
+                  ? '给每只宠物下达技能指令，点「⚡ 结束回合」后按速度统一结算'
+                  : '敌方行动中…';
 
   return (
     <div className="screen">
