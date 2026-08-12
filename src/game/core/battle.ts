@@ -114,7 +114,7 @@ export function useRng(b: BattleState, fn: (value: number, b2: BattleState) => B
 export function computeTurnOrder(b: BattleState): string[] {
   const all = [...b.playerUnits, ...b.enemyUnits]
     .filter((u) => u.hp > 0)
-    .sort((a, c) => getEffectiveSpd(c) - getEffectiveSpd(a) || a.uid.localeCompare(c.uid));
+    .sort((a, c) => getEffectiveSpd(c) - getEffectiveSpd(a) || (a.isPlayer === c.isPlayer ? 0 : a.isPlayer ? -1 : 1));
   return all.map((u) => u.uid);
 }
 
