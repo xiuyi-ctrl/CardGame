@@ -217,11 +217,17 @@ export interface GameState {
     encounter: { speciesId: string }[];
     nodeId: string;
     options?: { corruptDebuff?: 'spd' | 'dmg'; untameable?: boolean };
+    /** 移动前的位置（BACK_TO_MAP 时恢复） */
+    prevRow?: number;
+    prevNodeId?: string;
   };
   /** 车轮战：等待玩家选择出战顺序（GAUNTLET_ORDER_CONFIRM 确认后创建战斗） */
   gauntletOrder?: Unit[];
   /** 车轮战：敌方数量（n v n，顺序栏只解锁 n 个槽位） */
   gauntletSize?: number;
+  /** 车轮战：移动前的位置（BACK_TO_MAP 时恢复） */
+  gauntletPrevRow?: number;
+  gauntletPrevNodeId?: string;
   /** 侦查符使用结果：查看指定节点情报（背包界面展示） */
   scoutResult?: { nodeId: string; title: string; detail: string } | null;
   /** 侦查选择模式：打开背包使用侦查符后跳回地图，点击任意节点查看情报 */

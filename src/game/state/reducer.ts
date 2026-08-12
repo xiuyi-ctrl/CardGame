@@ -314,7 +314,7 @@ function autoPosition(units: Unit[]): Unit[] {
   );
 }
 
-function enterNode(base: GameState, node: MapNode): GameState {
+function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?: string): GameState {
   if (node.type === 'rest') return { ...base, screen: 'rest' };
   if (node.type === 'shop') {
     const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
@@ -336,7 +336,7 @@ function enterNode(base: GameState, node: MapNode): GameState {
     if (!encounter || base.roster.length === 0) return { ...base, screen: 'map' };
     const maxField = FIELD_MAX;
     const initial = autoPosition(fieldUnits(base, maxField));
-    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id } };
+    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, prevRow, prevNodeId } };
   }
   // 同步双节点（双生宝箱）：抵达开箱；持有双生符（加速道具）时消耗 1 个、同时开启两个宝箱（侦察符只用于查看情报，不双开）
   if (node.type === 'sync') {
@@ -370,7 +370,7 @@ function enterNode(base: GameState, node: MapNode): GameState {
     if (base.roster.length === 0) return { ...base, screen: 'map' };
     const maxField = maxFieldForEnemy(encounter.length);
     const initial = autoPosition(fieldUnits(base, maxField));
-    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true } } };
+    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true }, prevRow, prevNodeId } };
   }
   // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
   if (node.type === 'keydoor') {
@@ -393,14 +393,14 @@ function enterNode(base: GameState, node: MapNode): GameState {
     const maxField = maxFieldForEnemy(encounter.length);
     const units = fieldUnits(base, maxField);
     if (units.length === 0) return { ...base, screen: 'map' };
-    return { ...base, screen: 'gauntlet-order', gauntletOrder: units, gauntletSize: encounter.length };
+    return { ...base, screen: 'gauntlet-order', gauntletOrder: units, gauntletSize: encounter.length, gauntletPrevRow: prevRow, gauntletPrevNodeId: prevNodeId };
   }
   // 普通/精英/被侵蚀：先布阵选择站位（棋盘默认放自动出战宠物，列表为全部宠物池）
   const options = node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : undefined;
   if (base.roster.length === 0) return { ...base, screen: 'map' };
   const maxField = maxFieldForEnemy(encounter.length);
   const initial = autoPosition(fieldUnits(base, maxField));
-  return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options } };
+  return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
 }
 
 function bossCleared(state: GameState): boolean {
@@ -437,8 +437,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (node.type === 'keydoor' && !hasKeyFor(state, node)) return state;
       const visitedNodeIds = [...(state.visitedNodeIds ?? [])];
       if (!visitedNodeIds.includes(action.nodeId)) visitedNodeIds.push(action.nodeId);
+      const prevRow = state.currentRow;
+      const prevNodeId = state.currentNodeId;
       const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false, visitedNodeIds, skipSelecting: false, scoutSelecting: false };
-      return enterNode(base, node);
+      return enterNode(base, node, prevRow, prevNodeId);
     }
 
     case 'DEBUG_JUMP': {
@@ -1228,7 +1230,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'BACK_TO_MAP': {
-      return { ...state, screen: 'map', formation: undefined, gauntletOrder: undefined, gauntletSize: undefined };
+      const prevRow = state.formation?.prevRow ?? state.gauntletPrevRow;
+      const prevNodeId = state.formation?.prevNodeId ?? state.gauntletPrevNodeId;
+      return {
+        ...state,
+        screen: 'map',
+        currentRow: prevRow ?? state.currentRow,
+        currentNodeId: prevNodeId ?? state.currentNodeId,
+        formation: undefined,
+        gauntletOrder: undefined,
+        gauntletSize: undefined,
+        gauntletPrevRow: undefined,
+        gauntletPrevNodeId: undefined,
+      };
     }
 
     case 'RETRY':
