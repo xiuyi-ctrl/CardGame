@@ -4,6 +4,7 @@ import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
 import {
+  REST_SKILL_ID,
   isTameable,
   skillUsesLeft,
   tameChance,
@@ -369,7 +370,9 @@ export function BattleScreen({ state, dispatch }: Props) {
   const playerBack = [battle.playerUnits.find((u) => u.row === 'back' && u.column === 0), battle.playerUnits.find((u) => u.row === 'back' && u.column === 1), battle.playerUnits.find((u) => u.row === 'back' && u.column === 2)];
 
   const hint = selectedOrder
-    ? `⚡ ${getSkill(selectedOrder.skillId).name}技能已选择`
+    ? selectedOrder.skillId === REST_SKILL_ID
+      ? '😴 休息已选择'
+      : `⚡ ${getSkill(selectedOrder.skillId).name}技能已选择`
     : pendingSkill
       ? `⚡ ${getSkill(pendingSkill.skillId).name}：请选择目标`
       : pendingTame
