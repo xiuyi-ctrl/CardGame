@@ -421,8 +421,8 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   const back = enemies.filter((u) => u.row === 'back');
   let nb = b;
   let targets: Unit[] = [];
-  // 嘲讽统一约束：被嘲讽者的所有非 self/ally 技能强制以嘲讽来源为目标
-  if (skill.target !== 'self' && skill.target !== 'ally') {
+  // 嘲讽统一约束：被嘲讽者的单体/随机技能强制以嘲讽来源为目标（全体/自身/队友不受限）
+  if (skill.target !== 'self' && skill.target !== 'ally' && skill.target !== 'all') {
     const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
     if (tauntSrc?.sourceUid) {
       const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
