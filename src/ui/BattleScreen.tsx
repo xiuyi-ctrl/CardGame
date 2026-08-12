@@ -145,6 +145,16 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
       if (skill.target === 'single') {
+        // 嘲讽反向限制：己方被嘲讽时，所有技能只能以嘲讽来源为目标
+        const actor = battle?.playerUnits.find((u) => u.uid === pendingSkill.actorUid);
+        const tauntSrc = actor?.statuses.find((s) => s.kind === 'taunt');
+        if (tauntSrc?.sourceUid) {
+          const src = aliveEnemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
+          if (src) {
+            targets.add(src.uid);
+            return targets;
+          }
+        }
         aliveEnemies.forEach((u) => {
           if (enemyTargetable(skill, u, aliveEnemies)) targets.add(u.uid);
         });

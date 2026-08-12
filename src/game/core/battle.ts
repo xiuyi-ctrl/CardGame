@@ -445,8 +445,8 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
           break;
         }
       }
-      // 嘲讽反向限制：己方被嘲讽时，攻击技能强制以嘲讽来源为目标
-      if (actor.isPlayer && skill.kind === 'attack') {
+      // 嘲讽反向限制：己方被嘲讽时，所有技能强制以嘲讽来源为目标
+      if (actor.isPlayer) {
         const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
         if (tauntSrc?.sourceUid) {
           const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
