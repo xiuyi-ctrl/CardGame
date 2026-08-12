@@ -66,6 +66,7 @@ export function makeUnit(
     passive: s.passive,
     skillUses,
     statuses: [],
+    shield: 0,
     column,
     row,
     isPlayer,
@@ -433,6 +434,14 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       break;
     }
     case 'single': {
+      // 嘲讽：敌方攻击时，若我方有带嘲讽的存活单位，强制以该单位为目标
+      if (!actor.isPlayer && skill.kind === 'attack') {
+        const taunted = enemies.find((u) => u.hp > 0 && u.statuses.some((s) => s.kind === 'taunt'));
+        if (taunted) {
+          targets = Array.from({ length: skill.hits ?? 1 }, () => taunted);
+          break;
+        }
+      }
       const reach = skill.reach ?? 'front';
       if (reach === 'pierce') {
         let ft: Unit | undefined;
@@ -607,9 +616,13 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     for (const t of targets) {
       const e = skill.effects?.[0];
       if (!e) continue;
-      const buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns });
+      let buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns });
+      // 护盾：同时更新 shield 字段
+      if (e.kind === 'shield') {
+        buffed = { ...buffed, shield: buffed.shield + e.value };
+      }
       nb = replaceUnit(nb, buffed);
-      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor), actor.uid, t.uid);
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
     }
   } else {
     const perTarget = new Map<string, number>();
@@ -653,10 +666,26 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         // 目标已在前面某段被击杀（如一段清掉唯一敌人）：后续段不再命中、不产生攻击日志，
         // 对应动画（前冲/受击/飘字）也随之不再播放
         if (t2.hp <= 0) break;
-        t2 = { ...t2, hp: Math.max(0, t2.hp - seg) };
-        // 技能效果（灼烧/中毒/减防/眩晕）：每段攻击都触发（含击杀段），先于日志以便快照包含状态
+        // 护盾吸收：伤害优先扣除护盾，剩余扣血
+        let remainingDmg = seg;
+        if (t2.shield > 0) {
+          const shieldAbsorb = Math.min(t2.shield, remainingDmg);
+          t2 = { ...t2, shield: t2.shield - shieldAbsorb };
+          remainingDmg -= shieldAbsorb;
+          // 护盾耗尽时移除 shield 状态
+          if (t2.shield <= 0) {
+            t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'shield') };
+          }
+        }
+        t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
+        // 技能效果：每段攻击都触发（含击杀段），先于日志以便快照包含状态
         for (const e of skill.effects ?? []) {
-          if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun') {
+          // 弱化技能：随机选择 atkDown 或 spdDown
+          if (skill.id === 'weaken') {
+            const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
+            t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns });
+            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+          } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown') {
             t2 = applyStatusTo(t2, e);
           }
         }
@@ -686,6 +715,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
               nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
             }
           }
+        }
+        // 嘲讽清除：被嘲讽的目标受到攻击后移除嘲讽状态
+        if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'taunt')) {
+          t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'taunt') };
+          nb = replaceUnit(nb, t2);
         }
       }
       // 被动效果（毒/灼烧）标记在最后一段攻击日志上，供动画揭示
@@ -1088,6 +1122,9 @@ export function getEffectiveSpd(u: Unit): number {
   let spd = u.spd;
   if (u.battleBuffs?.spdUp) spd += 1;
   if (u.battleBuffs?.spdDown) spd -= 1;
+  // 状态效果减速（弱化技能）
+  const spdDownStatus = u.statuses.find((s) => s.kind === 'spdDown');
+  if (spdDownStatus) spd -= spdDownStatus.value;
   return Math.max(1, spd);
 }
 

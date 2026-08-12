@@ -247,7 +247,7 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     vi.useFakeTimers();
     const a = makeUnit('pipi', true, 1, false);
     const b0 = createBattle([a], [{ speciesId: 'kiki' }], 9);
-    const b1 = playerEndTurn(playerSkill(b0, a.uid, 'poison_sting', b0.enemyUnits[0].uid));
+    const b1 = playerEndTurn(playerSkill(b0, a.uid, 'weaken', b0.enemyUnits[0].uid));
     const enemyUid = b1.enemyUnits[0].uid;
 
     const { result, rerender } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
@@ -256,13 +256,17 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     });
     expect(result.current.hiddenStatuses).toEqual({});
 
-    // 结算后新增中毒先隐藏（StrictMode 下曾因 useMemo 工厂副作用导致差集为空、攻击前就显示）
+    // 结算后新增减攻/减速先隐藏（StrictMode 下曾因 useMemo 工厂副作用导致差集为空、攻击前就显示）
     act(() => rerender({ b: b1 }));
-    expect(result.current.hiddenStatuses).toEqual({ [enemyUid]: ['poison'] });
+    const hiddenKinds = result.current.hiddenStatuses[enemyUid] ?? [];
+    expect(hiddenKinds.length).toBe(1);
+    expect(['atkDown', 'spdDown']).toContain(hiddenKinds[0]);
 
     // 未到该目标被攻击的动画事件前，仍保持隐藏
     act(() => vi.advanceTimersByTime(0));
-    expect(result.current.hiddenStatuses).toEqual({ [enemyUid]: ['poison'] });
+    const hiddenKinds2 = result.current.hiddenStatuses[enemyUid] ?? [];
+    expect(hiddenKinds2.length).toBe(1);
+    expect(['atkDown', 'spdDown']).toContain(hiddenKinds2[0]);
     vi.useRealTimers();
   });
 

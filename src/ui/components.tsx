@@ -20,6 +20,9 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   atkDown: '⬇️',
   stun: '💫',
   healTick: '✚',
+  shield: '🛡️',
+  taunt: '🫧',
+  spdDown: '🕸️',
 };
 
 function effectText(e: StatusEffect): string {
@@ -37,6 +40,12 @@ function effectText(e: StatusEffect): string {
       return `眩晕（跳过行动）${turns}`;
     case 'healTick':
       return `每回合回复 ${e.value}${turns}`;
+    case 'shield':
+      return `护盾 ${e.value}${turns}`;
+    case 'taunt':
+      return `嘲讽${turns}`;
+    case 'spdDown':
+      return `速度 -${e.value}${turns}`;
   }
 }
 
@@ -108,6 +117,9 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   atkDown: { icon: '⬇️', label: '攻击降低' },
   stun: { icon: '💫', label: '眩晕' },
   healTick: { icon: '💚', label: '持续治疗' },
+  shield: { icon: '🛡️', label: '护盾' },
+  taunt: { icon: '🫧', label: '嘲讽' },
+  spdDown: { icon: '🕸️', label: '速度降低' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -131,9 +143,10 @@ export function StatusIcons({ unit }: { unit: Unit }) {
           s.kind === 'burn' || s.kind === 'poison'
             ? `${meta.label}（${s.value} 层，每回合结算一半）`
             : `${meta.label}（剩余 ${s.turns} 回合）`;
+        const display = s.kind === 'shield' ? `${meta.icon}${s.value}` : meta.icon;
         return (
           <span key={i} title={tip}>
-            {meta.icon}
+            {display}
           </span>
         );
       })}
@@ -226,6 +239,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
       <HpBar hp={unit.hp} maxHp={unit.maxHp} />
       <div className="card-sub">
         {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
+        {unit.shield > 0 && <span>🛡️{unit.shield}</span>}
         <StatusIcons unit={unit} />
         <PassiveBadge unit={unit} />
         <BattleBuffIcons unit={unit} />

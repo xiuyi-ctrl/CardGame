@@ -13,7 +13,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   lulu: {
     id: 'lulu', name: '泡泡', emoji: '🐸',
     baseHp: 14, baseSpd: 1,
-    skills: ['punch', 'aqua_shot'],
+    skills: ['punch', 'aqua_shot', 'water_bath'],
     desc: '开局御三家之一，血量最高的坦克型，靠持续回复磨血。',
     passive: 'watery_regen',
     evolutions: [{ to: 'lulu_king' }],
@@ -22,7 +22,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   fifi: {
     id: 'fifi', name: '灼灼', emoji: '🔥',
     baseHp: 7, baseSpd: 5,
-    skills: ['punch', 'ember'],
+    skills: ['ember', 'double_hit'],
     desc: '开局御三家之一，全游戏速度最快的先手刺客，但极其脆弱。',
     passive: 'heat',
     evolutions: [{ to: 'fifi_king' }],
@@ -31,7 +31,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   kiki: {
     id: 'kiki', name: '铁墩', emoji: '🛡️',
     baseHp: 12, baseSpd: 2,
-    skills: ['punch', 'steel_spike'],
+    skills: ['steel_spike', 'shield_skill'],
     desc: '血厚的基础宠，皮糙肉厚的盾卫。',
     passive: 'iron_guard',
     evolutions: [{ to: 'gora' }],
@@ -40,7 +40,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   mimi: {
     id: 'mimi', name: '咪咪', emoji: '🐍',
     baseHp: 10, baseSpd: 3,
-    skills: ['bite', 'shadow_claw'],
+    skills: ['bite', 'poison_sting'],
     desc: '直接掌握高阶单点技能的影系输出。',
     passive: 'venom_fang',
     evolutions: [{ to: 'mimi_king' }],
@@ -49,7 +49,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   pipi: {
     id: 'pipi', name: '刺刺', emoji: '🦔',
     baseHp: 11, baseSpd: 2,
-    skills: ['punch', 'poison_sting'],
+    skills: ['weaken', 'provoke'],
     desc: '靠中毒持续伤害磨血。',
     passive: 'spike',
     evolutions: [{ to: 'sisi' }],

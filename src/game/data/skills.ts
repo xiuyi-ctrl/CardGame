@@ -20,7 +20,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   aqua_shot: {
     id: 'aqua_shot', name: '水弹', desc: '攻击单个敌人',
-    target: 'single', kind: 'attack', damage: 6,
+    target: 'single', kind: 'attack', damage: 3,
   },
   leaf_needle: {
     id: 'leaf_needle', name: '叶针', desc: '连续两次攻击随机敌人',
@@ -32,7 +32,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   steel_spike: {
     id: 'steel_spike', name: '铁刺', desc: '攻击单个敌人，降低其伤害',
-    target: 'single', kind: 'attack', damage: 5,
+    target: 'single', kind: 'attack', damage: 3,
     effects: [{ kind: 'atkDown', value: 1, turns: 2 }],
   },
   heal_light: {
@@ -73,6 +73,27 @@ export const SKILLS: Record<string, SkillDef> = {
   pierce_strike: {
     id: 'pierce_strike', name: '穿刺', desc: '无视前后排，指定攻击任意位置敌人',
     target: 'single', kind: 'attack', damage: 6, reach: 'direct',
+  },
+
+  // —— 初始宠物专属技能 ——
+  water_bath: {
+    id: 'water_bath', name: '水浴', desc: '恢复指定队友生命值',
+    target: 'ally', kind: 'heal', heal: 5, uses: 2,
+  },
+  shield_skill: {
+    id: 'shield_skill', name: '坚盾', desc: '为指定队友或自身附加5点护盾',
+    target: 'ally', kind: 'buff', uses: 2,
+    effects: [{ kind: 'shield', value: 5, turns: 99 }],
+  },
+  weaken: {
+    id: 'weaken', name: '弱化', desc: '随机降低目标攻击或速度（2层，2回合）',
+    target: 'single', kind: 'attack', damage: 0,
+    effects: [{ kind: 'atkDown', value: 2, turns: 2 }],
+  },
+  provoke: {
+    id: 'provoke', name: '挑衅', desc: '攻击目标并使其2回合内只能攻击自己',
+    target: 'single', kind: 'attack', damage: 3,
+    effects: [{ kind: 'taunt', value: 1, turns: 2 }],
   },
 
   // —— Boss 专属技能 ——
