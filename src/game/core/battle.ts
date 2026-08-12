@@ -455,6 +455,16 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
             break;
           }
         }
+      } else {
+        // 嘲讽反向限制：敌方被嘲讽时，所有技能强制以嘲讽来源为目标
+        const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
+        if (tauntSrc?.sourceUid) {
+          const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
+          if (src) {
+            targets = Array.from({ length: skill.hits ?? 1 }, () => src);
+            break;
+          }
+        }
       }
       const reach = skill.reach ?? 'front';
       if (reach === 'pierce') {
