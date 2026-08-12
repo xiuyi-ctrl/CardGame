@@ -182,9 +182,7 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if ((m = text.match(RE_BUFF))) {
     const actorUid = entry.actorUid ?? findUid(b, side, m[1]);
     const targetName = m[3];
-    const targetUid = targetName === '自身'
-      ? actorUid
-      : (entry.targetUid ?? findUid(b, side, targetName));
+    const targetUid = entry.targetUid ?? (targetName === '自身' ? actorUid : findUid(b, side, targetName));
     return { kind: 'buff', actorUid, targetUid, value: 0, skillName: m[2], hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   if ((m = text.match(RE_DOT))) {
@@ -433,40 +431,48 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               return changed ? next : p;
             });
           }
+          // 每个 setFx 立即捕获当时的 seq，供 clear 超时精确比对，
+          // 避免多次 ++fxSeq 后统一捕获导致 actorSeq/targetSeq 与实际 seq 不匹配
+          let capturedActorSeq = 0;
+          let capturedTargetSeq = 0;
           if (ev.kind === 'attack') {
-            if (actorUid) setFx((p) => ({ ...p, [actorUid]: { cls: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down', seq: ++fxSeq } }));
+            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down', seq: capturedActorSeq } })); }
             if (targetUid) {
-              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: ++fxSeq } }));
+              ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
             }
           } else if (ev.kind === 'heal') {
-            if (actorUid) setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: ++fxSeq } }));
+            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
             if (targetUid) {
-              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-heal', seq: ++fxSeq } }));
+              ++fxSeq; capturedTargetSeq = fxSeq;
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-heal', seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `+${ev.value}`, heal: true }]);
             }
           } else if (ev.kind === 'buff') {
-            if (actorUid) setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: ++fxSeq } }));
+            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
             if (targetUid) {
               const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
               const isShield = sk?.effects?.[0]?.kind === 'shield';
-              setFx((p) => ({ ...p, [targetUid]: { cls: isShield ? 'fx-shield' : 'fx-buff', seq: ++fxSeq } }));
+              const buffCls = isShield ? 'fx-shield' : 'fx-buff';
+              ++fxSeq; capturedTargetSeq = fxSeq;
+              setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
             }
           } else if (targetUid) {
-            setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: ++fxSeq } }));
+            ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
             setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
           }
           if (ev.hp) setHpMap(ev.hp);
           if (ev.shields) setShieldMap(ev.shields);
           if (ev.statuses) setStatusMap(ev.statuses);
 
+          // 用各自捕获的 seq 做 clear 比对，仅当该 unit 的 fx 仍是本事件设置的才清除
           const clear = window.setTimeout(
             () => {
               setFx((p) => {
                 const next = { ...p };
-                if (actorUid) delete next[actorUid];
-                if (targetUid) delete next[targetUid];
+                if (actorUid && next[actorUid]?.seq === capturedActorSeq) delete next[actorUid];
+                if (targetUid && next[targetUid]?.seq === capturedTargetSeq) delete next[targetUid];
                 return next;
               });
               setPops((p) => p.filter((x) => x.id !== popId));

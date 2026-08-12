@@ -522,4 +522,51 @@ describe('useBattleFx：战斗记录随攻击动画逐条揭示', () => {
     expect(result.current.revealedLogLen).toBe(1);
     vi.useRealTimers();
   });
+
+  it('队友护盾 buff：护盾飘字出现在被加盾的队友身上，而非施法者', () => {
+    vi.useFakeTimers();
+    const a = makeUnit(SPECIES[0], true, 1, false);
+    const b = makeUnit(SPECIES[0], true, 0, false);
+    const k = makeUnit(SPECIES[1], false, 1, false);
+
+    const battle0 = { ...makeBattle([], [], a, k), playerUnits: [a, b] };
+    const battle1 = {
+      ...makeBattle(
+        [
+          {
+            text: `${a.name} 使用「坚盾」，强化${b.name}`,
+            side: 'player',
+            hp: { [a.uid]: a.hp, [b.uid]: b.hp, [k.uid]: k.hp },
+            actorUid: a.uid,
+            targetUid: b.uid,
+          },
+        ],
+        [],
+        a,
+        k,
+      ),
+      playerUnits: [a, b],
+    };
+
+    const { result, rerender } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
+      initialProps: { b: battle0 },
+    });
+
+    act(() => rerender({ b: battle1 }));
+    // 触发 buff 事件动画
+    act(() => vi.advanceTimersByTime(0));
+
+    // 飘字应出现在队友 b 身上
+    const popOnB = result.current.pops.filter((p) => p.uid === b.uid);
+    const popOnA = result.current.pops.filter((p) => p.uid === a.uid);
+    expect(popOnB.length).toBe(1);
+    expect(popOnB[0].text).toBe('🛡️护盾');
+    expect(popOnB[0].shield).toBe(true);
+    expect(popOnA.length).toBe(0);
+
+    // 动画结束后飘字消失
+    act(() => vi.advanceTimersByTime(800 + 1300));
+    expect(result.current.pops.length).toBe(0);
+    vi.useRealTimers();
+  });
 });
