@@ -13,7 +13,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   lulu: {
     id: 'lulu', name: '泡泡', emoji: '🐸',
     baseHp: 14, baseSpd: 1,
-    skills: ['punch', 'aqua_shot', 'water_bath'],
+    skills: ['aqua_shot', 'water_bath'],
     desc: '开局御三家之一，血量最高的坦克型，靠持续回复磨血。',
     passive: 'watery_regen',
     evolutions: [{ to: 'lulu_king' }],

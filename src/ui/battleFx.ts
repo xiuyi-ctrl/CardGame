@@ -30,6 +30,7 @@ export interface PopItem {
   text: string;
   heal: boolean;
   buff?: boolean;
+  shield?: boolean;
 }
 
 /** 揭示目标：事件 i 播放时揭示 uid 上的指定状态 kind */
@@ -103,7 +104,7 @@ const RE_HEAL = /^(.+?) 使用「(.+?)」(?:，治愈|恢复) (.+?) (\d+) 点生
 const RE_PASSIVE_HEAL = /^(.+?) 的「(.+?)」(?:恢复|治愈) (\d+) 点生命$/;
 const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
-const RE_BUFF = /^(.+?) 使用「(.+?)」，强化自身$/;
+const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
 
 /** buff 技能飘字：按技能施加的状态显示，如战吼→「攻击↑」；无法识别时兜底「强化」 */
 function buffText(skillName: string): string {
@@ -111,6 +112,7 @@ function buffText(skillName: string): string {
   if (skill?.kind === 'buff') {
     const e = skill.effects?.[0];
     if (e?.kind === 'atkUp') return '攻击↑';
+    if (e?.kind === 'shield') return '🛡️护盾';
   }
   return '强化';
 }
@@ -178,8 +180,12 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     return { kind: 'heal', actorUid: uid, targetUid: uid, value: Number(m[3]), hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   if ((m = text.match(RE_BUFF))) {
-    const uid = entry.actorUid ?? entry.targetUid ?? findUid(b, side, m[1]);
-    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: m[2], hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+    const actorUid = entry.actorUid ?? findUid(b, side, m[1]);
+    const targetName = m[3];
+    const targetUid = targetName === '自身'
+      ? actorUid
+      : (entry.targetUid ?? findUid(b, side, targetName));
+    return { kind: 'buff', actorUid, targetUid, value: 0, skillName: m[2], hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   if ((m = text.match(RE_DOT))) {
     return {
@@ -442,8 +448,10 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           } else if (ev.kind === 'buff') {
             if (actorUid) setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: ++fxSeq } }));
             if (targetUid) {
-              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-buff', seq: ++fxSeq } }));
-              setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: true }]);
+              const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
+              const isShield = sk?.effects?.[0]?.kind === 'shield';
+              setFx((p) => ({ ...p, [targetUid]: { cls: isShield ? 'fx-shield' : 'fx-buff', seq: ++fxSeq } }));
+              setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
             }
           } else if (targetUid) {
             setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: ++fxSeq } }));

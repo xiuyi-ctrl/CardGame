@@ -254,11 +254,11 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
 
 function tickStatuses(u: Unit): void {
   for (const s of u.statuses) {
-    // 灼烧/中毒由层数结算管理生命周期，不按回合数递减
-    if (s.kind === 'burn' || s.kind === 'poison') continue;
+    // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
+    if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
     s.turns -= 1;
   }
-  u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.turns > 0);
+  u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
 }
 
 export function pushLog(
@@ -622,7 +622,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       let buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns });
       // 护盾：同时更新 shield 字段
       if (e.kind === 'shield') {
-        buffed = { ...buffed, shield: buffed.shield + e.value };
+        buffed = { ...buffed, shield: Math.min(99, buffed.shield + e.value) };
       }
       nb = replaceUnit(nb, buffed);
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);

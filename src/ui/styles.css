@@ -968,6 +968,15 @@ button.primary {
   animation: fx-buff-pulse 0.5s ease;
 }
 
+@keyframes fx-shield-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(80, 160, 255, 0); }
+  35% { box-shadow: 0 0 0 3px rgba(80, 160, 255, 0.9), 0 0 18px rgba(60, 140, 255, 0.6); }
+  100% { box-shadow: 0 0 0 0 rgba(80, 160, 255, 0); }
+}
+.unit-card.fx-shield {
+  animation: fx-shield-pulse 0.5s ease;
+}
+
 @keyframes fx-dmg-rise {
   from { opacity: 1; transform: translate(-50%, 0); }
   to { opacity: 0; transform: translate(-50%, -26px); }
@@ -990,6 +999,9 @@ button.primary {
 }
 .dmg-pop.buff {
   color: #ffd76e;
+}
+.dmg-pop.shield {
+  color: #50a0ff;
 }
 
 .action-panel {

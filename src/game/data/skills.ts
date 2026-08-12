@@ -83,7 +83,7 @@ export const SKILLS: Record<string, SkillDef> = {
   shield_skill: {
     id: 'shield_skill', name: '坚盾', desc: '为指定队友或自身附加5点护盾',
     target: 'ally', kind: 'buff', uses: 2,
-    effects: [{ kind: 'shield', value: 5, turns: 99 }],
+    effects: [{ kind: 'shield', value: 5, turns: 0 }],
   },
   weaken: {
     id: 'weaken', name: '弱化', desc: '随机降低目标攻击或速度（2层，2回合）',
