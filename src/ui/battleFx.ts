@@ -314,6 +314,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       prevLen.current = battle.log.length;
       setRevealedLogLen(battle.log.length);
       setAnimating(false);
+      setShieldMap(shieldsOfUnits(battle));
       return;
     }
     const startLen = prevLen.current;
@@ -376,7 +377,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     if (events.length === 0) {
       setAnimating(false);
       setHpMap(null);
-      setShieldMap(null);
+      setShieldMap(shieldsOfUnits(battle));
       setStatusMap(null);
       setRevealedKinds(allRevealed(newStatuses));
       setEndingStatuses({});
