@@ -133,20 +133,20 @@ export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
 }
 
 export function StatusIcons({ unit }: { unit: Unit }) {
-  if (unit.statuses.length === 0) return <span className="statuses" />;
+  const visible = unit.statuses.filter((s) => s.kind !== 'shield');
+  if (visible.length === 0) return <span className="statuses" />;
   return (
     <span className="statuses">
-      {unit.statuses.map((s, i) => {
+      {visible.map((s, i) => {
         const meta = STATUS_ICON[s.kind];
         if (!meta) return null;
         const tip =
           s.kind === 'burn' || s.kind === 'poison'
             ? `${meta.label}（${s.value} 层，每回合结算一半）`
             : `${meta.label}（剩余 ${s.turns} 回合）`;
-        const display = s.kind === 'shield' ? `${meta.icon}${s.value}` : meta.icon;
         return (
           <span key={i} title={tip}>
-            {display}
+            {meta.icon}
           </span>
         );
       })}
@@ -218,7 +218,9 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
         <span className="emoji">{unit.emoji}</span>
         {topStats && (
           <div className="card-stats">
-            <div className="card-stat" style={spdColor ? { color: spdColor } : undefined}>⚡{effectiveSpd}</div>
+            <div className="card-stat" style={spdColor ? { color: spdColor } : undefined}>
+              {unit.shield > 0 && <span>🛡️{unit.shield} </span>}⚡{effectiveSpd}
+            </div>
           </div>
         )}
       </div>
@@ -226,6 +228,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
         <div>
           <div className="card-name">{unit.name}</div>
           <div className="card-sub">
+            {unit.shield > 0 && <span>🛡️{unit.shield} </span>}
             <span style={spdColor ? { color: spdColor } : undefined}>⚡{effectiveSpd}</span>
           </div>
         </div>
@@ -239,7 +242,6 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
       <HpBar hp={unit.hp} maxHp={unit.maxHp} />
       <div className="card-sub">
         {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
-        {unit.shield > 0 && <span>🛡️{unit.shield}</span>}
         <StatusIcons unit={unit} />
         <PassiveBadge unit={unit} />
         <BattleBuffIcons unit={unit} />
