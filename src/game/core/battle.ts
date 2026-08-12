@@ -719,11 +719,6 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             }
           }
         }
-        // 嘲讽清除：被嘲讽的目标受到攻击后移除嘲讽状态
-        if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'taunt')) {
-          t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'taunt') };
-          nb = replaceUnit(nb, t2);
-        }
       }
       // 被动效果（毒/灼烧）标记在最后一段攻击日志上，供动画揭示
       if (passiveAdds.length > 0 && lastHitLog !== undefined) {
