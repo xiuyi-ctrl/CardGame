@@ -339,7 +339,7 @@ describe('技能使用次数', () => {
   it('每次使用扣一次次数；耗尽后 playerSkill 拒绝（状态不变）', () => {
     const u = makeUnit('momo_queen', true, 0, false);
     let b = createBattle([u], [{ speciesId: 'kiki' }], 1);
-    // 让毛毛王后先挨打受伤，再连续使用愈光（每回合下指令后结算）
+    // 让迅牙先挨打受伤，再连续使用愈光（每回合下指令后结算）
     b = {
       ...b,
       playerUnits: b.playerUnits.map((x) => (x.uid === u.uid ? { ...x, hp: 5 } : x)),
@@ -393,7 +393,7 @@ describe('连击（多段命中）', () => {
   it('连击守卫减伤对每段生效', () => {
     const p = makeUnit('momo', true, 0, false);
     p.skills = ['double_hit'];
-    const b = createBattle([p], [{ speciesId: 'kiki' }], 2); // 基基 铁壁 -1
+    const b = createBattle([p], [{ speciesId: 'kiki' }], 2); // 铁墩 铁壁 -1
     const enemy = b.enemyUnits[0];
     const hpBefore = enemy.hp;
     const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
@@ -624,7 +624,7 @@ describe('专属被动', () => {
   });
 
   it('再生被动：每回合开始恢复生命', () => {
-    // 露露有水愈（每回合恢复 1）；被毛毛攻击后进入下一回合会触发再生
+    // 露露有水愈（每回合恢复 1）；被迅迅攻击后进入下一回合会触发再生
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu' }], 7);
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
     expect(after.enemyUnits[0].hp).toBeGreaterThan(0);
@@ -640,7 +640,7 @@ describe('专属被动', () => {
 
   it('毒牙：攻击命中附加中毒', () => {
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'mimi' }], 3);
-    // 先让敌方行动（咪咪攻击毛毛）→ 触发毒牙
+    // 先让敌方行动（咪咪攻击迅迅）→ 触发毒牙
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
     expect(after.playerUnits[0].statuses.some((s) => s.kind === 'poison')).toBe(true);
   });
@@ -710,7 +710,7 @@ describe('行动点与前后排', () => {
       makeUnit('gora', true, 0, false),
     ];
     const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }, { speciesId: 'mimi' }, { speciesId: 'sisi' }], 1);
-    // 我方全体高血保证结算中指令都能执行；移除甲兽「硬甲」被动避免反伤后排干扰断言
+    // 我方全体高血保证结算中指令都能执行；移除铁卫「硬甲」被动避免反伤后排干扰断言
     const strong = {
       ...b,
       playerUnits: b.playerUnits.map((u) =>
@@ -837,7 +837,7 @@ describe('战斗日志与动画时序', () => {
     const momoUid = b.playerUnits[0].uid;
     const momoHp0 = b.playerUnits[0].hp;
     const after = playerEndTurn(playerSkill(b, momoUid, 'punch', b.enemyUnits[0].uid));
-    const attackIdx = after.log.findIndex((l) => l.text.includes('攻击 皮皮'));
+    const attackIdx = after.log.findIndex((l) => l.text.includes('攻击 刺刺'));
     const thornIdx = after.log.findIndex((l) => l.text.includes('「尖刺」反伤'));
     expect(attackIdx).toBeGreaterThanOrEqual(0);
     expect(thornIdx).toBeGreaterThan(attackIdx);

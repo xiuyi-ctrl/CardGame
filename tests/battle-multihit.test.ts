@@ -81,7 +81,7 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
 
   it('尖刺反伤对多段每段都触发（连击 2 段反 2 次）', () => {
     const a = makeUnit('fifi_king', true, 0, false);
-    const b0 = createBattle([a], [{ speciesId: 'pipi' }], 3); // 皮皮 尖刺反伤 1
+    const b0 = createBattle([a], [{ speciesId: 'pipi' }], 3); // 刺刺 尖刺反伤 1
     const b1 = playerEndTurn(playerSkill(b0, a.uid, 'double_hit', b0.enemyUnits[0].uid));
     const attackLogsArr = attackLogs(b1, a.uid, '连击');
     const thornLogs = b1.log.filter((l) => l.text.includes('「尖刺」反伤'));

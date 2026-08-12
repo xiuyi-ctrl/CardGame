@@ -35,7 +35,7 @@ describe('成长与融合', () => {
     u.hp = 3;
     const fused = fuseUnit(u)!;
     expect(fused.speciesId).toBe('momo_queen');
-    expect(fused.name).toBe('毛毛王后');
+    expect(fused.name).toBe('迅牙');
     expect(fused.maxHp).toBe(18);
     expect(fused.hp).toBe(18);
     expect(fused.uid).toBe(u.uid);
