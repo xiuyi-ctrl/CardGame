@@ -48,7 +48,8 @@ export type PassiveKind =
   | 'guard' // 守护：受到的所有伤害 - value
   | 'venom' // 毒牙：攻击命中附加中毒 value（2 回合）
   | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
-  | 'frenzy'; // 狂暴：生命低于 50% 时伤害 + value
+  | 'frenzy' // 狂暴：生命低于 50% 时伤害 + value
+  | 'venomPower'; // 蟒影：对中毒目标伤害 + value
 
 export interface PassiveDef {
   id: string;

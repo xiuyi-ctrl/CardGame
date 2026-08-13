@@ -679,26 +679,27 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (t.isPlayer && nb.corruptDebuff === 'dmg') {
         perHitDmg += 1;
       }
+      // 先计算被动附加的状态（venom/scorch），在攻击前生效一次
+      const passiveAdds: string[] = [];
+      const ap = getUnitPassive(actor);
+      let tWithPassive = t;
+      if (ap?.kind === 'venom') {
+        tWithPassive = applyStatusTo(tWithPassive, { kind: 'poison', value: ap.value, turns: 2 }, nb.round);
+        passiveAdds.push('poison');
+      }
+      if (ap?.kind === 'scorch') {
+        tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
+        passiveAdds.push('burn');
+      }
+      // 蟒影被动：对已中毒的目标额外 +3 伤害
+      if (ap?.kind === 'venomPower' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
+        perHitDmg += ap.value;
+      }
       const finalDmg = perHitDmg * count;
       // 连击（hits>1）：总伤害拆成 count 段，逐段扣血并逐段写日志，
       // 动画表现为多段伤害飘字（如 8 拆成两段 4），总和与单条结算完全一致
       const segments = splitDamage(finalDmg, count);
-      let t2 = t;
-      // 先计算被动附加的状态（venom/scorch），在攻击前生效一次
-      const passiveAdds: string[] = [];
-      const ap = getUnitPassive(actor);
-      if (ap?.kind === 'venom') {
-        t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 }, nb.round);
-        passiveAdds.push('poison');
-      }
-      if (ap?.kind === 'scorch') {
-        t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
-        passiveAdds.push('burn');
-      }
-      // 毒力被动：对已中毒的目标额外 +2 伤害
-      if (ap?.id === 'venom_power' && t2.statuses.some((s) => s.kind === 'poison')) {
-        perHitDmg += 2;
-      }
+      let t2 = tWithPassive;
       // 水波冲击：记录命中目标数（每命中1人回复1血）
       if (skill.id === 'water_wave') {
         waterWaveHits += 1;

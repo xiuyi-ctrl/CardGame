@@ -41,7 +41,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   swift_power: { id: 'swift_power', name: '迅力', desc: '战斗开始速度 +3', kind: 'spd', value: 3 },
   tidal_regen: { id: 'tidal_regen', name: '潮汐再生', desc: '每回合开始恢复 3 点生命', kind: 'regen', value: 3 },
   blazing: { id: 'blazing', name: '灼焰', desc: '攻击命中附加灼烧 4 层', kind: 'scorch', value: 4 },
-  venom_power: { id: 'venom_power', name: '毒力', desc: '攻击命中附加中毒 2 层，对中毒目标伤害 +2', kind: 'venom', value: 2 },
+  venom_power: { id: 'venom_power', name: '蟒影', desc: '对中毒目标伤害 +3', kind: 'venomPower', value: 3 },
 };
 
 export function getPassive(id?: string): PassiveDef | undefined {
