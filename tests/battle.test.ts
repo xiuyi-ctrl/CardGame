@@ -330,16 +330,16 @@ describe('数据完整性', () => {
 
 describe('技能使用次数', () => {
   it('有限次技能初始化次数，无限次技能返回 Infinity', () => {
-    const u = makeUnit('momo_queen', true, 0, false); // 愈光 uses:2
+    const u = makeUnit('lulu_king', true, 0, false); // 愈光 uses:2
     expect(u.skillUses?.['heal_light']).toBe(2);
     expect(skillUsesLeft(u, 'heal_light')).toBe(2);
-    expect(skillUsesLeft(u, 'bite')).toBe(Infinity);
+    expect(skillUsesLeft(u, 'water_gun')).toBe(Infinity);
   });
 
   it('每次使用扣一次次数；耗尽后 playerSkill 拒绝（状态不变）', () => {
-    const u = makeUnit('momo_queen', true, 0, false);
+    const u = makeUnit('lulu_king', true, 0, false);
     let b = createBattle([u], [{ speciesId: 'kiki' }], 1);
-    // 让迅牙先挨打受伤，再连续使用愈光（每回合下指令后结算）
+    // 让泡泡将先挨打受伤，再连续使用愈光（每回合下指令后结算）
     b = {
       ...b,
       playerUnits: b.playerUnits.map((x) => (x.uid === u.uid ? { ...x, hp: 5 } : x)),
@@ -355,11 +355,10 @@ describe('技能使用次数', () => {
   });
 
   it('全部玩家技能用尽时战斗不会卡死', () => {
-    const u = makeUnit('momo_god', true, 0, false); // 愈光 uses:2、战吼 uses:2
+    const u = makeUnit('momo_god', true, 0, false); // 战吼 uses:2
     const b = createBattle([u], [{ speciesId: 'kiki' }], 42);
     let cur = currentPlayerUnit(b)!;
     const ids = cur.skills;
-    expect(ids).toContain('heal_light');
     expect(ids).toContain('roar');
     // 反复使用有限次技能直至耗尽后改用普通技能，逐回合推进不卡死
     let nb = b;
@@ -369,7 +368,7 @@ describe('技能使用次数', () => {
       if (!cur) break;
       const limited = cur.skills.find((id) => skillUsesLeft(cur, id) > 0 && skillUsesLeft(cur, id) < Infinity);
       const skillId = limited ?? cur.skills[0];
-      nb = playerSkill(nb, cur.uid, skillId, skillId === 'heal_light' ? cur.uid : nb.enemyUnits[0].uid);
+      nb = playerSkill(nb, cur.uid, skillId, skillId === 'roar' ? cur.uid : nb.enemyUnits[0].uid);
       nb = playerEndTurn(nb);
       guard += 1;
     }

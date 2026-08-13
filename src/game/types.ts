@@ -16,13 +16,14 @@ export interface SkillDef {
   desc: string;
   target: SkillTarget;
   /**
-   * 攻击范围定位（作用于 single/random 攻击技能）：
+   * 攻击范围定位（作用于 single/all 攻击技能）：
    * - 缺省 = 前排（默认单体只能攻击前排，前排全灭后可打后排）
+   * - 'front' = 前排优先：全体技能只打前排，前排全灭后才打后排
    * - 'pierce' = 贯穿：命中前排目标并波及对应位置后排
    * - 'back' = 后排：跳过前排直接攻击后排
    * - 'direct' = 指定：可攻击任意位置（无视前排保护）
    */
-  reach?: 'pierce' | 'back' | 'direct';
+  reach?: 'front' | 'pierce' | 'back' | 'direct';
   /** 攻击技能固定伤害值（整数，不经任何属性倍率） */
   damage?: number;
   /** 治疗技能固定回复值（整数） */

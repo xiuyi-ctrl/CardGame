@@ -103,7 +103,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   water_wave: {
     id: 'water_wave', name: '水波冲击', desc: '攻击全体前排敌人，每命中一个回复1点生命',
-    target: 'all', kind: 'attack', damage: 2, heal: 1,
+    target: 'all', kind: 'attack', damage: 2, heal: 1, reach: 'front',
   },
   flame_combo: {
     id: 'flame_combo', name: '火焰连击', desc: '连续两次攻击随机敌人',

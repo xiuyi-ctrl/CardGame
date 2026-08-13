@@ -445,7 +445,11 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       break;
     }
     case 'all':
-      targets = enemies;
+      if (skill.reach === 'front') {
+        targets = front.length > 0 ? front : back;
+      } else {
+        targets = enemies;
+      }
       break;
     case 'random': {
       const hits = skill.hits ?? 1;

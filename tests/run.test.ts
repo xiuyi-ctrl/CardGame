@@ -39,7 +39,7 @@ describe('成长与融合', () => {
     expect(fused.maxHp).toBe(18);
     expect(fused.hp).toBe(18);
     expect(fused.uid).toBe(u.uid);
-    expect(fused.skills).toEqual(['leaf_needle', 'double_hit', 'shockwave', 'heal_light']);
+    expect(fused.skills).toEqual(['leaf_needle', 'double_hit', 'shockwave']);
   });
 
   it('fuseUnit 继承主宠的强化与诅咒', () => {

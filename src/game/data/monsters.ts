@@ -58,9 +58,9 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   momo_queen: {
     id: 'momo_queen', name: '迅牙', emoji: '🐹',
     baseHp: 18, baseSpd: 4,
-    skills: ['leaf_needle', 'double_hit', 'shockwave', 'heal_light'],
+    skills: ['leaf_needle', 'double_hit', 'shockwave'],
     desc: '迅迅的融合形态，高速多段连击手，先手爆发。',
-    passive: 'brute',
+    passive: 'swift_power',
     evolutions: [{ to: 'momo_god' }],
     tame: { difficulty: 0.4 }, rank: 2,
   },
@@ -93,9 +93,9 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   gora: {
     id: 'gora', name: '铁卫', emoji: '🐊',
     baseHp: 19, baseSpd: 2,
-    skills: ['steel_spike', 'tail', 'shield_counter'],
-    desc: '铁墩的融合形态，高血铁壁，护盾反伤的防御大师。',
-    passive: 'hard_armor',
+    skills: ['steel_spike', 'shield_skill', 'shield_counter'],
+    desc: '铁墩的融合形态，高血铁壁，护盾防御的铁壁坦克。',
+    passive: 'thick_shell',
     evolutions: [{ to: 'gora_god' }],
     tame: { difficulty: 0.4 }, rank: 2,
   },
@@ -127,9 +127,9 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   momo_god: {
     id: 'momo_god', name: '迅天', emoji: '🐉',
     baseHp: 30, baseSpd: 6,
-    skills: ['bite', 'leaf_needle', 'heal_light', 'roar', 'shockwave'],
-    desc: '迅迅最终形态，均衡型的终极进化，攻守兼备。',
-    passive: 'fury',
+    skills: ['bite', 'leaf_needle', 'roar', 'shockwave'],
+    desc: '迅迅最终形态，高速刺客，先手爆发极强。',
+    passive: 'swift_power',
     tame: { difficulty: 0.3 }, rank: 3,
   },
   lulu_god: {
