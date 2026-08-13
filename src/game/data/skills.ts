@@ -183,6 +183,86 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'all', kind: 'attack', damage: 3, uses: 2, reach: 'front',
     effects: [{ kind: 'taunt', value: 1, turns: 2 }],
   },
+
+  // —— 传奇宠物重做技能 ——
+  iron_domain: {
+    id: 'iron_domain', name: '铁壁领域', desc: '为全体友方附加 6 层护盾',
+    kind: 'buff', target: 'ally',
+    effects: [{ kind: 'shield', value: 6, turns: 99 }],
+    uses: 2,
+  },
+  shield_quake: {
+    id: 'shield_quake', name: '盾震', desc: '攻击前排所有敌人',
+    kind: 'attack', damage: 3, hits: 1, target: 'all',
+    reach: 'front',
+  },
+  iron_double: {
+    id: 'iron_double', name: '铁壁双击', desc: '随机攻击两个敌人，每命中一个自身获得 5 层护盾',
+    kind: 'attack', damage: 3, hits: 2, target: 'random',
+    effects: [{ kind: 'shield', value: 5, turns: 99 }],
+  },
+  poison_mist: {
+    id: 'poison_mist', name: '毒雾', desc: '使所有敌人中毒 5 层',
+    kind: 'attack', damage: 0, hits: 1, target: 'all',
+    effects: [{ kind: 'poison', value: 5, turns: 3 }],
+    uses: 2,
+  },
+  toxic_bite: {
+    id: 'toxic_bite', name: '淬毒噬咬', desc: '攻击单个敌人，若目标已中毒则伤害翻倍',
+    kind: 'attack', damage: 6, hits: 1, target: 'single',
+    effects: [{ kind: 'poison', value: 4, turns: 3 }],
+    uses: 3,
+  },
+  wind_flash: {
+    id: 'wind_flash', name: '风灵闪', desc: '攻击单个敌人，若自身速度高于目标则额外攻击一次',
+    kind: 'attack', damage: 6, hits: 1, target: 'single',
+  },
+  wind_feather: {
+    id: 'wind_feather', name: '风羽', desc: '提升自身 2 点速度（持续 2 回合）',
+    kind: 'buff', target: 'self',
+    effects: [{ kind: 'windSpd', value: 2, turns: 2 }],
+  },
+  whirlwind: {
+    id: 'whirlwind', name: '旋风斩', desc: '攻击前排所有敌人，攻击后自身速度 +1',
+    kind: 'attack', damage: 5, hits: 1, target: 'all',
+    reach: 'front',
+  },
+  swift_strike: {
+    id: 'swift_strike', name: '迅击', desc: '先手：贯穿攻击单个敌人',
+    kind: 'attack', damage: 6, hits: 1, target: 'single',
+    reach: 'pierce', priority: 'first',
+  },
+  tidal_domain: {
+    id: 'tidal_domain', name: '潮汐领域', desc: '全体友方恢复 4 点生命，并附加水幕（下回合受伤 -2）',
+    kind: 'heal', target: 'ally',
+    heal: 4,
+    effects: [{ kind: 'waterCurtain', value: 2, turns: 1 }],
+    uses: 2,
+  },
+  water_shot: {
+    id: 'water_shot', name: '水波弹', desc: '攻击单个敌人',
+    kind: 'attack', damage: 6, hits: 1, target: 'single',
+  },
+  wave: {
+    id: 'wave', name: '浪潮', desc: '攻击全体敌方前排',
+    kind: 'attack', damage: 4, hits: 1, target: 'all',
+    reach: 'front',
+  },
+  burn_burst: {
+    id: 'burn_burst', name: '焚身爆', desc: '攻击所有敌人并附加灼烧；使用后自身损失 5 点生命（不可减免）',
+    kind: 'attack', damage: 8, hits: 1, target: 'all',
+    effects: [{ kind: 'burn', value: 3, turns: 2 }],
+    uses: 1,
+  },
+  flame_shield: {
+    id: 'flame_shield', name: '烈焰护盾', desc: '获得 5 层护盾；本回合受攻击则灼烧攻击者 10 层',
+    kind: 'buff', target: 'self',
+    effects: [{ kind: 'shield', value: 5, turns: 99 }, { kind: 'flameShield', value: 10, turns: 1 }],
+  },
+  flame_slash: {
+    id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人',
+    kind: 'attack', damage: 8, hits: 1, target: 'single',
+  },
 };
 
 export function getSkill(id: string): SkillDef {

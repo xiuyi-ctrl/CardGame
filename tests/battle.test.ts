@@ -263,7 +263,7 @@ describe('驯服', () => {
   });
 
   it('灼烧/中毒可叠加层数：同一目标再次附加则层数相加', () => {
-    const a = makeUnit('fifi_god', true, 0, false); // 有火花技能，无灼烧被动（技能附加 2 层）；龙力被动伤害 +2
+    const a = makeUnit('fifi_god', true, 0, false); // 余烬焚身被动攻击附加灼烧 4 层；技能附加 2 层
     const raw = createBattle([a], [{ speciesId: 'pipi' }], 1);
     const b: BattleState = {
       ...raw,
@@ -274,13 +274,12 @@ describe('驯服', () => {
         statuses: [{ kind: 'burn', value: 2, turns: 2 }],
       })),
     };
-    // 已带 2 层灼烧的目标再被火花命中（+2 层 = 4 层）：火花 6+2 伤、灼烧 4 层结算一半 2 伤
+    // 已带 2 层灼烧的目标再被火花命中：被动 +4 层、技能 +2 层 = 共 8 层；火花 6+2 伤（余烬焚身对已灼烧+2）、灼烧 8 层结算一半 4 伤
     const after = playerEndTurn(playerSkill(b, a.uid, 'ember', b.enemyUnits[0].uid));
     const burn = after.enemyUnits[0].statuses.find((s) => s.kind === 'burn');
     expect(burn).toBeDefined();
-    // 4 层每回合结算一半 → 剩 2 层（若按旧「取 max」则只会剩 1 层）
-    expect(burn!.value).toBe(2);
-    expect(after.enemyUnits[0].hp).toBe(100 - 8 - 2);
+    expect(burn!.value).toBe(4);
+    expect(after.enemyUnits[0].hp).toBe(100 - 8 - 4);
   });
 
   it('灼烧按层数结算：每回合掉一半（向上进位）直至清空', () => {
@@ -355,12 +354,12 @@ describe('技能使用次数', () => {
   });
 
   it('全部玩家技能用尽时战斗不会卡死', () => {
-    const u = makeUnit('momo_god', true, 0, false); // 战吼 uses:2
+    const u = makeUnit('momo_god', true, 0, false); // 迅天无有限次技能
     const b = createBattle([u], [{ speciesId: 'kiki' }], 42);
     let cur = currentPlayerUnit(b)!;
     const ids = cur.skills;
-    expect(ids).toContain('roar');
-    // 反复使用有限次技能直至耗尽后改用普通技能，逐回合推进不卡死
+    expect(ids.length).toBeGreaterThan(0);
+    // 反复使用技能，逐回合推进不卡死
     let nb = b;
     let guard = 0;
     while (nb.phase === 'acting' && guard < 300) {

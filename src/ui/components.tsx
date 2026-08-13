@@ -28,6 +28,9 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   shieldCounter: '🛡️',
   thornSpikes: '🔱',
   rageThorn: '🔴',
+  waterCurtain: '🌊',
+  flameShield: '🔥',
+  windSpd: '💨',
 };
 
 function effectText(e: StatusEffect): string {
@@ -59,6 +62,12 @@ function effectText(e: StatusEffect): string {
       return `复仇棘甲${turns}`;
     case 'rageThorn':
       return `怒棘 攻击+${e.value}${turns}`;
+    case 'waterCurtain':
+      return `水幕 受伤-${e.value}${turns}`;
+    case 'flameShield':
+      return `烈焰护盾 灼烧${e.value}层${turns}`;
+    case 'windSpd':
+      return `速度 +${e.value}${turns}`;
   }
 }
 
@@ -137,6 +146,9 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   shieldCounter: { icon: '🛡️', label: '盾反' },
   thornSpikes: { icon: '🔱', label: '复仇棘甲' },
   rageThorn: { icon: '🔴', label: '怒棘' },
+  waterCurtain: { icon: '🌊', label: '水幕' },
+  flameShield: { icon: '🔥', label: '烈焰护盾' },
+  windSpd: { icon: '💨', label: '风羽' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -168,6 +180,8 @@ export function StatusIcons({ unit }: { unit: Unit }) {
         const tip =
           s.kind === 'burn' || s.kind === 'poison'
             ? `${meta.label}（${s.value} 层，每回合结算一半）`
+            : s.kind === 'windSpd'
+            ? `${meta.label}（速度 +${s.value}，剩余 ${s.turns} 回合）`
             : `${meta.label}（剩余 ${s.turns} 回合）`;
         return (
           <span key={i} title={tip}>
@@ -184,6 +198,7 @@ const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
   spdUp: { icon: '💨', label: '速度 +1' },
   atkDown: { icon: '🪄', label: '伤害 -1' },
   spdDown: { icon: '🕸️', label: '速度 -1' },
+  skillSpd: { icon: '💨', label: '技能速度加成' },
 };
 
 export function PassiveBadge({ unit }: { unit: Unit }) {
@@ -204,9 +219,9 @@ export function BattleBuffIcons({ unit }: { unit: Unit }) {
   return (
     <span className="battle-buffs">
       {entries.map(([k, v]) => (
-        <span key={k} title={`${BATTLE_BUFF_ICON[k].label}（剩余 ${v} 回合）`}>
+        <span key={k} title={k === 'skillSpd' ? `${BATTLE_BUFF_ICON[k].label} +${v}` : `${BATTLE_BUFF_ICON[k].label}（剩余 ${v} 回合）`}>
           {BATTLE_BUFF_ICON[k].icon}
-          <sup>{v}</sup>
+          <sup>{k === 'skillSpd' ? `+${v}` : v}</sup>
         </span>
       ))}
     </span>
@@ -235,10 +250,13 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
   const passiveDef = getPassive(unit.passive);
   const passiveSpd = passiveDef?.kind === 'spd' ? passiveDef.value : 0;
   const buffSpd = (unit.battleBuffs?.spdUp ? 1 : 0) - (unit.battleBuffs?.spdDown ? 1 : 0);
+  const skillSpd = unit.battleBuffs?.skillSpd ?? 0;
   const spdDownStatus = unit.statuses.find((s) => s.kind === 'spdDown');
   const statusSpd = spdDownStatus ? -spdDownStatus.value : 0;
-  const effectiveSpd = Math.max(1, baseSpd + passiveSpd + buffSpd + statusSpd);
-  const totalDelta = passiveSpd + buffSpd + statusSpd;
+  const windSpdStatus = unit.statuses.find((s) => s.kind === 'windSpd');
+  const windSpd = windSpdStatus ? windSpdStatus.value : 0;
+  const effectiveSpd = Math.max(1, baseSpd + passiveSpd + buffSpd + skillSpd + statusSpd + windSpd);
+  const totalDelta = passiveSpd + buffSpd + skillSpd + statusSpd + windSpd;
   const spdColor = totalDelta > 0 ? 'var(--hp-good)' : totalDelta < 0 ? 'var(--hp-low)' : undefined;
   return (
     <div
@@ -371,18 +389,33 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   shieldCounter: () => '受击时反击攻击者 + 降低攻击 + 清除护盾',
   thornSpikes: () => '受击时获得怒棘（攻击+1，可叠加）',
   rageThorn: (v) => `攻击 +${v}，荆棘之躯反伤 +${v}`,
+  windSpd: () => '速度 +2',
+  waterCurtain: (v) => `下回合受到伤害 -${v}`,
+  flameShield: (v) => `受攻击时灼烧攻击者 ${v} 层`,
 };
 
 export function BuffDetailPanel({ unit }: { unit: Unit }) {
   const passive = getPassive(unit.passive);
   const buffs = unit.battleBuffs;
   const battleBuffEntries = buffs
-    ? (Object.entries(buffs) as [string, number][]).filter(([, v]) => v)
+    ? (Object.entries(buffs) as [string, number][]).filter(([k, v]) => v && k !== 'skillSpd')
     : [];
   const statuses = unit.statuses;
   const hasPassive = !!passive;
   const hasStatuses = statuses.length > 0;
   const hasBattleBuffs = battleBuffEntries.length > 0;
+
+  // 计算被动当前层数/加成
+  const passiveStacks = (() => {
+    if (!passive) return null;
+    if (passive.kind === 'speedBonus') {
+      const skillSpd = buffs?.skillSpd ?? 0;
+      return `+${skillSpd}`;
+    }
+    // 其他被动显示固定数值
+    return `${passive.value}`;
+  })();
+
   if (!hasPassive && !hasStatuses && !hasBattleBuffs) return null;
 
   const battleBuffMeta: Record<string, { icon: string; label: string }> = {
@@ -403,6 +436,9 @@ export function BuffDetailPanel({ unit }: { unit: Unit }) {
           <div className="buff-item">
             <span className="buff-icon">💠</span>
             <span className="buff-name">{passive.name}</span>
+            <span className="buff-passive-value">{passiveStacks}</span>
+          </div>
+          <div className="buff-item">
             <span className="buff-desc">{passive.desc}</span>
           </div>
         </div>

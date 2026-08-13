@@ -900,6 +900,13 @@ button.primary {
   flex-shrink: 0;
 }
 
+.battle-field .buff-detail-panel .buff-passive-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f0c040;
+  margin-left: 4px;
+}
+
 .battle-field .buff-detail-panel .buff-desc {
   font-size: 11px;
   color: var(--text-dim);

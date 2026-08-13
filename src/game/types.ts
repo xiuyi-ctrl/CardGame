@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn';
+  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -52,7 +52,13 @@ export type PassiveKind =
   | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
   | 'frenzy' // 狂暴：生命低于 50% 时伤害 + value
   | 'venomPower' // 蟒影：对中毒目标伤害 + value
-  | 'thornRoyal'; // 荆棘之躯：反伤 3，每受 3 次攻击反伤 5 并恢复 2
+  | 'thornRoyal' // 荆棘之躯：反伤 3，每受 3 次攻击反伤 5 并恢复 2
+  | 'damageCap' // 铁壁上限：每回合最多累计受到 value 点伤害
+  | 'poisonBreak' // 蛇狩：攻击中毒目标无视 value 点护盾/减伤，额外造成 3 真伤
+  | 'spdOnAttack' // 疾风连携：攻击后速度 +value（可叠加）
+  | 'speedBonus' // 速度差增伤：速度每高于目标 1 点伤害 +1，上限 value
+  | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
+  | 'scorchPlus'; // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
 
 export interface PassiveDef {
   id: string;
@@ -140,6 +146,8 @@ export interface Unit {
     spdUp?: number;
     atkDown?: number;
     spdDown?: number;
+    /** 技能/被动提供的永久速度加成（风羽/疾风连携），与药水 spdUp 独立 */
+    skillSpd?: number;
   };
   /** 荆棘之躯被动：本场战斗中受击次数（每 3 次触发强化反伤） */
   thornsHitCount?: number;

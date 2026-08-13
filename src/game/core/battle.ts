@@ -285,8 +285,8 @@ function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
     if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
-    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
-    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn') && s.appliedRound !== undefined && s.appliedRound === round) continue;
+    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
+    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
@@ -629,6 +629,180 @@ function markActed(b: BattleState, uid: string): BattleState {
   return replaceUnit(b, { ...actor, acted: true });
 }
 
+/** 逐目标攻击结算：伤害计算 + 段数拆分 + 护盾/吸血/反伤/状态写回 */
+function resolveAttack(
+  b: BattleState,
+  actor: Unit,
+  target: Unit,
+  skill: SkillDef,
+  count: number,
+): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[] } {
+  let nb = b;
+  const base = Math.max(1, (skill.damage ?? 0) + getDamageBonus(actor));
+  let perHitDmg = Math.max(1, base - getDamageGuard(target));
+  if (target.isPlayer && nb.corruptDebuff === 'dmg') {
+    perHitDmg += 1;
+  }
+  const passiveAdds: string[] = [];
+  const ap = getUnitPassive(actor);
+  let tWithPassive = target;
+  if (ap?.kind === 'venom') {
+    tWithPassive = applyStatusTo(tWithPassive, { kind: 'poison', value: ap.value, turns: 2 }, nb.round);
+    passiveAdds.push('poison');
+  }
+  if (ap?.kind === 'scorch') {
+    tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
+    passiveAdds.push('burn');
+  }
+  if (ap?.kind === 'venomPower' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
+    perHitDmg += ap.value;
+  }
+  if (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
+    perHitDmg += ap.value;
+    perHitDmg += getDamageGuard(target);
+  }
+  if (ap?.kind === 'scorchPlus') {
+    tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
+    passiveAdds.push('burn');
+    const burnStacks = tWithPassive.statuses.filter((s) => s.kind === 'burn').reduce((sum, s) => sum + s.value, 0) - ap.value;
+    if (burnStacks > 0) {
+      perHitDmg += Math.min(5, burnStacks);
+    }
+  }
+  if (ap?.kind === 'speedBonus') {
+    const spdDiff = Math.max(0, getEffectiveSpd(actor) - getEffectiveSpd(tWithPassive));
+    perHitDmg += Math.min(ap.value, spdDiff);
+  }
+  if (skill.id === 'toxic_bite' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
+    perHitDmg *= 2;
+  }
+  const finalDmg = perHitDmg * count;
+  const segments = splitDamage(finalDmg, count);
+  let t2 = tWithPassive;
+  const skillEffectKinds: string[] = (skill.effects ?? [])
+    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter')
+    .map((e) => e.kind);
+  let lastHitLog: number | undefined;
+  const roundDmgMap = new Map<string, number>();
+  for (let i = 0; i < segments.length; i++) {
+    let seg = segments[i];
+    if (seg <= 0) continue;
+    if (t2.hp <= 0) break;
+    const tgtPassive = getUnitPassive(t2);
+    if (tgtPassive?.kind === 'bigHitGuard' && seg > tgtPassive.value) {
+      seg = Math.max(1, seg - 2);
+    }
+    if (tgtPassive?.kind === 'damageCap') {
+      const prevDmg = roundDmgMap.get(t2.uid) ?? 0;
+      const allowed = Math.max(0, tgtPassive.value - prevDmg);
+      seg = Math.min(seg, allowed);
+      roundDmgMap.set(t2.uid, prevDmg + seg);
+      if (seg <= 0) continue;
+    }
+    let remainingDmg = seg;
+    if (t2.shield > 0) {
+      const shieldAbsorb = Math.min(t2.shield, remainingDmg);
+      t2 = { ...t2, shield: t2.shield - shieldAbsorb };
+      remainingDmg -= shieldAbsorb;
+      if (t2.shield <= 0) {
+        t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'shield') };
+      }
+    }
+    t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
+    for (const e of skill.effects ?? []) {
+      if (skill.id === 'weaken') {
+        const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
+        t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
+        nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+      } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns') {
+        t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
+      }
+    }
+    nb = replaceUnit(nb, t2);
+    const hitAdds = skillEffectKinds.length > 0 ? skillEffectKinds : undefined;
+    nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${target.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, target.uid, hitAdds);
+    lastHitLog = nb.log.length - 1;
+    if (ap?.kind === 'drain') {
+      const healedActor = actorFromId(nb, actor.uid);
+      if (healedActor && healedActor.hp > 0) {
+        const maxHp = getEffectiveMaxHp(healedActor);
+        const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
+        nb = replaceUnit(nb, healed);
+        nb = pushLog(nb, `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`, sideOf(healedActor), healedActor.uid, healedActor.uid);
+      }
+    }
+    if (t2.hp > 0) {
+      const tp = getUnitPassive(t2);
+      if (tp?.kind === 'thorns') {
+        const attacker = actorFromId(nb, actor.uid);
+        if (attacker && attacker.hp > 0) {
+          const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
+          nb = replaceUnit(nb, hurt);
+          nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
+        }
+      }
+      if (tp?.kind === 'thornRoyal') {
+        const attacker = actorFromId(nb, actor.uid);
+        if (attacker && attacker.hp > 0) {
+          const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').reduce((sum, s) => sum + s.value, 0);
+          const baseDmg = tp.value + rageThornStacks;
+          t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
+          const hitCount = t2.thornsHitCount!;
+          const isBurst = hitCount % 3 === 0;
+          const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
+          let newAttacker = { ...attacker, hp: Math.max(0, attacker.hp - thornDmg) };
+          nb = replaceUnit(nb, newAttacker);
+          nb = replaceUnit(nb, t2);
+          nb = pushLog(nb, `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`, sideOf(t2), t2.uid, attacker.uid);
+          if (isBurst) {
+            const freshT2 = actorFromId(nb, t2.uid) ?? t2;
+            t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
+            nb = replaceUnit(nb, t2);
+            nb = pushLog(nb, `${t2.name} 的「荆棘之躯」恢复 2 点生命`, sideOf(t2), t2.uid, t2.uid);
+          }
+        }
+      }
+      if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
+        t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
+        nb = replaceUnit(nb, t2);
+        nb = pushLog(nb, `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`, sideOf(t2), t2.uid, t2.uid);
+      }
+    }
+    if (t2.hp > 0) {
+      const scIdx = t2.statuses.findIndex((s) => s.kind === 'shieldCounter');
+      if (scIdx >= 0) {
+        const scVal = t2.statuses[scIdx].value;
+        const attacker = actorFromId(nb, actor.uid);
+        if (attacker && attacker.hp > 0) {
+          const hurt = { ...attacker, hp: Math.max(0, attacker.hp - scVal) };
+          const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
+          nb = replaceUnit(nb, debuffed);
+          nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低其伤害`, sideOf(t2), t2.uid, attacker.uid);
+        }
+        t2 = { ...t2, shield: 0, statuses: t2.statuses.filter((s) => s.kind !== 'shield' && s.kind !== 'shieldCounter') };
+        nb = replaceUnit(nb, t2);
+      }
+    }
+    if (t2.hp > 0) {
+      const fsIdx = t2.statuses.findIndex((s) => s.kind === 'flameShield');
+      if (fsIdx >= 0) {
+        const fsVal = t2.statuses[fsIdx].value;
+        const attacker = actorFromId(nb, actor.uid);
+        if (attacker && attacker.hp > 0) {
+          const burned = applyStatusTo(attacker, { kind: 'burn', value: fsVal, turns: 2 }, nb.round);
+          nb = replaceUnit(nb, burned);
+          nb = pushLog(nb, `${t2.name} 的「烈焰护盾」灼烧 ${attacker.name} ${fsVal} 层`, sideOf(t2), t2.uid, attacker.uid);
+        }
+      }
+    }
+  }
+  if (passiveAdds.length > 0 && lastHitLog !== undefined) {
+    nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: [...(l.addsStatus ?? []), ...passiveAdds] } : l)) };
+  }
+  nb = replaceUnit(nb, t2);
+  return { battle: nb, lastHitLog, passiveAdds };
+}
+
 /** 玩家与敌方通用的技能结算（内部） */
 function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): BattleState {
   if (actor.hp <= 0) return b;
@@ -682,152 +856,23 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     for (const [uid, count] of perTarget) {
       const t = actorFromId(nb, uid);
       if (!t || t.hp <= 0) continue;
-      const base = Math.max(1, (skill.damage ?? 0) + getDamageBonus(actor));
-      // 减伤（守卫被动「受到的所有伤害 -N」）与侵蚀「伤害加深」均对每一段生效：
-      // 每段基础伤害先扣减伤（每段最低 1），再叠加侵蚀 +1，乘以命中次数得总伤害
-      let perHitDmg = Math.max(1, base - getDamageGuard(t));
-      if (t.isPlayer && nb.corruptDebuff === 'dmg') {
-        perHitDmg += 1;
-      }
-      // 先计算被动附加的状态（venom/scorch），在攻击前生效一次
-      const passiveAdds: string[] = [];
-      const ap = getUnitPassive(actor);
-      let tWithPassive = t;
-      if (ap?.kind === 'venom') {
-        tWithPassive = applyStatusTo(tWithPassive, { kind: 'poison', value: ap.value, turns: 2 }, nb.round);
-        passiveAdds.push('poison');
-      }
-      if (ap?.kind === 'scorch') {
-        tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
-        passiveAdds.push('burn');
-      }
-      // 蟒影被动：对已中毒的目标额外 +3 伤害
-      if (ap?.kind === 'venomPower' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
-        perHitDmg += ap.value;
-      }
-      const finalDmg = perHitDmg * count;
-      // 连击（hits>1）：总伤害拆成 count 段，逐段扣血并逐段写日志，
-      // 动画表现为多段伤害飘字（如 8 拆成两段 4），总和与单条结算完全一致
-      const segments = splitDamage(finalDmg, count);
-      let t2 = tWithPassive;
-      // 水波冲击：记录命中目标数（每命中1人回复1血）
-      if (skill.id === 'water_wave') {
-        waterWaveHits += 1;
-      }
-      // 技能效果种类（用于每段攻击日志标记 addsStatus）
-      const skillEffectKinds: string[] = (skill.effects ?? [])
-        .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter')
-        .map((e) => e.kind);
-      let lastHitLog: number | undefined;
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        if (seg <= 0) continue;
-        // 目标已在前面某段被击杀（如一段清掉唯一敌人）：后续段不再命中、不产生攻击日志，
-        // 对应动画（前冲/受击/飘字）也随之不再播放
-        if (t2.hp <= 0) break;
-        // 护盾吸收：伤害优先扣除护盾，剩余扣血
-        let remainingDmg = seg;
-        if (t2.shield > 0) {
-          const shieldAbsorb = Math.min(t2.shield, remainingDmg);
-          t2 = { ...t2, shield: t2.shield - shieldAbsorb };
-          remainingDmg -= shieldAbsorb;
-          // 护盾耗尽时移除 shield 状态
-          if (t2.shield <= 0) {
-            t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'shield') };
-          }
-        }
-        t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
-        // 技能效果：每段攻击都触发（含击杀段），先于日志以便快照包含状态
-        for (const e of skill.effects ?? []) {
-          // 弱化技能：随机选择 atkDown 或 spdDown
-          if (skill.id === 'weaken') {
-            const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
-            t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
-            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
-          } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns') {
-            t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
-          }
-        }
-        nb = replaceUnit(nb, t2);
-        // 每段攻击日志标记技能效果（供动画在该段播放时揭示状态标签）
-        const hitAdds = skillEffectKinds.length > 0 ? skillEffectKinds : undefined;
-        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${t.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, t.uid, hitAdds);
-        lastHitLog = nb.log.length - 1;
-        // 吸血：每次命中造成伤害后恢复自身（多段每段都触发）
-        if (ap?.kind === 'drain') {
-          const healedActor = actorFromId(nb, actor.uid);
-          if (healedActor && healedActor.hp > 0) {
-            const maxHp = getEffectiveMaxHp(healedActor);
-            const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
-            nb = replaceUnit(nb, healed);
-            nb = pushLog(nb, `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`, sideOf(healedActor), healedActor.uid, healedActor.uid);
-          }
-        }
-        // 尖刺：受击者每次命中都反伤攻击者（多段每段都触发）
-        if (t2.hp > 0) {
-          const tp = getUnitPassive(t2);
-          if (tp?.kind === 'thorns') {
-            const attacker = actorFromId(nb, actor.uid);
-            if (attacker && attacker.hp > 0) {
-              const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
-              nb = replaceUnit(nb, hurt);
-              nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
-            }
-          }
-          // 荆棘之躯：反伤 3 + 怒棘加成，每第 3 次攻击反伤 5 并恢复 2 点生命
-          if (tp?.kind === 'thornRoyal') {
-            const attacker = actorFromId(nb, actor.uid);
-            if (attacker && attacker.hp > 0) {
-              const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').reduce((sum, s) => sum + s.value, 0);
-              const baseDmg = tp.value + rageThornStacks;
-              t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
-              const hitCount = t2.thornsHitCount!;
-              const isBurst = hitCount % 3 === 0;
-              const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
-              // 反伤扣血
-              let newAttacker = { ...attacker, hp: Math.max(0, attacker.hp - thornDmg) };
-              nb = replaceUnit(nb, newAttacker);
-              nb = replaceUnit(nb, t2);
-              nb = pushLog(nb, `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`, sideOf(t2), t2.uid, attacker.uid);
-              // 爆发回血（第 3 次攻击额外恢复 2 点生命）
-              if (isBurst) {
-                const freshT2 = actorFromId(nb, t2.uid) ?? t2;
-                t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
-                nb = replaceUnit(nb, t2);
-                nb = pushLog(nb, `${t2.name} 的「荆棘之躯」恢复 2 点生命`, sideOf(t2), t2.uid, t2.uid);
-              }
-            }
-          }
-          // 复仇棘甲：受击时获得怒棘层数（attack+1，可叠加，独立于战吼）
-          if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
-            t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
-            nb = replaceUnit(nb, t2);
-            nb = pushLog(nb, `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`, sideOf(t2), t2.uid, t2.uid);
-          }
-        }
-        // 盾反状态：受击时反击攻击者 + 降低攻击 + 清除自身护盾
-        if (t2.hp > 0) {
-          const scIdx = t2.statuses.findIndex((s) => s.kind === 'shieldCounter');
-          if (scIdx >= 0) {
-            const scVal = t2.statuses[scIdx].value;
-            const attacker = actorFromId(nb, actor.uid);
-            if (attacker && attacker.hp > 0) {
-              const hurt = { ...attacker, hp: Math.max(0, attacker.hp - scVal) };
-              const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
-              nb = replaceUnit(nb, debuffed);
-              nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低其伤害`, sideOf(t2), t2.uid, attacker.uid);
-            }
-            t2 = { ...t2, shield: 0, statuses: t2.statuses.filter((s) => s.kind !== 'shield' && s.kind !== 'shieldCounter') };
-            nb = replaceUnit(nb, t2);
+      const result = resolveAttack(nb, actor, t, skill, count);
+      nb = result.battle;
+      if (skill.id === 'water_wave') waterWaveHits += 1;
+    }
+    // 风灵闪：若自身速度高于目标，额外攻击一次（对每个目标独立判定，与主攻击完全一致）
+    if (skill.id === 'wind_flash') {
+      const freshActor = actorFromId(nb, actor.uid);
+      if (freshActor && freshActor.hp > 0) {
+        for (const t of targets) {
+          const freshTarget = actorFromId(nb, t.uid);
+          if (!freshTarget || freshTarget.hp <= 0) continue;
+          if (getEffectiveSpd(freshActor) > getEffectiveSpd(freshTarget)) {
+            const result = resolveAttack(nb, freshActor, freshTarget, skill, 1);
+            nb = result.battle;
           }
         }
       }
-      // 被动效果（毒/灼烧）标记在最后一段攻击日志上，供动画揭示
-      if (passiveAdds.length > 0 && lastHitLog !== undefined) {
-        nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: [...(l.addsStatus ?? []), ...passiveAdds] } : l)) };
-      }
-      // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
-      nb = replaceUnit(nb, t2);
     }
     // 荆棘状态（debuff）：攻击者攻击时自身受到 value 点反伤，触发后立即消失
     {
@@ -841,6 +886,27 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           nb = replaceUnit(nb, damagedActor);
           nb = pushLog(nb, `${curActor.name} 的「荆棘」反噬，受到 ${thVal} 点伤害`, sideOf(curActor), undefined, curActor.uid);
         }
+      }
+    }
+    // 疾风连携被动：攻击后自身速度 +1（可叠加，持续至战斗结束）
+    {
+      const curActor = actorFromId(nb, actor.uid);
+      if (curActor && curActor.hp > 0) {
+        const ap2 = getUnitPassive(curActor);
+        if (ap2?.kind === 'spdOnAttack' || ap2?.kind === 'speedBonus') {
+          const newBuffs = { ...curActor.battleBuffs, skillSpd: Math.min(5, (curActor.battleBuffs?.skillSpd ?? 0) + 1) };
+          nb = replaceUnit(nb, { ...curActor, battleBuffs: newBuffs });
+          nb = pushLog(nb, `${curActor.name} 的「疾风连携」速度 +1`, sideOf(curActor), curActor.uid, curActor.uid);
+        }
+      }
+    }
+    // 焚身爆：使用后自身损失 5 点生命（不可减免，不可被护盾抵消）
+    if (skill.id === 'burn_burst') {
+      const burnedActor = actorFromId(nb, actor.uid);
+      if (burnedActor && burnedActor.hp > 0) {
+        const newHp = Math.max(1, burnedActor.hp - 5);
+        nb = replaceUnit(nb, { ...burnedActor, hp: newHp });
+        nb = pushLog(nb, `${burnedActor.name} 的「焚身爆」反噬，损失 5 点生命`, sideOf(burnedActor), burnedActor.uid, burnedActor.uid);
       }
     }
     // 攻击技能附带自愈：水波冲击按命中人数回血，其他技能按固定值回血
@@ -1203,6 +1269,8 @@ export function decrementBattleBuffs(b: BattleState): BattleState {
     const next: Record<string, number> = {};
     let unitChanged = false;
     for (const [k, v] of Object.entries(u.battleBuffs)) {
+      // skillSpd 为永久速度加成，不递减
+      if (k === 'skillSpd') { next[k] = v; continue; }
       if (v > 1) {
         next[k] = v - 1;
         unitChanged = true;
@@ -1243,20 +1311,29 @@ export function getDamageBonus(u: Unit): number {
   return bonus;
 }
 
-/** 获取单位的伤害减免（被动守护，整数） */
+/** 获取单位的伤害减免（被动守护 + 水幕，整数） */
 export function getDamageGuard(u: Unit): number {
+  let guard = 0;
   const p = getUnitPassive(u);
-  return p?.kind === 'guard' ? p.value : 0;
+  if (p?.kind === 'guard') guard += p.value;
+  // 水幕：减少伤害 value
+  const wc = u.statuses.find((s) => s.kind === 'waterCurtain');
+  if (wc) guard += wc.value;
+  return guard;
 }
 
 /** 获取单位的有效速度（含临时buff，整数） */
 export function getEffectiveSpd(u: Unit): number {
   let spd = u.spd;
   if (u.battleBuffs?.spdUp) spd += 1;
+  if (u.battleBuffs?.skillSpd) spd += u.battleBuffs.skillSpd;
   if (u.battleBuffs?.spdDown) spd -= 1;
   // 状态效果减速（弱化技能）
   const spdDownStatus = u.statuses.find((s) => s.kind === 'spdDown');
   if (spdDownStatus) spd -= spdDownStatus.value;
+  // 风羽状态：速度 +value
+  const windSpdStatus = u.statuses.find((s) => s.kind === 'windSpd');
+  if (windSpdStatus) spd += windSpdStatus.value;
   return Math.max(1, spd);
 }
 
