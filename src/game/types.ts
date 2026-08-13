@@ -10,7 +10,7 @@ export interface StatusEffect {
   appliedRound?: number;
 }
 
-export type SkillTarget = 'single' | 'all' | 'random' | 'self' | 'ally';
+export type SkillTarget = 'single' | 'all' | 'random' | 'self' | 'ally' | 'allyAll';
 
 export interface SkillDef {
   id: string;
@@ -58,7 +58,8 @@ export type PassiveKind =
   | 'spdOnAttack' // 疾风连携：攻击后速度 +value（可叠加）
   | 'speedBonus' // 速度差增伤：速度每高于目标 1 点伤害 +1，上限 value
   | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
-  | 'scorchPlus'; // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
+  | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
+  | 'lifeSpring'; // 生命之泉：每回合开始恢复 3 点生命；受到超过 value 点伤害时，伤害 -2
 
 export interface PassiveDef {
   id: string;

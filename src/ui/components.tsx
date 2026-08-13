@@ -74,17 +74,7 @@ function effectText(e: StatusEffect): string {
 /** 技能完整描述：定位标注 + 基础描述 + 具体 buff 效果数值，如 "【前排攻击】攻击单个敌人（灼烧 2/回合，持续 2 回合）" */
 export function skillFullDesc(s: SkillDef): string {
   const effects = (s.effects ?? []).map(effectText).join('，');
-  let reachNote = '';
-  if (s.target === 'all') reachNote = '全体攻击';
-  else if (s.target === 'random') reachNote = '随机攻击';
-  else if (s.kind === 'attack' && s.target === 'single') {
-    if (s.reach === 'pierce') reachNote = '贯穿：命中前排并波及对应后排';
-    else if (s.reach === 'back') reachNote = '后排攻击：跳过前排直击后排';
-    else if (s.reach === 'direct') reachNote = '指定攻击：无视前后排';
-    else reachNote = '前排攻击';
-  }
-  const prefix = reachNote ? `【${reachNote}】` : '';
-  const base = `${prefix}${s.desc}`;
+  const base = s.desc;
   return effects ? `${base}（${effects}）` : base;
 }
 
@@ -175,6 +165,14 @@ export function StatusIcons({ unit }: { unit: Unit }) {
             </span>
           );
         }
+        // 水幕：专属水滴图标，显示减伤值
+        if (s.kind === 'waterCurtain') {
+          return (
+            <span key={i} title={`水幕（受伤 -${s.value}，剩余 ${s.turns} 回合）`}>
+              🌊-{s.value}
+            </span>
+          );
+        }
         const meta = STATUS_ICON[s.kind];
         if (!meta) return null;
         const tip =
@@ -214,7 +212,7 @@ export function PassiveBadge({ unit }: { unit: Unit }) {
 export function BattleBuffIcons({ unit }: { unit: Unit }) {
   const buffs = unit.battleBuffs;
   if (!buffs) return null;
-  const entries = Object.entries(buffs).filter(([k, v]) => v && BATTLE_BUFF_ICON[k]);
+  const entries = Object.entries(buffs).filter(([k, v]) => v && BATTLE_BUFF_ICON[k] && k !== 'skillSpd');
   if (entries.length === 0) return null;
   return (
     <span className="battle-buffs">

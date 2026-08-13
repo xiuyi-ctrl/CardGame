@@ -50,7 +50,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   iron_cap: { id: 'iron_cap', name: '铁壁上限', desc: '每回合最多累计受到 15 点伤害，超出部分无效', kind: 'damageCap', value: 15 },
   serpent_hunt: { id: 'serpent_hunt', name: '蛇狩', desc: '攻击中毒目标时，无视其 4 点护盾/减伤效果，并额外造成 3 点真实伤害', kind: 'poisonBreak', value: 3 },
   gale_combo: { id: 'gale_combo', name: '疾风连携', desc: '每次使用攻击技能后，自身速度 +1（可叠加）；速度每高于目标 1 点，伤害 +1，上限 +5', kind: 'speedBonus', value: 5 },
-  life_spring: { id: 'life_spring', name: '生命之泉', desc: '每回合开始恢复 3 点生命；每次受到伤害超过 6 点时，伤害减少 2 点', kind: 'bigHitGuard', value: 6 },
+  life_spring: { id: 'life_spring', name: '生命之泉', desc: '每回合开始恢复 3 点生命；每次受到伤害超过 6 点时，伤害减少 2 点', kind: 'lifeSpring', value: 6 },
   ember_body: { id: 'ember_body', name: '余烬焚身', desc: '攻击命中附加灼烧 4 层；对已灼烧的目标，每层灼烧使该次伤害 +1，上限 +5', kind: 'scorchPlus', value: 4 },
 };
 

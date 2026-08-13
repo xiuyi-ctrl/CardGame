@@ -238,11 +238,12 @@ function startRound(b: BattleState): BattleState {
   // 被动再生：每回合开始恢复（存活且未满血）
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     const p = getUnitPassive(u);
-    if (p?.kind === 'regen' && u.hp > 0 && u.hp < u.maxHp) {
+    if ((p?.kind === 'regen' || p?.kind === 'lifeSpring') && u.hp > 0 && u.hp < u.maxHp) {
       const maxHp = getEffectiveMaxHp(u);
-      const healed = { ...u, hp: Math.min(maxHp, u.hp + p.value) };
+      const healAmt = p.kind === 'lifeSpring' ? 3 : p.value;
+      const healed = { ...u, hp: Math.min(maxHp, u.hp + healAmt) };
       nb = replaceUnit(nb, healed);
-      nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${p.value} 点生命`, sideOf(u), u.uid);
+      nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${healAmt} 点生命`, sideOf(u), u.uid);
     }
   }
   nb = {
@@ -441,7 +442,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   let nb = b;
   let targets: Unit[] = [];
   // 嘲讽统一约束：被嘲讽者的单体/随机技能强制以嘲讽来源为目标（全体/自身/队友不受限）
-  if (skill.target !== 'self' && skill.target !== 'ally' && skill.target !== 'all') {
+  if (skill.target !== 'self' && skill.target !== 'ally' && skill.target !== 'allyAll' && skill.target !== 'all') {
     const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
     if (tauntSrc?.sourceUid) {
       const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
@@ -461,6 +462,10 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       } else {
         targets = [actor];
       }
+      break;
+    }
+    case 'allyAll': {
+      targets = allies.filter((u) => u.hp > 0);
       break;
     }
     case 'all':
@@ -689,7 +694,7 @@ function resolveAttack(
     if (seg <= 0) continue;
     if (t2.hp <= 0) break;
     const tgtPassive = getUnitPassive(t2);
-    if (tgtPassive?.kind === 'bigHitGuard' && seg > tgtPassive.value) {
+    if ((tgtPassive?.kind === 'bigHitGuard' || tgtPassive?.kind === 'lifeSpring') && seg > tgtPassive.value) {
       seg = Math.max(1, seg - 2);
     }
     if (tgtPassive?.kind === 'damageCap') {
@@ -829,7 +834,14 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     }
     for (const t of targets) {
       const maxHp = getEffectiveMaxHp(t);
-      const healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
+      let healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
+      // 治疗技能也可附带效果（如潮汐领域的水幕）
+      for (const e of skill.effects ?? []) {
+        healed = applyStatusTo(healed, { kind: e.kind, value: e.value, turns: e.turns }, r.round);
+        if (e.kind === 'shield') {
+          healed = { ...healed, shield: Math.min(99, healed.shield + e.value) };
+        }
+      }
       r = replaceUnit(r, healed);
       r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`, sideOf(actor), actor.uid, t.uid);
     }
@@ -1001,6 +1013,7 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   if (skillUsesLeft(actor, skillId) <= 0) return b;
   // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝（不扣 AP），避免结算时静默回退成治疗自己
   if (skill.target === 'ally' && targetUid && !b.playerUnits.some((u) => u.uid === targetUid)) return b;
+  // allyAll 不需要选择目标，跳过 targetUid 校验
   const curOrder = b.orders?.[actorUid];
   // 已下过技能指令：仅修改指令内容，不重复扣 AP/占用行动（休息指令不在此列，改技能需重新扣 AP）
   if (actor.acted && curOrder && curOrder.skillId !== REST_SKILL_ID) {

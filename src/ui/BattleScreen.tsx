@@ -173,7 +173,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     const targets = new Set<string>();
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
-      if (skill.target === 'ally') alivePlayers.forEach((u) => targets.add(u.uid));
+      if (skill.target === 'ally' || skill.target === 'allyAll') alivePlayers.forEach((u) => targets.add(u.uid));
     }
     if (swapFrom) alivePlayers.filter((u) => u.uid !== swapFrom).forEach((u) => targets.add(u.uid));
     if (pendingBattleItem) {
@@ -264,6 +264,12 @@ export function BattleScreen({ state, dispatch }: Props) {
       setPendingBattleItem(null);
       setInspectEnemy(null);
       setPendingSkill({ actorUid: selected.uid, skillId: skill.id });
+      return;
+    }
+    // allyAll：全体友方，无需选择目标，直接施放
+    if (skill.target === 'allyAll') {
+      dispatch({ type: 'PLAYER_SKILL', actorUid: selected.uid, skillId: skill.id });
+      setPendingSkill(null);
       return;
     }
     setPendingSkill(null);

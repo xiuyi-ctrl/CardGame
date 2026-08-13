@@ -215,7 +215,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   wind_flash: {
     id: 'wind_flash', name: '风灵闪', desc: '攻击单个敌人，若自身速度高于目标则额外攻击一次',
-    kind: 'attack', damage: 6, hits: 1, target: 'single',
+    kind: 'attack', damage: 5, hits: 1, target: 'single',
   },
   wind_feather: {
     id: 'wind_feather', name: '风羽', desc: '提升自身 2 点速度（持续 2 回合）',
@@ -223,18 +223,18 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'windSpd', value: 2, turns: 2 }],
   },
   whirlwind: {
-    id: 'whirlwind', name: '旋风斩', desc: '攻击前排所有敌人，攻击后自身速度 +1',
+    id: 'whirlwind', name: '旋风斩', desc: '攻击前排所有敌人',
     kind: 'attack', damage: 5, hits: 1, target: 'all',
     reach: 'front',
   },
   swift_strike: {
-    id: 'swift_strike', name: '迅击', desc: '先手：贯穿攻击单个敌人',
-    kind: 'attack', damage: 6, hits: 1, target: 'single',
+    id: 'swift_strike', name: '迅击', desc: '先手：贯穿攻击敌人',
+    kind: 'attack', damage: 5, hits: 1, target: 'single',
     reach: 'pierce', priority: 'first',
   },
   tidal_domain: {
     id: 'tidal_domain', name: '潮汐领域', desc: '全体友方恢复 4 点生命，并附加水幕（下回合受伤 -2）',
-    kind: 'heal', target: 'ally',
+    kind: 'heal', target: 'allyAll',
     heal: 4,
     effects: [{ kind: 'waterCurtain', value: 2, turns: 1 }],
     uses: 2,
