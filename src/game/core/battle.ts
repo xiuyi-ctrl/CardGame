@@ -652,12 +652,13 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     nb = r;
   } else if (skill.kind === 'buff') {
     for (const t of targets) {
-      const e = skill.effects?.[0];
-      if (!e) continue;
-      let buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
-      // 护盾：同时更新 shield 字段
-      if (e.kind === 'shield') {
-        buffed = { ...buffed, shield: Math.min(99, buffed.shield + e.value) };
+      let buffed = t;
+      for (const e of skill.effects ?? []) {
+        buffed = applyStatusTo(buffed, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
+        // 护盾：同时更新 shield 字段
+        if (e.kind === 'shield') {
+          buffed = { ...buffed, shield: Math.min(99, buffed.shield + e.value) };
+        }
       }
       nb = replaceUnit(nb, buffed);
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
