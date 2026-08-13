@@ -217,6 +217,15 @@ function startRound(b: BattleState): BattleState {
     if (res.unit.hp > 0) tickStatuses(res.unit, prevRound);
     nb = replaceUnit(nb, res.unit);
   }
+  // 盾反过期清除：若单位有盾状态但无盾反状态，说明盾反已过期（未受攻击），清除所有护盾
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const hasShield = u.statuses.some((s) => s.kind === 'shield');
+    const hasSC = u.statuses.some((s) => s.kind === 'shieldCounter');
+    if (hasShield && !hasSC) {
+      nb = replaceUnit(nb, { ...u, shield: 0, statuses: u.statuses.filter((s) => s.kind !== 'shield') });
+    }
+  }
   // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
   nb = {
     ...nb,
@@ -864,6 +873,16 @@ export function playerEndTurn(b: BattleState): BattleState {
   // 车轮战：场上一方全灭待换人——先等替补动画播完（GAUNTLET_SWAP）再结算/开新回合，避免在空场上重复结算
   if (b.pendingSwap?.player || b.pendingSwap?.enemy) return b;
   let nb: BattleState = { ...b, playerAp: 0 };
+  // 预选敌方先手技能：若有可用的先手技能，提前写入 orders 使 computeTurnOrder 能检测到
+  for (const eu of nb.enemyUnits) {
+    if (eu.hp <= 0 || eu.acted) continue;
+    const firstSkill = eu.skills
+      .map(getSkill)
+      .find((s) => s.priority === 'first' && skillUsesLeft(eu, s.id) > 0);
+    if (firstSkill) {
+      nb = { ...nb, orders: { ...(nb.orders ?? {}), [eu.uid]: { skillId: firstSkill.id } } };
+    }
+  }
   // 回合结算：所有存活单位（敌我混排）按速度统一行动——
   // 我方执行已下达的指令，敌方由 AI 自动行动；未下指令的我方单位本回合不出手。
   for (const uid of computeTurnOrder(nb)) {
@@ -884,7 +903,13 @@ export function playerEndTurn(b: BattleState): BattleState {
       // 车轮战：上一只阵亡后刚切入场的敌方替补本回合不出手，等下回合（startRound 重置 acted）再行动；
       // 眩晕单位仍走 enemyAct 正常打出「被眩晕」日志（startRound 也把它们标记为 acted）
       if (unit.acted && !unit.statuses.some((s) => s.kind === 'stun')) continue;
-      nb = enemyAct(nb, unit);
+      // 先手技能：若敌方已被预选先手指令，直接执行而非走 AI
+      const eOrder = nb.orders?.[uid];
+      if (eOrder && getSkill(eOrder.skillId)?.priority === 'first') {
+        nb = useSkillInner(nb, unit, getSkill(eOrder.skillId), eOrder.targetUid);
+      } else {
+        nb = enemyAct(nb, unit);
+      }
     }
     nb = checkEnd(nb);
   }
