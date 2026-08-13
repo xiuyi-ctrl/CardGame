@@ -772,8 +772,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             const attacker = actorFromId(nb, actor.uid);
             if (attacker && attacker.hp > 0) {
               const hurt = { ...attacker, hp: Math.max(0, attacker.hp - scVal) };
-              nb = replaceUnit(nb, hurt);
-              const debuffed = applyStatusTo(attacker, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
+              const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
               nb = replaceUnit(nb, debuffed);
               nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低其伤害`, sideOf(t2), t2.uid, attacker.uid);
             }
