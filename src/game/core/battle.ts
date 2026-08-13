@@ -773,7 +773,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
               t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
               const hitCount = t2.thornsHitCount!;
               const isBurst = hitCount % 3 === 0;
-              const thornDmg = isBurst ? 5 : baseDmg;
+              const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
               // 反伤扣血
               let newAttacker = { ...attacker, hp: Math.max(0, attacker.hp - thornDmg) };
               nb = replaceUnit(nb, newAttacker);
