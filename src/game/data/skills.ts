@@ -124,9 +124,9 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 7, reach: 'back',
   },
   thorn_skill: {
-    id: 'thorn_skill', name: '荆棘', desc: '攻击单个敌人，使其攻击时自身受到反伤',
-    target: 'single', kind: 'attack', damage: 3,
-    effects: [{ kind: 'thorns', value: 4, turns: 2 }],
+    id: 'thorn_skill', name: '荆棘', desc: '攻击单个敌人，使其下次攻击时自身受到反伤（触发后消失）',
+    kind: 'attack', damage: 3, hits: 1, target: 'single',
+    effects: [{ kind: 'thorns', value: 4, turns: 1 }],
   },
 
   // —— Boss 专属技能 ——

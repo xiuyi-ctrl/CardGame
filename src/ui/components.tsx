@@ -127,6 +127,8 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   shield: { icon: '🛡️', label: '护盾' },
   taunt: { icon: '🫧', label: '嘲讽' },
   spdDown: { icon: '🕸️', label: '速度降低' },
+  thorns: { icon: '🌿', label: '荆棘反伤' },
+  shieldCounter: { icon: '🛡️', label: '盾反' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {

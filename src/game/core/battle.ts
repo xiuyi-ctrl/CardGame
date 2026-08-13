@@ -275,8 +275,8 @@ function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
     if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
-    // 仅战吼（atkUp）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
-    if (s.kind === 'atkUp' && s.appliedRound !== undefined && s.appliedRound === round) continue;
+    // 仅战吼（atkUp）、荆棘（thorns）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
+    if ((s.kind === 'atkUp' || s.kind === 'thorns') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
@@ -780,16 +780,6 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             nb = replaceUnit(nb, t2);
           }
         }
-        // 荆棘状态（debuff）：受击时受 value 点伤害
-        if (t2.hp > 0) {
-          const thIdx = t2.statuses.findIndex((s) => s.kind === 'thorns');
-          if (thIdx >= 0) {
-            const thVal = t2.statuses[thIdx].value;
-            t2 = { ...t2, hp: Math.max(0, t2.hp - thVal) };
-            nb = replaceUnit(nb, t2);
-            nb = pushLog(nb, `${t2.name} 的「荆棘」反噬，受到 ${thVal} 点伤害`, sideOf(t2), undefined, t2.uid);
-          }
-        }
       }
       // 被动效果（毒/灼烧）标记在最后一段攻击日志上，供动画揭示
       if (passiveAdds.length > 0 && lastHitLog !== undefined) {
@@ -797,6 +787,20 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       }
       // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
       nb = replaceUnit(nb, t2);
+    }
+    // 荆棘状态（debuff）：攻击者攻击时自身受到 value 点反伤，触发后立即消失
+    {
+      const curActor = actorFromId(nb, actor.uid);
+      if (curActor && curActor.hp > 0) {
+        const thornsIdx = curActor.statuses.findIndex((s) => s.kind === 'thorns');
+        if (thornsIdx >= 0) {
+          const thVal = curActor.statuses[thornsIdx].value;
+          const cleanedStatuses = curActor.statuses.filter((_, i) => i !== thornsIdx);
+          const damagedActor = { ...curActor, hp: Math.max(0, curActor.hp - thVal), statuses: cleanedStatuses };
+          nb = replaceUnit(nb, damagedActor);
+          nb = pushLog(nb, `${curActor.name} 的「荆棘」反噬，受到 ${thVal} 点伤害`, sideOf(curActor), undefined, curActor.uid);
+        }
+      }
     }
     // 攻击技能附带自愈：水波冲击按命中人数回血，其他技能按固定值回血
     const healAmt = skill.id === 'water_wave' ? waterWaveHits : (skill.heal ?? 0);
