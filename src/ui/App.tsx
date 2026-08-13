@@ -1520,18 +1520,23 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
           {ev.desc}
         </p>
         <div className="reward-cards">
-          {ev.choices.map((c) => (
-            <div
-              key={c.id}
-              className="reward-card"
-              onClick={() => {
-                if (c.kind === 'recruit' && c.monsterId) {
-                  dispatch({ type: 'EVENT_HATCH_PREVIEW', choiceId: c.id, monsterId: c.monsterId });
-                } else {
-                  dispatch({ type: 'EVENT_CHOICE', choiceId: c.id });
-                }
-              }}
-            >
+          {ev.choices.map((c) => {
+            const cost = c.goldDelta ?? 0;
+            const totalCost = c.kind === 'gold' ? cost + Math.min(0, c.amount ?? 0) : cost;
+            const cantAfford = state.gold + totalCost < 0;
+            return (
+              <div
+                key={c.id}
+                className={`reward-card${cantAfford ? ' disabled' : ''}`}
+                onClick={() => {
+                  if (cantAfford) return;
+                  if (c.kind === 'recruit' && c.monsterId) {
+                    dispatch({ type: 'EVENT_HATCH_PREVIEW', choiceId: c.id, monsterId: c.monsterId });
+                  } else {
+                    dispatch({ type: 'EVENT_CHOICE', choiceId: c.id });
+                  }
+                }}
+              >
               <div className="ricon">
                 {c.kind === 'heal' && '❤️'}
                 {c.kind === 'gold' && '💰'}
@@ -1544,7 +1549,8 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
               <div className="rtitle">{c.label}</div>
               <div className="rdesc">{c.desc}</div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       {hatch && hatchMonster && (

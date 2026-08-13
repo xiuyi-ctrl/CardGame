@@ -1820,6 +1820,12 @@ button.primary {
   border-color: var(--gold);
 }
 
+.reward-card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* 背包道具卡：统一尺寸，描述区自动伸缩 */
 .reward-card.bag-item {
   width: 220px;
