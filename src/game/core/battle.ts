@@ -217,15 +217,6 @@ function startRound(b: BattleState): BattleState {
     if (res.unit.hp > 0) tickStatuses(res.unit, prevRound);
     nb = replaceUnit(nb, res.unit);
   }
-  // 盾反过期清除：若单位有盾状态但无盾反状态，说明盾反已过期（未受攻击），清除所有护盾
-  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
-    if (u.hp <= 0) continue;
-    const hasShield = u.statuses.some((s) => s.kind === 'shield');
-    const hasSC = u.statuses.some((s) => s.kind === 'shieldCounter');
-    if (hasShield && !hasSC) {
-      nb = replaceUnit(nb, { ...u, shield: 0, statuses: u.statuses.filter((s) => s.kind !== 'shield') });
-    }
-  }
   // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
   nb = {
     ...nb,
