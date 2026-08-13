@@ -28,7 +28,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   shadow_claw: {
     id: 'shadow_claw', name: '暗爪', desc: '重击单个敌人',
-    target: 'single', kind: 'attack', damage: 7,
+    target: 'single', kind: 'attack', damage: 6,
   },
   steel_spike: {
     id: 'steel_spike', name: '铁刺', desc: '攻击单个敌人，降低其伤害',
@@ -92,8 +92,41 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   provoke: {
     id: 'provoke', name: '挑衅', desc: '攻击目标并使其2回合内只能攻击自己',
-    target: 'single', kind: 'attack', damage: 3,
+    target: 'single', kind: 'attack', damage: 3, uses: 5,
     effects: [{ kind: 'taunt', value: 1, turns: 2 }],
+  },
+
+  // —— 一阶进化专属技能 ——
+  water_gun: {
+    id: 'water_gun', name: '水枪弹', desc: '攻击单个敌人',
+    target: 'single', kind: 'attack', damage: 4,
+  },
+  water_wave: {
+    id: 'water_wave', name: '水波冲击', desc: '攻击全体前排敌人，每命中一个回复1点生命',
+    target: 'all', kind: 'attack', damage: 2, heal: 1,
+  },
+  flame_combo: {
+    id: 'flame_combo', name: '火焰连击', desc: '连续两次攻击随机敌人',
+    target: 'random', kind: 'attack', damage: 4, hits: 2,
+  },
+  fire_shock: {
+    id: 'fire_shock', name: '火光冲击', desc: '贯穿攻击单个敌人并附加灼烧',
+    target: 'single', kind: 'attack', damage: 4, reach: 'pierce',
+    effects: [{ kind: 'burn', value: 1, turns: 2 }],
+  },
+  shield_counter: {
+    id: 'shield_counter', name: '盾反', desc: '为自身附加3层护盾，受攻击时反击敌人并降低其伤害',
+    target: 'self', kind: 'buff',
+    effects: [{ kind: 'shield', value: 3, turns: 0 }, { kind: 'shieldCounter', value: 2, turns: 3 }],
+  },
+  shadow_strike: {
+    id: 'shadow_strike', name: '影袭', desc: '跳过前排直接攻击后排敌人',
+    target: 'single', kind: 'attack', damage: 7, reach: 'back',
+  },
+  thorn_skill: {
+    id: 'thorn_skill', name: '荆棘', desc: '攻击单个敌人，使其攻击时自身受到反伤',
+    target: 'single', kind: 'attack', damage: 3,
+    effects: [{ kind: 'thorns', value: 4, turns: 2 }],
   },
 
   // —— Boss 专属技能 ——

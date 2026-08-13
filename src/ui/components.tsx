@@ -23,6 +23,8 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   shield: '🛡️',
   taunt: '🫧',
   spdDown: '🕸️',
+  thorns: '🌿',
+  shieldCounter: '🛡️',
 };
 
 function effectText(e: StatusEffect): string {
@@ -46,6 +48,10 @@ function effectText(e: StatusEffect): string {
       return `嘲讽${turns}`;
     case 'spdDown':
       return `速度 -${e.value}${turns}`;
+    case 'thorns':
+      return `荆棘反伤 ${e.value}${turns}`;
+    case 'shieldCounter':
+      return `盾反 ${e.value}${turns}`;
   }
 }
 

@@ -488,18 +488,20 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
             picked = res.pick;
           }
         } else if (reach === 'back') {
-          if (explicitTarget && back.some((u) => u.uid === explicitTarget)) {
-            picked = back.find((u) => u.uid === explicitTarget)!;
+          const backPool = back.length > 0 ? back : front;
+          if (explicitTarget && backPool.some((u) => u.uid === explicitTarget)) {
+            picked = backPool.find((u) => u.uid === explicitTarget)!;
           } else {
-            const res = rngPick(nb, back.length > 0 ? back : front);
+            const res = rngPick(nb, backPool);
             nb = res.battle;
             picked = res.pick;
           }
         } else {
-          if (explicitTarget && front.some((u) => u.uid === explicitTarget)) {
-            picked = front.find((u) => u.uid === explicitTarget)!;
+          const frontPool = front.length > 0 ? front : back;
+          if (explicitTarget && frontPool.some((u) => u.uid === explicitTarget)) {
+            picked = frontPool.find((u) => u.uid === explicitTarget)!;
           } else {
-            const res = rngPick(nb, front.length > 0 ? front : back);
+            const res = rngPick(nb, frontPool);
             nb = res.battle;
             picked = res.pick;
           }
@@ -649,6 +651,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     }
   } else {
     const perTarget = new Map<string, number>();
+    let waterWaveHits = 0;
     for (const t of targets) {
       perTarget.set(t.uid, (perTarget.get(t.uid) ?? 0) + 1);
     }
@@ -678,9 +681,17 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
         passiveAdds.push('burn');
       }
+      // 毒力被动：对已中毒的目标额外 +2 伤害
+      if (ap?.id === 'venom_power' && t2.statuses.some((s) => s.kind === 'poison')) {
+        perHitDmg += 2;
+      }
+      // 水波冲击：记录命中目标数（每命中1人回复1血）
+      if (skill.id === 'water_wave') {
+        waterWaveHits += 1;
+      }
       // 技能效果种类（用于每段攻击日志标记 addsStatus）
       const skillEffectKinds: string[] = (skill.effects ?? [])
-        .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun')
+        .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter')
         .map((e) => e.kind);
       let lastHitLog: number | undefined;
       for (let i = 0; i < segments.length; i++) {
@@ -739,6 +750,33 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             }
           }
         }
+        // 盾反状态：受击时反击攻击者 + 降低攻击 + 清除自身护盾
+        if (t2.hp > 0) {
+          const scIdx = t2.statuses.findIndex((s) => s.kind === 'shieldCounter');
+          if (scIdx >= 0) {
+            const scVal = t2.statuses[scIdx].value;
+            const attacker = actorFromId(nb, actor.uid);
+            if (attacker && attacker.hp > 0) {
+              const hurt = { ...attacker, hp: Math.max(0, attacker.hp - scVal) };
+              nb = replaceUnit(nb, hurt);
+              const debuffed = applyStatusTo(attacker, { kind: 'atkDown', value: 2, turns: 2 });
+              nb = replaceUnit(nb, debuffed);
+              nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低其伤害`, sideOf(t2), t2.uid, attacker.uid);
+            }
+            t2 = { ...t2, shield: 0, statuses: t2.statuses.filter((s) => s.kind !== 'shield' && s.kind !== 'shieldCounter') };
+            nb = replaceUnit(nb, t2);
+          }
+        }
+        // 荆棘状态（debuff）：受击时受 value 点伤害
+        if (t2.hp > 0) {
+          const thIdx = t2.statuses.findIndex((s) => s.kind === 'thorns');
+          if (thIdx >= 0) {
+            const thVal = t2.statuses[thIdx].value;
+            t2 = { ...t2, hp: Math.max(0, t2.hp - thVal) };
+            nb = replaceUnit(nb, t2);
+            nb = pushLog(nb, `${t2.name} 的「荆棘」反噬，受到 ${thVal} 点伤害`, sideOf(t2), undefined, t2.uid);
+          }
+        }
       }
       // 被动效果（毒/灼烧）标记在最后一段攻击日志上，供动画揭示
       if (passiveAdds.length > 0 && lastHitLog !== undefined) {
@@ -747,14 +785,15 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       // 状态（毒/灼烧等）写回后，攻击日志在吸血/反伤之前，动画按「攻击→吸血→反伤」真实结算顺序播放
       nb = replaceUnit(nb, t2);
     }
-    // 攻击技能附带自愈（如 tidal_slam）：所有目标结算后恢复自身
-    if (skill.heal && skill.heal > 0) {
+    // 攻击技能附带自愈：水波冲击按命中人数回血，其他技能按固定值回血
+    const healAmt = skill.id === 'water_wave' ? waterWaveHits : (skill.heal ?? 0);
+    if (healAmt > 0) {
       const healedActor = actorFromId(nb, actor.uid);
       if (healedActor && healedActor.hp > 0) {
         const maxHp = getEffectiveMaxHp(healedActor);
-        const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + skill.heal) };
+        const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + healAmt) };
         nb = replaceUnit(nb, healed);
-        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」恢复 ${skill.heal} 点生命`, sideOf(actor), actor.uid, actor.uid);
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」恢复 ${healAmt} 点生命`, sideOf(actor), actor.uid, actor.uid);
       }
     }
   }
