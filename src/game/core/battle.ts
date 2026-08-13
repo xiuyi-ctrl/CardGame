@@ -768,7 +768,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           if (tp?.kind === 'thornRoyal') {
             const attacker = actorFromId(nb, actor.uid);
             if (attacker && attacker.hp > 0) {
-              const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').length;
+              const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').reduce((sum, s) => sum + s.value, 0);
               const baseDmg = tp.value + rageThornStacks;
               t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
               const hitCount = t2.thornsHitCount!;
