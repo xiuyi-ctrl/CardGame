@@ -190,22 +190,29 @@ export function createBattle(
 
 /** 开始新回合：重置行动标记/行动点、结算持续伤害与状态持续、重新按速度排序 */
 function startRound(b: BattleState): BattleState {
+  const prevRound = b.round;
   let nb = decrementBattleBuffs(b);
   nb = {
     ...nb,
     round: nb.round + 1,
     turnOrder: computeTurnOrder(nb),
     turnIndex: 0,
-    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), statuses: u.statuses.map((s) => ({ ...s })) })),
-    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), statuses: u.statuses.map((s) => ({ ...s })) })),
+    playerUnits: nb.playerUnits.map((u) => ({ ...u, statuses: u.statuses.map((s) => ({ ...s })) })),
+    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, statuses: u.statuses.map((s) => ({ ...s })) })),
   };
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     if (u.hp <= 0) continue;
     const res = applyDot(nb, u);
     nb = res.battle;
-    if (res.unit.hp > 0) tickStatuses(res.unit);
+    if (res.unit.hp > 0) tickStatuses(res.unit, prevRound);
     nb = replaceUnit(nb, res.unit);
   }
+  // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
+  nb = {
+    ...nb,
+    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun') })),
+    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun') })),
+  };
   // 清除来源已死亡的嘲讽
   const allUnits = [...nb.playerUnits, ...nb.enemyUnits];
   for (const u of allUnits) {
@@ -264,10 +271,12 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
   return { unit, battle: nb };
 }
 
-function tickStatuses(u: Unit): void {
+function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
     if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
+    // 仅战吼（atkUp）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
+    if (s.kind === 'atkUp' && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
@@ -523,7 +532,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   return { targets, battle: nb };
 }
 
-function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number; sourceUid?: string }): Unit {
+function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number; sourceUid?: string }, round?: number): Unit {
   const idx = unit.statuses.findIndex((s) => s.kind === effect.kind);
   if (idx >= 0) {
     const next = [...unit.statuses];
@@ -540,7 +549,7 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
     }
     return { ...unit, statuses: next };
   }
-  return { ...unit, statuses: [...unit.statuses, { ...effect }] };
+  return { ...unit, statuses: [...unit.statuses, { ...effect, appliedRound: round }] };
 }
 
 /** 交换己方两只单位的位置（可前后/左右任意交换） */
@@ -645,7 +654,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     for (const t of targets) {
       const e = skill.effects?.[0];
       if (!e) continue;
-      let buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns });
+      let buffed = applyStatusTo(t, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
       // 护盾：同时更新 shield 字段
       if (e.kind === 'shield') {
         buffed = { ...buffed, shield: Math.min(99, buffed.shield + e.value) };
@@ -678,11 +687,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const passiveAdds: string[] = [];
       const ap = getUnitPassive(actor);
       if (ap?.kind === 'venom') {
-        t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 });
+        t2 = applyStatusTo(t2, { kind: 'poison', value: ap.value, turns: 2 }, nb.round);
         passiveAdds.push('poison');
       }
       if (ap?.kind === 'scorch') {
-        t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 });
+        t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
         passiveAdds.push('burn');
       }
       // 毒力被动：对已中毒的目标额外 +2 伤害
@@ -721,10 +730,10 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           // 弱化技能：随机选择 atkDown 或 spdDown
           if (skill.id === 'weaken') {
             const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
-            t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns });
+            t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
             nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
           } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown') {
-            t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e);
+            t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
           }
         }
         nb = replaceUnit(nb, t2);
@@ -763,7 +772,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             if (attacker && attacker.hp > 0) {
               const hurt = { ...attacker, hp: Math.max(0, attacker.hp - scVal) };
               nb = replaceUnit(nb, hurt);
-              const debuffed = applyStatusTo(attacker, { kind: 'atkDown', value: 2, turns: 2 });
+              const debuffed = applyStatusTo(attacker, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
               nb = replaceUnit(nb, debuffed);
               nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低其伤害`, sideOf(t2), t2.uid, attacker.uid);
             }

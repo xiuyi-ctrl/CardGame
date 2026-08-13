@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
+import { getMonster } from '../game/data/monsters';
 
 /** 技能数值简述：仅伤害/治疗数值，如 "5"、"3×2"（buff 效果数值不放这里，见 skillFullDesc） */
 export function skillBrief(s: SkillDef): string {
@@ -211,10 +212,16 @@ export interface UnitCardProps {
 
 export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer }: UnitCardProps) {
   const dead = unit.hp <= 0;
-  // 计算有效速度（含临时 buff）
+  // 计算有效速度（含临时 buff/debuff/被动）
+  const baseSpd = getMonster(unit.speciesId).baseSpd;
+  const passiveDef = getPassive(unit.passive);
+  const passiveSpd = passiveDef?.kind === 'spd' ? passiveDef.value : 0;
   const buffSpd = (unit.battleBuffs?.spdUp ? 1 : 0) - (unit.battleBuffs?.spdDown ? 1 : 0);
-  const effectiveSpd = Math.max(1, unit.spd + buffSpd);
-  const spdColor = buffSpd > 0 ? 'var(--hp-good)' : buffSpd < 0 ? 'var(--hp-low)' : undefined;
+  const spdDownStatus = unit.statuses.find((s) => s.kind === 'spdDown');
+  const statusSpd = spdDownStatus ? -spdDownStatus.value : 0;
+  const effectiveSpd = Math.max(1, baseSpd + passiveSpd + buffSpd + statusSpd);
+  const totalDelta = passiveSpd + buffSpd + statusSpd;
+  const spdColor = totalDelta > 0 ? 'var(--hp-good)' : totalDelta < 0 ? 'var(--hp-low)' : undefined;
   return (
     <div
       className={`unit-card ${small ? 'small' : ''} ${className} ${dead ? 'dead' : ''} ${onClick ? 'clickable' : ''} ${unit.isPlayer ? 'is-player' : ''}`}

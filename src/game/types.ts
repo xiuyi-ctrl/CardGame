@@ -6,6 +6,8 @@ export interface StatusEffect {
   turns: number;
   /** 嘲讽来源：记录施加嘲讽的单位 UID，被嘲讽者只能攻击该来源 */
   sourceUid?: string;
+  /** 施加时的回合号（施放回合不计入持续回合数） */
+  appliedRound?: number;
 }
 
 export type SkillTarget = 'single' | 'all' | 'random' | 'self' | 'ally';

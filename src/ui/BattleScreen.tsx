@@ -372,7 +372,15 @@ export function BattleScreen({ state, dispatch }: Props) {
   const hint = selectedOrder
     ? selectedOrder.skillId === REST_SKILL_ID
       ? '😴 休息已选择'
-      : `⚡ ${getSkill(selectedOrder.skillId).name}技能已选择`
+      : (() => {
+          const sk = getSkill(selectedOrder.skillId);
+          const isSingleTarget = sk.target === 'single' || sk.target === 'ally';
+          if (isSingleTarget && selectedOrder.targetUid) {
+            const targetUnit = [...battle.playerUnits, ...battle.enemyUnits].find((u) => u.uid === selectedOrder.targetUid);
+            return `⚡ ${sk.name}技能已选择：${targetUnit?.name ?? ''}`;
+          }
+          return `⚡ ${sk.name}技能已选择`;
+        })()
     : pendingSkill
       ? `⚡ ${getSkill(pendingSkill.skillId).name}：请选择目标`
       : pendingTame
