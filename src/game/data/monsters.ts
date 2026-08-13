@@ -88,6 +88,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['weaken', 'provoke', 'thorn_skill'],
     desc: '刺刺的融合形态，控制+反伤的肉盾，擅长削弱和限制敌人。',
     passive: 'hard_armor',
+    evolutions: [{ to: 'sisi_god' }],
     tame: { difficulty: 0.4 }, rank: 2,
   },
   gora: {
@@ -122,6 +123,14 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['dark_shock', 'poison_sting', 'double_hit', 'pierce_strike', 'roar'],
     desc: '咪咪的最终形态，毒系狂怒刺客，低血暴走收割。',
     passive: 'fury',
+    tame: { difficulty: 0.3 }, rank: 3,
+  },
+  sisi_god: {
+    id: 'sisi_god', name: '棘刺王', emoji: '🦂',
+    baseHp: 30, baseSpd: 4,
+    skills: ['thorn_skill', 'steel_spike', 'revenge_thorn', 'group_taunt'],
+    desc: '刺刺的最终形态，荆棘反伤坦克，受击越多反伤越痛，控制+反伤的极致肉盾。',
+    passive: 'thorn_royal',
     tame: { difficulty: 0.3 }, rank: 3,
   },
   momo_god: {

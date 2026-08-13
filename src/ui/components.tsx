@@ -26,6 +26,8 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   spdDown: '🕸️',
   thorns: '🌿',
   shieldCounter: '🛡️',
+  thornSpikes: '🔱',
+  rageThorn: '🔴',
 };
 
 function effectText(e: StatusEffect): string {
@@ -53,6 +55,8 @@ function effectText(e: StatusEffect): string {
       return `荆棘反伤 ${e.value}${turns}`;
     case 'shieldCounter':
       return `盾反 ${e.value}${turns}`;
+    case 'thornSpikes':
+      return `复仇棘甲${turns}`;
   }
 }
 
@@ -129,6 +133,8 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   spdDown: { icon: '🕸️', label: '速度降低' },
   thorns: { icon: '🌿', label: '荆棘反伤' },
   shieldCounter: { icon: '🛡️', label: '盾反' },
+  thornSpikes: { icon: '🔱', label: '复仇棘甲' },
+  rageThorn: { icon: '🔴', label: '怒棘' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -147,6 +153,14 @@ export function StatusIcons({ unit }: { unit: Unit }) {
   return (
     <span className="statuses">
       {visible.map((s, i) => {
+        // 怒棘：专属红色圆点图标，显示层数
+        if (s.kind === 'rageThorn') {
+          return (
+            <span key={i} title={`怒棘（攻击+${s.value}，反伤+${s.value}，剩余 ${s.turns} 回合）`}>
+              🔴×{s.value}
+            </span>
+          );
+        }
         const meta = STATUS_ICON[s.kind];
         if (!meta) return null;
         const tip =

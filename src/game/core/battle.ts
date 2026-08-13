@@ -275,8 +275,8 @@ function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
     if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
-    // 仅战吼（atkUp）、荆棘（thorns）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
-    if ((s.kind === 'atkUp' || s.kind === 'thorns') && s.appliedRound !== undefined && s.appliedRound === round) continue;
+    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
+    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
@@ -536,8 +536,8 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
   const idx = unit.statuses.findIndex((s) => s.kind === effect.kind);
   if (idx >= 0) {
     const next = [...unit.statuses];
-    if (effect.kind === 'burn' || effect.kind === 'poison') {
-      // 灼烧/中毒可叠加：层数相加（可挂多层）
+    if (effect.kind === 'burn' || effect.kind === 'poison' || effect.kind === 'rageThorn') {
+      // 灼烧/中毒/怒棘可叠加：层数相加（可挂多层）
       next[idx] = { ...next[idx], value: next[idx].value + effect.value };
     } else {
       next[idx] = {
@@ -763,6 +763,36 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
               nb = replaceUnit(nb, hurt);
               nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
             }
+          }
+          // 荆棘之躯：反伤 3 + 怒棘加成，每第 3 次攻击反伤 5 并恢复 2 点生命
+          if (tp?.kind === 'thornRoyal') {
+            const attacker = actorFromId(nb, actor.uid);
+            if (attacker && attacker.hp > 0) {
+              const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').length;
+              const baseDmg = tp.value + rageThornStacks;
+              t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
+              const hitCount = t2.thornsHitCount!;
+              const isBurst = hitCount % 3 === 0;
+              const thornDmg = isBurst ? 5 : baseDmg;
+              // 反伤扣血
+              let newAttacker = { ...attacker, hp: Math.max(0, attacker.hp - thornDmg) };
+              nb = replaceUnit(nb, newAttacker);
+              nb = replaceUnit(nb, t2);
+              nb = pushLog(nb, `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`, sideOf(t2), t2.uid, attacker.uid);
+              // 爆发回血（第 3 次攻击额外恢复 2 点生命）
+              if (isBurst) {
+                const freshT2 = actorFromId(nb, t2.uid) ?? t2;
+                t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
+                nb = replaceUnit(nb, t2);
+                nb = pushLog(nb, `${t2.name} 的「荆棘之躯」恢复 2 点生命`, sideOf(t2), t2.uid, t2.uid);
+              }
+            }
+          }
+          // 复仇棘甲：受击时获得怒棘层数（attack+1，可叠加，独立于战吼）
+          if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
+            t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
+            nb = replaceUnit(nb, t2);
+            nb = pushLog(nb, `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`, sideOf(t2), t2.uid, t2.uid);
           }
         }
         // 盾反状态：受击时反击攻击者 + 降低攻击 + 清除自身护盾
@@ -1175,6 +1205,7 @@ export function getDamageBonus(u: Unit): number {
   for (const s of u.statuses) {
     if (s.kind === 'atkUp') bonus += s.value;
     else if (s.kind === 'atkDown') bonus -= s.value;
+    else if (s.kind === 'rageThorn') bonus += s.value;
   }
   if (u.battleBuffs) {
     if (u.battleBuffs.atkUp) bonus += 1;

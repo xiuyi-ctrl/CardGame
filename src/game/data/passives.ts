@@ -42,6 +42,9 @@ export const PASSIVES: Record<string, PassiveDef> = {
   tidal_regen: { id: 'tidal_regen', name: '潮汐再生', desc: '每回合开始恢复 3 点生命', kind: 'regen', value: 3 },
   blazing: { id: 'blazing', name: '灼焰', desc: '攻击命中附加灼烧 4 层', kind: 'scorch', value: 4 },
   venom_power: { id: 'venom_power', name: '蟒影', desc: '对中毒目标伤害 +3', kind: 'venomPower', value: 3 },
+
+  // —— 刺刺二阶进化专属 ——
+  thorn_royal: { id: 'thorn_royal', name: '荆棘之躯', desc: '受到攻击时反伤 3 点；每受到第 3 次攻击，反伤 5 点并恢复 2 点生命', kind: 'thornRoyal', value: 3 },
 };
 
 export function getPassive(id?: string): PassiveDef | undefined {
