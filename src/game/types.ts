@@ -35,6 +35,8 @@ export interface SkillDef {
   effects?: StatusEffect[];
   /** 每场战斗可使用次数上限（回血/强化等强技能限定，缺省无限制） */
   uses?: number;
+  /** 先手：该技能在回合结算时必定最先执行（同为先手则按速度排序） */
+  priority?: 'first';
 }
 
 /** 被动技能效果类型 */

@@ -114,7 +114,17 @@ export function useRng(b: BattleState, fn: (value: number, b2: BattleState) => B
 export function computeTurnOrder(b: BattleState): string[] {
   const all = [...b.playerUnits, ...b.enemyUnits]
     .filter((u) => u.hp > 0)
-    .sort((a, c) => getEffectiveSpd(c) - getEffectiveSpd(a) || (a.isPlayer === c.isPlayer ? 0 : a.isPlayer ? -1 : 1));
+    .sort((a, c) => {
+      // 先手技能优先：使用 priority:'first' 技能的单位必定最先行动
+      const aOrder = b.orders?.[a.uid];
+      const cOrder = b.orders?.[c.uid];
+      const aSkill = aOrder && aOrder.skillId !== REST_SKILL_ID ? getSkill(aOrder.skillId) : undefined;
+      const cSkill = cOrder && cOrder.skillId !== REST_SKILL_ID ? getSkill(cOrder.skillId) : undefined;
+      const aFirst = aSkill?.priority === 'first' ? 1 : 0;
+      const cFirst = cSkill?.priority === 'first' ? 1 : 0;
+      if (aFirst !== cFirst) return cFirst - aFirst;
+      return getEffectiveSpd(c) - getEffectiveSpd(a) || (a.isPlayer === c.isPlayer ? 0 : a.isPlayer ? -1 : 1);
+    });
   return all.map((u) => u.uid);
 }
 
