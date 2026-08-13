@@ -448,6 +448,10 @@ export function BattleScreen({ state, dispatch }: Props) {
             const su = b.playerUnits.find((x) => x.uid === selectedUid);
             return su && su.hp > 0 ? <BuffDetailPanel unit={shownUnit(su)} /> : null;
           })()}
+          {inspectEnemy && (() => {
+            const eu = b.enemyUnits.find((x) => x.uid === inspectEnemy);
+            return eu && eu.hp > 0 ? <BuffDetailPanel unit={shownUnit(eu)} /> : null;
+          })()}
         </div>
 
         <div className="log-panel">
