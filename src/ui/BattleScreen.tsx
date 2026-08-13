@@ -14,7 +14,7 @@ import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
-import { UnitCard, skillBrief, SkillTag } from './components';
+import { UnitCard, skillBrief, SkillTag, BuffDetailPanel } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 
@@ -444,6 +444,10 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="battle-divider" />
           <div className="formation-row row-front">{playerFront.map((u, i) => playerSlot(u, `pf${i}`, true))}</div>
           <div className="formation-row row-back">{playerBack.map((u, i) => playerSlot(u, `pb${i}`, false))}</div>
+          {selectedUid && (() => {
+            const su = b.playerUnits.find((x) => x.uid === selectedUid);
+            return su && su.hp > 0 ? <BuffDetailPanel unit={shownUnit(su)} /> : null;
+          })()}
         </div>
 
         <div className="log-panel">

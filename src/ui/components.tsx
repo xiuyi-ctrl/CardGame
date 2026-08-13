@@ -57,6 +57,8 @@ function effectText(e: StatusEffect): string {
       return `盾反 ${e.value}${turns}`;
     case 'thornSpikes':
       return `复仇棘甲${turns}`;
+    case 'rageThorn':
+      return `怒棘 攻击+${e.value}${turns}`;
   }
 }
 
@@ -351,6 +353,96 @@ export function DragScrollRow({
   return (
     <div ref={ref} className={`drag-row ${className}`} style={style}>
       {children}
+    </div>
+  );
+}
+
+const STATUS_DESC: Record<string, (v: number) => string> = {
+  burn: (v) => `每回合受到 ${Math.ceil(v / 2)} 点灼烧伤害（${v} 层，向上进位）`,
+  poison: (v) => `每回合受到 ${Math.ceil(v / 2)} 点中毒伤害（${v} 层，向上进位）`,
+  atkUp: (v) => `技能伤害 +${v}`,
+  atkDown: (v) => `技能伤害 -${v}`,
+  stun: () => '跳过下次行动',
+  healTick: (v) => `每回合恢复 ${v} 点生命`,
+  shield: (v) => `吸收 ${v} 点伤害`,
+  taunt: () => '被迫攻击嘲讽者',
+  spdDown: (v) => `速度 -${v}`,
+  thorns: (v) => `受击时反伤 ${v} 点`,
+  shieldCounter: () => '受击时反击攻击者 + 降低攻击 + 清除护盾',
+  thornSpikes: () => '受击时获得怒棘（攻击+1，可叠加）',
+  rageThorn: (v) => `攻击 +${v}，荆棘之躯反伤 +${v}`,
+};
+
+export function BuffDetailPanel({ unit }: { unit: Unit }) {
+  const passive = getPassive(unit.passive);
+  const buffs = unit.battleBuffs;
+  const battleBuffEntries = buffs
+    ? (Object.entries(buffs) as [string, number][]).filter(([, v]) => v)
+    : [];
+  const statuses = unit.statuses;
+  const hasPassive = !!passive;
+  const hasStatuses = statuses.length > 0;
+  const hasBattleBuffs = battleBuffEntries.length > 0;
+  if (!hasPassive && !hasStatuses && !hasBattleBuffs) return null;
+
+  const battleBuffMeta: Record<string, { icon: string; label: string }> = {
+    atkUp: { icon: '⚔️', label: '伤害加成' },
+    spdUp: { icon: '💨', label: '速度加成' },
+    atkDown: { icon: '🪄', label: '伤害降低' },
+    spdDown: { icon: '🕸️', label: '速度降低' },
+  };
+
+  return (
+    <div className="buff-detail-panel">
+      <div className="buff-detail-title">
+        {unit.emoji} {unit.name}
+      </div>
+      {hasPassive && (
+        <div className="buff-section">
+          <div className="buff-section-label">被动</div>
+          <div className="buff-item">
+            <span className="buff-icon">💠</span>
+            <span className="buff-name">{passive.name}</span>
+            <span className="buff-desc">{passive.desc}</span>
+          </div>
+        </div>
+      )}
+      {hasStatuses && (
+        <div className="buff-section">
+          <div className="buff-section-label">状态</div>
+          {statuses.map((s, i) => {
+            const meta = STATUS_ICON[s.kind];
+            if (!meta) return null;
+            const descFn = STATUS_DESC[s.kind];
+            const desc = descFn ? descFn(s.value) : '';
+            const stacks = s.kind === 'burn' || s.kind === 'poison' || s.kind === 'rageThorn';
+            return (
+              <div key={i} className="buff-item">
+                <span className="buff-icon">{meta.icon}</span>
+                <span className="buff-name">{meta.label}{stacks && s.value > 1 ? ` ×${s.value}` : ''}</span>
+                <span className="buff-turns">{s.turns > 0 ? `${s.turns}回合` : ''}</span>
+                <span className="buff-desc">{desc}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {hasBattleBuffs && (
+        <div className="buff-section">
+          <div className="buff-section-label">药水增益</div>
+          {battleBuffEntries.map(([k, v]) => {
+            const m = battleBuffMeta[k];
+            if (!m) return null;
+            return (
+              <div key={k} className="buff-item">
+                <span className="buff-icon">{m.icon}</span>
+                <span className="buff-name">{m.label}</span>
+                <span className="buff-turns">{v}回合</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
