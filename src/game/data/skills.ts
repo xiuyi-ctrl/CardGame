@@ -78,11 +78,11 @@ export const SKILLS: Record<string, SkillDef> = {
   // —— 初始宠物专属技能 ——
   water_bath: {
     id: 'water_bath', name: '水浴', desc: '恢复指定队友生命值',
-    target: 'ally', kind: 'heal', heal: 5, uses: 2,
+    target: 'ally', kind: 'heal', heal: 5, uses: 5,
   },
   shield_skill: {
     id: 'shield_skill', name: '坚盾', desc: '为指定队友或自身附加5点护盾',
-    target: 'ally', kind: 'buff', uses: 2,
+    target: 'ally', kind: 'buff', uses: 5,
     effects: [{ kind: 'shield', value: 5, turns: 0 }],
   },
   weaken: {
@@ -187,7 +187,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // —— 传奇宠物重做技能 ——
   iron_domain: {
     id: 'iron_domain', name: '铁壁领域', desc: '为全体友方附加 6 层护盾',
-    kind: 'buff', target: 'ally',
+    kind: 'buff', target: 'allyAll',
     effects: [{ kind: 'shield', value: 6, turns: 99 }],
     uses: 2,
   },
@@ -258,6 +258,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'flame_shield', name: '烈焰护盾', desc: '获得 5 层护盾；本回合受攻击则灼烧攻击者 10 层',
     kind: 'buff', target: 'self',
     effects: [{ kind: 'shield', value: 5, turns: 99 }, { kind: 'flameShield', value: 10, turns: 1 }],
+    uses: 5,
   },
   flame_slash: {
     id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人',

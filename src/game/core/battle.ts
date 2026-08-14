@@ -210,6 +210,7 @@ function startRound(b: BattleState): BattleState {
     playerUnits: nb.playerUnits.map((u) => ({ ...u, statuses: u.statuses.map((s) => ({ ...s })) })),
     enemyUnits: nb.enemyUnits.map((u) => ({ ...u, statuses: u.statuses.map((s) => ({ ...s })) })),
   };
+  // 灼烧/中毒DOT在重置前结算，伤害计入上一回合的累计伤害上限
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     if (u.hp <= 0) continue;
     const res = applyDot(nb, u);
@@ -217,6 +218,8 @@ function startRound(b: BattleState): BattleState {
     if (res.unit.hp > 0) tickStatuses(res.unit, prevRound);
     nb = replaceUnit(nb, res.unit);
   }
+  // DOT结算完毕后重置伤害累计（新回合开始）
+  nb = { ...nb, roundDmgMap: {} };
   // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
   nb = {
     ...nb,
@@ -268,16 +271,29 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
   for (const s of u.statuses) {
     if (unit.hp <= 0) break;
     if (s.kind !== 'burn' && s.kind !== 'poison') continue;
-    const dmg = Math.ceil(s.value / 2);
+    let dmg = Math.ceil(s.value / 2);
     const left = s.value - dmg;
+    // damageCap：dot伤害也计入本回合累计伤害上限
+    const p = getUnitPassive(unit);
+    if (p?.kind === 'damageCap') {
+      const roundDmg = nb.roundDmgMap ?? {};
+      const prevDmg = roundDmg[unit.uid] ?? 0;
+      const allowed = Math.max(0, p.value - prevDmg);
+      if (dmg > allowed) {
+        dmg = allowed;
+      }
+      nb = { ...nb, roundDmgMap: { ...roundDmg, [unit.uid]: prevDmg + dmg } };
+    }
+    // 层数始终消耗（即使伤害被截断为0）
     unit = {
       ...unit,
-      hp: Math.max(0, unit.hp - dmg),
+      hp: dmg > 0 ? Math.max(0, unit.hp - dmg) : unit.hp,
       statuses: left > 0 ? unit.statuses.map((x) => (x === s ? { ...x, value: left } : x)) : unit.statuses.filter((x) => x !== s),
     };
-    // 先写回再记录日志，让日志血量快照包含本次掉血，动画里飘字与血量条下降同步
     nb = replaceUnit(nb, unit);
-    nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit), undefined, unit.uid);
+    if (dmg > 0) {
+      nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit), undefined, unit.uid);
+    }
   }
   return { unit, battle: nb };
 }
@@ -643,8 +659,8 @@ function resolveAttack(
   count: number,
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[] } {
   let nb = b;
-  const base = Math.max(1, (skill.damage ?? 0) + getDamageBonus(actor));
-  let perHitDmg = Math.max(1, base - getDamageGuard(target));
+  const base = (skill.damage ?? 0) + getDamageBonus(actor);
+  let perHitDmg = base - getDamageGuard(target);
   if (target.isPlayer && nb.corruptDebuff === 'dmg') {
     perHitDmg += 1;
   }
@@ -662,9 +678,16 @@ function resolveAttack(
   if (ap?.kind === 'venomPower' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
     perHitDmg += ap.value;
   }
+  if (ap?.kind === 'speedBonus') {
+    const spdDiff = Math.max(0, getEffectiveSpd(actor) - getEffectiveSpd(tWithPassive));
+    perHitDmg += Math.min(ap.value, spdDiff);
+  }
+  if (skill.id === 'toxic_bite' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
+    perHitDmg *= 2;
+  }
   if (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
     perHitDmg += ap.value;
-    perHitDmg += getDamageGuard(target);
+    perHitDmg += Math.min(8, getDamageGuard(target));
   }
   if (ap?.kind === 'scorchPlus') {
     tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
@@ -674,13 +697,6 @@ function resolveAttack(
       perHitDmg += Math.min(5, burnStacks);
     }
   }
-  if (ap?.kind === 'speedBonus') {
-    const spdDiff = Math.max(0, getEffectiveSpd(actor) - getEffectiveSpd(tWithPassive));
-    perHitDmg += Math.min(ap.value, spdDiff);
-  }
-  if (skill.id === 'toxic_bite' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
-    perHitDmg *= 2;
-  }
   const finalDmg = perHitDmg * count;
   const segments = splitDamage(finalDmg, count);
   let t2 = tWithPassive;
@@ -688,37 +704,54 @@ function resolveAttack(
     .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter')
     .map((e) => e.kind);
   let lastHitLog: number | undefined;
-  const roundDmgMap = new Map<string, number>();
+  let shieldIgnoreLeft = (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) ? 8 : 0;
   for (let i = 0; i < segments.length; i++) {
     let seg = segments[i];
-    if (seg <= 0) continue;
     if (t2.hp <= 0) break;
-    const tgtPassive = getUnitPassive(t2);
-    if ((tgtPassive?.kind === 'bigHitGuard' || tgtPassive?.kind === 'lifeSpring') && seg > tgtPassive.value) {
-      seg = Math.max(1, seg - 2);
-    }
-    if (tgtPassive?.kind === 'damageCap') {
-      const prevDmg = roundDmgMap.get(t2.uid) ?? 0;
-      const allowed = Math.max(0, tgtPassive.value - prevDmg);
-      seg = Math.min(seg, allowed);
-      roundDmgMap.set(t2.uid, prevDmg + seg);
-      if (seg <= 0) continue;
-    }
-    let remainingDmg = seg;
-    if (t2.shield > 0) {
-      const shieldAbsorb = Math.min(t2.shield, remainingDmg);
-      t2 = { ...t2, shield: t2.shield - shieldAbsorb };
-      remainingDmg -= shieldAbsorb;
-      if (t2.shield <= 0) {
-        t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'shield') };
+    if (seg > 0) {
+      const tgtPassive = getUnitPassive(t2);
+      if ((tgtPassive?.kind === 'bigHitGuard' || tgtPassive?.kind === 'lifeSpring') && seg > tgtPassive.value) {
+        seg = seg - 2;
       }
+      if (tgtPassive?.kind === 'damageCap') {
+        const roundDmg = nb.roundDmgMap ?? {};
+        const prevDmg = roundDmg[t2.uid] ?? 0;
+        const allowed = Math.max(0, tgtPassive.value - prevDmg);
+        if (seg > allowed) {
+          seg = allowed;
+        }
+        nb = { ...nb, roundDmgMap: { ...roundDmg, [t2.uid]: prevDmg + seg } };
+      }
+      let remainingDmg = seg;
+      let effectiveShield = t2.shield;
+      if (shieldIgnoreLeft > 0 && effectiveShield > 0) {
+        const ignored = Math.min(shieldIgnoreLeft, effectiveShield);
+        effectiveShield -= ignored;
+        shieldIgnoreLeft -= ignored;
+      }
+      if (effectiveShield > 0) {
+        const shieldAbsorb = Math.min(effectiveShield, remainingDmg);
+        t2 = { ...t2, shield: t2.shield - shieldAbsorb };
+        remainingDmg -= shieldAbsorb;
+        if (t2.shield <= 0) {
+          t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'shield') };
+        }
+      }
+      t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
     }
-    t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
     for (const e of skill.effects ?? []) {
       if (skill.id === 'weaken') {
         const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
         t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
         nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+      } else if (e.kind === 'shield') {
+        // 护盾：应用给攻击者自身（如铁壁双击）
+        const shielded = actorFromId(nb, actor.uid);
+        if (shielded && shielded.hp > 0) {
+          const newShield = { ...shielded, shield: Math.min(99, shielded.shield + e.value) };
+          nb = replaceUnit(nb, newShield);
+          nb = pushLog(nb, `${shielded.name} 获得 ${e.value} 点护盾`, sideOf(shielded), actor.uid, actor.uid);
+        }
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns') {
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
       }

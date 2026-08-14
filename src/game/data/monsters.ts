@@ -74,7 +74,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.4 }, rank: 2,
   },
   fifi_king: {
-    id: 'fifi_king', name: '灼刃', emoji: '🐲',
+    id: 'fifi_king', name: '灼刃', emoji: '🦊',
     baseHp: 13, baseSpd: 6,
     skills: ['flame_combo', 'roar', 'fire_shock'],
     desc: '灼灼的融合形态，高速度的火焰刺客，多段灼烧爆发。',
@@ -112,8 +112,8 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   gora_god: {
     id: 'gora_god', name: '铁壁神', emoji: '🗿',
     baseHp: 30, baseSpd: 3,
-    skills: ['steel_spike', 'iron_domain', 'shield_quake', 'iron_double'],
-    desc: '铁墩的最终形态，每回合伤害上限15点的不朽堡垒，为队友提供护盾保护。',
+    skills: ['steel_spike', 'iron_domain', 'shield_quake', 'iron_double', 'shield_skill'],
+    desc: '铁墩的最终形态，每回合伤害上限10点的不朽堡垒，为队友提供护盾保护。',
     passive: 'iron_cap',
     tame: { difficulty: 0.3 }, rank: 3,
   },
@@ -150,9 +150,9 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.3 }, rank: 3,
   },
   fifi_god: {
-    id: 'fifi_god', name: '灼天', emoji: '🐉',
+    id: 'fifi_god', name: '灼天', emoji: '🐲',
     baseHp: 22, baseSpd: 7,
-    skills: ['burn_burst', 'roar', 'flame_shield', 'flame_slash'],
+    skills: ['burn_burst', 'roar', 'flame_shield', 'flame_slash', 'flame_combo'],
     desc: '灼灼最终形态，余烬焚身对灼烧目标伤害叠加上限+5，焚身爆全体爆发。',
     passive: 'ember_body',
     tame: { difficulty: 0.3 }, rank: 3,

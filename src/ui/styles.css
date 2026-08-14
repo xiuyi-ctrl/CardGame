@@ -1098,14 +1098,14 @@ button.primary {
 
 .action-panel .skill-column {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-template-rows: 22px 58px 58px;
   gap: 6px 10px;
   flex: 0 1 auto;
   min-width: 0;
   margin-right: auto;
-  width: 540px;
-  max-width: 540px;
+  width: 720px;
+  max-width: 720px;
   align-content: start;
   overflow: hidden;
 }
@@ -1215,8 +1215,8 @@ button.primary {
 .action-panel .items-panel {
   border-right: 1px solid var(--border);
   padding-right: 16px;
-  flex: 0 1 380px;
-  max-width: 380px;
+  flex: 0 1 270px;
+  max-width: 270px;
 }
 
 /* 捕获栏（食物）：宽高固定上限，内容居左，可随屏幕收缩，超出悬停滚动（隐藏滚动条） */
@@ -1240,7 +1240,7 @@ button.primary {
 .action-panel .items-panel .panel-btns {
   display: grid;
   grid-auto-flow: row;
-  grid-template-columns: repeat(3, max-content);
+  grid-template-columns: repeat(2, max-content);
   grid-auto-rows: 34px;
   gap: 6px 10px;
   align-content: start;

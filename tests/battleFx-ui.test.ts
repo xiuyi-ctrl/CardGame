@@ -262,10 +262,9 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     expect(hiddenKinds.length).toBe(1);
     expect(['atkDown', 'spdDown']).toContain(hiddenKinds[0]);
 
-    // 未到该目标被攻击的动画事件前，仍保持隐藏
-    act(() => vi.advanceTimersByTime(0));
+    // kiki(spd=2)先手攻击→事件0；pipi弱化→事件1，delay=1*STEP_MS=800ms 揭示减益
+    act(() => vi.advanceTimersByTime(800));
     const hiddenKinds2 = result.current.hiddenStatuses[enemyUid] ?? [];
-    // 玩家先手（同速时玩家优先），弱化攻击为事件0，delay=0 立即揭示
     expect(hiddenKinds2.length).toBe(0);
     vi.useRealTimers();
   });

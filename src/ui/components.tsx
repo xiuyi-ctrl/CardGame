@@ -137,7 +137,7 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   thornSpikes: { icon: '🔱', label: '复仇棘甲' },
   rageThorn: { icon: '🔴', label: '怒棘' },
   waterCurtain: { icon: '🌊', label: '水幕' },
-  flameShield: { icon: '🔥', label: '烈焰护盾' },
+  flameShield: { icon: '🟠', label: '烈焰护盾' },
   windSpd: { icon: '💨', label: '风羽' },
 };
 
@@ -410,7 +410,10 @@ export function BuffDetailPanel({ unit }: { unit: Unit }) {
       const skillSpd = buffs?.skillSpd ?? 0;
       return `+${skillSpd}`;
     }
-    // 其他被动显示固定数值
+    // 效果类被动不显示数值（lifeSpring/guard/regen/thorns/drain/damageCap 的 value 是内部阈值，非叠加层数）
+    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body'];
+    if (noShowValue.includes(passive.kind)) return null;
+    // 其他被动显示固定数值（如 hp+3, spd+1）
     return `${passive.value}`;
   })();
 
@@ -454,7 +457,7 @@ export function BuffDetailPanel({ unit }: { unit: Unit }) {
               <div key={i} className="buff-item">
                 <span className="buff-icon">{meta.icon}</span>
                 <span className="buff-name">{meta.label}{stacks && s.value > 1 ? ` ×${s.value}` : ''}</span>
-                <span className="buff-turns">{s.turns > 0 ? `${s.turns}回合` : ''}</span>
+                <span className="buff-turns">{s.kind !== 'shield' && s.turns > 0 ? `${s.turns}回合` : ''}</span>
                 <span className="buff-desc">{desc}</span>
               </div>
             );
