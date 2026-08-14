@@ -4,6 +4,7 @@ import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { getMonster } from '../game/data/monsters';
+import { CURSE_CN } from '../game/state/game';
 
 /** 技能数值简述：仅伤害/治疗数值，如 "5"、"3×2"（buff 效果数值不放这里，见 skillFullDesc） */
 export function skillBrief(s: SkillDef): string {
@@ -209,6 +210,23 @@ export function PassiveBadge({ unit }: { unit: Unit }) {
   );
 }
 
+const CURSE_ICON: Record<string, { icon: string; tip: string }> = {
+  hpDown: { icon: '💔', tip: '血脆（生命 -5）' },
+  atkDown: { icon: '🪄', tip: '虚弱（伤害 -1）' },
+  spdDown: { icon: '🕸️', tip: '迟缓（速度 -1）' },
+};
+
+export function CurseBadge({ unit }: { unit: Unit }) {
+  if (!unit.curse) return null;
+  const meta = CURSE_ICON[unit.curse];
+  if (!meta) return null;
+  return (
+    <span className="curse-badge" title={meta.tip}>
+      {meta.icon}{CURSE_CN[unit.curse]}
+    </span>
+  );
+}
+
 export function BattleBuffIcons({ unit }: { unit: Unit }) {
   const buffs = unit.battleBuffs;
   if (!buffs) return null;
@@ -291,6 +309,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
         {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
         <StatusIcons unit={unit} />
         <PassiveBadge unit={unit} />
+        <CurseBadge unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
       {showSkills && !small && (

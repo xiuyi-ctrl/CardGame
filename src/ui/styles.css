@@ -460,6 +460,17 @@ button.primary {
   white-space: nowrap;
 }
 
+.curse-badge {
+  font-size: 10px;
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.12);
+  border: 1px solid rgba(231, 76, 60, 0.35);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 .elem {
   font-size: 10px;
   padding: 1px 6px;
