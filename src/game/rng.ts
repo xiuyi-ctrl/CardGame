@@ -22,6 +22,17 @@ export function chance(rng: () => number, p: number): boolean {
   return rng() < p;
 }
 
+/** 按权重从 [value, weight] 数组中抽取一个元素 */
+export function weightedPick<T>(rng: () => number, entries: readonly [T, number][]): T {
+  const total = entries.reduce((s, [, w]) => s + w, 0);
+  let roll = rng() * total;
+  for (const [value, weight] of entries) {
+    roll -= weight;
+    if (roll <= 0) return value;
+  }
+  return entries[entries.length - 1][0];
+}
+
 export function shuffle<T>(rng: () => number, arr: T[]): T[] {
   const out = [...arr];
   for (let i = out.length - 1; i > 0; i--) {
