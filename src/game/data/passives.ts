@@ -31,6 +31,12 @@ export const PASSIVES: Record<string, PassiveDef> = {
   ghost_step: { id: 'ghost_step', name: '幽灵疾步', desc: '战斗开始速度 +3', kind: 'spd', value: 3 },
   dragon_thorns: { id: 'dragon_thorns', name: '玄铁反甲', desc: '受到攻击时反伤 3 点', kind: 'thorns', value: 3 },
   demon_frenzy: { id: 'demon_frenzy', name: '炼狱狂暴', desc: '生命低于 50% 时伤害 +3', kind: 'frenzy', value: 3 },
+  hit_speed_up: { id: 'hit_speed_up', name: '受击加速', desc: '每次受到攻击后，自身速度 +1，可叠加最多 6 层', kind: 'spdOnHit', value: 1 },
+  tree_speed_up: { id: 'tree_speed_up', name: '古木加速', desc: '每回合结束时回复3点生命值，每次受到攻击后，自身速度 +1，可叠加最多 6 层', kind: 'treeSpeedUp', value: 1 },
+
+  // —— Boss 小怪 ——
+  symbiotic_bark: { id: 'symbiotic_bark', name: '共生树皮', desc: '每回合开始恢复 2 点生命；若古树之主在场，恢复量翻倍为 4', kind: 'regen', value: 2 },
+  thorn_slow: { id: 'thorn_slow', name: '荆棘缠绕', desc: '攻击时有 40% 概率使目标速度 -1，持续 2 回合', kind: 'thorns', value: 1 },
 
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },

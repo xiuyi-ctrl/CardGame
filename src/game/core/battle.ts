@@ -283,9 +283,15 @@ function startRound(b: BattleState): BattleState {
   // 被动再生：每回合开始恢复（存活且未满血）
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     const p = getUnitPassive(u);
-    if ((p?.kind === 'regen' || p?.kind === 'lifeSpring') && u.hp > 0 && u.hp < u.maxHp) {
+    if ((p?.kind === 'regen' || p?.kind === 'lifeSpring' || p?.kind === 'treeSpeedUp') && u.hp > 0 && u.hp < u.maxHp) {
       const maxHp = getEffectiveMaxHp(u);
-      const healAmt = p.kind === 'lifeSpring' ? 3 : p.value;
+      let healAmt = p.kind === 'lifeSpring' ? 3 : (p.kind === 'treeSpeedUp' ? 3 : p.value);
+      // 共生树皮：若古树之主在场，恢复量翻倍
+      if (u.passive === 'symbiotic_bark') {
+        const allies = u.isPlayer ? nb.playerUnits : nb.enemyUnits;
+        const hasBossVine = allies.some((a) => a.speciesId === 'boss_vine' && a.hp > 0);
+        if (hasBossVine) healAmt *= 2;
+      }
       const healed = { ...u, hp: Math.min(maxHp, u.hp + healAmt) };
       nb = replaceUnit(nb, healed);
       nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${healAmt} 点生命`, sideOf(u), u.uid);
@@ -855,6 +861,17 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
         if (atk.target === 'all' && targetPool.length >= 3) tScore += 3;
         // 带状态效果的技能加分
         if (atk.effects?.some((e) => e.kind === 'poison' || e.kind === 'burn')) tScore += 2;
+        // ── 速度加成技能倾向 ──
+        const actorSpd = getEffectiveSpd(actor);
+        if (atk.spdScaling && atk.spdScaling > 0) {
+          // 速度越高，使用速度加成技能的倾向越大
+          const spdBonus = Math.min(25, actorSpd * 4);
+          tScore += spdBonus;
+          // 全体技能额外加分（速度高时清场效率高）
+          if (atk.target === 'all' && targetPool.length >= 2) {
+            tScore += Math.min(10, actorSpd * 2);
+          }
+        }
         return { target: t, score: tScore };
       });
       scoredTargets.sort((a, c) => c.score - a.score);
@@ -938,6 +955,10 @@ function resolveAttack(
   let nb = b;
   const base = (skill.damage ?? 0) + getDamageBonus(actor);
   let perHitDmg = base - getDamageGuard(target);
+  // 速度加成伤害
+  if (skill.spdScaling && skill.spdScaling > 0) {
+    perHitDmg += getEffectiveSpd(actor) * skill.spdScaling;
+  }
   if (target.isPlayer && nb.corruptDebuff === 'dmg') {
     perHitDmg += 1;
   }
@@ -1077,6 +1098,15 @@ function resolveAttack(
           }
         }
       }
+      // 受击加速：受到攻击后速度 +1（可叠加，上限 6 层）
+      if ((tp?.kind === 'spdOnHit' || tp?.kind === 'treeSpeedUp') && t2.hp > 0) {
+        const stacks = t2.passiveSpdStacks ?? 0;
+        if (stacks < 6) {
+          t2 = { ...t2, spd: t2.spd + 1, passiveSpdStacks: stacks + 1 };
+          nb = replaceUnit(nb, t2);
+          nb = pushLog(nb, `${t2.name} 的「${tp.name}」速度 +1`, sideOf(t2), t2.uid, t2.uid);
+        }
+      }
       if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
         t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
         nb = replaceUnit(nb, t2);
@@ -1115,6 +1145,10 @@ function resolveAttack(
     nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: [...(l.addsStatus ?? []), ...passiveAdds] } : l)) };
   }
   nb = replaceUnit(nb, t2);
+  // 小怪死亡日志
+  if (t2.hp <= 0 && t2.speciesId.startsWith('boss_minion_')) {
+    nb = pushLog(nb, `${t2.name} 被击倒了`, sideOf(t2), t2.uid, t2.uid);
+  }
   return { battle: nb, lastHitLog, passiveAdds };
 }
 
@@ -1152,6 +1186,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   } else if (skill.kind === 'buff') {
     for (const t of targets) {
       let buffed = t;
+      // 治疗：buff技能也可附带治疗效果
+      if (skill.heal && skill.heal > 0) {
+        const maxHp = getEffectiveMaxHp(buffed);
+        buffed = { ...buffed, hp: Math.min(maxHp, buffed.hp + skill.heal) };
+      }
       for (const e of skill.effects ?? []) {
         buffed = applyStatusTo(buffed, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
         // 护盾：同时更新 shield 字段
@@ -1209,8 +1248,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (curActor && curActor.hp > 0) {
         const ap2 = getUnitPassive(curActor);
         if (ap2?.kind === 'spdOnAttack' || ap2?.kind === 'speedBonus') {
+          const stacks = curActor.passiveSpdStacks ?? 0;
           const newBuffs = { ...curActor.battleBuffs, skillSpd: Math.min(5, (curActor.battleBuffs?.skillSpd ?? 0) + 1) };
-          nb = replaceUnit(nb, { ...curActor, battleBuffs: newBuffs });
+          nb = replaceUnit(nb, { ...curActor, battleBuffs: newBuffs, passiveSpdStacks: stacks + 1 });
           nb = pushLog(nb, `${curActor.name} 的「疾风连携」速度 +1`, sideOf(curActor), curActor.uid, curActor.uid);
         }
       }

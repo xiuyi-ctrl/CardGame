@@ -39,6 +39,8 @@ export interface SkillDef {
   cooldown?: number;
   /** 先手：该技能在回合结算时必定最先执行（同为先手则按速度排序） */
   priority?: 'first';
+  /** 速度加成：每点速度增加的伤害值（0或缺省=不加成） */
+  spdScaling?: number;
 }
 
 /** 被动技能效果类型 */
@@ -58,6 +60,8 @@ export type PassiveKind =
   | 'damageCap' // 铁壁上限：每回合最多累计受到 value 点伤害
   | 'poisonBreak' // 蛇狩：攻击中毒目标无视 value 点护盾/减伤，额外造成 3 真伤
   | 'spdOnAttack' // 疾风连携：攻击后速度 +value（可叠加）
+  | 'spdOnHit' // 受击加速：受到攻击后速度 +value（可叠加，上限 6 层）
+  | 'treeSpeedUp' // 古木加速：每回合恢复3HP + 受击后速度+1（可叠加，上限6层）
   | 'speedBonus' // 速度差增伤：速度每高于目标 1 点伤害 +1，上限 value
   | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
   | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
@@ -145,6 +149,8 @@ export interface Unit {
   curse?: 'hpDown' | 'atkDown' | 'spdDown';
   /** 自创生物：创建时随机组合的技能，融合时保留而非按物种解锁 */
   customSkills?: string[];
+  /** 被动速度技能叠加层数（受击加速/疾风连携等，上限 6 层） */
+  passiveSpdStacks?: number;
   /** 战斗药水临时效果（uid -> {atkUp?, spdUp?, atkDown?, spdDown?} 回合数；hpUp/hpDown 为即时生效不入此表） */
   battleBuffs?: {
     atkUp?: number;

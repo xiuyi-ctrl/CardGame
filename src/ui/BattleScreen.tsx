@@ -62,7 +62,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, shieldMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
+  const { fx, pops, hpMap, shieldMap, spdMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -346,7 +346,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${isInspect ? 'inspectable' : ''} ${inspected ? 'inspected' : ''}`}
         onClick={isTarget || isInspect ? () => onEnemyClick(u.uid) : undefined}
       >
-        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small topStats className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small topStats className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} />
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
         {popOverlay(u.uid)}
       </div>
@@ -365,7 +365,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
       >
-        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small showSkills={false} topStats className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small showSkills={false} topStats className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} />
         {popOverlay(u.uid)}
       </div>
     );

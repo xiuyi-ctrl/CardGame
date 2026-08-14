@@ -334,9 +334,10 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   if (node.type === 'boss') {
     const encounter = base.map.boss[node.id];
     if (!encounter || base.roster.length === 0) return { ...base, screen: 'map' };
-    const maxField = FIELD_MAX;
+    const maxField = maxFieldForEnemy(encounter.length);
     const initial = autoPosition(fieldUnits(base, maxField));
-    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, prevRow, prevNodeId } };
+    const options = { act: base.act, nodeType: 'boss' as const };
+    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
   }
   // 同步双节点（双生宝箱）：抵达开箱；持有双生符（加速道具）时消耗 1 个、同时开启两个宝箱（侦察符只用于查看情报，不双开）
   if (node.type === 'sync') {

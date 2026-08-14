@@ -264,6 +264,31 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人',
     kind: 'attack', damage: 8, hits: 1, target: 'single',
   },
+
+  // —— Boss 专属技能（小怪/首领）——
+  wild_leaf: {
+    id: 'wild_leaf', name: '狂叶', desc: '攻击全体敌人，伤害随自身速度提高',
+    target: 'all', kind: 'attack', damage: 1, spdScaling: 1,
+  },
+  leaf_quake: {
+    id: 'leaf_quake', name: '叶震波', desc: '贯穿攻击前排并波及后排，伤害随自身速度提高',
+    target: 'single', kind: 'attack', damage: 2, reach: 'pierce', spdScaling: 1,
+  },
+  boss_vine_shield: {
+    id: 'boss_vine_shield', name: '古树庇护', desc: '全体友方获得5点护盾并回复2点生命',
+    target: 'allyAll', kind: 'buff', heal: 2, uses: 2,
+    effects: [{ kind: 'shield', value: 5, turns: 99 }],
+  },
+  poison_vine: {
+    id: 'poison_vine', name: '毒刺藤', desc: '攻击单个敌人并施加中毒',
+    target: 'single', kind: 'attack', damage: 3,
+    effects: [{ kind: 'poison', value: 3, turns: 3 }],
+  },
+  entangle: {
+    id: 'entangle', name: '缠绕', desc: '攻击单个敌人并降低其速度',
+    target: 'single', kind: 'attack', damage: 2,
+    effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
+  },
 };
 
 export function getSkill(id: string): SkillDef {

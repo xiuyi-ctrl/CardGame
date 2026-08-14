@@ -680,6 +680,11 @@ function middleNodeType(rng: () => number, progress: number): NodeType {
   return battleVariant();
 }
 
+/** Boss 小怪映射表：每个 boss 的小怪 speciesId 列表 */
+export const BOSS_MINIONS: Record<string, string[]> = {
+  boss_vine: ['boss_minion_tree_guard', 'boss_minion_thorn'],
+};
+
 function buildEncounter(
   rng: () => number,
   type: NodeType,
@@ -689,7 +694,9 @@ function buildEncounter(
   gauntletSize?: 2 | 3,
 ): { speciesId: string }[] {
   if (type === 'boss') {
-    return [{ speciesId: bossId ?? ACT_BOSS_POOLS[act][0] }];
+    const id = bossId ?? ACT_BOSS_POOLS[act][0];
+    const minions = BOSS_MINIONS[id] ?? [];
+    return [{ speciesId: id }, ...minions.map((m) => ({ speciesId: m }))];
   }
   // ---- 第 1 幕：固定遭遇表（加权抽取） ----
   if (act === 1) {

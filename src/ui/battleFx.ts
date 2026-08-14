@@ -4,7 +4,7 @@ import { SKILLS } from '../game/data/skills';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
 interface FxEvent {
-  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff';
+  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed';
   actorUid?: string;
   targetUid?: string;
   value: number;
@@ -105,6 +105,7 @@ const RE_PASSIVE_HEAL = /^(.+?) 的「(.+?)」(?:恢复|治愈) (\d+) 点生命$
 const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
+const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 
 /** buff 技能飘字：按技能施加的状态显示，如战吼→「攻击↑」；无法识别时兜底「强化」 */
 function buffText(skillName: string): string {
@@ -140,6 +141,21 @@ function statusesOfUnits(b: BattleState): Record<string, StatusEffect[]> {
 function shieldsOfUnits(b: BattleState): Record<string, number> {
   const out: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) out[u.uid] = u.shield;
+  return out;
+}
+
+/** 计算每个单位的有效速度（与 UnitCard 同步） */
+function spdOfUnits(b: BattleState): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) {
+    const buffSpd = (u.battleBuffs?.spdUp ? 1 : 0) - (u.battleBuffs?.spdDown ? 1 : 0);
+    const skillSpd = u.battleBuffs?.skillSpd ?? 0;
+    const spdDownSt = u.statuses.find((s) => s.kind === 'spdDown');
+    const statusSpd = spdDownSt ? -spdDownSt.value : 0;
+    const windSpdSt = u.statuses.find((s) => s.kind === 'windSpd');
+    const windSpd = windSpdSt ? windSpdSt.value : 0;
+    out[u.uid] = Math.max(1, u.spd + buffSpd + skillSpd + statusSpd + windSpd);
+  }
   return out;
 }
 
@@ -207,6 +223,19 @@ function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       shields: entry.shields,
     };
   }
+  if ((m = text.match(RE_SPD_UP))) {
+    const uid = entry.actorUid ?? entry.targetUid ?? findUid(b, side, m[1]);
+    return {
+      kind: 'speed',
+      actorUid: uid,
+      targetUid: uid,
+      value: Number(m[3]),
+      skillName: m[2],
+      hp: entry.hp,
+      statuses: entry.statuses,
+      shields: entry.shields,
+    };
+  }
   return null;
 }
 
@@ -239,6 +268,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [pops, setPops] = useState<PopItem[]>([]);
   const [hpMap, setHpMap] = useState<Record<string, number> | null>(null);
   const [shieldMap, setShieldMap] = useState<Record<string, number> | null>(null);
+  const [spdMap, setSpdMap] = useState<Record<string, number> | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, StatusEffect[]> | null>(null);
   const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
@@ -299,6 +329,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setAnimating(false);
       setRevealedLogLen(0);
       setHpMap(null);
+      setSpdMap(null);
       setStatusMap(null);
       setFx({});
       setPops([]);
@@ -333,6 +364,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     });
     const prevHp = prevBattleBefore ? hpOfUnits(prevBattleBefore) : hpOfUnits(battle);
     const prevShields = prevBattleBefore ? shieldsOfUnits(prevBattleBefore) : shieldsOfUnits(battle);
+    const prevSpd = prevBattleBefore ? spdOfUnits(prevBattleBefore) : spdOfUnits(battle);
     const prevStatuses = prevBattleBefore ? statusesOfUnits(prevBattleBefore) : statusesOfUnits(battle);
     // 仅当日志带状态快照（真实战斗 pushLog 均会写入）时才启用状态回放；
     // 测试手搓的日志无 statuses 字段时保持原有「直接读最终状态」行为
@@ -377,6 +409,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     if (events.length === 0) {
       setAnimating(false);
       setHpMap(null);
+      setSpdMap(null);
       setShieldMap(shieldsOfUnits(battle));
       setStatusMap(null);
       setRevealedKinds(allRevealed(newStatuses));
@@ -390,6 +423,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setAnimating(true);
     setHpMap(prevHp);
     setShieldMap(prevShields);
+    setSpdMap(prevSpd);
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
     events.forEach((ev, i) => {
@@ -459,6 +493,13 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
             }
+          } else if (ev.kind === 'speed') {
+            if (targetUid) {
+              ++fxSeq; capturedTargetSeq = fxSeq;
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-buff', seq: capturedTargetSeq } }));
+              setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度+${ev.value}`, heal: false, buff: true }]);
+              setSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + ev.value } : p);
+            }
           } else if (targetUid) {
             ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
             setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
@@ -492,6 +533,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       () => {
         setAnimating(false);
         setHpMap(null);
+        setSpdMap(null);
         // 不清理 shieldMap，保留最后事件快照，防止新动画启动时 prevShields 与真实值的跳变导致盾图标闪烁
         setStatusMap(null);
         setRevealedKinds(allRevealed(newStatuses));
@@ -505,5 +547,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, shieldMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
+  return { fx, pops, hpMap, shieldMap, spdMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
 }

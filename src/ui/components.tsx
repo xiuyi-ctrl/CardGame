@@ -3,7 +3,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
-import { getMonster } from '../game/data/monsters';
 import { CURSE_CN } from '../game/state/game';
 
 /** 技能数值简述：仅伤害/治疗数值，如 "5"、"3×2"（buff 效果数值不放这里，见 skillFullDesc） */
@@ -203,9 +202,11 @@ const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
 export function PassiveBadge({ unit }: { unit: Unit }) {
   const p = getPassive(unit.passive);
   if (!p) return null;
+  const stacks = unit.passiveSpdStacks ?? 0;
+  const showStacks = stacks > 0 && (p.kind === 'spdOnHit' || p.kind === 'treeSpeedUp' || p.kind === 'spdOnAttack' || p.kind === 'speedBonus');
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
-      💠{p.name}
+      💠{p.name}{showStacks ? ` ×${stacks}` : ''}
     </span>
   );
 }
@@ -257,22 +258,22 @@ export interface UnitCardProps {
   topStats?: boolean;
   /** 渲染在卡片底部的操作区（如队伍管理里的融合/释放按钮） */
   footer?: ReactNode;
+  /** 动画期间覆盖有效速度（逐段递增，如受击加速每段+1） */
+  speedOverride?: number;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
-  const baseSpd = getMonster(unit.speciesId).baseSpd;
-  const passiveDef = getPassive(unit.passive);
-  const passiveSpd = passiveDef?.kind === 'spd' ? passiveDef.value : 0;
+  // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
   const buffSpd = (unit.battleBuffs?.spdUp ? 1 : 0) - (unit.battleBuffs?.spdDown ? 1 : 0);
   const skillSpd = unit.battleBuffs?.skillSpd ?? 0;
   const spdDownStatus = unit.statuses.find((s) => s.kind === 'spdDown');
   const statusSpd = spdDownStatus ? -spdDownStatus.value : 0;
   const windSpdStatus = unit.statuses.find((s) => s.kind === 'windSpd');
   const windSpd = windSpdStatus ? windSpdStatus.value : 0;
-  const effectiveSpd = Math.max(1, baseSpd + passiveSpd + buffSpd + skillSpd + statusSpd + windSpd);
-  const totalDelta = passiveSpd + buffSpd + skillSpd + statusSpd + windSpd;
+  const effectiveSpd = speedOverride ?? Math.max(1, unit.spd + buffSpd + skillSpd + statusSpd + windSpd);
+  const totalDelta = buffSpd + skillSpd + statusSpd + windSpd;
   const spdColor = totalDelta > 0 ? 'var(--hp-good)' : totalDelta < 0 ? 'var(--hp-low)' : undefined;
   return (
     <div
