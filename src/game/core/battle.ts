@@ -25,6 +25,10 @@ export interface BattleOptions {
   untameable?: boolean;
   /** 敌方按指定数量原样创建（自定义测试用）：不按我方数量压缩、不复制补齐 */
   enemyExact?: boolean;
+  /** 当前幕次（1/2/3），影响 AI 行为差异 */
+  act?: number;
+  /** 节点类型（battle/elite/arena/gauntlet/corrupted/guardian），影响 AI 行为差异 */
+  nodeType?: string;
 }
 
 export function computeStats(speciesId: string) {
@@ -182,6 +186,8 @@ export function createBattle(
     orders: {},
     corruptDebuff: options?.corruptDebuff,
     enemyHealsLeft: ENEMY_HEAL_LIMIT,
+    act: options?.act,
+    nodeType: options?.nodeType,
   };
   const untameable = options?.untameable === true;
   if (options?.gauntlet) {
@@ -641,11 +647,16 @@ function swapUnits(b: BattleState, uidA: string, uidB: string): BattleState {
 /** 敌方 AI 尝试把残血前排换到后排（成功返回新状态，失败返回 undefined） */
 function tryEnemySwap(b: BattleState, actor: Unit): BattleState | undefined {
   if (actor.row !== 'front') return undefined;
+  if ((actor.swapCount ?? 0) >= 2) return undefined;
   if (actor.hp / actor.maxHp >= 0.5) return undefined;
-  const backs = alliesOf(b, actor).filter((u) => u.row === 'back' && u.hp / u.maxHp > 0.5);
+  const backs = alliesOf(b, actor).filter((u) => u.row === 'back' && u.hp > 0 && u.hp / u.maxHp > 0.5);
   if (backs.length === 0) return undefined;
-  const target = backs.sort((x, y) => y.hp / y.maxHp - x.hp / x.maxHp)[0];
+  const target = backs.sort((x, y) => y.hp / y.maxHp - x.hp / y.maxHp)[0];
   let nb = swapUnits(b, actor.uid, target.uid);
+  const swappedActor = actorFromId(nb, actor.uid);
+  if (swappedActor) {
+    nb = replaceUnit(nb, { ...swappedActor, swapCount: (swappedActor.swapCount ?? 0) + 1 });
+  }
   nb = markActed(nb, actor.uid);
   nb = pushLog(nb, `${actor.name} 退到后排，${target.name} 顶上`, sideOf(actor));
   return nb;
@@ -661,25 +672,241 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     if (skills.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
-    // 治疗：残血且有治疗技能时优先使用（受敌方治疗次数上限约束）
+    const candidates: { kind: 'heal' | 'buff' | 'attack' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
+    const hpRatio = actor.hp / actor.maxHp;
+    const allies = alliesOf(b2, actor);
+    const enemies = enemiesOf(b2, actor);
+    const canHeal = (b2.enemyHealsLeft ?? 0) > 0;
+
+    // ─── 1. 治疗行动（含特殊模式调整） ───
+    const nTypeHeal = b2.nodeType ?? 'battle';
     const healSkills = skills.filter((s) => s.kind === 'heal');
-    if (healSkills.length > 0 && (b2.enemyHealsLeft ?? 0) > 0 && actor.hp / actor.maxHp < 0.5 && rngVal > 0.3) {
-      const heal = healSkills[0];
-      const ally = alliesOf(b2, actor).sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
-      return useSkillInner(b2, actor, heal, ally?.uid);
+    if (healSkills.length > 0 && canHeal) {
+      // 各模式治疗阈值
+      let healThreshold = 0.45;
+      if (nTypeHeal === 'guardian') healThreshold = 0.55;       // 守卫：保守 55%
+      else if (nTypeHeal === 'gauntlet') healThreshold = 0.35;  // 车轮：激进 35%
+      else if (nTypeHeal === 'corrupted') healThreshold = 0.30; // 被侵蚀：更少治疗 30%
+
+      for (const hs of healSkills) {
+        if (hs.target === 'allyAll') {
+          const injuredAllies = allies.filter((u) => u.hp / u.maxHp < 0.8);
+          if (injuredAllies.length >= 2) {
+            let healScore = 0;
+            if (hpRatio < healThreshold) healScore += 55;
+            else if (hpRatio < 0.55) healScore += 30;
+            const lowAllies = allies.filter((u) => u.hp / u.maxHp < 0.3);
+            healScore += lowAllies.length * 15;
+            if (nTypeHeal === 'guardian') healScore += 15;
+            candidates.push({ kind: 'heal', skill: hs, score: healScore });
+          }
+          continue;
+        }
+        // 自身血量 < 阈值 → 必须治疗
+        if (hpRatio < healThreshold) {
+          candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 65 });
+        } else if (hpRatio < 0.55) {
+          candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 35 });
+        }
+        // 队友血量 < 25% → 治疗队友
+        const criticalAlly = allies
+          .filter((u) => u.hp > 0 && u.hp / u.maxHp < 0.25)
+          .sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
+        if (criticalAlly) {
+          candidates.push({ kind: 'heal', skill: hs, targetUid: criticalAlly.uid, score: 60 });
+        }
+      }
     }
-    // 换位：残血前排偶尔退到后排
-    if (rngVal < 0.15) {
-      const swapped = tryEnemySwap(b2, actor);
-      if (swapped) return swapped;
+
+    // ─── 2. 增益/防御技能（含特殊模式调整） ───
+    const nTypeBuff = b2.nodeType ?? 'battle';
+    const actorPassiveForBuff = getUnitPassive(actor);
+    const hasThorns = actorPassiveForBuff?.kind === 'thorns';
+    const buffSkills = skills.filter((s) => s.kind === 'buff' && s.target !== 'allyAll');
+    for (const bs of buffSkills) {
+      // 战吼：首回合 概率使用，后续回合降低
+      if (bs.effects?.some((e) => e.kind === 'atkUp') && !actor.statuses.some((s) => s.kind === 'atkUp')) {
+        let roarChance = 0.25;
+        if (b2.round <= 1) {
+          // 各模式首回合战吼概率
+          if (nTypeBuff === 'arena' || nTypeBuff === 'guardian') roarChance = 0.7;
+          else if (nTypeBuff === 'gauntlet') roarChance = 0.7;
+          else if (nTypeBuff === 'corrupted') roarChance = 0.7;
+          else roarChance = 0.4;
+        }
+        // 濒死反扑：血量 < 40% → 额外 60% 概率
+        if (hpRatio < 0.4) roarChance = Math.max(roarChance, 0.6);
+        if (rngVal < roarChance) {
+          candidates.push({ kind: 'buff', skill: bs, score: 55 });
+        }
+      }
+      // 坚盾/盾反：血量 < 40% 时 50%
+      if (bs.effects?.some((e) => e.kind === 'shield') && actor.shield <= 0 && !actor.statuses.some((s) => s.kind === 'shield')) {
+        if (hpRatio < 0.4 && rngVal < 0.5) {
+          candidates.push({ kind: 'buff', skill: bs, score: 50 });
+        }
+      }
+      // 嘲讽：前排 ≥2 时使用（反伤型单位优先使用嘲讽）
+      if (bs.effects?.some((e) => e.kind === 'taunt')) {
+        const frontEnemies = enemies.filter((u) => u.row === 'front' && u.hp > 0);
+        const tauntChance = hasThorns ? 0.6 : 0.35;
+        if (frontEnemies.length >= 2 && hpRatio > 0.4 && rngVal < tauntChance) {
+          candidates.push({ kind: 'buff', skill: bs, score: hasThorns ? 50 : 40 });
+        }
+      }
     }
-    // 攻击：随机选择可用技能（AI 不总是最优，保证难度合理）；治疗次数用尽后不再随机选中治疗技能
-    const attackSkills = (b2.enemyHealsLeft ?? 0) <= 0 ? skills.filter((s) => s.kind !== 'heal') : skills;
-    if (attackSkills.length === 0) {
+
+    // ─── 3. 换位（限次 2 次，分层阈值；守卫/首领禁用） ───
+    const nTypeSwap = b2.nodeType ?? 'battle';
+    if (actor.row === 'front' && (actor.swapCount ?? 0) < 2 && nTypeSwap !== 'guardian') {
+      const healthyBack = allies.filter((u) => u.row === 'back' && u.hp > 0 && u.hp / u.maxHp > 0.5);
+      if (healthyBack.length > 0) {
+        if (hpRatio < 0.25 && rngVal < 0.65) {
+          candidates.push({ kind: 'swap', score: 55 });
+        } else if (hpRatio < 0.35 && rngVal < 0.4) {
+          candidates.push({ kind: 'swap', score: 40 });
+        }
+      }
+      // 嘲讽状态 + 血量 < 30% → 50% 概率换位
+      const hasTaunt = actor.statuses.some((s) => s.kind === 'taunt');
+      if (hasTaunt && hpRatio < 0.3 && healthyBack.length > 0 && rngVal < 0.5) {
+        candidates.push({ kind: 'swap', score: 50 });
+      }
+    }
+
+    // ─── 4. 攻击行动 ───
+    const attackSkills = canHeal ? skills.filter((s) => s.kind === 'attack') : skills.filter((s) => s.kind !== 'heal');
+    let targetPool = enemies.filter((u) => u.hp > 0);
+    if (targetPool.length === 0) {
+      return markActed(pushLog(b2, `${actor.name} 无目标可攻击`, sideOf(actor)), actor.uid);
+    }
+    // 嘲讽强制锁定
+    const taunt = actor.statuses.find((s) => s.kind === 'taunt');
+    if (taunt?.sourceUid) {
+      const src = enemies.find((u) => u.uid === taunt.sourceUid && u.hp > 0);
+      if (src) targetPool = [src];
+    }
+    // 自身被动信息（状态配合用）
+    const actorPassive = getUnitPassive(actor);
+    const hasVenomPower = actorPassive?.kind === 'venomPower';
+    const hasScorchPlus = actorPassive?.kind === 'scorchPlus';
+    // 幕次 + 特殊模式
+    const currentAct = b2.act ?? 1;
+    const nType = b2.nodeType ?? 'battle';
+
+    for (const atk of attackSkills) {
+      const isLimitedHighDmg = atk.uses !== undefined && (atk.damage ?? 0) >= 6;
+      // 限次高伤技能额外加分条件
+      let limitedBonus = 0;
+      if (isLimitedHighDmg) {
+        // 濒死反扑：血量 < 35% → 90% 倾向
+        if (hpRatio < 0.35) limitedBonus += 40;
+        // 目标已中毒/灼烧（配合被动增伤） → 80% 倾向
+        else if (targetPool.some((t) => t.statuses.some((s) => s.kind === 'poison' || s.kind === 'burn'))) limitedBonus += 30;
+        // 高威胁目标血量 > 50% 且自身血量 > 50% → 60% 倾向
+        else if (hpRatio > 0.5) limitedBonus += 15;
+        // 守卫模式：血量 < 50% 后倾向使用（狂暴模式）
+        if (nType === 'guardian' && hpRatio < 0.5) limitedBonus += 20;
+      }
+
+      const scoredTargets = targetPool.map((t) => {
+        let tScore = 0;
+        // ── 残血收割（幕次加权） ──
+        const lowHpBonus = currentAct >= 2 ? 30 : 20;
+        if (t.hp / t.maxHp < 0.3) tScore += lowHpBonus;
+        // ── 核心威胁（幕次加权） ──
+        const hasHealSkill = t.skills.some((id) => getSkill(id)?.kind === 'heal');
+        const threatBonus = currentAct >= 2 ? 10 : 6;
+        if (hasHealSkill) tScore += threatBonus;
+        if (t.spd >= 6) tScore += threatBonus;
+        const tp = getUnitPassive(t);
+        if (tp && (tp.kind === 'power' || tp.kind === 'frenzy')) tScore += threatBonus;
+        // ── 状态配合 ──
+        if (hasVenomPower && t.statuses.some((s) => s.kind === 'poison')) tScore += 15;
+        if (hasScorchPlus && t.statuses.some((s) => s.kind === 'burn')) tScore += 15;
+        const debuffCount = t.statuses.filter((s) => s.kind === 'poison' || s.kind === 'burn' || s.kind === 'atkDown').length;
+        tScore += debuffCount * 3;
+        // ── 幕次权重调整 ──
+        if (currentAct === 1) {
+          // 幕1：随机扰动 60%
+          tScore += rngVal * 15;
+        } else if (currentAct === 2) {
+          // 幕2：残血 50% + 核心威胁 30%
+          if (t.hp / t.maxHp < 0.3) tScore += 10;
+          if (hasHealSkill || t.spd >= 6) tScore += 8;
+        } else {
+          // 幕3：核心威胁 40% + 状态配合 35%
+          if (hasHealSkill || t.spd >= 6) tScore += 12;
+          if (debuffCount > 0) tScore += 10;
+        }
+        // ── 特殊模式调整 ──
+        if (nType === 'arena') {
+          // 斗兽场：优先集火单体高伤，血量权重 +10
+          if (t.hp / t.maxHp < 0.3) tScore += 10;
+        } else if (nType === 'gauntlet') {
+          // 车轮战：优先击杀减少敌方数量，残血额外 +8
+          if (t.hp / t.maxHp < 0.3) tScore += 8;
+          if (atk.target === 'all') tScore += 5;
+        } else if (nType === 'corrupted') {
+          // 被侵蚀：攻击倾向 +15%（所有攻击目标额外加分）
+          tScore += 3;
+        } else if (nType === 'guardian') {
+          // 守卫：治疗者威胁最高，优先集火
+          if (hasHealSkill) tScore += 10;
+        }
+        // 技能伤害
+        tScore += (atk.damage ?? 0) + getDamageBonus(actor);
+        if (atk.target === 'all' && targetPool.length >= 3) tScore += 3;
+        // 带状态效果的技能加分
+        if (atk.effects?.some((e) => e.kind === 'poison' || e.kind === 'burn')) tScore += 2;
+        return { target: t, score: tScore };
+      });
+      scoredTargets.sort((a, c) => c.score - a.score);
+      const best = scoredTargets[0];
+      if (best) {
+        candidates.push({ kind: 'attack', skill: atk, targetUid: best.target.uid, score: best.score + limitedBonus + 5 });
+      }
+    }
+
+    // ─── 5. 选择最高分行动（加随机扰动） ───
+    if (candidates.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
-    const chosen = attackSkills[Math.floor(rngVal * attackSkills.length)];
-    return useSkillInner(b2, actor, chosen, undefined);
+    const scored = candidates.map((c) => ({
+      ...c,
+      finalScore: c.score * (0.7 + rngVal * 0.6),
+    }));
+    scored.sort((a, c) => c.finalScore - a.finalScore);
+    const chosen = scored[0];
+
+    if (chosen.kind === 'heal' && chosen.skill) {
+      const target = chosen.targetUid
+        ? allies.find((u) => u.uid === chosen.targetUid)
+        : allies.sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
+      return useSkillInner(b2, actor, chosen.skill, target?.uid);
+    }
+    if (chosen.kind === 'buff' && chosen.skill) {
+      return useSkillInner(b2, actor, chosen.skill, actor.uid);
+    }
+    if (chosen.kind === 'swap') {
+      const swapped = tryEnemySwap(b2, actor);
+      if (swapped) return swapped;
+      if (attackSkills.length > 0) {
+        const fallback = attackSkills[Math.floor(rngVal * attackSkills.length)];
+        return useSkillInner(b2, actor, fallback, undefined);
+      }
+      return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
+    }
+    if (chosen.kind === 'attack' && chosen.skill) {
+      return useSkillInner(b2, actor, chosen.skill, chosen.targetUid);
+    }
+    // 兜底：选择可用技能（治疗次数用尽时排除纯治疗技能）
+    const fallbackPool = canHeal ? skills : skills.filter((s) => s.kind !== 'heal');
+    if (fallbackPool.length === 0) {
+      return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
+    }
+    const fb = fallbackPool[Math.floor(rngVal * fallbackPool.length)];
+    return useSkillInner(b2, actor, fb, undefined);
   });
 }
 

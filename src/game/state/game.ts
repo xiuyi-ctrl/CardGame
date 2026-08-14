@@ -216,7 +216,7 @@ export interface GameState {
     initialField: Unit[];
     encounter: { speciesId: string }[];
     nodeId: string;
-    options?: { corruptDebuff?: 'spd' | 'dmg'; untameable?: boolean };
+    options?: { corruptDebuff?: 'spd' | 'dmg'; untameable?: boolean; act?: number; nodeType?: string };
     /** 移动前的位置（BACK_TO_MAP 时恢复） */
     prevRow?: number;
     prevNodeId?: string;

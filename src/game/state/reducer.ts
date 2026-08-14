@@ -370,7 +370,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     if (base.roster.length === 0) return { ...base, screen: 'map' };
     const maxField = maxFieldForEnemy(encounter.length);
     const initial = autoPosition(fieldUnits(base, maxField));
-    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true }, prevRow, prevNodeId } };
+    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true, act: base.act, nodeType: 'guardian' }, prevRow, prevNodeId } };
   }
   // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
   if (node.type === 'keydoor') {
@@ -396,7 +396,11 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     return { ...base, screen: 'gauntlet-order', gauntletOrder: units, gauntletSize: encounter.length, gauntletPrevRow: prevRow, gauntletPrevNodeId: prevNodeId };
   }
   // 普通/精英/被侵蚀：先布阵选择站位（棋盘默认放自动出战宠物，列表为全部宠物池）
-  const options = node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : undefined;
+  const options = {
+    ...(node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : {}),
+    act: base.act,
+    nodeType: node.type,
+  };
   if (base.roster.length === 0) return { ...base, screen: 'map' };
   const maxField = maxFieldForEnemy(encounter.length);
   const initial = autoPosition(fieldUnits(base, maxField));
@@ -707,7 +711,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const node = currentNode(state);
         const encounter = node ? state.map.encounter[node.id] : undefined;
         if (!encounter) return { ...state, screen: 'map', specialPending: undefined };
-        const battle = createBattle([unit], encounter, state.seed + state.currentRow * 17, { untameable: true });
+        const battle = createBattle([unit], encounter, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'arena' });
         return {
           ...state,
           screen: 'battle',
@@ -870,7 +874,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.currentNodeId === '' || action.units.length === 0) return state;
       const encounter = state.map.encounter[state.currentNodeId];
       if (!encounter) return state;
-      const battle = createBattle(action.units, encounter, state.seed + state.currentRow * 17, { gauntlet: true, untameable: true });
+      const battle = createBattle(action.units, encounter, state.seed + state.currentRow * 17, { gauntlet: true, untameable: true, act: state.act, nodeType: 'gauntlet' });
       return { ...state, screen: 'battle', battle, gauntletOrder: undefined, gauntletSize: undefined };
     }
 
@@ -938,7 +942,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!state.testRun || !state.pendingBattle) return state;
       const pb = state.pendingBattle;
       const seed = action.seed > 0 ? Math.floor(action.seed) : 1;
-      const battle = createBattle(pb.units, pb.encounter, seed, pb.options);
+      const battle = createBattle(pb.units, pb.encounter, seed, { ...pb.options, act: state.act });
       const inventory: Record<string, number> = {};
       for (const [k, v] of Object.entries(action.inventory)) {
         const n = Math.floor(v);

@@ -156,6 +156,8 @@ export interface Unit {
   };
   /** 荆棘之躯被动：本场战斗中受击次数（每 3 次触发强化反伤） */
   thornsHitCount?: number;
+  /** 敌方换位次数（每场战斗最多 2 次） */
+  swapCount?: number;
 }
 
 export interface LogEntry {
@@ -219,4 +221,8 @@ export interface BattleState {
   enemyHealsLeft?: number;
   /** 本回合各单位累计受到的伤害（用于 damageCap 被动：每回合上限 value，超出无效） */
   roundDmgMap?: Record<string, number>;
+  /** 当前幕次（1/2/3），AI 行为差异用 */
+  act?: number;
+  /** 节点类型（battle/elite/arena/gauntlet/corrupted/guardian），AI 行为差异用 */
+  nodeType?: string;
 }
