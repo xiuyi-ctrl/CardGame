@@ -217,8 +217,6 @@ export interface BattleState {
   playerDown?: Unit[];
   /** 车轮战：场上一方全灭但仍有替补时标记待换人（死亡动画播完后由 GAUNTLET_SWAP 触发换人） */
   pendingSwap?: { player: boolean; enemy: boolean };
-  /** 敌方本场战斗剩余治疗次数（防止敌方治疗无限拉长战斗形成死局） */
-  enemyHealsLeft?: number;
   /** 本回合各单位累计受到的伤害（用于 damageCap 被动：每回合上限 value，超出无效） */
   roundDmgMap?: Record<string, number>;
   /** 当前幕次（1/2/3），AI 行为差异用 */

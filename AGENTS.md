@@ -43,14 +43,19 @@
 
 - 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`），无随机浮动；**受击减伤被动（guard）对多段技能的每一段都生效**（每段最低 1）。`getEffectiveSpd` 含药水 ±1。
 - 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+3 / 速度+1。
+- **反伤先打盾**：`applyCounterDmg(attacker, dmg)` 统一处理荆棘/盾反/棘刺王的反击伤害——先扣护盾再扣血，避免护盾失效后反伤仍穿透护盾的 bug。`thorns`/`thornRoyal`/`shieldCounter` 三处均已改为调用此函数。
+- **技能冷却**：`SkillDef.cooldown?: number` 设置使用后冷却回合数（缺省=0）；`Unit.skillCooldowns?: Record<string, number>` 追踪当前冷却；`applySkillCooldown` 存储 `skill.cooldown + 1`（因为 `startRound` 在回合开始时立即递减，+1 确保实际冷却回合数正确）；`skillCooldownLeft` 检查冷却是否归零。已设：盾反（shield_counter）冷却 1 回合。
+- **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫/首领战禁用换位）。
+- **幕次+节点类型**：`BattleState.act?: number`（当前幕次 1/2/3）+ `BattleState.nodeType?: string`（battle/elite/arena/gauntlet/guardian/corrupted），从 `BattleOptions` 传入，AI 根据这些字段调整概率阈值和评分权重。
+- **复仇棘甲先手**：`revenge_thorn` 技能设 `priority: 'first'`，确保在所有非先手技能之前施放。
 - 战斗日志为结构化 `LogEntry[]`（`{ text, side, hp, actorUid?, targetUid?, addsStatus? }`）：`pushLog(b, msg, side, actorUid?, targetUid?, addsStatus?)` 带阵营，技能/状态/道具按行动者或受击者阵营，系统消息用 info；`hp` 为该条日志时全体血量快照，`addsStatus` 标记本次攻击附加的状态 kind（灼烧/中毒/减防/眩晕，仅标在攻击日志最后一段，无附加则为 undefined）。UI 日志面板按 side 分色，**只显示已揭示的条目**（`useBattleFx` 的 `revealedLogLen`：动画事件 i 播放时揭示到对应日志，动画结束补全），最多最近 6 条。
 - 战斗动画（`src/ui/battleFx.ts`）按日志事件排队播放；新增状态标签在**附加它的那次行动动画**播放时才揭示（攻击类状态按 `addsStatus` 精确归属，同一目标多只宠物附加不同状态时按攻击顺序依次显示；连击多段标在最后一段、在最后一段动画揭示；**连击若一段即清掉目标（敌方全灭）则后续段不再命中、不产生攻击日志，对应动画不播放**；**buff 状态（如战吼 atkUp）归入该单位施放 buff 技能的施法动画**，即便该单位本回合先受 dot 掉血也不提前），到期状态在其最后一次掉血动画时移除。胜负结算弹窗在动画全部播放完后再显示——我方全灭时先播完死亡动画才弹失败界面（`BattleScreen` 的 `won`/`lost` 弹窗均带 `!animating` 条件）。
 - 状态：灼烧/中毒**可叠加层数**（重复附加层数相加），每回合结算 ceil(层数/2) 层（向上进位）并扣等量伤害、归 0 消失；战吼 伤害+2/2R、铁刺 伤害-1/2R、眩晕（跳过行动）。**战吼施放回合不计**：战吼（atkUp）`turns: N` 施放回合生效后还持续 N 个完整回合（实际跨越 N+1 回合）；铁刺/嘲讽/眩晕等负面状态施放回合正常计入。侵蚀节点：速度-1（入场）或 我方受伤+1（**多段每段都 +1**）。
 - **技能次数**：`SkillDef.uses?` 设置每场战斗的可用次数（缺省=无限，`skillUsesLeft` 返回 Infinity）。有限次技能在玩家/敌方使用后各扣 1（`consumeSkillUse` 需按当前状态重新取单位，勿用旧引用否则覆盖治疗等改动）；耗尽后 `playerSkill` 拒绝、UI 按钮禁用显示「剩 N 次/已用完」。已设：愈光（heal_light）2 次、战吼（roar）2 次。
 - **专属被动**：`MonsterSpecies.passive` + `Unit.passive`，所有生物（含 Boss/造物）各有 1 个，表在 `data/passives.ts`（`PASSIVES`/`getPassive`）。类型 `PassiveKind`：`hp`（最大生命+）`spd`（入场速度+）`regen`（回合开始回血）`thorns`（受击反伤）`drain`（造成伤害吸血）`power`（技能伤害+）`guard`（受击减伤，`getDamageGuard`）`venom`/`scorch`（攻击命中附中毒/灼烧）`frenzy`（血量<50% 伤害+）`venomPower`（对中毒目标伤害+）`damageCap`（每回合伤害上限）`poisonBreak`（攻击中毒目标无视护盾+真伤）`speedBonus`（速度差转伤害）`spdOnAttack`（攻击后速度+）`bigHitGuard`（大额伤害减免）`scorchPlus`（灼烧层数转伤害加成）。**guard 减伤、侵蚀「伤害加深」、thorns 反伤、drain 吸血对多段攻击均按段生效**（每段最低 1）。被动入口：`makeUnit` 应用 hp/spd 加成、`startRound` 处理 regen、攻击结算处理 guard/venom/scorch/thorns/drain、`getDamageBonus` 含 power/frenzy/venomPower/speedBonus/scorchPlus。UI 卡片显示 `PassiveBadge`（components.tsx）。
 - 属性强化固定值：生命 +3 / 速度 +1；诅咒：血脆=生命-5、虚弱=伤害-1、迟缓=速度-1；侵蚀节点：速度-1 / 受伤+1。
-- 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。敌方治疗每场限 3 次（`enemyHealsLeft`），防止治疗无限拉长形成死局。
-- 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 4；队伍已满时驯服的新宠物进「处理队伍」界面（替换/融合/放生）。
+- 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。敌方治疗按各技能自身 `uses` 次数限制（用尽后不再选择该技能）。
+- 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 5；队伍已满时驯服的新宠物进「处理队伍」界面（替换/融合/放生）。
 - 地图生成：每幕 8~10 层，出发后第 1 行强制全战斗；事件 3~5、商人 2~4（**最后两层必有 1 个商人**，故可至 5）、奇遇 ≤1；全战斗行 ≤2。
 - 侦查符/跳关道具均为背包中使用：背包点击 → 返回地图进入选择模式 → 点击目标节点执行。侦查符可看任意一关情报；跳关道具仅对可达的战斗类节点（battle/elite/arena/gauntlet/corrupted）直接获得奖励，boss/guardian 不可跳。双生宝箱双开仅由双生符触发。
 - 背包界面：HUD 右侧「🎒 背包」可随时打开（查看宠物/道具，使用侦查符/跳关道具/净化药水）。

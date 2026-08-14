@@ -8,8 +8,6 @@ import { createRng } from '../rng';
 export const TAME_THRESHOLD = 0.4;
 /** 每次驯服失败对该敌人捕捉概率的乘法加成（如 0.25 = +25%） */
 export const TAME_FAIL_BONUS = 0.25;
-/** 敌方每场战斗的治疗次数上限，防止治疗无限拉长战斗形成死局 */
-export const ENEMY_HEAL_LIMIT = 3;
 /** 战斗棋盘每排列数（前后排各 3 列 = 6 格） */
 export const FIELD_COLS = 3;
 /** 休息指令的特殊 skillId（orders 里用它表示「本回合不行动」，可再次点击取消） */
@@ -185,7 +183,6 @@ export function createBattle(
     rngCount: 0,
     orders: {},
     corruptDebuff: options?.corruptDebuff,
-    enemyHealsLeft: ENEMY_HEAL_LIMIT,
     act: options?.act,
     nodeType: options?.nodeType,
   };
@@ -676,12 +673,11 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     const hpRatio = actor.hp / actor.maxHp;
     const allies = alliesOf(b2, actor);
     const enemies = enemiesOf(b2, actor);
-    const canHeal = (b2.enemyHealsLeft ?? 0) > 0;
 
     // ─── 1. 治疗行动（含特殊模式调整） ───
     const nTypeHeal = b2.nodeType ?? 'battle';
     const healSkills = skills.filter((s) => s.kind === 'heal');
-    if (healSkills.length > 0 && canHeal) {
+    if (healSkills.length > 0) {
       // 各模式治疗阈值
       let healThreshold = 0.45;
       if (nTypeHeal === 'guardian') healThreshold = 0.55;       // 守卫：保守 55%
@@ -775,7 +771,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     }
 
     // ─── 4. 攻击行动 ───
-    const attackSkills = canHeal ? skills.filter((s) => s.kind === 'attack') : skills.filter((s) => s.kind !== 'heal');
+    const attackSkills = skills.filter((s) => s.kind === 'attack');
     let targetPool = enemies.filter((u) => u.hp > 0);
     if (targetPool.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无目标可攻击`, sideOf(actor)), actor.uid);
@@ -900,8 +896,8 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     if (chosen.kind === 'attack' && chosen.skill) {
       return useSkillInner(b2, actor, chosen.skill, chosen.targetUid);
     }
-    // 兜底：选择可用技能（治疗次数用尽时排除纯治疗技能）
-    const fallbackPool = canHeal ? skills : skills.filter((s) => s.kind !== 'heal');
+    // 兜底：选择可用技能
+    const fallbackPool = skills;
     if (fallbackPool.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
@@ -914,6 +910,21 @@ function markActed(b: BattleState, uid: string): BattleState {
   const actor = actorFromId(b, uid);
   if (!actor) return b;
   return replaceUnit(b, { ...actor, acted: true });
+}
+
+/** 反伤/反击伤害：先扣护盾再扣血，返回更新后的攻击者 */
+function applyCounterDmg(attacker: Unit, dmg: number): Unit {
+  let rd = dmg;
+  let a = { ...attacker };
+  if (a.shield > 0) {
+    const absorbed = Math.min(a.shield, rd);
+    a = { ...a, shield: a.shield - absorbed };
+    rd -= absorbed;
+    if (a.shield <= 0) {
+      a = { ...a, statuses: a.statuses.filter((s) => s.kind !== 'shield') };
+    }
+  }
+  return { ...a, hp: Math.max(0, a.hp - rd) };
 }
 
 /** 逐目标攻击结算：伤害计算 + 段数拆分 + 护盾/吸血/反伤/状态写回 */
@@ -1040,7 +1051,7 @@ function resolveAttack(
       if (tp?.kind === 'thorns') {
         const attacker = actorFromId(nb, actor.uid);
         if (attacker && attacker.hp > 0) {
-          const hurt = { ...attacker, hp: Math.max(0, attacker.hp - tp.value) };
+          const hurt = applyCounterDmg(attacker, tp.value);
           nb = replaceUnit(nb, hurt);
           nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
         }
@@ -1054,7 +1065,7 @@ function resolveAttack(
           const hitCount = t2.thornsHitCount!;
           const isBurst = hitCount % 3 === 0;
           const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
-          let newAttacker = { ...attacker, hp: Math.max(0, attacker.hp - thornDmg) };
+          const newAttacker = applyCounterDmg(attacker, thornDmg);
           nb = replaceUnit(nb, newAttacker);
           nb = replaceUnit(nb, t2);
           nb = pushLog(nb, `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`, sideOf(t2), t2.uid, attacker.uid);
@@ -1078,7 +1089,7 @@ function resolveAttack(
         const scVal = t2.statuses[scIdx].value;
         const attacker = actorFromId(nb, actor.uid);
         if (attacker && attacker.hp > 0) {
-          const hurt = { ...attacker, hp: Math.max(0, attacker.hp - scVal) };
+          const hurt = applyCounterDmg(attacker, scVal);
           const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
           nb = replaceUnit(nb, debuffed);
           nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低其伤害`, sideOf(t2), t2.uid, attacker.uid);
@@ -1124,13 +1135,6 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (skill.kind === 'heal') {
     let r = nb;
     const amt = Math.max(1, skill.heal ?? 0);
-    if (!actor.isPlayer) {
-      if ((r.enemyHealsLeft ?? 0) <= 0) {
-        // 防御兜底：敌方治疗次数用尽后拒绝治疗（enemyAct 已避免随机选中，此处防止直接调用）
-        return markActed(pushLog(r, `${actor.name} 的「${skill.name}」施展失败：治疗次数已用完`, sideOf(actor)), actor.uid);
-      }
-      r = { ...r, enemyHealsLeft: (r.enemyHealsLeft ?? 0) - 1 };
-    }
     for (const t of targets) {
       const maxHp = getEffectiveMaxHp(t);
       let healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };

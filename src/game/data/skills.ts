@@ -174,8 +174,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 3, turns: 2 }],
   },
   revenge_thorn: {
-    id: 'revenge_thorn', name: '复仇棘甲', desc: '本回合内每次受到攻击后获得怒棘（攻击+1，可叠加），每层额外使被动反伤+1（每场限 2 次）',
-    target: 'self', kind: 'buff', uses: 2,
+    id: 'revenge_thorn', name: '复仇棘甲', desc: '【先手】本回合内每次受到攻击后获得怒棘（攻击+1，可叠加），每层额外使被动反伤+1（每场限 2 次）',
+    target: 'self', kind: 'buff', uses: 2, priority: 'first',
     effects: [{ kind: 'thornSpikes', value: 1, turns: 1 }],
   },
   group_taunt: {

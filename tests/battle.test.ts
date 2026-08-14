@@ -843,17 +843,17 @@ describe('战斗日志与动画时序', () => {
     expect(after.log[thornIdx].hp?.[momoUid]).toBe(momoHp0 - 2);
   });
 
-  it('敌方治疗次数用尽后不再治疗（即使带治疗技能且残血）', () => {
+  it('敌方治疗技能次数用尽后不再治疗（即使带治疗技能且残血）', () => {
     let b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'momo_queen' }], 3);
-    b = { ...b, enemyHealsLeft: 0, enemyUnits: [{ ...b.enemyUnits[0], hp: 6 }] };
+    b = { ...b, enemyUnits: [{ ...b.enemyUnits[0], hp: 6, skillUses: { water_bath: 0 } }] };
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
-    expect(after.log.some((l) => l.text.includes('愈光'))).toBe(false);
+    expect(after.log.some((l) => l.text.includes('水浴'))).toBe(false);
     expect(after.log.some((l) => l.text.includes('施展失败'))).toBe(false);
   });
 
-  it('敌方治疗次数用尽且仅剩治疗技能时观望', () => {
+  it('敌方治疗技能次数用尽且仅剩治疗技能时观望', () => {
     let b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu_king' }], 3);
-    b = { ...b, enemyHealsLeft: 0, enemyUnits: [{ ...b.enemyUnits[0], hp: 6, skills: ['heal_light'] }] };
+    b = { ...b, enemyUnits: [{ ...b.enemyUnits[0], hp: 6, skills: ['heal_light'], skillUses: { heal_light: 0 } }] };
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
     expect(after.log.some((l) => l.text.includes('无技能可用，只能观望'))).toBe(true);
   });
