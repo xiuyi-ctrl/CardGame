@@ -159,7 +159,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   boss_vine: {
     id: 'boss_vine', name: '古树之主', emoji: '🌳',
-    baseHp: 28, baseSpd: 4,
+    baseHp: 28, baseSpd: 2,
     skills: ['leaf_needle', 'roar', 'leaf_quake', 'vine_whip', 'wild_leaf', 'boss_vine_shield'],
     desc: '越挨打越快的站桩树王，小怪会保护它。速度越快，狂叶和叶震波伤害越高。',
     passive: 'tree_speed_up',

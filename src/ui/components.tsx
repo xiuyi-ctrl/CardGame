@@ -199,10 +199,10 @@ const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
   skillSpd: { icon: '💨', label: '技能速度加成' },
 };
 
-export function PassiveBadge({ unit }: { unit: Unit }) {
+export function PassiveBadge({ unit, stacksOverride }: { unit: Unit; stacksOverride?: number }) {
   const p = getPassive(unit.passive);
   if (!p) return null;
-  const stacks = unit.passiveSpdStacks ?? 0;
+  const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;
   const showStacks = stacks > 0 && (p.kind === 'spdOnHit' || p.kind === 'treeSpeedUp' || p.kind === 'spdOnAttack' || p.kind === 'speedBonus');
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
@@ -260,9 +260,11 @@ export interface UnitCardProps {
   footer?: ReactNode;
   /** 动画期间覆盖有效速度（逐段递增，如受击加速每段+1） */
   speedOverride?: number;
+  /** 动画期间覆盖被动速度叠加层数（逐段递增） */
+  stacksOverride?: number;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -309,7 +311,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
       <div className="card-sub">
         {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
         <StatusIcons unit={unit} />
-        <PassiveBadge unit={unit} />
+        <PassiveBadge unit={unit} stacksOverride={stacksOverride} />
         <CurseBadge unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
@@ -412,7 +414,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   flameShield: (v) => `受攻击时灼烧攻击者 ${v} 层`,
 };
 
-export function BuffDetailPanel({ unit }: { unit: Unit }) {
+export function BuffDetailPanel({ unit, stacksOverride }: { unit: Unit; stacksOverride?: number }) {
   const passive = getPassive(unit.passive);
   const buffs = unit.battleBuffs;
   const battleBuffEntries = buffs
@@ -426,12 +428,13 @@ export function BuffDetailPanel({ unit }: { unit: Unit }) {
   // 计算被动当前层数/加成
   const passiveStacks = (() => {
     if (!passive) return null;
-    if (passive.kind === 'speedBonus') {
-      const skillSpd = buffs?.skillSpd ?? 0;
-      return `+${skillSpd}`;
+    // 速度叠加类被动：显示战斗中累计层数（被动层数随攻击/受击逐段递增）
+    if (passive.kind === 'speedBonus' || passive.kind === 'spdOnHit' || passive.kind === 'treeSpeedUp' || passive.kind === 'spdOnAttack') {
+      const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;
+      return stacks > 0 ? `×${stacks}` : null;
     }
     // 效果类被动不显示数值（lifeSpring/guard/regen/thorns/drain/damageCap 的 value 是内部阈值，非叠加层数）
-    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body'];
+    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body', 'thornEntangle'];
     if (noShowValue.includes(passive.kind)) return null;
     // 其他被动显示固定数值（如 hp+3, spd+1）
     return `${passive.value}`;

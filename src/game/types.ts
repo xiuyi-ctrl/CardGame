@@ -49,6 +49,7 @@ export type PassiveKind =
   | 'spd' // 速度加成：spd + value（战斗开始时生效）
   | 'regen' // 再生：每回合开始恢复 value 点生命
   | 'thorns' // 尖刺：受到攻击时反伤 value 点
+  | 'thornEntangle' // 荆棘缠绕：攻击时概率使目标伤害-1（古树之主在场时概率更高）
   | 'drain' // 吸血：造成伤害时恢复 value 点生命
   | 'power' // 力量：所有技能伤害 + value
   | 'guard' // 守护：受到的所有伤害 - value
@@ -61,7 +62,7 @@ export type PassiveKind =
   | 'poisonBreak' // 蛇狩：攻击中毒目标无视 value 点护盾/减伤，额外造成 3 真伤
   | 'spdOnAttack' // 疾风连携：攻击后速度 +value（可叠加）
   | 'spdOnHit' // 受击加速：受到攻击后速度 +value（可叠加，上限 6 层）
-  | 'treeSpeedUp' // 古木加速：每回合恢复3HP + 受击后速度+1（可叠加，上限6层）
+  | 'treeSpeedUp' // 古木加速：每回合恢复3HP + 受击后速度+1（可叠加，上限8层）
   | 'speedBonus' // 速度差增伤：速度每高于目标 1 点伤害 +1，上限 value
   | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
   | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
@@ -149,7 +150,7 @@ export interface Unit {
   curse?: 'hpDown' | 'atkDown' | 'spdDown';
   /** 自创生物：创建时随机组合的技能，融合时保留而非按物种解锁 */
   customSkills?: string[];
-  /** 被动速度技能叠加层数（受击加速/疾风连携等，上限 6 层） */
+  /** 被动速度技能叠加层数（受击加速上限6层/古木加速上限8层/疾风连携无上限） */
   passiveSpdStacks?: number;
   /** 战斗药水临时效果（uid -> {atkUp?, spdUp?, atkDown?, spdDown?} 回合数；hpUp/hpDown 为即时生效不入此表） */
   battleBuffs?: {

@@ -204,6 +204,18 @@ export function createBattle(
     const picked = exact ? [...enemySpecies] : [...enemySpecies];
     b.playerUnits = preparedPlayer;
     b.enemyUnits = picked.map((e, i) => makeEnemy(e, i, untameable));
+    // Boss 小怪战：Boss 显示在前排中间（column 1），与两侧小怪互换位置
+    if (b.enemyUnits.length >= 2 && b.enemyUnits[0]?.speciesId.startsWith('boss_')) {
+      const boss = b.enemyUnits[0];
+      const center = b.enemyUnits[1];
+      if (center && boss.row === 'front' && center.row === 'front') {
+        b.enemyUnits = [
+          { ...center, column: 0 },
+          { ...boss, column: 1 },
+          ...b.enemyUnits.slice(2),
+        ];
+      }
+    }
     // 只有一个敌人时，默认前排居中显示
     if (b.enemyUnits.length === 1 && b.enemyUnits[0]) {
       b.enemyUnits = [{ ...b.enemyUnits[0], row: 'front', column: 1 }];
@@ -1067,6 +1079,18 @@ function resolveAttack(
         nb = pushLog(nb, `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`, sideOf(healedActor), healedActor.uid, healedActor.uid);
       }
     }
+    // 荆棘缠绕：攻击时概率使目标伤害 -1（古树之主在场时概率更高）
+    if (ap?.kind === 'thornEntangle' && t2.hp > 0) {
+      const bossAlive = nb.enemyUnits.some((u) => u.speciesId === 'boss_vine' && u.hp > 0);
+      const chance = bossAlive ? 60 : 40;
+      const roll = Math.abs((nb.rngCount ?? 0)) % 100;
+      nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+      if (roll < chance) {
+        t2 = applyStatusTo(t2, { kind: 'atkDown', value: ap.value, turns: 2 }, nb.round);
+        nb = replaceUnit(nb, t2);
+        nb = pushLog(nb, `${actor.name} 的「${ap.name}」使 ${t2.name} 伤害 -1`, sideOf(actor), actor.uid, t2.uid, ['atkDown']);
+      }
+    }
     if (t2.hp > 0) {
       const tp = getUnitPassive(t2);
       if (tp?.kind === 'thorns') {
@@ -1098,10 +1122,11 @@ function resolveAttack(
           }
         }
       }
-      // 受击加速：受到攻击后速度 +1（可叠加，上限 6 层）
+      // 受击加速/古木加速：受到攻击后速度 +1（可叠加，上限按被动类型区分）
       if ((tp?.kind === 'spdOnHit' || tp?.kind === 'treeSpeedUp') && t2.hp > 0) {
         const stacks = t2.passiveSpdStacks ?? 0;
-        if (stacks < 6) {
+        const cap = tp.kind === 'treeSpeedUp' ? 8 : 6;
+        if (stacks < cap) {
           t2 = { ...t2, spd: t2.spd + 1, passiveSpdStacks: stacks + 1 };
           nb = replaceUnit(nb, t2);
           nb = pushLog(nb, `${t2.name} 的「${tp.name}」速度 +1`, sideOf(t2), t2.uid, t2.uid);

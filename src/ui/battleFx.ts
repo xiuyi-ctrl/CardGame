@@ -159,6 +159,13 @@ function spdOfUnits(b: BattleState): Record<string, number> {
   return out;
 }
 
+/** 计算每个单位的被动速度叠加层数（用于动画期间逐段递增显示） */
+function passiveSpdOfUnits(b: BattleState): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) out[u.uid] = u.passiveSpdStacks ?? 0;
+  return out;
+}
+
 /** 解析一条战斗日志为动画事件；无法识别或名字找不到目标时返回 null */
 function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const text = entry.text;
@@ -269,6 +276,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [hpMap, setHpMap] = useState<Record<string, number> | null>(null);
   const [shieldMap, setShieldMap] = useState<Record<string, number> | null>(null);
   const [spdMap, setSpdMap] = useState<Record<string, number> | null>(null);
+  const [passiveSpdMap, setPassiveSpdMap] = useState<Record<string, number> | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, StatusEffect[]> | null>(null);
   const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
@@ -330,6 +338,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setRevealedLogLen(0);
       setHpMap(null);
       setSpdMap(null);
+      setPassiveSpdMap(null);
       setStatusMap(null);
       setFx({});
       setPops([]);
@@ -410,6 +419,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setAnimating(false);
       setHpMap(null);
       setSpdMap(null);
+      setPassiveSpdMap(null);
       setShieldMap(shieldsOfUnits(battle));
       setStatusMap(null);
       setRevealedKinds(allRevealed(newStatuses));
@@ -424,6 +434,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setHpMap(prevHp);
     setShieldMap(prevShields);
     setSpdMap(prevSpd);
+    setPassiveSpdMap(prevBattleBefore ? passiveSpdOfUnits(prevBattleBefore) : null);
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
     events.forEach((ev, i) => {
@@ -499,6 +510,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-buff', seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度+${ev.value}`, heal: false, buff: true }]);
               setSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + ev.value } : p);
+              setPassiveSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + 1 } : p);
             }
           } else if (targetUid) {
             ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
@@ -534,6 +546,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
         setAnimating(false);
         setHpMap(null);
         setSpdMap(null);
+        setPassiveSpdMap(null);
         // 不清理 shieldMap，保留最后事件快照，防止新动画启动时 prevShields 与真实值的跳变导致盾图标闪烁
         setStatusMap(null);
         setRevealedKinds(allRevealed(newStatuses));
@@ -547,5 +560,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, shieldMap, spdMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
+  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
 }
