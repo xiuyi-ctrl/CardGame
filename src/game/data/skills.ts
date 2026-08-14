@@ -289,6 +289,19 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 2,
     effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
   },
+  claw_smash: {
+    id: 'claw_smash', name: '蟹钳重击', desc: '重击单个敌人，目标生命值高于80%时额外造成2点伤害',
+    target: 'single', kind: 'attack', damage: 7,
+  },
+  wave_aura: {
+    id: 'wave_aura', name: '波光环', desc: '使自身下回合连击段数+2',
+    target: 'self', kind: 'buff',
+    effects: [{ kind: 'comboBoost', value: 2, turns: 1 }],
+  },
+  water_cannon: {
+    id: 'water_cannon', name: '水炮射击', desc: '连续三次随机攻击敌人',
+    target: 'random', kind: 'attack', damage: 3, hits: 3,
+  },
 };
 
 export function getSkill(id: string): SkillDef {

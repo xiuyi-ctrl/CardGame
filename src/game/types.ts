@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd';
+  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -66,7 +66,8 @@ export type PassiveKind =
   | 'speedBonus' // 速度差增伤：速度每高于目标 1 点伤害 +1，上限 value
   | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
   | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
-  | 'lifeSpring'; // 生命之泉：每回合开始恢复 3 点生命；受到超过 value 点伤害时，伤害 -2
+  | 'lifeSpring' // 生命之泉：每回合开始恢复 3 点生命；受到超过 value 点伤害时，伤害 -2
+  | 'tideRhythm'; // 潮汐节律：每2回合开始时自身伤害+2（本回合）
 
 export interface PassiveDef {
   id: string;

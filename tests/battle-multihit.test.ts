@@ -93,8 +93,11 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
   });
 
   it('潮汐吸噬吸血对多段每段都触发（连击 2 段吸 2 次）', () => {
-    const a = makeUnit('boss_crab', true, 0, false); // 潮汐吸噬 吸血 2
+    // 用自创生物+drain被动模拟潮汐吸噬多段吸血
+    const a = makeUnit('lulu', true, 0, false);
+    a.passive = 'tide_drain';
     a.hp = 10;
+    a.skills = ['double_hit'];
     const b0 = createBattle([a], [{ speciesId: 'lulu' }], 3);
     const b1 = playerEndTurn(playerSkill(b0, a.uid, 'double_hit', b0.enemyUnits[0].uid));
     // 攻击日志快照在吸血前：第一段日志玩家仍 10；第二段日志已含第一段吸血（12）

@@ -199,10 +199,10 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   boss_crab: {
     id: 'boss_crab', name: '潮汐巨蟹', emoji: '🦀',
-    baseHp: 38, baseSpd: 3,
-    skills: ['double_hit', 'tail', 'roar', 'tidal_slam'],
-    desc: '多段连击，速度慢但坦度尚可。',
-    passive: 'tide_drain',
+    baseHp: 36, baseSpd: 3,
+    skills: ['double_hit', 'claw_smash', 'wave_aura', 'water_cannon', 'tidal_slam'],
+    desc: '多段连击手，每2回合爆发一次，配合波光环强化连击。',
+    passive: 'tide_rhythm',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_golem: {

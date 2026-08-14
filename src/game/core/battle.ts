@@ -309,6 +309,16 @@ function startRound(b: BattleState): BattleState {
       nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${healAmt} 点生命`, sideOf(u), u.uid);
     }
   }
+  // 潮汐节律：每2回合（偶数回合）开始时，为被动为 tideRhythm 的单位挂 atkUp +2
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const p = getUnitPassive(u);
+    if (p?.kind === 'tideRhythm' && nb.round % 2 === 0) {
+      const boosted = applyStatusTo(u, { kind: 'atkUp', value: p.value, turns: 1 }, nb.round);
+      nb = replaceUnit(nb, boosted);
+      nb = pushLog(nb, `${u.name} 的「${p.name}」触发！伤害 +${p.value}`, sideOf(u), u.uid);
+    }
+  }
   nb = {
     ...nb,
     playerAp: nb.playerUnits.filter((u) => u.hp > 0).length,
@@ -517,13 +527,21 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   const back = enemies.filter((u) => u.row === 'back');
   let nb = b;
   let targets: Unit[] = [];
+  // 波光环：攻击技能消耗 comboBoost 状态，增加连击段数
+  const comboBoost = actor.statuses.find((s) => s.kind === 'comboBoost');
+  const baseHits = skill.hits ?? 1;
+  const effectiveHits = (comboBoost && skill.kind === 'attack') ? baseHits + comboBoost.value : baseHits;
+  if (comboBoost && skill.kind === 'attack') {
+    const boosted = { ...actor, statuses: actor.statuses.filter((s) => s.kind !== 'comboBoost') };
+    nb = replaceUnit(nb, boosted);
+  }
   // 嘲讽统一约束：被嘲讽者的单体/随机技能强制以嘲讽来源为目标（全体/自身/队友不受限）
   if (skill.target !== 'self' && skill.target !== 'ally' && skill.target !== 'allyAll' && skill.target !== 'all') {
     const tauntSrc = actor.statuses.find((s) => s.kind === 'taunt');
     if (tauntSrc?.sourceUid) {
       const src = enemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
       if (src) {
-        targets = Array.from({ length: skill.hits ?? 1 }, () => src);
+        targets = Array.from({ length: effectiveHits }, () => src);
         return { targets, battle: nb };
       }
     }
@@ -552,12 +570,11 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       }
       break;
     case 'random': {
-      const hits = skill.hits ?? 1;
       if (enemies.length <= 1) {
         // 目标唯一时所有段命中同一目标（如叶针单体 2 段），避免随机多段打单体只结算 1 段
-        targets = enemies.length === 1 ? Array.from({ length: hits }, () => enemies[0]) : [];
+        targets = enemies.length === 1 ? Array.from({ length: effectiveHits }, () => enemies[0]) : [];
       } else {
-        const res = randomOf(nb, enemies, hits);
+        const res = randomOf(nb, enemies, effectiveHits);
         nb = res.battle;
         targets = res.picks;
       }
@@ -612,7 +629,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
         }
         // 连击：同一目标命中 hits 次（伤害按 hits 倍结算，perTarget 聚合）
         if (picked) {
-          targets = Array.from({ length: skill.hits ?? 1 }, () => picked);
+          targets = Array.from({ length: effectiveHits }, () => picked);
         }
       }
       break;
@@ -766,6 +783,12 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
         const tauntChance = hasThorns ? 0.6 : 0.35;
         if (frontEnemies.length >= 2 && hpRatio > 0.4 && rngVal < tauntChance) {
           candidates.push({ kind: 'buff', skill: bs, score: hasThorns ? 50 : 40 });
+        }
+      }
+      // 波光环：连击段数+2，血量>50%时优先使用
+      if (bs.effects?.some((e) => e.kind === 'comboBoost') && !actor.statuses.some((s) => s.kind === 'comboBoost')) {
+        if (hpRatio > 0.5 && rngVal < 0.55) {
+          candidates.push({ kind: 'buff', skill: bs, score: 45 });
         }
       }
     }
@@ -994,6 +1017,10 @@ function resolveAttack(
   }
   if (skill.id === 'toxic_bite' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
     perHitDmg *= 2;
+  }
+  // 蟹钳重击：目标生命值高于80%时额外+2
+  if (skill.id === 'claw_smash' && target.hp > target.maxHp * 0.8) {
+    perHitDmg += 2;
   }
   if (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
     perHitDmg += ap.value;

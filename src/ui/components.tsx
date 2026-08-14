@@ -31,6 +31,7 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   waterCurtain: '🌊',
   flameShield: '🔥',
   windSpd: '💨',
+  comboBoost: '🌊',
 };
 
 function effectText(e: StatusEffect): string {
@@ -68,6 +69,8 @@ function effectText(e: StatusEffect): string {
       return `烈焰护盾 灼烧${e.value}层${turns}`;
     case 'windSpd':
       return `速度 +${e.value}${turns}`;
+    case 'comboBoost':
+      return `连击 +${e.value}${turns}`;
   }
 }
 
