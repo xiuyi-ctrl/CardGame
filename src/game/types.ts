@@ -35,6 +35,8 @@ export interface SkillDef {
   effects?: StatusEffect[];
   /** 每场战斗可使用次数上限（回血/强化等强技能限定，缺省无限制） */
   uses?: number;
+  /** 使用后的冷却回合数（冷却期间不可再次使用，缺省无冷却） */
+  cooldown?: number;
   /** 先手：该技能在回合结算时必定最先执行（同为先手则按速度排序） */
   priority?: 'first';
 }
@@ -135,6 +137,8 @@ export interface Unit {
   passive?: string;
   /** 本场战斗中各技能剩余使用次数（skillId -> 剩余次数；有限次数技能用） */
   skillUses?: Record<string, number>;
+  /** 本场战斗中各技能冷却剩余回合数（skillId -> 剩余回合；冷却结束后归零） */
+  skillCooldowns?: Record<string, number>;
   /** 属性强化：对基准属性的永久加成（来自奇遇关「属性强化」） */
   bonusStats?: { hp?: number; spd?: number };
   /** 超进化带来的负面诅咒：hpDown=生命-5 / atkDown=伤害-1 / spdDown=速度-1 */

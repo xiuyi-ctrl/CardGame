@@ -455,9 +455,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!node) node = map.layers[row][0];
       // 调试专用强队 + 物资，保证能顺利体验各关卡机制
       const debugRoster = [
-        makeUnit('momo_queen', true, 0, false),
-        makeUnit('lulu_king', true, 1, false),
-        makeUnit('fifi_king', true, 2, false),
+        makeUnit('momo_god', true, 0, false),
+        makeUnit('lulu_god', true, 1, false),
+        makeUnit('fifi_god', true, 2, false),
+        makeUnit('momo', true, 0, false, 'back'),
+        makeUnit('lulu', true, 1, false, 'back'),
+        makeUnit('fifi', true, 2, false, 'back'),
       ];
       const base: GameState = {
         ...state,
@@ -494,8 +497,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       const map: RunMap = { layers: [[node]], encounter: {}, boss: {}, events: {}, specials: {} };
       const needsPets = TEST_BATTLE_TYPES.includes(nodeType);
-      // 非战斗类：默认携带 3 只初始宠物（御三家），供进化之光/属性强化等选择类内容使用
-      const starters = needsPets ? [] : ['momo', 'lulu', 'fifi'].map((id, i) => makeUnit(id, true, i as 0 | 1 | 2, false));
+      // 所有类型默认携带 3 只最高进化形态 + 3 只基础形态（御三家全系列）
+      const starters = [
+        makeUnit('momo_god', true, 0, false),
+        makeUnit('lulu_god', true, 1, false),
+        makeUnit('fifi_god', true, 2, false),
+        makeUnit('momo', true, 0, false, 'back'),
+        makeUnit('lulu', true, 1, false, 'back'),
+        makeUnit('fifi', true, 2, false, 'back'),
+      ];
       // 默认携带全部食物与道具各 2 个，供测试各关卡内容
       const testInventory: Record<string, number> = {};
       for (const id of Object.keys(FOODS)) testInventory[id] = 2;
@@ -519,7 +529,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         testPick: needsPets
           ? { side: 'player', nodeType, corruptDebuff: node.corruptDebuff, corruptReward: node.corruptReward }
           : undefined,
-        log: [`[自定义测试] ${labelOf(nodeType, 0)}${needsPets ? '：选择我方宠物' : '：默认携带 3 只初始宠物'}`, ...state.log].slice(0, 20),
+        log: [`[自定义测试] ${labelOf(nodeType, 0)}${needsPets ? '：选择我方宠物' : '：默认携带 3 只最高进化形态宠物'}`, ...state.log].slice(0, 20),
       };
       // 非战斗类：预生成事件/奇遇/钥匙，进入对应界面时展示
       if (nodeType === 'event') {

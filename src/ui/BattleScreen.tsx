@@ -7,6 +7,7 @@ import {
   REST_SKILL_ID,
   isTameable,
   skillUsesLeft,
+  skillCooldownLeft,
   tameChance,
   TAME_THRESHOLD,
 } from '../game/core/battle';
@@ -547,8 +548,10 @@ export function BattleScreen({ state, dispatch }: Props) {
               </span>
               {selectedSkills.map((s) => {
                 const left = skillUsesLeft(selected, s.id);
+                const cd = skillCooldownLeft(selected, s.id);
                 const limited = Number.isFinite(left);
                 const exhausted = limited && left <= 0;
+                const onCooldown = cd > 0;
                 const isCurrent = selectedOrder?.skillId === s.id;
                 const cannotOrder = selected.acted && !selectedOrder;
                 return (
@@ -556,16 +559,19 @@ export function BattleScreen({ state, dispatch }: Props) {
                     key={s.id}
                     className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
                     onClick={() => onSkillClick(s)}
-                    disabled={exhausted || cannotOrder || animating}
-                    title={`${s.desc}（${skillBrief(s)}）${limited ? `，本场剩余 ${Math.max(0, left)} 次` : ''}`}
+                    disabled={exhausted || onCooldown || cannotOrder || animating}
+                    title={`${s.desc}（${skillBrief(s)}）${limited ? `，本场剩余 ${Math.max(0, left)} 次` : ''}${onCooldown ? `，冷却中（${cd} 回合）` : ''}`}
                   >
+                    {onCooldown && (
+                      <span className="skill-cooldown-overlay">冷却 {cd} 回合</span>
+                    )}
                     <span className="skill-btn-main">
                       {s.name}
                       <span className="skill-num">{skillBrief(s)}</span>
                     </span>
                     <span className="skill-desc">
                       {s.desc}
-                      {limited && (
+                      {!onCooldown && limited && (
                         <span className="skill-uses">{exhausted ? '（已用完）' : `（剩 ${Math.max(0, left)} 次）`}</span>
                       )}
                     </span>

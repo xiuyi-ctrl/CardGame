@@ -533,8 +533,8 @@ describe('DEBUG_JUMP（测试关卡直达）', () => {
     const s = dispatch(createInitialState(), { type: 'DEBUG_JUMP', act: 2, row: 6, nodeType: 'all', seed: 42 });
     expect(s.act).toBe(2);
     expect(s.currentRow).toBe(6);
-    expect(s.roster.length).toBe(3);
-    expect(s.roster.map((u) => u.speciesId)).toEqual(['momo_queen', 'lulu_king', 'fifi_king']);
+    expect(s.roster.length).toBe(6);
+    expect(s.roster.map((u) => u.speciesId)).toEqual(['momo_god', 'lulu_god', 'fifi_god', 'momo', 'lulu', 'fifi']);
     expect(s.gold).toBe(500);
     expect(s.inventory.skip).toBe(3);
     expect(['battle', 'roster', 'event', 'shop', 'special', 'rest']).toContain(s.screen);

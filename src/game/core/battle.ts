@@ -102,6 +102,21 @@ function consumeSkillUse(b: BattleState, actor: Unit, skillId: string): BattleSt
   return replaceUnit(b, { ...current, skillUses: next });
 }
 
+/** 技能冷却剩余回合数（无冷却返回 0） */
+export function skillCooldownLeft(u: Unit, skillId: string): number {
+  return u.skillCooldowns?.[skillId] ?? 0;
+}
+
+/** 设置技能冷却（使用后调用） */
+function applySkillCooldown(b: BattleState, actor: Unit, skill: SkillDef): BattleState {
+  if (!skill.cooldown) return b;
+  const current = actorFromId(b, actor.uid);
+  if (!current) return b;
+  // startRound 会在下一回合开头立即递减，因此存储 cooldown+1 确保实际冷却回合数正确
+  const next = { ...current.skillCooldowns, [skill.id]: skill.cooldown + 1 };
+  return replaceUnit(b, { ...current, skillCooldowns: next });
+}
+
 /**
  * 在战斗状态上取一个随机数，并推进 RNG 计数。
  * 纯函数式：任何随机抽取都必须经由 useRng，保证可复现。
@@ -202,6 +217,30 @@ export function createBattle(
 function startRound(b: BattleState): BattleState {
   const prevRound = b.round;
   let nb = decrementBattleBuffs(b);
+  // 递减技能冷却
+  nb = {
+    ...nb,
+    playerUnits: nb.playerUnits.map((u) => {
+      if (!u.skillCooldowns) return u;
+      const next: Record<string, number> = {};
+      let changed = false;
+      for (const [k, v] of Object.entries(u.skillCooldowns)) {
+        if (v > 1) { next[k] = v - 1; changed = true; }
+        else { changed = true; }
+      }
+      return changed ? { ...u, skillCooldowns: Object.keys(next).length > 0 ? next : undefined } : u;
+    }),
+    enemyUnits: nb.enemyUnits.map((u) => {
+      if (!u.skillCooldowns) return u;
+      const next: Record<string, number> = {};
+      let changed = false;
+      for (const [k, v] of Object.entries(u.skillCooldowns)) {
+        if (v > 1) { next[k] = v - 1; changed = true; }
+        else { changed = true; }
+      }
+      return changed ? { ...u, skillCooldowns: Object.keys(next).length > 0 ? next : undefined } : u;
+    }),
+  };
   nb = {
     ...nb,
     round: nb.round + 1,
@@ -618,7 +657,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     return markActed(pushLog(nb, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
   return useRng(nb, (rngVal, b2) => {
-    const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0);
+    const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0 && skillCooldownLeft(actor, s.id) <= 0);
     if (skills.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
@@ -966,7 +1005,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       }
     }
   }
-  return markActed(consumeSkillUse(nb, actor, skill.id), actor.uid);
+  return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
 }
 
 /** 结束指令阶段并统一结算：敌我所有存活单位按速度依次行动，随后进入新回合 */
@@ -980,7 +1019,7 @@ export function playerEndTurn(b: BattleState): BattleState {
     if (eu.hp <= 0 || eu.acted) continue;
     const firstSkill = eu.skills
       .map(getSkill)
-      .find((s) => s.priority === 'first' && skillUsesLeft(eu, s.id) > 0);
+      .find((s) => s.priority === 'first' && skillUsesLeft(eu, s.id) > 0 && skillCooldownLeft(eu, s.id) <= 0);
     if (firstSkill) {
       nb = { ...nb, orders: { ...(nb.orders ?? {}), [eu.uid]: { skillId: firstSkill.id } } };
     }
@@ -1044,6 +1083,7 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   const skill = getSkill(skillId);
   if (!skill) return b;
   if (skillUsesLeft(actor, skillId) <= 0) return b;
+  if (skillCooldownLeft(actor, skillId) > 0) return b;
   // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝（不扣 AP），避免结算时静默回退成治疗自己
   if (skill.target === 'ally' && targetUid && !b.playerUnits.some((u) => u.uid === targetUid)) return b;
   // allyAll 不需要选择目标，跳过 targetUid 校验

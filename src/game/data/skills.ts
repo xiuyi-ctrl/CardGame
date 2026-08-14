@@ -115,8 +115,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   shield_counter: {
-    id: 'shield_counter', name: '盾反', desc: '先手：为自身附加3层护盾，受攻击时反击敌人并降低其伤害（仅当前回合有效）',
-    target: 'self', kind: 'buff', priority: 'first', uses: 5,
+    id: 'shield_counter', name: '盾反', desc: '先手：为自身附加3层护盾，受攻击时反击敌人并降低其伤害（仅当前回合有效，使用后冷却1回合）',
+    target: 'self', kind: 'buff', priority: 'first', uses: 5, cooldown: 1,
     effects: [{ kind: 'shield', value: 3, turns: 1 }, { kind: 'shieldCounter', value: 2, turns: 1 }],
   },
   shadow_strike: {

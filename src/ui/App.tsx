@@ -308,7 +308,19 @@ function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const tp = state.testPick;
   if (!tp) return null;
   const isPlayerSide = tp.side === 'player';
-  const [units, setUnits] = useState<Unit[]>([]);
+  const [units, setUnits] = useState<Unit[]>(() => {
+    if (isPlayerSide) {
+      return [
+        makeUnit('momo_god', true, 0, false),
+        makeUnit('lulu_god', true, 1, false),
+        makeUnit('fifi_god', true, 2, false),
+        makeUnit('momo', true, 0, false, 'back'),
+        makeUnit('lulu', true, 1, false, 'back'),
+        makeUnit('fifi', true, 2, false, 'back'),
+      ];
+    }
+    return [];
+  });
 
   const maxSlots = isPlayerSide ? FIELD_MAX : 6;
   const fieldCount = units.length;
@@ -618,7 +630,7 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           >
             直接进入
           </button>
-          <div className="debug-hint">调试模式：自动配备 3 只强宠、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
+          <div className="debug-hint">调试模式：自动配备 3 只最高进化形态宠物、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
           <button className="debug-sub-toggle" onClick={() => dispatch({ type: 'DEBUG_CUSTOM_TEST' })}>
             ⚙ 自定义测试（选关卡 → 选我方 → 选敌方 → 配置 → 开战）
           </button>

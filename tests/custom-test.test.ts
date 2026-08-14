@@ -2,7 +2,7 @@
 import { createInitialState, gameReducer, type GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
 import type { NodeType } from '../src/game/state/game';
-import { nextStage, SPECIAL_REWARDS } from '../src/game/state/game';
+import { SPECIAL_REWARDS } from '../src/game/state/game';
 import { FOODS } from '../src/game/data/foods';
 import { ITEMS } from '../src/game/data/items';
 import { createBattle, makeUnit } from '../src/game/core/battle';
@@ -182,11 +182,10 @@ describe('自定义测试：战斗结束直接回首页', () => {
 });
 
 describe('自定义测试：非战斗类节点（不需要宠物，跳过选宠直接进入）', () => {
-  it('默认携带 3 只初始宠物（御三家），且都能进化供进化之光选择', () => {
+  it('默认携带 3 只最高进化形态 + 3 只基础形态（共6只）', () => {
     const s = startTest('event');
     expect(s.screen).toBe('event');
-    expect(s.roster.map((u) => u.speciesId)).toEqual(['momo', 'lulu', 'fifi']);
-    expect(s.roster.every((u) => nextStage(u.speciesId) !== undefined)).toBe(true);
+    expect(s.roster.map((u) => u.speciesId)).toEqual(['momo_god', 'lulu_god', 'fifi_god', 'momo', 'lulu', 'fifi']);
     expect(s.field).toEqual(s.roster.map((u) => u.uid));
   });
 
@@ -202,16 +201,18 @@ describe('自定义测试：非战斗类节点（不需要宠物，跳过选宠�
     expect(s.map.specials.custom_test.rewards).toHaveLength(3);
   });
 
-  it('进化之光：默认御三家可直接进化到下一形态', () => {
+  it('进化之光：基础形态可进化，最高进化形态无法再进化', () => {
     let s = startTest('special');
-    // 覆盖奇遇奖励为「进化之光」，验证默认 3 只初始宠物可直接进化
+    // 覆盖奇遇奖励为「进化之光」
     s = {
       ...s,
       map: { ...s.map, specials: { ...s.map.specials, custom_test: { title: '奇遇', desc: 'x', rewards: [SPECIAL_REWARDS.find((r) => r.kind === 'evolve')!] } } },
     };
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'sr-evolve' });
+    // roster 中有基础形态（momo/lulu/fifi）可进化，进入选择界面
     expect(s.screen).toBe('roster');
     expect(s.specialPending).toEqual({ kind: 'evolve', super: false });
+    // 选择 momo 进化
     const momo = s.roster.find((u) => u.speciesId === 'momo')!;
     s = dispatch(s, { type: 'EVOLVE_ONE', uid: momo.uid });
     expect(s.roster.find((u) => u.uid === momo.uid)!.speciesId).toBe('momo_queen');

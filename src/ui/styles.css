@@ -1149,12 +1149,28 @@ button.primary {
 }
 
 .action-panel .skill-btn {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
   padding: 6px 10px;
   text-align: left;
+}
+
+.action-panel .skill-cooldown-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #ff6b6b;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .action-panel .skill-btn-main {
@@ -1643,8 +1659,14 @@ button.primary {
 .roster-card .skill-list {
   flex: 1;
   flex-direction: column;
+  flex-wrap: nowrap;
   gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
 }
+.roster-card .skill-list::-webkit-scrollbar { width: 0; background: transparent; }
 
 .roster-card .skill-line {
   display: flex;
@@ -1675,6 +1697,8 @@ button.primary {
 .roster-card .skill-desc {
   color: var(--text-dim);
   font-size: 10px;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .roster-actions {
@@ -1712,6 +1736,7 @@ button.primary {
 /* 卡片底部操作按钮（融合/释放） */
 .unit-card-footer {
   margin-top: 2px;
+  flex-shrink: 0;
 }
 
 .unit-card-actions {
