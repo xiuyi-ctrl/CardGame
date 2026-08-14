@@ -181,6 +181,22 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     passive: 'thorn_slow',
     tame: { difficulty: 0 }, rank: 4,
   },
+  boss_minion_shrimp: {
+    id: 'boss_minion_shrimp', name: '潮汐虾兵', emoji: '🦐',
+    baseHp: 16, baseSpd: 4,
+    skills: ['double_hit', 'aqua_shot'],
+    desc: '与巨蟹共享爆发节奏，爆发回合双压力。',
+    passive: 'tide_echo',
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_minion_hermit: {
+    id: 'boss_minion_hermit', name: '寄居蟹', emoji: '🐚',
+    baseHp: 14, baseSpd: 1,
+    skills: ['punch', 'shell_up'],
+    desc: '纯肉盾，缩壳拖慢节奏让巨蟹等到爆发回合。',
+    passive: 'shell_guard',
+    tame: { difficulty: 0 }, rank: 4,
+  },
   boss_dark: {
     id: 'boss_dark', name: '暗影之王', emoji: '😈',
     baseHp: 38, baseSpd: 5,

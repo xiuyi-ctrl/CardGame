@@ -437,7 +437,7 @@ export function BuffDetailPanel({ unit, stacksOverride }: { unit: Unit; stacksOv
       return stacks > 0 ? `×${stacks}` : null;
     }
     // 效果类被动不显示数值（lifeSpring/guard/regen/thorns/drain/damageCap 的 value 是内部阈值，非叠加层数）
-    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body', 'thornEntangle'];
+    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body', 'thornEntangle', 'tideRhythm', 'tideEcho'];
     if (noShowValue.includes(passive.kind)) return null;
     // 其他被动显示固定数值（如 hp+3, spd+1）
     return `${passive.value}`;

@@ -683,6 +683,7 @@ function middleNodeType(rng: () => number, progress: number): NodeType {
 /** Boss 小怪映射表：每个 boss 的小怪 speciesId 列表 */
 export const BOSS_MINIONS: Record<string, string[]> = {
   boss_vine: ['boss_minion_tree_guard', 'boss_minion_thorn'],
+  boss_crab: ['boss_minion_shrimp', 'boss_minion_hermit'],
 };
 
 function buildEncounter(

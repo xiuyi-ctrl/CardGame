@@ -319,6 +319,20 @@ function startRound(b: BattleState): BattleState {
       nb = pushLog(nb, `${u.name} 的「${p.name}」触发！伤害 +${p.value}`, sideOf(u), u.uid);
     }
   }
+  // 潮汐共鸣：巨蟹爆发时，同侧 tideEcho 单位同步获得 atkUp +2
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const p = getUnitPassive(u);
+    if (p?.kind === 'tideEcho' && nb.round % 2 === 0) {
+      const allies = u.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const crabAlive = allies.some((a) => a.speciesId === 'boss_crab' && a.hp > 0);
+      if (crabAlive) {
+        const boosted = applyStatusTo(u, { kind: 'atkUp', value: p.value, turns: 1 }, nb.round);
+        nb = replaceUnit(nb, boosted);
+        nb = pushLog(nb, `${u.name} 的「${p.name}」触发！伤害 +${p.value}`, sideOf(u), u.uid);
+      }
+    }
+  }
   nb = {
     ...nb,
     playerAp: nb.playerUnits.filter((u) => u.hp > 0).length,
@@ -1252,6 +1266,15 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       }
       nb = replaceUnit(nb, buffed);
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
+    }
+    // 缩壳：施法者自身眩晕1回合
+    if (skill.id === 'shell_up') {
+      const self = actorFromId(nb, actor.uid);
+      if (self && self.hp > 0) {
+        const stunned = applyStatusTo(self, { kind: 'stun', value: 1, turns: 1 }, nb.round);
+        nb = replaceUnit(nb, stunned);
+        nb = pushLog(nb, `${self.name} 缩入壳中，下回合无法行动`, sideOf(self), self.uid);
+      }
     }
   } else {
     const perTarget = new Map<string, number>();

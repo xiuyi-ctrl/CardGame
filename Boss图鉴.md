@@ -2,7 +2,7 @@
 
 基于修改后的 9 个首领，为每个首领搭配 2 种专属小怪。
 
-> **实施状态**：第 1 幕古树之主 ✅ 已实现；其余首领待实现。
+> **实施状态**：第 1 幕古树之主 ✅ 已实现；第 1 幕潮汐巨蟹 ✅ 已实现；其余首领待实现。
 
 ---
 
@@ -102,14 +102,16 @@
 
 ## 新增内容清单
 
-### 新增被动（2 种）
+### 新增被动（4 种）
 
 | id | 名称 | 描述 | kind | value | 用于 |
 |----|------|------|------|-------|------|
 | `symbiotic_bark` | 共生树皮 | 每回合恢复 2HP；若古树之主在场，恢复量翻倍 | `regen` | 2 | 树精卫士 |
-| `thorn_slow` | 荆棘缠绕 | 攻击时 40% 概率使目标速度 -1（2 回合） | `thorns` | 1 | 荆棘卫士 |
+| `thorn_slow` | 荆棘缠绕 | 攻击时 40% 概率使目标伤害 -1（2 回合）；古树之主在场 60% | `thornEntangle` | 1 | 荆棘卫士 |
+| `tide_echo` | 潮汐共鸣 | 潮汐巨蟹爆发时本回合自身伤害 +2 | `tideEcho` | 2 | 潮汐虾兵 |
+| `shell_guard` | 寄居壳 | 受到的所有伤害 -1 | `guard` | 1 | 寄居蟹 |
 
-### 新增技能（8 种）
+### 新增技能（9 种）
 
 | id | 名称 | 类型 | 目标 | 伤害 | 速度加成 | 效果 | 次数 | 用于 |
 |----|------|------|------|------|----------|------|------|------|
@@ -121,13 +123,16 @@
 | `water_cannon` | 水炮射击 | attack | random | 3×3 | — | — | 无限 | 潮汐巨蟹 |
 | `claw_smash` | 蟹钳重击 | attack | single | 7 | — | HP>80%额外+2 | 无限 | 潮汐巨蟹 |
 | `wave_aura` | 波光环 | buff | self | — | — | 下回合连击段数+2 | 无限 | 潮汐巨蟹 |
+| `shell_up` | 缩壳 | buff | allyAll | — | — | 5 护盾，自身下回合眩晕 | 无限 | 寄居蟹 |
 
-### 新增物种（2 种）
+### 新增物种（4 种）
 
 | id | 名称 | 表情 | HP | SPD | 技能 | 被动 | rank |
 |----|------|------|-----|-----|------|------|------|
 | `boss_minion_tree_guard` | 树精卫士 | 🌿 | 18 | 2 | 弱化/缠绕 | symbiotic_bark | 4 |
 | `boss_minion_thorn` | 荆棘卫士 | 🌱 | 12 | 3 | 毒刺藤/铁刺 | thorn_slow | 4 |
+| `boss_minion_shrimp` | 潮汐虾兵 | 🦐 | 16 | 4 | 连击/水弹 | tide_echo | 4 |
+| `boss_minion_hermit` | 寄居蟹 | 🐚 | 14 | 1 | 爪击/缩壳 | shell_guard | 4 |
 
 ### SkillDef 新增属性
 
@@ -151,6 +156,7 @@ export interface SkillDef {
 ```typescript
 export const BOSS_MINIONS: Record<string, string[]> = {
   boss_vine: ['boss_minion_tree_guard', 'boss_minion_thorn'],
+  boss_crab: ['boss_minion_shrimp', 'boss_minion_hermit'],
 };
 ```
 
@@ -198,7 +204,7 @@ if (atk.spdScaling && atk.spdScaling > 0) {
 
 - **技能**：连击（4×2）/ 水弹（3伤害）
 
-- **被动**：💠 **潮汐共鸣**（潮汐巨蟹触发「潮汐节律」爆发时，本回合自身伤害 +2，连击段数 +1）
+- **被动**：💠 **潮汐共鸣**（潮汐巨蟹触发「潮汐节律」爆发时，本回合自身伤害 +2）
 
 - **说明**：与巨蟹共享爆发节奏，爆发回合双压力。
 

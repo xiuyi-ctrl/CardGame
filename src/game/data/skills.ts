@@ -302,6 +302,11 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'water_cannon', name: '水炮射击', desc: '连续三次随机攻击敌人',
     target: 'random', kind: 'attack', damage: 3, hits: 3,
   },
+  shell_up: {
+    id: 'shell_up', name: '缩壳', desc: '自身和潮汐巨蟹获得5点护盾，自身下回合无法行动',
+    target: 'allyAll', kind: 'buff',
+    effects: [{ kind: 'shield', value: 5, turns: 99 }],
+  },
 };
 
 export function getSkill(id: string): SkillDef {

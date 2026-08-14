@@ -38,6 +38,8 @@ export const PASSIVES: Record<string, PassiveDef> = {
   // —— Boss 小怪 ——
   symbiotic_bark: { id: 'symbiotic_bark', name: '共生树皮', desc: '每回合开始恢复 2 点生命；若古树之主在场，恢复量翻倍为 4', kind: 'regen', value: 2 },
   thorn_slow: { id: 'thorn_slow', name: '荆棘缠绕', desc: '攻击时有 40% 概率使目标伤害 -1，持续 2 回合；若古树之主在场，概率为 60%', kind: 'thornEntangle', value: 1 },
+  tide_echo: { id: 'tide_echo', name: '潮汐共鸣', desc: '潮汐巨蟹爆发时本回合自身伤害 +2', kind: 'tideEcho', value: 2 },
+  shell_guard: { id: 'shell_guard', name: '寄居壳', desc: '受到的所有伤害 -1', kind: 'guard', value: 1 },
 
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },
