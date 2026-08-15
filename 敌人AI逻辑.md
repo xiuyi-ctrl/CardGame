@@ -147,7 +147,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
 - **攻击分**：目标优先级 × 技能伤害；状态配合额外加分
 - **换位分**：前排残血 + 健康后排存在时加分
 
-最后用 `rngVal` 做随机扰动（±10%），避免完全确定性。
+最后用 softmax 加权随机抽取：`weight = exp((score - maxScore) / 温度)`，高分 = 更高概率，低分仍可能被抽到。
 
 ---
 
@@ -212,7 +212,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
 | 条件                                         | AI 行为                                              |
 | :------------------------------------------- | :--------------------------------------------------- |
 | 自身血量 > 50% 且无 comboBoost 状态          | 55% 概率使用**波光环**（波光环仅对 hits>1 的连击技能生效） |
-| 已有 comboBoost 状态                         | 优先使用**连击/水炮射击**等多段技能（攻击评分 +25）   |
+| 已有 comboBoost 状态                                    | 连击/水炮射击等多段技能概率大幅提升（softmax 权重加成，温度=12） |
 | 使用 comboBoost 时目标为非连击技能（蟹钳重击） | 不消耗 comboBoost，buff 保留至下次连击技能使用       |
 
 ##### 治疗+坦克配合

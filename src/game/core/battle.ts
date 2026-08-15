@@ -12,6 +12,8 @@ export const TAME_FAIL_BONUS = 0.25;
 export const FIELD_COLS = 3;
 /** 休息指令的特殊 skillId（orders 里用它表示「本回合不行动」，可再次点击取消） */
 export const REST_SKILL_ID = 'rest';
+/** AI 选择行动时 softmax 温度：越小越趋向最高分，越大越随机（默认 12） */
+const SOFTMAX_TEMP = 12;
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
@@ -938,45 +940,50 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
       }
     }
 
-    // ─── 5. 选择最高分行动（加随机扰动） ───
+    // ─── 5. 选择行动（softmax 概率加权：高分=更高概率，低分仍可能被抽到） ───
     if (candidates.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
-    const scored = candidates.map((c) => ({
-      ...c,
-      finalScore: c.score * (0.7 + rngVal * 0.6),
-    }));
-    scored.sort((a, c) => c.finalScore - a.finalScore);
-    const chosen = scored[0];
-
-    if (chosen.kind === 'heal' && chosen.skill) {
-      const target = chosen.targetUid
-        ? allies.find((u) => u.uid === chosen.targetUid)
-        : allies.sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
-      return useSkillInner(b2, actor, chosen.skill, target?.uid);
-    }
-    if (chosen.kind === 'buff' && chosen.skill) {
-      return useSkillInner(b2, actor, chosen.skill, actor.uid);
-    }
-    if (chosen.kind === 'swap') {
-      const swapped = tryEnemySwap(b2, actor);
-      if (swapped) return swapped;
-      if (attackSkills.length > 0) {
-        const fallback = attackSkills[Math.floor(rngVal * attackSkills.length)];
-        return useSkillInner(b2, actor, fallback, undefined);
+    return useRng(b2, (v, b3) => {
+      const maxScore = Math.max(...candidates.map((c) => c.score));
+      const weights = candidates.map((c) => Math.exp((c.score - maxScore) / SOFTMAX_TEMP));
+      const total = weights.reduce((s, w) => s + w, 0);
+      let roll = v * total;
+      let chosen = candidates[candidates.length - 1];
+      for (let i = 0; i < weights.length; i++) {
+        roll -= weights[i];
+        if (roll <= 0) { chosen = candidates[i]; break; }
       }
-      return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
-    }
-    if (chosen.kind === 'attack' && chosen.skill) {
-      return useSkillInner(b2, actor, chosen.skill, chosen.targetUid);
-    }
-    // 兜底：选择可用技能
-    const fallbackPool = skills;
-    if (fallbackPool.length === 0) {
-      return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
-    }
-    const fb = fallbackPool[Math.floor(rngVal * fallbackPool.length)];
-    return useSkillInner(b2, actor, fb, undefined);
+
+      if (chosen.kind === 'heal' && chosen.skill) {
+        const target = chosen.targetUid
+          ? allies.find((u) => u.uid === chosen.targetUid)
+          : allies.sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
+        return useSkillInner(b3, actor, chosen.skill, target?.uid);
+      }
+      if (chosen.kind === 'buff' && chosen.skill) {
+        return useSkillInner(b3, actor, chosen.skill, actor.uid);
+      }
+      if (chosen.kind === 'swap') {
+        const swapped = tryEnemySwap(b3, actor);
+        if (swapped) return swapped;
+        if (attackSkills.length > 0) {
+          const fallback = attackSkills[Math.floor(v * attackSkills.length)];
+          return useSkillInner(b3, actor, fallback, undefined);
+        }
+        return markActed(pushLog(b3, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
+      }
+      if (chosen.kind === 'attack' && chosen.skill) {
+        return useSkillInner(b3, actor, chosen.skill, chosen.targetUid);
+      }
+      // 兜底：选择可用技能
+      const fallbackPool = skills;
+      if (fallbackPool.length === 0) {
+        return markActed(pushLog(b3, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
+      }
+      const fb = fallbackPool[Math.floor(v * fallbackPool.length)];
+      return useSkillInner(b3, actor, fb, undefined);
+    });
   });
 }
 
