@@ -146,8 +146,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   tidal_slam: {
-    id: 'tidal_slam', name: '潮涌重击', desc: '攻击全体敌人并恢复自身生命',
-    target: 'all', kind: 'attack', damage: 4, heal: 3,
+    id: 'tidal_slam', name: '潮涌重击', desc: '攻击全体敌人并恢复自身4点生命值',
+    target: 'all', kind: 'attack', damage: 4, heal: 4,
   },
   quake: {
     id: 'quake', name: '震地', desc: '攻击全体敌人并使其眩晕',
