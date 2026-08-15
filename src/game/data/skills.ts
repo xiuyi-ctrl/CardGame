@@ -89,6 +89,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'weaken', name: '弱化', desc: '随机降低目标攻击或速度（2层，持续2回合）',
     target: 'single', kind: 'attack', damage: 0,
     effects: [{ kind: 'atkDown', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   provoke: {
     id: 'provoke', name: '挑衅', desc: '攻击目标并使其2回合内只能攻击自己',
@@ -221,6 +222,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'wind_feather', name: '风羽', desc: '提升自身 2 点速度（持续 2 回合）',
     kind: 'buff', target: 'self',
     effects: [{ kind: 'windSpd', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   whirlwind: {
     id: 'whirlwind', name: '旋风斩', desc: '攻击前排所有敌人',

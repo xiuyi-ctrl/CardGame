@@ -76,6 +76,7 @@ function effectText(e: StatusEffect): string {
 
 /** 技能完整描述：定位标注 + 基础描述 + 具体 buff 效果数值，如 "【前排攻击】攻击单个敌人（灼烧 2/回合，持续 2 回合）" */
 export function skillFullDesc(s: SkillDef): string {
+  if (s.hideEffects) return s.desc;
   const effects = (s.effects ?? []).map(effectText).join('，');
   const base = s.desc;
   return effects ? `${base}（${effects}）` : base;

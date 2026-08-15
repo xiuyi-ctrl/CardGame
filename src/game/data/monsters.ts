@@ -35,7 +35,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '血厚的基础宠，皮糙肉厚的盾卫。',
     passive: 'iron_guard',
     evolutions: [{ to: 'gora' }],
-    tame: { difficulty: 0.7 }, rank: 1,
+    tame: { difficulty: 0.75 }, rank: 1,
   },
   mimi: {
     id: 'mimi', name: '咪咪', emoji: '🐍',
@@ -44,7 +44,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '直接掌握高阶单点技能的影系输出。',
     passive: 'venom_fang',
     evolutions: [{ to: 'mimi_king' }],
-    tame: { difficulty: 0.7 }, rank: 1,
+    tame: { difficulty: 0.75 }, rank: 1,
   },
   pipi: {
     id: 'pipi', name: '刺刺', emoji: '🦔',
@@ -53,7 +53,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '靠中毒持续伤害磨血。',
     passive: 'spike',
     evolutions: [{ to: 'sisi' }],
-    tame: { difficulty: 0.7 }, rank: 1,
+    tame: { difficulty: 0.75 }, rank: 1,
   },
   momo_queen: {
     id: 'momo_queen', name: '迅牙', emoji: '🐹',

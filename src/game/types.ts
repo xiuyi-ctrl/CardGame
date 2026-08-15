@@ -41,6 +41,8 @@ export interface SkillDef {
   priority?: 'first';
   /** 速度加成：每点速度增加的伤害值（0或缺省=不加成） */
   spdScaling?: number;
+  /** 技能描述已自包含效果信息，skillFullDesc 不再自动追加 effects 文本 */
+  hideEffects?: boolean;
 }
 
 /** 被动技能效果类型 */

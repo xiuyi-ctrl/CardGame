@@ -2218,6 +2218,18 @@ button.primary {
   font-size: 13px;
 }
 
+.codex-link {
+  color: var(--gold);
+  background: rgba(232, 194, 106, 0.16);
+  padding: 1px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.codex-link:hover {
+  background: rgba(232, 194, 106, 0.28);
+}
+
 .codex-desc {
   margin-top: auto;
   color: var(--text-dim);

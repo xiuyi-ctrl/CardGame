@@ -736,7 +736,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
           <div className="codex-section">
             <div className="codex-sec-title">🎣 驯服</div>
             <div className="codex-line">
-              {tameable ? `驯服难度 ${Math.round(sp.tame.difficulty * 100)}%` : '首领 · 不可驯服'}
+              {tameable ? `驯服成功率 ${Math.round(sp.tame.difficulty * 100)}%` : '首领 · 不可驯服'}
             </div>
           </div>
 
@@ -745,7 +745,13 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
             <div className="codex-line">
               {next ? (
                 <>
-                  需 {fusionNeedCount(sp.id)} 只同物种 → {getMonster(next).emoji} {getMonster(next).name}
+                  需 {fusionNeedCount(sp.id)} 只同物种 →{' '}
+                  <span
+                    className="codex-link"
+                    onClick={() => setSelectedId(next)}
+                  >
+                    {getMonster(next).emoji} {getMonster(next).name}
+                  </span>
                 </>
               ) : (
                 '不可融合'
