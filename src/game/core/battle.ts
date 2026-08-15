@@ -1017,7 +1017,7 @@ function resolveAttack(
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[] } {
   let nb = b;
   const base = (skill.damage ?? 0) + getDamageBonus(actor);
-  let perHitDmg = base - getDamageGuard(target);
+  let perHitDmg = base - getDamageGuard(target, nb);
   // 速度加成伤害
   if (skill.spdScaling && skill.spdScaling > 0) {
     perHitDmg += getEffectiveSpd(actor) * skill.spdScaling;
@@ -1052,7 +1052,7 @@ function resolveAttack(
   }
   if (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) {
     perHitDmg += ap.value;
-    perHitDmg += Math.min(8, getDamageGuard(target));
+    perHitDmg += Math.min(8, getDamageGuard(target, nb));
   }
   if (ap?.kind === 'scorchPlus') {
     tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
@@ -1770,10 +1770,19 @@ export function getDamageBonus(u: Unit): number {
 }
 
 /** 获取单位的伤害减免（被动守护 + 水幕，整数） */
-export function getDamageGuard(u: Unit): number {
+export function getDamageGuard(u: Unit, b?: BattleState): number {
   let guard = 0;
   const p = getUnitPassive(u);
-  if (p?.kind === 'guard') guard += p.value;
+  if (p?.kind === 'guard') {
+    // 寄居壳：巨蟹在场时减伤提升至2
+    if (p.id === 'shell_guard' && b) {
+      const allies = u.isPlayer ? b.playerUnits : b.enemyUnits;
+      const crabAlive = allies.some((a) => a.speciesId === 'boss_crab' && a.hp > 0);
+      guard += crabAlive ? 2 : 1;
+    } else {
+      guard += p.value;
+    }
+  }
   // 水幕：减少伤害 value
   const wc = u.statuses.find((s) => s.kind === 'waterCurtain');
   if (wc) guard += wc.value;
