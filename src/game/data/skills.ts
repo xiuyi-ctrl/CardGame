@@ -86,7 +86,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'shield', value: 5, turns: 0 }],
   },
   weaken: {
-    id: 'weaken', name: '弱化', desc: '随机降低目标攻击或速度（2层，2回合）',
+    id: 'weaken', name: '弱化', desc: '随机降低目标攻击或速度（2层，持续2回合）',
     target: 'single', kind: 'attack', damage: 0,
     effects: [{ kind: 'atkDown', value: 2, turns: 2 }],
   },
