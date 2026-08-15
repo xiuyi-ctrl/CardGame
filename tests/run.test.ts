@@ -88,11 +88,13 @@ describe('成长与融合', () => {
 });
 
 describe('地图生成', () => {
-  it('层数在 8~10 之间，首层单战斗、末层 2~3 个首领（遵循寻路），且每幕含商店/事件', () => {
+  it('层数按幕递进（幕1 8~10、幕2 10~12、幕3 12~14），首层单战斗、末层 2~3 个首领（遵循寻路），且每幕含商店/事件', () => {
+    const LAYER_RANGES: Record<number, [number, number]> = { 1: [8, 10], 2: [10, 12], 3: [12, 14] };
     for (let act = 1; act <= 3; act++) {
       const map = generateMap(42, act);
-      expect(map.layers.length).toBeGreaterThanOrEqual(8);
-      expect(map.layers.length).toBeLessThanOrEqual(10);
+      const [lo, hi] = LAYER_RANGES[act];
+      expect(map.layers.length).toBeGreaterThanOrEqual(lo);
+      expect(map.layers.length).toBeLessThanOrEqual(hi);
       expect(map.layers[0].length).toBe(1);
       expect(map.layers[0][0].type).toBe('battle');
       const last = map.layers[map.layers.length - 1];
@@ -123,17 +125,17 @@ describe('地图生成', () => {
       // 全战斗行（不含首/尾）不超过 3
       const allBattleRows = map.layers.slice(1, -1).filter((row) => row.every((n) => n.type === 'battle'));
       expect(allBattleRows.length).toBeLessThanOrEqual(3);
-      // 不再生成独立休整节点；每幕 3~5 次事件、2~4 个商人（最后两层必有商人，故上限放宽到 5）
+      // 不再生成独立休整节点；事件/商人数量随层数缩放（事件 ≤6，商人 ≤5，最后两层必有商人）
       const types = map.layers.flat().map((n) => n.type);
       expect(types.includes('rest')).toBe(false);
       const shopCount = types.filter((t) => t === 'shop').length;
       expect(shopCount).toBeGreaterThanOrEqual(2);
-      expect(shopCount).toBeLessThanOrEqual(5);
+      expect(shopCount).toBeLessThanOrEqual(6);
       const tail = map.layers.slice(-3, -1);
       expect(tail.some((row) => row.some((n) => n.type === 'shop'))).toBe(true);
       const evCount = types.filter((t) => t === 'event').length;
       expect(evCount).toBeGreaterThanOrEqual(3);
-      expect(evCount).toBeLessThanOrEqual(5);
+      expect(evCount).toBeLessThanOrEqual(6);
       // 奇遇节点都有事件内容
       for (const n of map.layers.flat().filter((x) => x.type === 'event')) {
         expect(map.events[n.id]).toBeDefined();
@@ -764,28 +766,32 @@ describe('瞭望塔', () => {
     const after = dispatch(s, { type: 'NEXT_NODE' });
     expect(after.screen).toBe('map');
     expect(after.currentRow).toBe(row);
-    const nextParent = run!.map.layers[row + 1].find((n) => Math.abs(n.col - target!.col) <= 1) ?? run!.map.layers[row + 1][0];
+    const nextParent = run!.map.layers[row + 1].find((n) => Math.abs(n.col - target!.col) <= 1 && n.type !== 'keydoor') ?? run!.map.layers[row + 1].find((n) => n.type !== 'keydoor') ?? run!.map.layers[row + 1][0];
     const moved = dispatch(after, { type: 'MOVE', nodeId: nextParent.id });
     expect(moved.currentRow).toBe(row + 1);
   });
 
   it('瞭望塔在首领关前 3 行内出现概率显著更高（20%）', () => {
     let last3Count = 0;
+    let last3Rows = 0;
     let otherCount = 0;
+    let otherRows = 0;
     for (let seed = 1; seed <= 300; seed++) {
       for (let act = 1; act <= 3; act++) {
         const map = generateMap(seed, act);
         const last = map.layers.length - 1;
         for (let r = 1; r < last; r++) {
           const wt = map.layers[r].filter((n) => n.type === 'watchtower').length;
-          if (wt === 0) continue;
-          if (r >= last - 3) last3Count += wt;
-          else otherCount += wt;
+          if (r >= last - 3) { last3Rows++; last3Count += wt; }
+          else { otherRows++; otherCount += wt; }
         }
       }
     }
     expect(last3Count).toBeGreaterThanOrEqual(60);
-    expect(last3Count).toBeGreaterThan(otherCount);
+    // 最后3行的瞭望塔密度应显著高于其他行（20% vs ≈0%，因只在最后3行生成）
+    const last3Rate = last3Count / last3Rows;
+    const otherRate = otherCount / otherRows;
+    expect(last3Rate).toBeGreaterThan(otherRate + 0.05);
   });
 
   it('末层多个首领：击败任意一个即可通关本幕', () => {

@@ -1693,7 +1693,7 @@ const BUFF_MAP: Record<string, BuffKey> = {
   hp_down: 'hpDown',
 };
 
-const BUFF_DURATION = 3; // 持续 3 回合
+const BUFF_DURATION = 2; // 持续 2 回合
 
 /** 使用战斗药水：给指定单位加buff/debuff。不消耗行动点、不占用宠物行动（本回合宠物仍可出手） */
 export function useBattleItem(b: BattleState, itemId: string, targetUid: string): BattleState {
@@ -1767,11 +1767,11 @@ export function useBattleItem(b: BattleState, itemId: string, targetUid: string)
     unitBuffs[key] = BUFF_DURATION;
 
     const effectDesc: Record<string, string> = {
-      atkUp: '伤害 +1',
-      spdUp: '速度 +1',
+      atkUp: '伤害 +2',
+      spdUp: '速度 +2',
       hpUp: '回复 50% 生命',
-      atkDown: '伤害 -1',
-      spdDown: '速度 -1',
+      atkDown: '伤害 -2',
+      spdDown: '速度 -2',
       hpDown: '当前生命 -30%',
     };
 
@@ -1832,8 +1832,8 @@ export function getDamageBonus(u: Unit): number {
     else if (s.kind === 'rageThorn') bonus += s.value;
   }
   if (u.battleBuffs) {
-    if (u.battleBuffs.atkUp) bonus += 1;
-    if (u.battleBuffs.atkDown) bonus -= 1;
+    if (u.battleBuffs.atkUp) bonus += 2;
+    if (u.battleBuffs.atkDown) bonus -= 2;
   }
   const p = getUnitPassive(u);
   if (p?.kind === 'power') bonus += p.value;
@@ -1864,9 +1864,9 @@ export function getDamageGuard(u: Unit, b?: BattleState): number {
 /** 获取单位的有效速度（含临时buff，整数） */
 export function getEffectiveSpd(u: Unit): number {
   let spd = u.spd;
-  if (u.battleBuffs?.spdUp) spd += 1;
+  if (u.battleBuffs?.spdUp) spd += 2;
   if (u.battleBuffs?.skillSpd) spd += u.battleBuffs.skillSpd;
-  if (u.battleBuffs?.spdDown) spd -= 1;
+  if (u.battleBuffs?.spdDown) spd -= 2;
   // 状态效果减速（弱化技能）
   const spdDownStatus = u.statuses.find((s) => s.kind === 'spdDown');
   if (spdDownStatus) spd -= spdDownStatus.value;

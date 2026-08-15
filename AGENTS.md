@@ -59,9 +59,9 @@
 - **专属被动**：`MonsterSpecies.passive` + `Unit.passive`，所有生物（含 Boss/造物）各有 1 个，表在 `data/passives.ts`（`PASSIVES`/`getPassive`）。类型 `PassiveKind`：`hp`（最大生命+）`spd`（入场速度+）`regen`（回合开始回血）`thorns`（受击反伤）`drain`（造成伤害吸血）`power`（技能伤害+）`guard`（受击减伤，`getDamageGuard`）`venom`/`scorch`（攻击命中附中毒/灼烧）`frenzy`（血量<50% 伤害+）`venomPower`（对中毒目标伤害+）`damageCap`（每回合伤害上限）`poisonBreak`（攻击中毒目标无视护盾+真伤）`speedBonus`（速度差转伤害）`spdOnAttack`（攻击后速度+）`bigHitGuard`（大额伤害减免）`scorchPlus`（灼烧层数转伤害加成）。**guard 减伤、侵蚀「伤害加深」、thorns 反伤、drain 吸血对多段攻击均按段生效**（每段最低 1）。被动入口：`makeUnit` 应用 hp/spd 加成、`startRound` 处理 regen、攻击结算处理 guard/venom/scorch/thorns/drain、`getDamageBonus` 含 power/frenzy/venomPower/speedBonus/scorchPlus。UI 卡片显示 `PassiveBadge`（components.tsx）。
 - **超进化诅咒 UI**：`Unit.curse`（`hpDown`/`atkDown`/`spdDown`）在战斗卡片上通过 `CurseBadge` 显示（红色标签，图标+中文名），与 `PassiveBadge`/`BattleBuffIcons` 并列。
 - 属性强化固定值：生命 +3 / 速度 +1；诅咒：血脆=生命-5、虚弱=伤害-1、迟缓=速度-1；侵蚀节点：速度-1 / 受伤+1。
-- 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。敌方治疗按各技能自身 `uses` 次数限制（用尽后不再选择该技能）。
+- 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 60%。敌方治疗按各技能自身 `uses` 次数限制（用尽后不再选择该技能）。
 - 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 5；队伍已满时驯服/孵化/招募的新宠物进「处理队伍」界面（替换/融合/放生，融合时待处理宠物也可作为同物种材料）。
-- 地图生成：每幕 8~10 层，出发后第 1 行强制全战斗；事件 3~5、商人 2~4（**最后两层必有 1 个商人**，故可至 5）、奇遇 ≤1；全战斗行 ≤2。
+- 地图生成：每幕层数按幕递进（幕1 8~10、幕2 10~12、幕3 12~14），出发后第 1 行强制全战斗；事件/商人数量随层数缩放（事件≈0.42×层数，上限6；商人≈0.28×层数，上限5，**最后两层必有 1 个商人**）；奇遇 ≤1；全战斗行 ≤2。
 - 普通战斗敌人规模：`weightedPickEncounterSize` 按幕数权重抽取，4v4 **仅幕3 启用**（`ACT3_BASE_W = [10,40,45,5]`，后期修正 +15→约 17%）；幕1/2 无 4v4（表中第 4 项权重=0）。
 - 侦查符/跳关道具均为背包中使用：背包点击 → 返回地图进入选择模式 → 点击目标节点执行。侦查符可看任意一关情报；跳关道具仅对可达的战斗类节点（battle/elite/arena/gauntlet/corrupted）直接获得奖励，boss/guardian 不可跳。双生宝箱双开仅由双生符触发。
 - 背包界面：HUD 右侧「🎒 背包」可随时打开（查看宠物/道具，使用侦查符/跳关道具/净化药水）。

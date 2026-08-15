@@ -19,35 +19,33 @@ function makeBattleState() {
 }
 
 describe('战斗药水：增益', () => {
-  it('atk_up 给目标写入 atkUp=3 并提升固定伤害', () => {
+  it('atk_up 给目标写入 atkUp=2 并提升固定伤害', () => {
     const b = makeBattleState();
     const target = b.playerUnits[0];
     const rc0 = b.rngCount;
     const after = useBattleItem(b, 'atk_up', target.uid);
     expect(after.rngCount).toBe(rc0 + 1); // 消耗随机数
-    expect(after.playerUnits[0].battleBuffs?.atkUp).toBe(3);
-    expect(getDamageBonus(after.playerUnits[0])).toBe(1);
-    expect(after.log[after.log.length - 1].text).toContain('伤害 +1');
+    expect(after.playerUnits[0].battleBuffs?.atkUp).toBe(2);
+    expect(getDamageBonus(after.playerUnits[0])).toBe(2);
+    expect(after.log[after.log.length - 1].text).toContain('伤害 +2');
   });
 
   it('spd_up 提升有效速度', () => {
     const b = makeBattleState();
     const target = b.playerUnits[0];
     const after = useBattleItem(b, 'spd_up', target.uid);
-    expect(after.playerUnits[0].battleBuffs?.spdUp).toBe(3);
-    expect(getEffectiveSpd(after.playerUnits[0])).toBe(target.spd + 1);
+    expect(after.playerUnits[0].battleBuffs?.spdUp).toBe(2);
+    expect(getEffectiveSpd(after.playerUnits[0])).toBe(target.spd + 2);
   });
 
-  it('buff 回合递减，3 回合后清除', () => {
+  it('buff 回合递减，2 回合后清除', () => {
     const b = makeBattleState();
     const after = useBattleItem(b, 'atk_up', b.playerUnits[0].uid);
     const r2 = decrementBattleBuffs(after);
-    expect(r2.playerUnits[0].battleBuffs?.atkUp).toBe(2);
+    expect(r2.playerUnits[0].battleBuffs?.atkUp).toBe(1);
     const r3 = decrementBattleBuffs(r2);
-    expect(r3.playerUnits[0].battleBuffs?.atkUp).toBe(1);
-    const r4 = decrementBattleBuffs(r3);
-    expect(r4.playerUnits[0].battleBuffs).toBeUndefined();
-    expect(getDamageBonus(r4.playerUnits[0])).toBe(0);
+    expect(r3.playerUnits[0].battleBuffs).toBeUndefined();
+    expect(getDamageBonus(r3.playerUnits[0])).toBe(0);
   });
 
   it('buff 只能用于我方单位，攻击敌方被拒', () => {
@@ -78,8 +76,8 @@ describe('战斗药水：增益', () => {
     const rc0 = exhausted.rngCount;
     const after = useBattleItem(exhausted, 'spd_up', target.uid);
     expect(after.rngCount).toBeGreaterThan(rc0); // 生效（未被 AP=0 拒绝）
-    // 药水生效为 3 回合；随后 AP=0 自动结束本回合进入新回合，回合初 buff 递减 1 → 2
-    expect(after.playerUnits[0].battleBuffs?.spdUp).toBe(2);
+    // 药水生效为 2 回合；随后 AP=0 自动结束本回合进入新回合，回合初 buff 递减 1 → 1
+    expect(after.playerUnits[0].battleBuffs?.spdUp).toBe(1);
   });
 });
 
@@ -140,7 +138,7 @@ describe('USE_BATTLE_ITEM reducer', () => {
     const uid = state.battle!.playerUnits[0].uid;
     const next = dispatch({ type: 'USE_BATTLE_ITEM', itemId: 'atk_up', targetUid: uid });
     expect(next.inventory.atk_up).toBe(1);
-    expect(next.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(3);
+    expect(next.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(2);
   });
 
   it('库存不足时不生效', () => {
@@ -180,7 +178,7 @@ describe('USE_BATTLE_ITEM reducer', () => {
       inventory: { atk_up: 5 },
     };
     const s = gameReducer(withInv, { type: 'USE_BATTLE_ITEM', itemId: 'atk_up', targetUid: battle.playerUnits[0].uid });
-    expect(s.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(3);
+    expect(s.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(2);
     // 给所有可行动玩家下达指令，再结束回合触发结算与新回合（回合初 buff 递减 1）
     let s2 = s;
     for (const u of s.battle!.playerUnits.filter((p) => p.hp > 0 && !p.acted && s.battle!.playerAp > 0)) {
@@ -192,6 +190,6 @@ describe('USE_BATTLE_ITEM reducer', () => {
       });
     }
     s2 = gameReducer(s2, { type: 'END_TURN' });
-    expect(s2.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(2);
+    expect(s2.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(1);
   });
 });

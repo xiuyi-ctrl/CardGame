@@ -38,18 +38,18 @@ export const ITEMS: Record<string, ItemDef> = {
   // === 战斗药水：提升己方单体 ===
   atk_up: {
     id: 'atk_up', name: '攻击药水', emoji: '⚔️',
-    desc: '战斗中使用：指定一只我方宠物，伤害 +1（持续 3 回合）',
-    kind: 'atk_up', price: 12,
+    desc: '战斗中使用：指定一只我方宠物，伤害 +2（持续 2 回合）',
+    kind: 'atk_up', price: 15,
     usableInBattle: true,
-    battleDesc: '指定一只我方宠物，伤害 +1（3 回合）',
+    battleDesc: '指定一只我方宠物，伤害 +2（2 回合）',
     needsTarget: true,
   },
   spd_up: {
     id: 'spd_up', name: '速度药水', emoji: '💨',
-    desc: '战斗中使用：指定一只我方宠物，速度 +1（持续 3 回合）',
-    kind: 'spd_up', price: 12,
+    desc: '战斗中使用：指定一只我方宠物，速度 +2（持续 2 回合）',
+    kind: 'spd_up', price: 15,
     usableInBattle: true,
-    battleDesc: '指定一只我方宠物，速度 +1（3 回合）',
+    battleDesc: '指定一只我方宠物，速度 +2（2 回合）',
     needsTarget: true,
   },
   hp_up: {
@@ -63,18 +63,18 @@ export const ITEMS: Record<string, ItemDef> = {
   // === 战斗药水：削弱敌方单体 ===
   atk_down: {
     id: 'atk_down', name: '虚弱药水', emoji: '🪄',
-    desc: '战斗中使用：指定一只敌方，伤害 -1（持续 3 回合）',
+    desc: '战斗中使用：指定一只敌方，伤害 -2（持续 2 回合）',
     kind: 'atk_down', price: 15,
     usableInBattle: true,
-    battleDesc: '指定一只敌方，伤害 -1（3 回合）',
+    battleDesc: '指定一只敌方，伤害 -2（2 回合）',
     needsTarget: true,
   },
   spd_down: {
     id: 'spd_down', name: '缓速药水', emoji: '🕸️',
-    desc: '战斗中使用：指定一只敌方，速度 -1（持续 3 回合）',
-    kind: 'spd_down', price: 12,
+    desc: '战斗中使用：指定一只敌方，速度 -2（持续 2 回合）',
+    kind: 'spd_down', price: 15,
     usableInBattle: true,
-    battleDesc: '指定一只敌方，速度 -1（3 回合）',
+    battleDesc: '指定一只敌方，速度 -2（2 回合）',
     needsTarget: true,
   },
   hp_down: {

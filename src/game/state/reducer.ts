@@ -236,8 +236,8 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       ...state.log,
     ].slice(0, 20),
   };
-  // 战后全体恢复 50%，缓解减员滚雪球
-  const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.5)) }));
+  // 战后全体恢复 60%，缓解减员滚雪球
+  const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.6)) }));
   let rewards = challenge
     ? generateChallengeRewards({ ...settled, roster: healed }, node!.type as 'arena' | 'gauntlet')
     : generateRewards({ ...settled, roster: healed });

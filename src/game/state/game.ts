@@ -1011,7 +1011,9 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
 
 export function generateMap(seed: number, act: number): RunMap {
   const rng = createRng(seed + act * 1013);
-  const layerCount = randInt(rng, 8, 10);
+  const LAYER_RANGES: Record<number, [number, number]> = { 1: [8, 10], 2: [10, 12], 3: [12, 14] };
+  const [lo, hi] = LAYER_RANGES[act] ?? LAYER_RANGES[1];
+  const layerCount = randInt(rng, lo, hi);
   const encounter: Record<string, { speciesId: string }[]> = {};
   const boss: Record<string, { speciesId: string }[]> = {};
   const events: Record<string, EventNode> = {};
@@ -1063,7 +1065,7 @@ export function generateMap(seed: number, act: number): RunMap {
     layers.push(nodes);
   }
 
-  // 事件每幕 3~5 个、商人每幕 2~4 个（目标数量用种子预掷，可复现）；另保证最后两层必有一个商人
+  // 事件/商人数量随层数缩放（目标数量用种子预掷，可复现）；另保证最后两层必有一个商人
   const setType = (node: MapNode, t: NodeType): void => {
     const row = layers.findIndex((r) => r.includes(node));
     node.type = t;
@@ -1085,13 +1087,14 @@ export function generateMap(seed: number, act: number): RunMap {
   earlySpNodes.forEach((n) => setType(n, 'battle'));
   const remainingSp = mid.filter((n) => n.type === 'special');
   if (remainingSp.length > 1) remainingSp.slice(1).forEach((n) => setType(n, 'battle'));
-  const evTarget = 3 + Math.floor(rng() * 3); // 3~5
-  const shopTarget = 2 + Math.floor(rng() * 3); // 2~4
+  // 事件/商人目标随层数缩放，保持恢复节点占比基本不变
+  const evTarget = Math.min(6, Math.round(layerCount * 0.42) + randInt(rng, 0, 1));
+  const shopTarget = Math.min(5, Math.round(layerCount * 0.28) + randInt(rng, 0, 1));
   // 超出上限的转回战斗
   const over = mid.filter((n) => n.type === 'event');
-  if (over.length > 5) over.slice(5).forEach((n) => setType(n, 'battle'));
+  if (over.length > 6) over.slice(6).forEach((n) => setType(n, 'battle'));
   const overShop = mid.filter((n) => n.type === 'shop');
-  if (overShop.length > 4) overShop.slice(4).forEach((n) => setType(n, 'battle'));
+  if (overShop.length > shopTarget) overShop.slice(shopTarget).forEach((n) => setType(n, 'battle'));
   // 不足的从候选战斗节点补足（优先补事件，再补商人；不动强制战斗行）
   const ensure = (t: NodeType, target: number): void => {
     while (countOf(t) < target) {
@@ -1115,7 +1118,7 @@ export function generateMap(seed: number, act: number): RunMap {
     layers.slice(1, -1).map((row, idx) => ({ row, idx: idx + 1 })).filter(({ row }) => row.every((n) => n.type === 'battle'));
   for (const { row } of allBattleRows().slice(2)) {
     const n = row[Math.floor(rng() * row.length)];
-    setType(n, countOf('event') < 5 ? 'event' : countOf('shop') < 4 ? 'shop' : 'elite');
+    setType(n, countOf('event') < evTarget ? 'event' : countOf('shop') < shopTarget ? 'shop' : 'elite');
   }
 
   // 最后两层（首领前两行）必存在一个商人：若都没有，把最靠后一行中一个普通战斗节点改写为商人

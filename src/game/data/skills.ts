@@ -257,10 +257,10 @@ export const SKILLS: Record<string, SkillDef> = {
     uses: 1,
   },
   flame_shield: {
-    id: 'flame_shield', name: '烈焰护盾', desc: '获得 5 层护盾；本回合受攻击则灼烧攻击者 10 层',
-    kind: 'buff', target: 'self',
+    id: 'flame_shield', name: '烈焰护盾',     desc: '先手：获得 5 层护盾；本回合受攻击则灼烧攻击者 10 层（使用后冷却1回合）',
+    kind: 'buff', target: 'self', priority: 'first',
     effects: [{ kind: 'shield', value: 5, turns: 99 }, { kind: 'flameShield', value: 10, turns: 1 }],
-    uses: 5,
+    uses: 5, cooldown: 1,
   },
   flame_slash: {
     id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人',
