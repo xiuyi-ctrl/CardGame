@@ -31,7 +31,7 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   waterCurtain: '🌊',
   flameShield: '🔥',
   windSpd: '💨',
-  comboBoost: '🌊',
+  comboBoost: '✖️',
 };
 
 function effectText(e: StatusEffect): string {
@@ -165,6 +165,14 @@ export function StatusIcons({ unit }: { unit: Unit }) {
           return (
             <span key={i} title={`怒棘（攻击+${s.value}，反伤+${s.value}，剩余 ${s.turns} 回合）`}>
               🔴×{s.value}
+            </span>
+          );
+        }
+        // 连击段数：专属乘法图标，显示 +N 段
+        if (s.kind === 'comboBoost') {
+          return (
+            <span key={i} title={`连击 +${s.value} 段（下次攻击生效，剩余 ${s.turns} 回合）`}>
+              ✖️+{s.value}
             </span>
           );
         }
