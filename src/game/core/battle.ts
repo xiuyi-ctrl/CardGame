@@ -525,20 +525,6 @@ function rngPick<T>(b: BattleState, arr: T[]): { pick?: T; battle: BattleState }
   return { pick, battle };
 }
 
-function randomOf<T>(b: BattleState, arr: T[], count: number): { picks: T[]; battle: BattleState } {
-  const out: T[] = [];
-  const pool = [...arr];
-  let nb = b;
-  for (let i = 0; i < count && pool.length > 0; i++) {
-    const res = rngPick(nb, pool);
-    nb = res.battle;
-    if (res.pick !== undefined) {
-      out.push(res.pick);
-      pool.splice(pool.indexOf(res.pick), 1);
-    }
-  }
-  return { picks: out, battle: nb };
-}
 
 /**
  * 目标解析（含前后排保护规则）：
@@ -598,13 +584,16 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       }
       break;
     case 'random': {
-      if (enemies.length <= 1) {
-        // 目标唯一时所有段命中同一目标（如叶针单体 2 段），避免随机多段打单体只结算 1 段
-        targets = enemies.length === 1 ? Array.from({ length: effectiveHits }, () => enemies[0]) : [];
+      if (enemies.length === 0) {
+        targets = [];
       } else {
-        const res = randomOf(nb, enemies, effectiveHits);
-        nb = res.battle;
-        targets = res.picks;
+        // 每段独立随机，允许重复命中同一目标
+        targets = [];
+        for (let i = 0; i < effectiveHits; i++) {
+          const res = rngPick(nb, enemies);
+          nb = res.battle;
+          if (res.pick) targets.push(res.pick);
+        }
       }
       break;
     }
