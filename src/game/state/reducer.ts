@@ -433,6 +433,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rowNodes = state.map.layers[targetRow];
       const node = rowNodes?.find((n) => n.id === action.nodeId);
       if (!node) return state;
+      // 同层锁定：该层已有已访问节点时，不可改选其他节点
+      const visitedInRow = (state.visitedNodeIds ?? []).filter((id) => rowNodes?.some((n) => n.id === id) ?? false);
+      if (visitedInRow.length > 0 && !visitedInRow.includes(action.nodeId)) return state;
       // 相邻校验：出发层可直达下一层任意节点；此后只能移动到当前节点列号 col±1（旧存档无 col 时放行）
       if (!isFirst) {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
@@ -656,24 +659,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!sp) return state;
       const reward = sp.rewards.find((r) => r.id === action.rewardId);
       if (!reward) return state;
-      let next: GameState = { ...state, screen: 'roster' };
+      let next: GameState = { ...state };
       switch (reward.kind) {
         case 'gold':
-          next = { ...next, gold: next.gold + (reward.amount ?? 0) };
+          next = { ...next, screen: 'map', postBattle: undefined, gold: next.gold + (reward.amount ?? 0) };
           break;
         case 'item':
           if (reward.itemId) {
-            next = { ...next, inventory: { ...next.inventory, [reward.itemId]: (next.inventory[reward.itemId] ?? 0) + 1 } };
+            next = { ...next, screen: 'map', postBattle: undefined, inventory: { ...next.inventory, [reward.itemId]: (next.inventory[reward.itemId] ?? 0) + 1 } };
           }
           break;
         case 'evolve':
         case 'superevolve':
           if (!next.roster.some((u) => nextStage(u.speciesId))) return state;
-          next = { ...next, specialPending: { kind: 'evolve', super: reward.kind === 'superevolve' } };
+          next = { ...next, screen: 'roster', specialPending: { kind: 'evolve', super: reward.kind === 'superevolve' } };
           break;
         case 'boost':
           if (next.roster.length === 0) return state;
-          next = { ...next, specialPending: { kind: 'boost', uid: '' } };
+          next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' } };
           break;
         case 'custom':
           if (next.roster.length >= ROSTER_MAX) return state;
@@ -752,7 +755,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const unit = makeCustomUnit(action.presetId, rng);
       return {
         ...state,
-        screen: 'roster',
+        screen: 'map',
+        postBattle: undefined,
         roster: [...state.roster, unit],
         log: [`造物：${unit.name} 加入了队伍`, ...state.log].slice(0, 20),
       };
@@ -825,7 +829,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const targetRow = state.currentNodeId === '' ? state.currentRow : state.currentRow + 1;
       const node = state.map.layers[targetRow]?.find((n) => n.id === action.nodeId);
       if (!node) return state;
-      // 与 MOVE 相同的相邻校验
+      // 同层锁定：该层已有已访问节点时，不可改选其他节点
+      const visitedInRow = (state.visitedNodeIds ?? []).filter((id) => state.map.layers[targetRow]?.some((n) => n.id === id) ?? false);
+      if (visitedInRow.length > 0 && !visitedInRow.includes(action.nodeId)) return state;
       if (state.currentNodeId !== '') {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
         if (!canStepTo(state.currentRow, cur?.col, node, state.map)) return state;

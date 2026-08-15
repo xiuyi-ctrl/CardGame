@@ -799,13 +799,24 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   const isDisabled = (n: MapNode) => state.map.disabled?.[n.id] === true;
   const isLocked = (n: MapNode) => (n.type === 'keydoor' && (n.guardianId ? (state.inventory[`key_${n.guardianId}`] ?? 0) > 0 : false) === false);
   const canSelect = (n: MapNode) =>
-    !isDisabled(n) && !isLocked(n) && canStepTo(state.currentRow, currentCol, n, state.map);
+    (lockedNodeId == null || n.id === lockedNodeId) && !isDisabled(n) && !isLocked(n) && canStepTo(state.currentRow, currentCol, n, state.map);
 
   // 路线预览：默认显示当前节点 → 下一步可达；悬停某节点时显示该节点的下一步可达
   const nextRow = state.map.layers[optionsRow] ?? EMPTY_ROW;
+  const visitedInOptions = useMemo(
+    () => nextRow.filter((n) => (state.visitedNodeIds ?? []).includes(n.id)),
+    [nextRow, state.visitedNodeIds],
+  );
+  const lockedNodeId = visitedInOptions.length > 0 ? visitedInOptions[0].id : null;
   const nearIds = useMemo(
-    () => new Set(nextRow.filter((n) => canStepTo(state.currentRow, currentCol, n, state.map)).map((n) => n.id)),
-    [nextRow, state.currentRow, currentCol],
+    () =>
+      new Set(
+        nextRow
+          .filter((n) => canStepTo(state.currentRow, currentCol, n, state.map))
+          .filter((n) => lockedNodeId == null || n.id === lockedNodeId)
+          .map((n) => n.id),
+      ),
+    [nextRow, state.currentRow, currentCol, lockedNodeId],
   );
   const [hoverId, setHoverId] = useState<string | null>(null);
   const hoverRow = hoverId ? state.map.layers.findIndex((r) => r.some((n) => n.id === hoverId)) : -1;

@@ -482,13 +482,13 @@ describe('奇遇关', () => {
     }
   });
 
-  it('SPECIAL_CHOICE gold 奖励金币并进入队伍界面', () => {
+  it('SPECIAL_CHOICE gold 奖励金币并返回地图', () => {
     const s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
       reward('g', 'gold', { amount: 60 }),
     ]);
     const before = s.gold;
     const next = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'g' });
-    expect(next.screen).toBe('roster');
+    expect(next.screen).toBe('map');
     expect(next.gold).toBe(before + 60);
   });
 
@@ -498,14 +498,17 @@ describe('奇遇关', () => {
     ]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'i' });
     expect(s.inventory.skip).toBe(1);
+    expect(s.screen).toBe('map');
 
     s = atSpecial(s, [reward('p', 'item', { itemId: 'purify' })]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'p' });
     expect(s.inventory.purify).toBe(1);
+    expect(s.screen).toBe('map');
 
     s = atSpecial(s, [reward('f', 'item', { itemId: 'golden_fruit' })]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'f' });
     expect(s.inventory.golden_fruit).toBe(1);
+    expect(s.screen).toBe('map');
   });
 
   it('进化之光：点选宠物后无视等级进化', () => {
@@ -572,7 +575,7 @@ describe('奇遇关', () => {
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'c' });
     expect(s.screen).toBe('custom');
     s = dispatch(s, { type: 'PICK_CUSTOM', presetId: 'custom_fury' });
-    expect(s.screen).toBe('roster');
+    expect(s.screen).toBe('map');
     expect(s.roster.length).toBe(len0 + 1);
     const created = s.roster[s.roster.length - 1];
     expect(created.speciesId).toBe('custom_fury');
@@ -1007,5 +1010,72 @@ describe('守卫与钥匙门', () => {
       const name = (FOODS[id] ?? ITEMS[id])?.name;
       expect(info.detail).toContain(name);
     }
+  });
+});
+
+describe('同层锁定：布阵返回地图后不可改选同层其他节点', () => {
+  it('布阵改选被拒：只能重选已进入的节点', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 6 });
+    const r0 = run.map.layers[0]; // row 0: 唯一节点
+    const r1 = run.map.layers[1]; // row 1: 强制全战斗，≥3 个节点
+    const a = r1[0];
+    const b = r1.find((n) => n.id !== a.id)!;
+    // 手动构造「已锁定 row0 节点」的状态
+    let s: GameState = {
+      ...run,
+      screen: 'map',
+      currentRow: 0,
+      currentNodeId: r0[0].id,
+      visitedNodeIds: [r0[0].id],
+    };
+    // MOVE 进入 row1 节点 a（battle → formation）
+    s = dispatch(s, { type: 'MOVE', nodeId: a.id });
+    expect(s.screen).toBe('formation');
+    expect(s.formation?.nodeId).toBe(a.id);
+    // 返回地图
+    s = dispatch(s, { type: 'BACK_TO_MAP' });
+    expect(s.screen).toBe('map');
+    expect(s.currentRow).toBe(0);
+    expect(s.currentNodeId).toBe(r0[0].id);
+    // 改选同层其他节点 b 被拒
+    const rejected = dispatch(s, { type: 'MOVE', nodeId: b.id });
+    expect(rejected.screen).toBe('map');
+    expect(rejected.currentNodeId).toBe(r0[0].id);
+    // 重选同一节点 a 允许
+    const re = dispatch(s, { type: 'MOVE', nodeId: a.id });
+    expect(re.screen).toBe('formation');
+    expect(re.formation?.nodeId).toBe(a.id);
+  });
+});
+
+describe('同层锁定：跳关道具不可跳同层其他节点', () => {
+  it('USE_SKIP 改选被拒：只能跳已进入的节点', () => {
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 6 });
+    const r0 = run.map.layers[0];
+    const r1 = run.map.layers[1];
+    const a = r1[0];
+    const b = r1.find((n) => n.id !== a.id)!;
+    let s: GameState = {
+      ...run,
+      screen: 'map',
+      currentRow: 0,
+      currentNodeId: r0[0].id,
+      visitedNodeIds: [r0[0].id],
+      inventory: { ...run.inventory, skip: 2 },
+    };
+    // USE_SKIP 跳 b 被拒（row1 无已访问节点，但 row0 已锁定... 等等）
+    // 实际上 row1 无已访问节点，所以 USE_SKIP 不受锁定限制
+    // 需要先 MOVE 进 a 再返回，让 row1 有已访问节点
+    s = dispatch(s, { type: 'MOVE', nodeId: a.id });
+    s = dispatch(s, { type: 'BACK_TO_MAP' });
+    // 现在 row1 有已访问节点 a
+    const rejected = dispatch(s, { type: 'USE_SKIP', nodeId: b.id });
+    expect(rejected.screen).toBe('map');
+    expect(rejected.currentNodeId).toBe(r0[0].id);
+    expect(rejected.inventory.skip).toBe(2); // 未消耗
+    // USE_SKIP 跳 a 允许
+    const ok = dispatch(s, { type: 'USE_SKIP', nodeId: a.id });
+    expect(ok.screen).toBe('reward');
+    expect(ok.inventory.skip).toBe(1);
   });
 });
