@@ -142,6 +142,7 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   waterCurtain: { icon: '🌊', label: '水幕' },
   flameShield: { icon: '🟠', label: '烈焰护盾' },
   windSpd: { icon: '💨', label: '风羽' },
+  comboBoost: { icon: '✖️', label: '连击段数' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -165,14 +166,6 @@ export function StatusIcons({ unit }: { unit: Unit }) {
           return (
             <span key={i} title={`怒棘（攻击+${s.value}，反伤+${s.value}，剩余 ${s.turns} 回合）`}>
               🔴×{s.value}
-            </span>
-          );
-        }
-        // 连击段数：专属乘法图标，显示 +N 段
-        if (s.kind === 'comboBoost') {
-          return (
-            <span key={i} title={`连击 +${s.value} 段（下次攻击生效，剩余 ${s.turns} 回合）`}>
-              ✖️+{s.value}
             </span>
           );
         }
@@ -423,6 +416,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   windSpd: () => '速度 +2',
   waterCurtain: (v) => `下回合受到伤害 -${v}`,
   flameShield: (v) => `受攻击时灼烧攻击者 ${v} 层`,
+  comboBoost: (v) => `连击段数 +${v}`,
 };
 
 export function BuffDetailPanel({ unit, stacksOverride }: { unit: Unit; stacksOverride?: number }) {
@@ -482,7 +476,7 @@ export function BuffDetailPanel({ unit, stacksOverride }: { unit: Unit; stacksOv
         <div className="buff-section">
           <div className="buff-section-label">状态</div>
           {statuses.map((s, i) => {
-            const meta = STATUS_ICON[s.kind];
+        const meta = STATUS_ICON[s.kind];
             if (!meta) return null;
             const descFn = STATUS_DESC[s.kind];
             const desc = descFn ? descFn(s.value) : '';

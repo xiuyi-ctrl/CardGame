@@ -400,8 +400,8 @@ function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
     if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
-    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
-    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd') && s.appliedRound !== undefined && s.appliedRound === round) continue;
+    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）、波光环（comboBoost）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
+    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd' || s.kind === 'comboBoost') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
@@ -541,11 +541,12 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   const back = enemies.filter((u) => u.row === 'back');
   let nb = b;
   let targets: Unit[] = [];
-  // 波光环：攻击技能消耗 comboBoost 状态，增加连击段数
+  // 波光环：仅连击类攻击技能（hits>1）消耗 comboBoost 状态并增加连击段数
   const comboBoost = actor.statuses.find((s) => s.kind === 'comboBoost');
   const baseHits = skill.hits ?? 1;
-  const effectiveHits = (comboBoost && skill.kind === 'attack') ? baseHits + comboBoost.value : baseHits;
-  if (comboBoost && skill.kind === 'attack') {
+  const isComboAttack = skill.kind === 'attack' && baseHits > 1;
+  const effectiveHits = comboBoost && isComboAttack ? baseHits + comboBoost.value : baseHits;
+  if (comboBoost && isComboAttack) {
     const boosted = { ...actor, statuses: actor.statuses.filter((s) => s.kind !== 'comboBoost') };
     nb = replaceUnit(nb, boosted);
   }
@@ -844,12 +845,16 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     const actorPassive = getUnitPassive(actor);
     const hasVenomPower = actorPassive?.kind === 'venomPower';
     const hasScorchPlus = actorPassive?.kind === 'scorchPlus';
+    // 波光环：拥有 comboBoost 时大幅倾向连击技能
+    const hasComboBoost = actor.statuses.some((s) => s.kind === 'comboBoost');
     // 幕次 + 特殊模式
     const currentAct = b2.act ?? 1;
     const nType = b2.nodeType ?? 'battle';
 
     for (const atk of attackSkills) {
       const isLimitedHighDmg = atk.uses !== undefined && (atk.damage ?? 0) >= 6;
+      // 波光环：拥有 comboBoost 时大幅倾向连击技能（hits>1）
+      const comboBoostBonus = hasComboBoost && (atk.hits ?? 1) > 1 ? 25 : 0;
       // 限次高伤技能额外加分条件
       let limitedBonus = 0;
       if (isLimitedHighDmg) {
@@ -929,7 +934,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
       scoredTargets.sort((a, c) => c.score - a.score);
       const best = scoredTargets[0];
       if (best) {
-        candidates.push({ kind: 'attack', skill: atk, targetUid: best.target.uid, score: best.score + limitedBonus + 5 });
+        candidates.push({ kind: 'attack', skill: atk, targetUid: best.target.uid, score: best.score + limitedBonus + comboBoostBonus + 5 });
       }
     }
 
