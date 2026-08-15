@@ -304,7 +304,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   shell_up: {
     id: 'shell_up', name: '缩壳', desc: '自身和潮汐巨蟹获得5点护盾，自身下回合无法行动',
-    target: 'allyAll', kind: 'buff',
+    target: 'self', kind: 'buff',
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
   },
 };

@@ -1281,6 +1281,18 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       nb = replaceUnit(nb, buffed);
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
     }
+    // 缩壳：额外给同侧潮汐巨蟹5点护盾
+    if (skill.id === 'shell_up') {
+      const allies = actor.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const crab = allies.find((a) => a.speciesId === 'boss_crab' && a.hp > 0 && a.uid !== actor.uid);
+      if (crab) {
+        const shieldVal = (skill.effects ?? []).find((e) => e.kind === 'shield')?.value ?? 5;
+        let shielded = { ...crab, shield: Math.min(99, crab.shield + shieldVal) };
+        shielded = applyStatusTo(shielded, { kind: 'shield', value: shieldVal, turns: 99 }, nb.round);
+        nb = replaceUnit(nb, shielded);
+        nb = pushLog(nb, `${actor.name} 的缩壳为 ${crab.name} 提供了 ${shieldVal} 点护盾`, sideOf(actor), actor.uid, crab.uid);
+      }
+    }
     // 缩壳：施法者自身眩晕1回合
     if (skill.id === 'shell_up') {
       const self = actorFromId(nb, actor.uid);

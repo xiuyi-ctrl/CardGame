@@ -67,7 +67,7 @@ export type PassiveKind =
   | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
   | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
   | 'lifeSpring' // 生命之泉：每回合开始恢复 3 点生命；受到超过 value 点伤害时，伤害 -2
-  | 'tideRhythm' // 潮汐节律：每3回合触发一次，本回合伤害+2（爆发1回合、休2回合）
+  | 'tideRhythm' // 潮汐节律：每3回合触发一次，本回合伤害+2
   | 'tideEcho'; // 潮汐共鸣：潮汐巨蟹爆发时本回合自身伤害+2
 
 export interface PassiveDef {
