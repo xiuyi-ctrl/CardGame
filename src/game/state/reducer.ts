@@ -640,8 +640,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       let next: GameState = { ...state, screen: 'map', pendingEventHatch: undefined, postBattle: undefined };
       const ev = state.map.events[state.currentNodeId];
       const choice = ev?.choices.find((x) => x.id === choiceId);
-      if (choice && choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
-        next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
+      if (choice && choice.kind === 'recruit' && choice.monsterId) {
+        if (next.roster.length < ROSTER_MAX) {
+          next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
+        } else {
+          const hatched = makeUnit(choice.monsterId, true, 0, false);
+          next = {
+            ...next,
+            screen: 'tame-overflow',
+            tameOverflow: [...(state.tameOverflow ?? []), hatched],
+            tameOverflowReturn: 'map',
+          };
+        }
       }
       return { ...next, log: [choice?.label ?? '孵化', ...next.log].slice(0, 20) };
     }
@@ -1016,6 +1026,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (next.roster.length < ROSTER_MAX) {
           const u = makeUnit(reward.monsterId, true, 0, false);
           next = { ...next, roster: [...next.roster, u], toast: { msg: `招募了 ${u.name}！`, kind: 'success' } };
+        } else {
+          const recruited = makeUnit(reward.monsterId, true, 0, false);
+          next = {
+            ...next,
+            screen: 'tame-overflow',
+            tameOverflow: [...(state.tameOverflow ?? []), recruited],
+            tameOverflowReturn: 'roster',
+          };
         }
       } else if (reward.kind === 'gold') {
         next = { ...next, gold: next.gold + (reward.amount ?? 0) };
@@ -1090,7 +1108,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         tameOverflow: overflow,
         log: [`释放 ${discard.name}（+${goldGain}💰），刚驯服的 ${tame.name} 加入队伍`, ...state.log].slice(0, 20),
       };
-      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : next;
+      return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : next;
     }
 
     case 'TAME_OVERFLOW_FUSE': {
@@ -1119,7 +1137,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         tameOverflow: overflow,
         log: [`融合！${materialNames} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
       };
-      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : next;
+      return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : next;
     }
 
     case 'TAME_OVERFLOW_DISCARD': {
@@ -1131,7 +1149,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         tameOverflow: overflow,
         log: [`放生了刚驯服的 ${tame.name}`, ...state.log].slice(0, 20),
       };
-      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : next;
+      return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : next;
     }
 
     case 'FUSE_IN_OVERFLOW': {
@@ -1156,7 +1174,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         field: state.field.filter((uid) => roster.some((u) => u.uid === uid)),
         log: [`融合！${materials.map((m) => m.name).join('+')} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
       };
-      return overflow.length === 0 ? { ...next, screen: 'reward', tameOverflow: undefined } : { ...next, tameOverflow: overflow };
+      return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : { ...next, tameOverflow: overflow };
     }
 
     case 'SHOP_BUY': {

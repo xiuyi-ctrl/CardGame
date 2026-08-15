@@ -1076,6 +1076,165 @@ describe('同层锁定：跳关道具不可跳同层其他节点', () => {
     // USE_SKIP 跳 a 允许
     const ok = dispatch(s, { type: 'USE_SKIP', nodeId: a.id });
     expect(ok.screen).toBe('reward');
-    expect(ok.inventory.skip).toBe(1);
+     expect(ok.inventory.skip).toBe(1);
+  });
+});
+
+describe('孵蛋与招募满员处理', () => {
+  const eggEvent = {
+    title: '神秘蛋',
+    desc: '一颗布满奇异纹路的蛋',
+    choices: [
+      { id: 'hatch', label: '孵化它', desc: '一只神秘生物破壳而出', kind: 'recruit' as const, monsterId: 'fifi' },
+      { id: 'gold', label: '敲开蛋壳', desc: '15金币', kind: 'gold' as const, amount: 15 },
+    ],
+  };
+  const eggEventLulu = {
+    title: '神秘蛋',
+    desc: '一颗布满奇异纹路的蛋',
+    choices: [
+      { id: 'hatch', label: '孵化它', desc: '一只神秘生物破壳而出', kind: 'recruit' as const, monsterId: 'lulu' },
+      { id: 'gold', label: '敲开蛋壳', desc: '15金币', kind: 'gold' as const, amount: 15 },
+    ],
+  };
+
+  function makeFullRoster(eventNode = eggEvent): GameState {
+    const s = { ...createInitialState() };
+    s.roster = Array.from({ length: ROSTER_MAX }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
+    const eventId = 'evt_egg_test';
+    s.map = { ...s.map, events: { ...s.map.events, [eventId]: eventNode } };
+    s.currentNodeId = eventId;
+    s.screen = 'event';
+    return s;
+  }
+
+  it('满员蛋事件：收下→处理队伍界面→放生→回地图', () => {
+    const s = makeFullRoster();
+    const preview = dispatch(s, { type: 'EVENT_HATCH_PREVIEW', choiceId: 'hatch', monsterId: 'fifi' });
+    expect(preview.pendingEventHatch).toBeDefined();
+    const confirm = dispatch(preview, { type: 'EVENT_HATCH_CONFIRM' });
+    expect(confirm.screen).toBe('tame-overflow');
+    expect(confirm.tameOverflow).toHaveLength(1);
+    expect(confirm.tameOverflow![0].speciesId).toBe('fifi');
+    expect(confirm.tameOverflowReturn).toBe('map');
+    const tameUid = confirm.tameOverflow![0].uid;
+    const discard = dispatch(confirm, { type: 'TAME_OVERFLOW_DISCARD', tameUid });
+    expect(discard.screen).toBe('map');
+    expect(discard.tameOverflow).toBeUndefined();
+    expect(discard.tameOverflowReturn).toBeUndefined();
+    expect(discard.roster.length).toBe(ROSTER_MAX);
+  });
+
+  it('满员蛋事件：收下→替换一只→回地图', () => {
+    const s = makeFullRoster();
+    const preview = dispatch(s, { type: 'EVENT_HATCH_PREVIEW', choiceId: 'hatch', monsterId: 'fifi' });
+    const confirm = dispatch(preview, { type: 'EVENT_HATCH_CONFIRM' });
+    expect(confirm.screen).toBe('tame-overflow');
+    const target = confirm.roster[0];
+    const replace = dispatch(confirm, { type: 'TAME_OVERFLOW_REPLACE', tameUid: confirm.tameOverflow![0].uid, discardUid: target.uid });
+    expect(replace.screen).toBe('map');
+    expect(replace.tameOverflow).toBeUndefined();
+    expect(replace.roster.length).toBe(ROSTER_MAX);
+    expect(replace.roster.some((u) => u.speciesId === 'fifi')).toBe(true);
+    expect(replace.roster.some((u) => u.uid === target.uid)).toBe(false);
+  });
+
+  it('未满蛋事件：收下直接入队回地图', () => {
+    const s = makeFullRoster(eggEventLulu);
+    s.roster = Array.from({ length: ROSTER_MAX - 1 }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
+    const preview = dispatch(s, { type: 'EVENT_HATCH_PREVIEW', choiceId: 'hatch', monsterId: 'lulu' });
+    const confirm = dispatch(preview, { type: 'EVENT_HATCH_CONFIRM' });
+    expect(confirm.screen).toBe('map');
+    expect(confirm.tameOverflow).toBeUndefined();
+    expect(confirm.roster.length).toBe(ROSTER_MAX);
+    expect(confirm.roster.some((u) => u.speciesId === 'lulu')).toBe(true);
+  });
+
+  it('满员招募奖励：PICK_REWARD→处理队伍界面→回战后休整', () => {
+    let s = { ...createInitialState() };
+    s.roster = Array.from({ length: ROSTER_MAX }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
+    s.rewards = [{ id: 'r-recruit', label: '招募', desc: '随机一只普通宠物加入队伍', kind: 'recruit', monsterId: 'kiki' }];
+    s.postBattle = true;
+    s.screen = 'reward';
+    const after = dispatch(s, { type: 'PICK_REWARD', rewardId: 'r-recruit' });
+    expect(after.screen).toBe('tame-overflow');
+    expect(after.tameOverflow).toHaveLength(1);
+    expect(after.tameOverflow![0].speciesId).toBe('kiki');
+    expect(after.tameOverflowReturn).toBe('roster');
+    const tameUid = after.tameOverflow![0].uid;
+    const discard = dispatch(after, { type: 'TAME_OVERFLOW_DISCARD', tameUid });
+    expect(discard.screen).toBe('roster');
+    expect(discard.tameOverflow).toBeUndefined();
+    expect(discard.postBattle).toBe(true);
+  });
+});
+
+describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
+  function makeFullWithOneFifi(): GameState {
+    const s = { ...createInitialState() };
+    const roster = Array.from({ length: ROSTER_MAX }, () => makeUnit('kiki', true, 0, false));
+    roster[0] = makeUnit('momo', true, 0, false);
+    roster[1] = makeUnit('fifi', true, 0, false);
+    s.roster = roster;
+    return s;
+  }
+
+  it('队伍 1 只 fifi + 溢出 fifi → 融合为 fifi_king，溢出清空，回 map', () => {
+    const s = makeFullWithOneFifi();
+    s.screen = 'tame-overflow';
+    s.tameOverflow = [makeUnit('fifi', false, 0, false)];
+    s.tameOverflowReturn = 'map';
+    const tameUid = s.tameOverflow[0].uid;
+    const primaryUid = s.roster.find((u) => u.speciesId === 'fifi')!.uid;
+    const after = dispatch(s, { type: 'TAME_OVERFLOW_FUSE', tameUid, primaryUid });
+    expect(after.screen).toBe('map');
+    expect(after.tameOverflow).toBeUndefined();
+    expect(after.tameOverflowReturn).toBeUndefined();
+    expect(after.roster.some((u) => u.speciesId === 'fifi_king')).toBe(true);
+    expect(after.roster.length).toBe(ROSTER_MAX);
+  });
+
+  it('溢出宠物物种与队伍主宠不同 → state 不变', () => {
+    const s = makeFullWithOneFifi();
+    s.screen = 'tame-overflow';
+    s.tameOverflow = [makeUnit('lulu', false, 0, false)];
+    s.tameOverflowReturn = 'map';
+    const tameUid = s.tameOverflow[0].uid;
+    const primaryUid = s.roster.find((u) => u.speciesId === 'fifi')!.uid;
+    const after = dispatch(s, { type: 'TAME_OVERFLOW_FUSE', tameUid, primaryUid });
+    expect(after).toBe(s);
+  });
+
+  it('队伍内融合后溢出宠物仍在队列、screen 仍为 tame-overflow', () => {
+    const s = { ...createInitialState() };
+    s.roster = Array.from({ length: ROSTER_MAX }, (_, i) => {
+      if (i === 0 || i === 1) return makeUnit('momo', true, 0, false);
+      if (i < 6) return makeUnit('kiki', true, 0, false);
+      return makeUnit('lulu', true, 0, false);
+    });
+    s.screen = 'tame-overflow';
+    s.tameOverflow = [makeUnit('fifi', false, 0, false)];
+    s.tameOverflowReturn = 'map';
+    const primaryUid = s.roster.find((u) => u.speciesId === 'momo')!.uid;
+    const after = dispatch(s, { type: 'FUSE_IN_OVERFLOW', uid: primaryUid });
+    expect(after.screen).toBe('tame-overflow');
+    expect(after.tameOverflow).toHaveLength(1);
+    expect(after.tameOverflow![0].speciesId).toBe('fifi');
+    expect(after.roster.some((u) => u.speciesId === 'momo_queen')).toBe(true);
+    expect(after.roster.length).toBe(ROSTER_MAX - 1);
+  });
+
+  it('队伍 1 只 fifi + 溢出 fifi → 融合后回 roster（tameOverflowReturn）', () => {
+    const s = makeFullWithOneFifi();
+    s.screen = 'tame-overflow';
+    s.tameOverflow = [makeUnit('fifi', false, 0, false)];
+    s.tameOverflowReturn = 'roster';
+    s.postBattle = true;
+    const tameUid = s.tameOverflow[0].uid;
+    const primaryUid = s.roster.find((u) => u.speciesId === 'fifi')!.uid;
+    const after = dispatch(s, { type: 'TAME_OVERFLOW_FUSE', tameUid, primaryUid });
+    expect(after.screen).toBe('roster');
+    expect(after.tameOverflow).toBeUndefined();
+    expect(after.postBattle).toBe(true);
   });
 });

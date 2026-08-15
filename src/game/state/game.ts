@@ -209,6 +209,8 @@ export interface GameState {
   visitedNodeIds?: string[];
   /** 队伍已满（ROSTER_MAX）时捕捉溢出、等待玩家处理的宠物（替换/融合/放弃） */
   tameOverflow?: Unit[];
+  /** 溢出处理完毕后返回的界面：战斗驯服→'reward'；孵化→'map'；招募→'roster' */
+  tameOverflowReturn?: 'reward' | 'map' | 'roster';
   /** 布阵：进入普通/精英/被侵蚀/守卫战斗前选择站位（FORMATION_CONFIRM 确认后创建战斗） */
   formation?: {
     units: Unit[];

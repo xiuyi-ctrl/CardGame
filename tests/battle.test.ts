@@ -13,6 +13,7 @@ import {
   playerSwap,
   playerTame,
   REST_SKILL_ID,
+  planEnemyLayout,
   skillUsesLeft,
   splitDamage,
   tameChance,
@@ -696,6 +697,53 @@ describe('行动点与前后排', () => {
     const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false), makeUnit('fifi', true, 2, false), makeUnit('gora', true, 0, false)];
     const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }, { speciesId: 'mimi' }, { speciesId: 'sisi' }], 1);
     expect(b.enemyUnits.length).toBe(4);
+    expect(b.enemyUnits.filter((u) => u.row === 'front').length).toBe(3);
+    expect(b.enemyUnits.filter((u) => u.row === 'back').length).toBe(1);
+  });
+
+  it('敌方按角色布局：防守型站前排，进攻型站后排', () => {
+    // crab(boss强制→前)、hermit(shell_guard→前)、shrimp(tideEcho→后)
+    const layout = planEnemyLayout([
+      { speciesId: 'boss_crab' },
+      { speciesId: 'boss_minion_hermit' },
+      { speciesId: 'boss_minion_shrimp' },
+    ]);
+    expect(layout[0].row).toBe('front');
+    expect(layout[1].row).toBe('front');
+    expect(layout[2].row).toBe('back');
+    // crab(boss) 前排居中 col1（boss swap），hermit col0
+    const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
+    const b = createBattle(players, [
+      { speciesId: 'boss_crab' },
+      { speciesId: 'boss_minion_hermit' },
+      { speciesId: 'boss_minion_shrimp' },
+    ], 1);
+    const crab = b.enemyUnits.find((u) => u.speciesId === 'boss_crab')!;
+    const hermit = b.enemyUnits.find((u) => u.speciesId === 'boss_minion_hermit')!;
+    const shrimp = b.enemyUnits.find((u) => u.speciesId === 'boss_minion_shrimp')!;
+    expect(crab.row).toBe('front');
+    expect(crab.column).toBe(1);
+    expect(hermit.row).toBe('front');
+    expect(hermit.column).toBe(0);
+    expect(shrimp.row).toBe('back');
+  });
+
+  it('全后排敌人保底 1 只前排', () => {
+    // fifi(heat→后)、fifi_king(blazing→后)：全后排 → 基础HP最高的挪前排
+    const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
+    const b = createBattle(players, [{ speciesId: 'fifi' }, { speciesId: 'fifi_king' }], 1);
+    expect(b.enemyUnits.filter((u) => u.row === 'front').length).toBeGreaterThanOrEqual(1);
+    expect(b.enemyUnits.filter((u) => u.row === 'back').length).toBeGreaterThanOrEqual(0);
+    const front = b.enemyUnits.filter((u) => u.row === 'front')[0];
+    // fifi_king 基础HP13 > fifi 基础HP7，应挪到前排
+    expect(front.speciesId).toBe('fifi_king');
+  });
+
+  it('4xkiki 全是前排被动，前排满 3 后第 4 只溢出后排', () => {
+    const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false), makeUnit('fifi', true, 2, false), makeUnit('gora', true, 0, false)];
+    const b = createBattle(players, [
+      { speciesId: 'kiki' }, { speciesId: 'kiki' }, { speciesId: 'kiki' }, { speciesId: 'kiki' },
+    ], 1);
     expect(b.enemyUnits.filter((u) => u.row === 'front').length).toBe(3);
     expect(b.enemyUnits.filter((u) => u.row === 'back').length).toBe(1);
   });

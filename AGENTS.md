@@ -49,6 +49,7 @@
 - **幕次+节点类型**：`BattleState.act?: number`（当前幕次 1/2/3）+ `BattleState.nodeType?: string`（battle/elite/arena/gauntlet/guardian/corrupted），从 `BattleOptions` 传入，AI 根据这些字段调整概率阈值和评分权重。
 - **复仇棘甲先手**：`revenge_thorn` 技能设 `priority: 'first'`，确保在所有非先手技能之前施放。
 - **Boss小怪系统**：`BOSS_MINIONS` 映射表定义每个 Boss 的小怪 speciesId 列表；`buildEncounter` 自动追加小怪；小怪 rank=4，不可驯服，击败无奖励，死亡时显示「XX 被击倒了」日志。
+- **敌方按角色布局**：`planEnemyLayout` 按被动/治疗技能/等级分类——防守被动（guard/thorns/regen/hp/damageCap/thornRoyal/bigHitGuard/spdOnHit/treeSpeedUp/lifeSpring）或 Boss（rank 4）→ 前排；进攻被动（power/frenzy/venom/scorch/drain/venomPower/speedBonus/scorchPlus/poisonBreak/spdOnAttack/tideRhythm/tideEcho/thornEntangle）或治疗技能（heal>0）→ 后排；前排满 3 列溢出后排；全后排时 baseHp 最高者挪前排（保底 ≥1 前排）。Boss 在首领战中强制前排居中，与小怪互换位置。
 - **受击加速**：`hit_speed_up` 被动，每次受到攻击后速度 +1，可叠加最多 6 层（古树之主专属）。
 - **古木加速**：`tree_speed_up` 被动，每回合结束时回复3点生命值，每次受到攻击后速度 +1，可叠加最多 6 层（古树之主专属）。
 - 战斗日志为结构化 `LogEntry[]`（`{ text, side, hp, actorUid?, targetUid?, addsStatus? }`）：`pushLog(b, msg, side, actorUid?, targetUid?, addsStatus?)` 带阵营，技能/状态/道具按行动者或受击者阵营，系统消息用 info；`hp` 为该条日志时全体血量快照，`addsStatus` 标记本次攻击附加的状态 kind（灼烧/中毒/减防/眩晕，仅标在攻击日志最后一段，无附加则为 undefined）。UI 日志面板按 side 分色，**只显示已揭示的条目**（`useBattleFx` 的 `revealedLogLen`：动画事件 i 播放时揭示到对应日志，动画结束补全），最多最近 6 条。
@@ -59,7 +60,7 @@
 - **超进化诅咒 UI**：`Unit.curse`（`hpDown`/`atkDown`/`spdDown`）在战斗卡片上通过 `CurseBadge` 显示（红色标签，图标+中文名），与 `PassiveBadge`/`BattleBuffIcons` 并列。
 - 属性强化固定值：生命 +3 / 速度 +1；诅咒：血脆=生命-5、虚弱=伤害-1、迟缓=速度-1；侵蚀节点：速度-1 / 受伤+1。
 - 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。敌方治疗按各技能自身 `uses` 次数限制（用尽后不再选择该技能）。
-- 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 5；队伍已满时驯服的新宠物进「处理队伍」界面（替换/融合/放生）。
+- 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 5；队伍已满时驯服/孵化/招募的新宠物进「处理队伍」界面（替换/融合/放生，融合时待处理宠物也可作为同物种材料）。
 - 地图生成：每幕 8~10 层，出发后第 1 行强制全战斗；事件 3~5、商人 2~4（**最后两层必有 1 个商人**，故可至 5）、奇遇 ≤1；全战斗行 ≤2。
 - 普通战斗敌人规模：`weightedPickEncounterSize` 按幕数权重抽取，4v4 **仅幕3 启用**（`ACT3_BASE_W = [10,40,45,5]`，后期修正 +15→约 17%）；幕1/2 无 4v4（表中第 4 项权重=0）。
 - 侦查符/跳关道具均为背包中使用：背包点击 → 返回地图进入选择模式 → 点击目标节点执行。侦查符可看任意一关情报；跳关道具仅对可达的战斗类节点（battle/elite/arena/gauntlet/corrupted）直接获得奖励，boss/guardian 不可跳。双生宝箱双开仅由双生符触发。

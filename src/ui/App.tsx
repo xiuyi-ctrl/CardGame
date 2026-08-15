@@ -1459,9 +1459,9 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   return (
     <div className="screen">
-      <div className="section-title">队伍已满（{state.roster.length}/{ROSTER_MAX}）</div>
+      <div className="section-title">{state.roster.length >= ROSTER_MAX ? '队伍已满' : '处理队伍'}（队伍 {state.roster.length}/{ROSTER_MAX}）</div>
       <p className="card-sub" style={{ maxWidth: 560, textAlign: 'center', margin: '0 auto 8px' }}>
-        你驯服了新的宠物，但队伍已满。选择：<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（同物种足够可直接进化）／<b>放生</b>（丢弃）。
+        你{state.tameOverflowReturn === 'map' ? '孵化了' : state.tameOverflowReturn === 'roster' ? '招募了' : '驯服了'}新的宠物，但队伍已满。选择：<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（同物种足够可直接进化，待处理宠物也可作为材料）／<b>放生</b>（丢弃）。
       </p>
       <div className="center-col" style={{ flex: '0 0 auto', padding: '8px 0' }}>
         <UnitCard unit={tame} />
@@ -1475,7 +1475,10 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
           const stage = nextStage(u.speciesId);
           const need = stage ? fusionNeedCount(u.speciesId) : 0;
           const sameCount = state.roster.filter((x) => x.speciesId === u.speciesId).length;
-          const canFuseAlone = stage !== undefined && sameCount >= need;
+          const tameSame = tame.speciesId === u.speciesId;
+          const totalCount = sameCount + (tameSame ? 1 : 0);
+          const canFuse = stage !== undefined && totalCount >= need;
+          const needTame = canFuse && tameSame && sameCount < need;
           return (
           <div key={u.uid} className="roster-item">
             <UnitCard
@@ -1495,13 +1498,15 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
                     替换
                   </button>
                   <button
-                    title={stage ? (canFuseAlone ? `融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : `同物种不足（${sameCount}/${need}）`) : '该宠物已是最终形态，无法融合'}
+                    title={stage ? (canFuse ? (needTame ? `融合进化为 ${getMonster(stage).name}（含待处理 ${totalCount}/${need}）` : `融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）`) : `同物种不足（${totalCount}/${need}，${tameSame ? '含待处理 1 只' : '不含待处理'}）`) : '该宠物已是最终形态，无法融合'}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!stage) {
                         setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
-                      } else if (!canFuseAlone) {
-                        setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
+                      } else if (!canFuse) {
+                        setConfirm({ kind: 'notice', msg: `同物种不足（${totalCount}/${need}），无法融合` });
+                      } else if (needTame) {
+                        setConfirm({ kind: 'tame-fuse', uid: u.uid, tameUid: tame.uid });
                       } else {
                         dispatch({ type: 'FUSE_IN_OVERFLOW', uid: u.uid });
                       }

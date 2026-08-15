@@ -1,4 +1,4 @@
-import type { BattleState, PassiveDef, SkillDef, StatusEffect, Unit } from '../types';
+import type { BattleState, PassiveDef, PassiveKind, SkillDef, StatusEffect, Unit } from '../types';
 import { getSkill } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
@@ -12,6 +12,17 @@ export const TAME_FAIL_BONUS = 0.25;
 export const FIELD_COLS = 3;
 /** 休息指令的特殊 skillId（orders 里用它表示「本回合不行动」，可再次点击取消） */
 export const REST_SKILL_ID = 'rest';
+/** 前排倾向被动：防守/续航类，该被动生物站前排 */
+const FRONT_PASSIVES: PassiveKind[] = [
+  'hp', 'guard', 'thorns', 'regen', 'damageCap', 'thornRoyal',
+  'bigHitGuard', 'spdOnHit', 'treeSpeedUp', 'lifeSpring',
+];
+/** 后排倾向被动：进攻/输出类，该被动生物站后排 */
+const BACK_PASSIVES: PassiveKind[] = [
+  'power', 'frenzy', 'venom', 'scorch', 'drain', 'venomPower',
+  'speedBonus', 'scorchPlus', 'poisonBreak', 'spdOnAttack',
+  'tideRhythm', 'tideEcho', 'thornEntangle',
+];
 /** AI 选择行动时 softmax 温度：越小越趋向最高分，越大越随机（默认 12） */
 const SOFTMAX_TEMP = 12;
 
@@ -147,11 +158,70 @@ export function computeTurnOrder(b: BattleState): string[] {
   return all.map((u) => u.uid);
 }
 
-function makeEnemy(e: { speciesId: string }, index: number, untameable = false): Unit {
-  const row: 'front' | 'back' = index < FIELD_COLS ? 'front' : 'back';
-  const col = (index % FIELD_COLS) as 0 | 1 | 2;
+function makeEnemy(
+  e: { speciesId: string },
+  row: 'front' | 'back',
+  col: 0 | 1 | 2,
+  untameable = false,
+): Unit {
   const s = getMonster(e.speciesId);
   return makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
+}
+
+/**
+ * 该敌人是否倾向站前排：
+ * Boss（rank 4 首领）强制前排；有防守被动 → 前；有进攻被动 → 后；有治疗技能 → 后；默认后。
+ */
+function wantsFront(speciesId: string): boolean {
+  const s = getMonster(speciesId);
+  if (s.rank >= 4 && !speciesId.startsWith('boss_minion_')) return true;
+  const kind = getPassive(s.passive)?.kind;
+  if (kind && FRONT_PASSIVES.includes(kind)) return true;
+  if (kind && BACK_PASSIVES.includes(kind)) return false;
+  if (s.skills.some((sid) => getSkill(sid).heal !== undefined && (getSkill(sid).heal ?? 0) > 0)) return false;
+  return false;
+}
+
+/** 按角色分类生成敌方站位（保留 encounter 原始顺序）；确保 ≥1 前排 */
+export function planEnemyLayout(
+  enemySpecies: { speciesId: string }[],
+): { row: 'front' | 'back'; col: 0 | 1 | 2 }[] {
+  if (enemySpecies.length === 0) return [];
+  // 1. 分类前后
+  const fronts: number[] = [];
+  const backs: number[] = [];
+  enemySpecies.forEach((e, i) => (wantsFront(e.speciesId) ? fronts : backs).push(i));
+  // 2. 全后排时把最肉的挪前排（保底 1 前排）
+  if (fronts.length === 0 && backs.length > 0) {
+    backs.sort((a, b) => {
+      const sa = getMonster(enemySpecies[a].speciesId);
+      const sb = getMonster(enemySpecies[b].speciesId);
+      if (sb.baseHp !== sa.baseHp) return sb.baseHp - sa.baseHp;
+      return sa.baseSpd - sb.baseSpd;
+    });
+    fronts.push(backs.shift()!);
+  }
+  // 3. 按 encounter 顺序分配 row/col
+  const result: { row: 'front' | 'back'; col: 0 | 1 | 2 }[] = enemySpecies.map(() => ({
+    row: 'back' as const,
+    col: 0 as const,
+  }));
+  const frontPool = [...fronts];
+  const backPool = [...backs];
+  // 前排填列 0~2
+  for (let col = 0; col < FIELD_COLS && frontPool.length > 0; col++) {
+    result[frontPool.shift()!] = { row: 'front', col: col as 0 | 1 | 2 };
+  }
+  // 溢出前排 + 全部后排 → 后排列 0~2
+  const backFill = [...frontPool, ...backPool];
+  for (let col = 0; col < FIELD_COLS && backFill.length > 0; col++) {
+    result[backFill.shift()!] = { row: 'back', col: col as 0 | 1 | 2 };
+  }
+  // 超出 6 格的极端情况（≥7 只，当前不可能）：继续循环后排列
+  for (let i = 0; i < backFill.length; i++) {
+    result[backFill[i]] = { row: 'back', col: (i % FIELD_COLS) as 0 | 1 | 2 };
+  }
+  return result;
 }
 
 /** 潮汐节律/共鸣：为 tideRhythm 和 tideEcho 单位挂 atkUp +2（本回合） */
@@ -217,16 +287,17 @@ export function createBattle(
     b.playerBench = playerRest;
     b.playerDown = [];
     const [firstEnemy, ...enemyRest] = enemySpecies;
-    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 0, untameable), row: 'front', column: 1 }] : [];
-    b.enemyBench = enemyRest.map((e, i) => makeEnemy(e, i + 1, untameable));
+    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable), row: 'front', column: 1 }] : [];
+    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
     // 敌方数量固定为 encounter 原始数量（不再复制补齐）；
     // 玩家出战数由布阵界面限制（≤ 敌方数量+1，最多 FIELD_MAX）
     const exact = options?.enemyExact === true;
     const picked = exact ? [...enemySpecies] : [...enemySpecies];
+    const layout = planEnemyLayout(picked);
     b.playerUnits = preparedPlayer;
-    b.enemyUnits = picked.map((e, i) => makeEnemy(e, i, untameable));
+    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable));
     // Boss 小怪战：Boss 显示在前排中间（column 1），与两侧小怪互换位置
     if (b.enemyUnits.length >= 2 && b.enemyUnits[0]?.speciesId.startsWith('boss_')) {
       const boss = b.enemyUnits[0];
