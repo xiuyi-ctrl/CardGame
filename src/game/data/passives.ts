@@ -26,7 +26,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   shadow_power: { id: 'shadow_power', name: '暗影之力', desc: '所有技能伤害 +3', kind: 'power', value: 3 },
   lava_scorch: { id: 'lava_scorch', name: '熔火灼烧', desc: '攻击命中附加灼烧 3 层', kind: 'scorch', value: 3 },
   tide_drain: { id: 'tide_drain', name: '潮汐吸噬', desc: '造成伤害时恢复 2 点生命', kind: 'drain', value: 2 },
-  tide_rhythm: { id: 'tide_rhythm', name: '潮汐节律', desc: '每2回合开始时自身伤害+2（本回合）', kind: 'tideRhythm', value: 2 },
+  tide_rhythm: { id: 'tide_rhythm', name: '潮汐节律', desc: '每3回合触发一次：本回合自身伤害+2（爆发1回合、休2回合）', kind: 'tideRhythm', value: 2 },
   rock_guard: { id: 'rock_guard', name: '磐岩护甲', desc: '受到的所有伤害 -3', kind: 'guard', value: 3 },
   spore_venom: { id: 'spore_venom', name: '剧毒孢子', desc: '攻击命中附加中毒 3 层', kind: 'venom', value: 3 },
   ghost_step: { id: 'ghost_step', name: '幽灵疾步', desc: '战斗开始速度 +3', kind: 'spd', value: 3 },

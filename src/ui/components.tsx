@@ -42,7 +42,7 @@ function effectText(e: StatusEffect): string {
     case 'poison':
       return `中毒 ${e.value} 层`;
     case 'atkUp':
-      return `伤害 +${e.value}${turns}`;
+      return `伤害 +${e.value}${e.turns === 0 ? '（本回合）' : turns}`;
     case 'atkDown':
       return `伤害 -${e.value}${turns}`;
     case 'stun':

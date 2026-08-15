@@ -152,6 +152,27 @@ function makeEnemy(e: { speciesId: string }, index: number, untameable = false):
   return makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
 }
 
+/** 潮汐节律/共鸣：为 tideRhythm 和 tideEcho 单位挂 atkUp +2（本回合） */
+function applyTideBurst(b: BattleState): BattleState {
+  let nb = b;
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const p = getUnitPassive(u);
+    if (p?.kind === 'tideRhythm') {
+      const boosted = applyStatusTo(u, { kind: 'atkUp', value: p.value, turns: 1 }, nb.round - 1);
+      nb = replaceUnit(nb, boosted);
+    }
+    if (p?.kind === 'tideEcho') {
+      const allies = u.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      if (allies.some((a) => a.speciesId === 'boss_crab' && a.hp > 0)) {
+        const boosted = applyStatusTo(u, { kind: 'atkUp', value: p.value, turns: 1 }, nb.round - 1);
+        nb = replaceUnit(nb, boosted);
+      }
+    }
+  }
+  return nb;
+}
+
 export function createBattle(
   playerUnits: Unit[],
   enemySpecies: { speciesId: string }[],
@@ -167,7 +188,7 @@ export function createBattle(
   if (preparedPlayer.length === 1 && preparedPlayer[0]) {
     preparedPlayer[0] = { ...preparedPlayer[0], row: 'front', column: 1 };
   }
-  const b: BattleState = {
+  let b: BattleState = {
     playerUnits: [],
     enemyUnits: [],
     turnOrder: [],
@@ -225,6 +246,10 @@ export function createBattle(
   b.playerApMax = b.playerAp;
   b.enemyAp = b.enemyUnits.filter((u) => u.hp > 0).length;
   b.turnOrder = computeTurnOrder(b);
+  // 首回合潮汐节律触发（createBattle 不调用 startRound，需单独处理）
+  if (b.round % 3 === 1) {
+    b = applyTideBurst(b);
+  }
   return checkEnd(b);
 }
 
@@ -309,26 +334,15 @@ function startRound(b: BattleState): BattleState {
       nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${healAmt} 点生命`, sideOf(u), u.uid);
     }
   }
-  // 潮汐节律：每2回合（偶数回合）开始时，为被动为 tideRhythm 的单位挂 atkUp +2
-  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
-    if (u.hp <= 0) continue;
-    const p = getUnitPassive(u);
-    if (p?.kind === 'tideRhythm' && nb.round % 2 === 0) {
-      const boosted = applyStatusTo(u, { kind: 'atkUp', value: p.value, turns: 1 }, nb.round);
-      nb = replaceUnit(nb, boosted);
-      nb = pushLog(nb, `${u.name} 的「${p.name}」触发！伤害 +${p.value}`, sideOf(u), u.uid);
-    }
-  }
-  // 潮汐共鸣：巨蟹爆发时，同侧 tideEcho 单位同步获得 atkUp +2
-  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
-    if (u.hp <= 0) continue;
-    const p = getUnitPassive(u);
-    if (p?.kind === 'tideEcho' && nb.round % 2 === 0) {
-      const allies = u.isPlayer ? nb.playerUnits : nb.enemyUnits;
-      const crabAlive = allies.some((a) => a.speciesId === 'boss_crab' && a.hp > 0);
-      if (crabAlive) {
-        const boosted = applyStatusTo(u, { kind: 'atkUp', value: p.value, turns: 1 }, nb.round);
-        nb = replaceUnit(nb, boosted);
+  // 潮汐节律/共鸣：每3回合触发一次（爆发1回合、休2回合），触发回合 round % 3 === 1
+  // appliedRound = nb.round - 1 配合 atkUp 跳过规则，确保 atkUp 精确持续当回合
+  if (nb.round % 3 === 1) {
+    nb = applyTideBurst(nb);
+    // 为爆发回合生成日志
+    for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+      if (u.hp <= 0) continue;
+      const p = getUnitPassive(u);
+      if (p?.kind === 'tideRhythm' || p?.kind === 'tideEcho') {
         nb = pushLog(nb, `${u.name} 的「${p.name}」触发！伤害 +${p.value}`, sideOf(u), u.uid);
       }
     }
@@ -1271,7 +1285,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     if (skill.id === 'shell_up') {
       const self = actorFromId(nb, actor.uid);
       if (self && self.hp > 0) {
-        const stunned = applyStatusTo(self, { kind: 'stun', value: 1, turns: 1 }, nb.round);
+        const stunned = applyStatusTo(self, { kind: 'stun', value: 1, turns: 2 }, nb.round);
         nb = replaceUnit(nb, stunned);
         nb = pushLog(nb, `${self.name} 缩入壳中，下回合无法行动`, sideOf(self), self.uid);
       }
