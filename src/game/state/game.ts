@@ -366,8 +366,8 @@ function nodeId(): string {
 // ---------- 地图生成 ----------
 
 const ACT3_PROGRESS_MOD = [
-  { threshold: -0.3, mod: [20, -10, -10] },
-  { threshold: 0.7, mod: [-20, 5, 15] },
+  { threshold: -0.3, mod: [20, -10, -10, 0] },
+  { threshold: 0.7, mod: [-20, 5, 15, 15] },
 ];
 const RECRUIT_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
 
@@ -516,26 +516,29 @@ const ACT2_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
   { species: ['fifi_king', 'gora', 'lulu_king'], weight: 14 },            // G12
 ];
 
-function applyProgressModifier(progress: number, baseW: number[], progressMod: { threshold: number; mod: number[] }[]): [number, number, number] {
-  let [w1, w2, w3] = baseW;
+function applyProgressModifier(progress: number, baseW: number[], progressMod: { threshold: number; mod: number[] }[]): number[] {
+  const w = [...baseW];
   for (const m of progressMod) {
     if ((m.threshold < 0 && progress < Math.abs(m.threshold)) || (m.threshold > 0 && progress > m.threshold)) {
-      w1 += m.mod[0]; w2 += m.mod[1]; w3 += m.mod[2];
+      for (let i = 0; i < m.mod.length && i < w.length; i++) w[i] += m.mod[i];
     }
   }
-  return [w1, w2, w3];
+  return w;
 }
 
-function weightedPickEncounterSize(rng: () => number, adjusted: [number, number, number]): { count: number; kinds: number } {
-  const roll = rng() * (adjusted[0] + adjusted[1] + adjusted[2]);
-  if (roll < adjusted[0]) return { count: 1, kinds: 1 };
-  if (roll < adjusted[0] + adjusted[1]) return { count: 2, kinds: 2 };
-  if (roll < adjusted[0] + adjusted[1] + adjusted[2]) return { count: 3, kinds: 3 };
-  return { count: 4, kinds: 4 };
+function weightedPickEncounterSize(rng: () => number, adjusted: number[]): { count: number; kinds: number } {
+  const total = adjusted.reduce((a, b) => a + b, 0);
+  const roll = rng() * total;
+  let acc = 0;
+  for (let i = 0; i < adjusted.length; i++) {
+    acc += adjusted[i];
+    if (roll < acc) return { count: i + 1, kinds: i + 1 };
+  }
+  return { count: adjusted.length, kinds: adjusted.length };
 }
 
 // ---- 第 3 幕固定遭遇表（第三幕敌人.md 设计） ----
-const ACT3_BASE_W = [10, 40, 50]; // 1v1 / 2v2 / 3v3 基础权重
+const ACT3_BASE_W = [10, 40, 45, 5]; // 1v1 / 2v2 / 3v3 / 4v4 基础权重
 const ACT3_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
   { species: ['gora_god'], weight: 15 },    // S1 铁壁神
   { species: ['mimi_god'], weight: 15 },    // S2 深渊蛇王
@@ -1339,17 +1342,25 @@ export function fusionNeedCount(speciesId: string): number {
 export function fuseUnit(primary: Unit): Unit | null {
   const target = nextStage(primary.speciesId);
   if (!target) return null;
-  const stats = applyMods(computeStats(target), primary);
   const sp = getMonster(target);
+  // 以新形态为基础（自动应用被动属性加成），再叠加主宠的 bonusStats/诅咒
+  const fresh = makeUnit(target, primary.isPlayer, primary.column, false, primary.row);
+  let hp = fresh.maxHp;
+  let spd = fresh.spd;
+  const b = primary.bonusStats;
+  if (b) { hp += b.hp ?? 0; spd += b.spd ?? 0; }
+  if (primary.curse === 'hpDown') hp = Math.max(1, hp - 5);
+  else if (primary.curse === 'spdDown') spd = Math.max(1, spd - 1);
   return {
-    ...primary,
-    speciesId: target,
-    name: sp.name,
-    emoji: sp.emoji,
-    maxHp: stats.maxHp,
-    hp: stats.maxHp,
-    spd: stats.spd,
+    ...fresh,
+    uid: primary.uid,
+    hp,
+    maxHp: hp,
+    spd,
     skills: primary.customSkills ?? [...sp.skills],
+    ...(primary.bonusStats ? { bonusStats: primary.bonusStats } : {}),
+    ...(primary.curse ? { curse: primary.curse } : {}),
+    ...(primary.customSkills ? { customSkills: primary.customSkills } : {}),
   };
 }
 

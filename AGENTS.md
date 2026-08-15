@@ -45,7 +45,7 @@
 - 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+3 / 速度+1。
 - **反伤先打盾**：`applyCounterDmg(attacker, dmg)` 统一处理荆棘/盾反/棘刺王的反击伤害——先扣护盾再扣血，避免护盾失效后反伤仍穿透护盾的 bug。`thorns`/`thornRoyal`/`shieldCounter` 三处均已改为调用此函数。
 - **技能冷却**：`SkillDef.cooldown?: number` 设置使用后冷却回合数（缺省=0）；`Unit.skillCooldowns?: Record<string, number>` 追踪当前冷却；`applySkillCooldown` 存储 `skill.cooldown + 1`（因为 `startRound` 在回合开始时立即递减，+1 确保实际冷却回合数正确）；`skillCooldownLeft` 检查冷却是否归零。已设：盾反（shield_counter）冷却 1 回合。
-- **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫/首领战禁用换位）。
+- **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫战禁用换位）。
 - **幕次+节点类型**：`BattleState.act?: number`（当前幕次 1/2/3）+ `BattleState.nodeType?: string`（battle/elite/arena/gauntlet/guardian/corrupted），从 `BattleOptions` 传入，AI 根据这些字段调整概率阈值和评分权重。
 - **复仇棘甲先手**：`revenge_thorn` 技能设 `priority: 'first'`，确保在所有非先手技能之前施放。
 - **Boss小怪系统**：`BOSS_MINIONS` 映射表定义每个 Boss 的小怪 speciesId 列表；`buildEncounter` 自动追加小怪；小怪 rank=4，不可驯服，击败无奖励，死亡时显示「XX 被击倒了」日志。
@@ -61,6 +61,7 @@
 - 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 50%。敌方治疗按各技能自身 `uses` 次数限制（用尽后不再选择该技能）。
 - 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 5；队伍已满时驯服的新宠物进「处理队伍」界面（替换/融合/放生）。
 - 地图生成：每幕 8~10 层，出发后第 1 行强制全战斗；事件 3~5、商人 2~4（**最后两层必有 1 个商人**，故可至 5）、奇遇 ≤1；全战斗行 ≤2。
+- 普通战斗敌人规模：`weightedPickEncounterSize` 按幕数权重抽取，4v4 **仅幕3 启用**（`ACT3_BASE_W = [10,40,45,5]`，后期修正 +15→约 17%）；幕1/2 无 4v4（表中第 4 项权重=0）。
 - 侦查符/跳关道具均为背包中使用：背包点击 → 返回地图进入选择模式 → 点击目标节点执行。侦查符可看任意一关情报；跳关道具仅对可达的战斗类节点（battle/elite/arena/gauntlet/corrupted）直接获得奖励，boss/guardian 不可跳。双生宝箱双开仅由双生符触发。
 - 背包界面：HUD 右侧「🎒 背包」可随时打开（查看宠物/道具，使用侦查符/跳关道具/净化药水）。
 - 所有随机必须经 `useRng`/`createRng`（seed + rngCount），保证确定性、可复现、可单测。

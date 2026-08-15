@@ -38,6 +38,8 @@ describe('成长与融合', () => {
     expect(fused.name).toBe('迅牙');
     expect(fused.maxHp).toBe(18);
     expect(fused.hp).toBe(18);
+    expect(fused.spd).toBe(7); // 迅牙 baseSpd 4 + 迅力 spd+3
+    expect(fused.passive).toBe('swift_power'); // 被动更新为新形态
     expect(fused.uid).toBe(u.uid);
     expect(fused.skills).toEqual(['leaf_needle', 'double_hit', 'shockwave']);
   });
@@ -49,7 +51,7 @@ describe('成长与融合', () => {
     const fused = fuseUnit(cursed)!;
     expect(fused.bonusStats).toEqual({ hp: 3, spd: 1 });
     expect(fused.curse).toBe('spdDown');
-    expect(fused.spd).toBe(4); // 王后 spd4 +1 -1
+    expect(fused.spd).toBe(7); // 王后 spd7（base4+迅力3）+1 -1
   });
 
   it('FUSE reducer：材料不足被拒；材料足够融合并移除材料', () => {
