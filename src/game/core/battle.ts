@@ -877,7 +877,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
       const scoredTargets = targetPool.map((t) => {
         let tScore = 0;
         // ── 残血收割（幕次加权） ──
-        const lowHpBonus = currentAct >= 2 ? 30 : 20;
+        const lowHpBonus = currentAct >= 2 ? 15 : 10;
         if (t.hp / t.maxHp < 0.3) tScore += lowHpBonus;
         // ── 核心威胁（幕次加权） ──
         const hasHealSkill = t.skills.some((id) => getSkill(id)?.kind === 'heal');
@@ -897,7 +897,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           tScore += rngVal * 15;
         } else if (currentAct === 2) {
           // 幕2：残血 50% + 核心威胁 30%
-          if (t.hp / t.maxHp < 0.3) tScore += 10;
+          if (t.hp / t.maxHp < 0.3) tScore += 5;
           if (hasHealSkill || t.spd >= 6) tScore += 8;
         } else {
           // 幕3：核心威胁 40% + 状态配合 35%
@@ -906,11 +906,11 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
         }
         // ── 特殊模式调整 ──
         if (nType === 'arena') {
-          // 斗兽场：优先集火单体高伤，血量权重 +10
-          if (t.hp / t.maxHp < 0.3) tScore += 10;
+          // 斗兽场：优先集火单体高伤，血量权重 +5
+          if (t.hp / t.maxHp < 0.3) tScore += 5;
         } else if (nType === 'gauntlet') {
-          // 车轮战：优先击杀减少敌方数量，残血额外 +8
-          if (t.hp / t.maxHp < 0.3) tScore += 8;
+          // 车轮战：优先击杀减少敌方数量，残血额外 +4
+          if (t.hp / t.maxHp < 0.3) tScore += 4;
           if (atk.target === 'all') tScore += 5;
         } else if (nType === 'corrupted') {
           // 被侵蚀：攻击倾向 +15%（所有攻击目标额外加分）
