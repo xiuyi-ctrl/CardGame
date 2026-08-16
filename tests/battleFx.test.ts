@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeRevealAt, type RevealEntry } from '../src/ui/battleFx';
+import { computeRevealAt, type RevealEntry, rockShellHitsAfterEvent } from '../src/ui/battleFx';
 
 const kindsAt = (revealAt: Record<number, RevealEntry[]>, i: number, uid: string): string[] | undefined =>
   revealAt[i]?.find((e) => e.uid === uid)?.kinds;
@@ -148,5 +148,52 @@ describe('parseEvent：范围伤害 burst 事件提取正确伤害值', () => {
       side: 'enemy',
     };
     expect(parseEvent(mkBattle(), entry)).toBeNull();
+  });
+});
+
+describe('rockShellHitsAfterEvent：岩壳崩解计数动画递增', () => {
+  const bossUid = 'boss-1';
+  const base: Record<string, number> = { [bossUid]: 0 };
+
+  it('attack 命中 boss 时 +1', () => {
+    const ev = { kind: 'attack' as const, targetUid: bossUid, value: 3 };
+    expect(rockShellHitsAfterEvent(base, ev, bossUid)).toEqual({ [bossUid]: 1 });
+  });
+
+  it('多段 attack 逐 +1', () => {
+    let map: Record<string, number> = { [bossUid]: 0 };
+    map = rockShellHitsAfterEvent(map, { kind: 'attack', targetUid: bossUid, value: 3 }, bossUid);
+    expect(map).toEqual({ [bossUid]: 1 });
+    map = rockShellHitsAfterEvent(map, { kind: 'attack', targetUid: bossUid, value: 3 }, bossUid);
+    expect(map).toEqual({ [bossUid]: 2 });
+    map = rockShellHitsAfterEvent(map, { kind: 'attack', targetUid: bossUid, value: 3 }, bossUid);
+    expect(map).toEqual({ [bossUid]: 3 });
+  });
+
+  it('burst 波及 boss 时 +1（小怪自爆）', () => {
+    const ev = { kind: 'burst' as const, burstTargets: [bossUid, 'player-1'], value: 3 };
+    expect(rockShellHitsAfterEvent(base, ev, bossUid)).toEqual({ [bossUid]: 1 });
+  });
+
+  it('burst 未波及 boss（岩壳崩解 AOE）时归 0', () => {
+    const ev = { kind: 'burst' as const, burstTargets: ['player-1', 'player-2'], value: 5 };
+    expect(rockShellHitsAfterEvent({ [bossUid]: 3 }, ev, bossUid)).toEqual({ [bossUid]: 0 });
+  });
+
+  it('无关事件（heal/dot/buff/speed）不改变计数', () => {
+    expect(rockShellHitsAfterEvent(base, { kind: 'heal', targetUid: bossUid, value: 5 }, bossUid)).toEqual(base);
+    expect(rockShellHitsAfterEvent(base, { kind: 'dot', targetUid: bossUid, value: 2 }, bossUid)).toEqual(base);
+    expect(rockShellHitsAfterEvent(base, { kind: 'buff', targetUid: bossUid, value: 0 }, bossUid)).toEqual(base);
+    expect(rockShellHitsAfterEvent(base, { kind: 'speed', targetUid: bossUid, value: 1 }, bossUid)).toEqual(base);
+  });
+
+  it('bossUid 不存在时不做任何改变', () => {
+    const ev = { kind: 'attack' as const, targetUid: bossUid, value: 3 };
+    expect(rockShellHitsAfterEvent(base, ev, undefined)).toEqual(base);
+  });
+
+  it('attack 命中非 boss 目标不改变计数', () => {
+    const ev = { kind: 'attack' as const, targetUid: 'other-unit', value: 3 };
+    expect(rockShellHitsAfterEvent(base, ev, bossUid)).toEqual(base);
   });
 });

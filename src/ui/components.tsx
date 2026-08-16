@@ -204,14 +204,16 @@ const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
   skillSpd: { icon: '💨', label: '技能速度加成' },
 };
 
-export function PassiveBadge({ unit, stacksOverride }: { unit: Unit; stacksOverride?: number }) {
+export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number }) {
   const p = getPassive(unit.passive);
   if (!p) return null;
   const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;
   const showStacks = stacks > 0 && (p.kind === 'spdOnHit' || p.kind === 'treeSpeedUp' || p.kind === 'spdOnAttack' || p.kind === 'speedBonus');
+  const rockHits = p.kind === 'rockShellBreak' ? (rockShellHitsOverride ?? unit.rockShellHits ?? 0) : undefined;
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
       💠{p.name}{showStacks ? ` ×${stacks}` : ''}
+      {rockHits !== undefined && p.value !== undefined ? ` ${rockHits}/${p.value}` : ''}
     </span>
   );
 }
@@ -267,9 +269,11 @@ export interface UnitCardProps {
   speedOverride?: number;
   /** 动画期间覆盖被动速度叠加层数（逐段递增） */
   stacksOverride?: number;
+  /** 动画期间覆盖岩壳崩解受击计数（逐段递增） */
+  rockShellHitsOverride?: number;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -316,7 +320,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
       <div className="card-sub">
         {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
         <StatusIcons unit={unit} />
-        <PassiveBadge unit={unit} stacksOverride={stacksOverride} />
+        <PassiveBadge unit={unit} stacksOverride={stacksOverride} rockShellHitsOverride={rockShellHitsOverride} />
         <CurseBadge unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
@@ -420,7 +424,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   comboBoost: (v) => `连击段数 +${v}`,
 };
 
-export function BuffDetailPanel({ unit, stacksOverride }: { unit: Unit; stacksOverride?: number }) {
+export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number }) {
   const passive = getPassive(unit.passive);
   const buffs = unit.battleBuffs;
   const battleBuffEntries = buffs
@@ -439,8 +443,12 @@ export function BuffDetailPanel({ unit, stacksOverride }: { unit: Unit; stacksOv
       const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;
       return stacks > 0 ? `×${stacks}` : null;
     }
+    // 岩壳崩解：显示当前受击计数（每受击 +1，达到阈值触发 AOE 后重置为 0）
+    if (passive.kind === 'rockShellBreak') {
+      return `${rockShellHitsOverride ?? unit.rockShellHits ?? 0}/${passive.value}`;
+    }
     // 效果类被动不显示数值（lifeSpring/guard/regen/thorns/drain/damageCap 的 value 是内部阈值，非叠加层数）
-    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body', 'thornEntangle', 'tideRhythm', 'tideEcho', 'rockShellBreak'];
+    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body', 'thornEntangle', 'tideRhythm', 'tideEcho'];
     if (noShowValue.includes(passive.kind)) return null;
     // 其他被动显示固定数值（如 hp+3, spd+1）
     return `${passive.value}`;

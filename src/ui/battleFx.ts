@@ -168,6 +168,31 @@ function passiveSpdOfUnits(b: BattleState): Record<string, number> {
   return out;
 }
 
+/** 计算每个单位的岩壳崩解受击计数（用于动画基线） */
+function rockShellHitsOfUnits(b: BattleState): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) out[u.uid] = u.rockShellHits ?? 0;
+  return out;
+}
+
+/** 根据单个动画事件推进岩壳崩解计数：
+ *  attack 命中 boss → +1；burst 波及 boss → +1；burst 未波及 boss（岩壳崩解 AOE）→ 归 0；
+ *  其他事件不变。bossUid 不存在时直接返回原 map（boss 已死亡等边缘情况） */
+export function rockShellHitsAfterEvent(
+  prev: Record<string, number>,
+  ev: FxEvent,
+  bossUid: string | undefined,
+): Record<string, number> {
+  if (!bossUid) return prev;
+  const cur = prev[bossUid] ?? 0;
+  if (ev.kind === 'attack' && ev.targetUid === bossUid) return { ...prev, [bossUid]: cur + 1 };
+  if (ev.kind === 'burst') {
+    if (ev.burstTargets?.includes(bossUid)) return { ...prev, [bossUid]: cur + 1 };
+    if (ev.burstTargets?.length) return { ...prev, [bossUid]: 0 };
+  }
+  return prev;
+}
+
 /** 解析一条战斗日志为动画事件；无法识别或名字找不到目标时返回 null */
 export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const text = entry.text;
@@ -294,6 +319,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [shieldMap, setShieldMap] = useState<Record<string, number> | null>(null);
   const [spdMap, setSpdMap] = useState<Record<string, number> | null>(null);
   const [passiveSpdMap, setPassiveSpdMap] = useState<Record<string, number> | null>(null);
+  const [rockShellHitsMap, setRockShellHitsMap] = useState<Record<string, number> | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, StatusEffect[]> | null>(null);
   const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
@@ -356,6 +382,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setHpMap(null);
       setSpdMap(null);
       setPassiveSpdMap(null);
+      setRockShellHitsMap(null);
       setStatusMap(null);
       setFx({});
       setPops([]);
@@ -431,12 +458,16 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setFx({});
     setPops([]);
 
+    // 岩壳崩解计数动画：逐段+1，bossUid 从最终状态取（boss 在 AOE 之后存活）
+    const bossUid = battle.enemyUnits.find((u) => u.speciesId === 'boss_golem')?.uid ?? undefined;
+
     // 无血量变化事件（如纯状态/换位）则不进入动画，新增状态立即全部显示
     if (events.length === 0) {
       setAnimating(false);
       setHpMap(null);
       setSpdMap(null);
       setPassiveSpdMap(null);
+      setRockShellHitsMap(null);
       setShieldMap(shieldsOfUnits(battle));
       setStatusMap(null);
       setRevealedKinds(allRevealed(newStatuses));
@@ -452,6 +483,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setShieldMap(prevShields);
     setSpdMap(prevSpd);
     setPassiveSpdMap(prevBattleBefore ? passiveSpdOfUnits(prevBattleBefore) : null);
+    setRockShellHitsMap(prevBattleBefore ? rockShellHitsOfUnits(prevBattleBefore) : null);
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
     events.forEach((ev, i) => {
@@ -541,6 +573,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           if (ev.hp) setHpMap(ev.hp);
           if (ev.shields) setShieldMap(ev.shields);
           if (ev.statuses) setStatusMap(ev.statuses);
+          if (bossUid) setRockShellHitsMap((p) => rockShellHitsAfterEvent(p ?? {}, ev, bossUid));
 
           // 用各自捕获的 seq 做 clear 比对，仅当该 unit 的 fx 仍是本事件设置的才清除
           const clear = window.setTimeout(
@@ -569,6 +602,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
         setHpMap(null);
         setSpdMap(null);
         setPassiveSpdMap(null);
+        setRockShellHitsMap(null);
         // 不清理 shieldMap，保留最后事件快照，防止新动画启动时 prevShields 与真实值的跳变导致盾图标闪烁
         setStatusMap(null);
         setRevealedKinds(allRevealed(newStatuses));
@@ -582,5 +616,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
+  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
 }

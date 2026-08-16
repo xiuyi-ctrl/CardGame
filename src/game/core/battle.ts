@@ -366,9 +366,15 @@ function startRound(b: BattleState): BattleState {
   // 灼烧/中毒DOT在重置前结算，伤害计入上一回合的累计伤害上限
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     if (u.hp <= 0) continue;
-    const res = applyDot(nb, u);
+    const cur = actorFromId(nb, u.uid);
+    if (!cur || cur.hp <= 0) continue;
+    const res = applyDot(nb, cur);
     nb = res.battle;
-    if (res.unit.hp > 0) tickStatuses(res.unit, prevRound);
+    if (res.unit.hp > 0) {
+      tickStatuses(res.unit, prevRound);
+    } else if (res.unit.speciesId.startsWith('boss_minion_')) {
+      nb = applyRockShardDeath(nb, res.unit);
+    }
     nb = replaceUnit(nb, res.unit);
   }
   // DOT结算完毕后重置伤害累计（新回合开始）
@@ -895,15 +901,17 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           candidates.push({ kind: 'buff', skill: bs, score: 45 });
         }
       }
-      // 碎岩重组：有小怪死亡时高优先级（重新召唤）；小怪存活时中等概率使用（触发自爆链）
+      // 碎岩重组：有次数且未冷却时（line 813 已过滤），小怪在场则高概率使用（触发自爆链加速岩壳崩解）
       if (bs.id === 'rock_reforge') {
-        const allies = alliesOf(b2, actor);
-        const deadMinions = allies.filter((u) => u.hp <= 0 && u.speciesId.startsWith('boss_minion_'));
-        const aliveMinions = allies.filter((u) => u.hp > 0 && u.speciesId.startsWith('boss_minion_'));
+        // 死亡小怪：从 enemyUnits 直接查（alliesOf 过滤了 hp <= 0）
+        const deadMinions = b2.enemyUnits.filter((u) => u.hp <= 0 && u.speciesId.startsWith('boss_minion_'));
+        const aliveMinions = allies.filter((u) => u.speciesId.startsWith('boss_minion_'));
         if (deadMinions.length > 0) {
-          candidates.push({ kind: 'buff', skill: bs, score: 60 });
-        } else if (aliveMinions.length >= 2 && hpRatio > 0.3 && rngVal < 0.4) {
-          candidates.push({ kind: 'buff', skill: bs, score: 35 });
+          // 小怪已阵亡，高优先复活（恢复核心机制），无条件进候选
+          candidates.push({ kind: 'buff', skill: bs, score: 80 });
+        } else if (aliveMinions.length >= 2 && hpRatio > 0.3 && rngVal < 0.9) {
+          // 小怪健全，主动重组触发自爆链加速岩壳崩解（hpRatio ≤ 0.3 时避免自伤致死）
+          candidates.push({ kind: 'buff', skill: bs, score: 65 });
         }
       }
     }
@@ -1116,7 +1124,9 @@ function applyRockShardDeath(b: BattleState, dead: Unit): BattleState {
     let bossWasHit = false;
     const damagedUnits: Unit[] = [];
     for (const v of victims) {
-      const after = { ...v, hp: Math.max(0, v.hp - dmg) };
+      // 岩壳碎片自爆不会炸死巨像：波及 Boss 时保底 1 HP
+      const isGolem = v.speciesId === 'boss_golem' && getUnitPassive(v)?.kind === 'rockShellBreak';
+      const after = { ...v, hp: Math.max(isGolem ? 1 : 0, v.hp - dmg) };
       nb = replaceUnit(nb, after);
       damagedUnits.push(after);
       if (after.speciesId === 'boss_golem' && after.hp > 0 && getUnitPassive(after)?.kind === 'rockShellBreak') {
@@ -1510,10 +1520,15 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           nb = pushLog(nb, `${existing.name} 被巨像碾碎了`, sideOf(killed), killed.uid, killed.uid);
           nb = applyRockShardDeath(nb, killed);
         }
-        // 创建新的小怪
-        const fresh = makeEnemy({ speciesId: sid }, 'front', col, true);
-        const summoned = { ...fresh, acted: true };
-        nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
+        // 复用同 species 的死亡单位：覆盖其 uid/槽位为新召唤个体，避免死卡占位
+        const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
+        const fresh = makeEnemy({ speciesId: sid }, dead ? dead.row : 'front', dead ? dead.column : col, true);
+        const summoned = { ...fresh, acted: true, ...(dead ? { uid: dead.uid } : {}) };
+        if (dead) {
+          nb = replaceUnit(nb, summoned);
+        } else {
+          nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
+        }
         nb = pushLog(nb, `${actor.name} 使用「碎岩重组」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
       }
     }

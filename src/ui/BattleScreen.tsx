@@ -62,7 +62,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
+  const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -346,7 +346,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${isInspect ? 'inspectable' : ''} ${inspected ? 'inspected' : ''}`}
         onClick={isTarget || isInspect ? () => onEnemyClick(u.uid) : undefined}
       >
-        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small topStats className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small topStats className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} />
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
         {popOverlay(u.uid)}
       </div>
@@ -365,7 +365,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
       >
-        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small showSkills={false} topStats className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small showSkills={false} topStats className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} />
         {popOverlay(u.uid)}
       </div>
     );
@@ -453,11 +453,11 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="formation-row row-back">{playerBack.map((u, i) => playerSlot(u, `pb${i}`, false))}</div>
           {selectedUid && (() => {
             const su = b.playerUnits.find((x) => x.uid === selectedUid);
-            return su && su.hp > 0 ? <BuffDetailPanel unit={shownUnit(su)} stacksOverride={passiveSpdMap?.[su.uid]} /> : null;
+            return su && su.hp > 0 ? <BuffDetailPanel unit={shownUnit(su)} stacksOverride={passiveSpdMap?.[su.uid]} rockShellHitsOverride={rockShellHitsMap?.[su.uid]} /> : null;
           })()}
           {inspectEnemy && (() => {
             const eu = b.enemyUnits.find((x) => x.uid === inspectEnemy);
-            return eu && eu.hp > 0 ? <BuffDetailPanel unit={shownUnit(eu)} stacksOverride={passiveSpdMap?.[eu.uid]} /> : null;
+            return eu && eu.hp > 0 ? <BuffDetailPanel unit={shownUnit(eu)} stacksOverride={passiveSpdMap?.[eu.uid]} rockShellHitsOverride={rockShellHitsMap?.[eu.uid]} /> : null;
           })()}
         </div>
 
