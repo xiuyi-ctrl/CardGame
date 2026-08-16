@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BattleState, LogEntry, StatusEffect } from '../game/types';
 import { SKILLS } from '../game/data/skills';
+import { getPassive } from '../game/data/passives';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
 interface FxEvent {
@@ -193,6 +194,26 @@ export function rockShellHitsAfterEvent(
   return prev;
 }
 
+/** 计算荆棘之躯单位的受击计数（用于动画基线） */
+function thornRoyalHitsOfUnits(b: BattleState): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const u of [...b.playerUnits, ...b.enemyUnits]) {
+    if (getPassive(u.passive)?.kind === 'thornRoyal') out[u.uid] = u.thornsHitCount ?? 0;
+  }
+  return out;
+}
+
+/** 根据单个动画事件推进荆棘之躯受击计数：attack 命中该单位 → +1 */
+export function thornRoyalHitsAfterEvent(
+  prev: Record<string, number>,
+  ev: FxEvent,
+): Record<string, number> {
+  if (ev.kind === 'attack' && ev.targetUid && prev[ev.targetUid] !== undefined) {
+    return { ...prev, [ev.targetUid]: (prev[ev.targetUid] ?? 0) + 1 };
+  }
+  return prev;
+}
+
 /** 解析一条战斗日志为动画事件；无法识别或名字找不到目标时返回 null */
 export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const text = entry.text;
@@ -320,6 +341,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [spdMap, setSpdMap] = useState<Record<string, number> | null>(null);
   const [passiveSpdMap, setPassiveSpdMap] = useState<Record<string, number> | null>(null);
   const [rockShellHitsMap, setRockShellHitsMap] = useState<Record<string, number> | null>(null);
+  const [thornRoyalHitsMap, setThornRoyalHitsMap] = useState<Record<string, number> | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, StatusEffect[]> | null>(null);
   const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
@@ -484,6 +506,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setSpdMap(prevSpd);
     setPassiveSpdMap(prevBattleBefore ? passiveSpdOfUnits(prevBattleBefore) : null);
     setRockShellHitsMap(prevBattleBefore ? rockShellHitsOfUnits(prevBattleBefore) : null);
+    setThornRoyalHitsMap(prevBattleBefore ? thornRoyalHitsOfUnits(prevBattleBefore) : null);
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
     events.forEach((ev, i) => {
@@ -574,6 +597,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           if (ev.shields) setShieldMap(ev.shields);
           if (ev.statuses) setStatusMap(ev.statuses);
           if (bossUid) setRockShellHitsMap((p) => rockShellHitsAfterEvent(p ?? {}, ev, bossUid));
+          setThornRoyalHitsMap((p) => thornRoyalHitsAfterEvent(p ?? {}, ev));
 
           // 用各自捕获的 seq 做 clear 比对，仅当该 unit 的 fx 仍是本事件设置的才清除
           const clear = window.setTimeout(
@@ -616,5 +640,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
+  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
 }

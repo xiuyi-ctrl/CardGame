@@ -204,16 +204,18 @@ const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
   skillSpd: { icon: '💨', label: '技能速度加成' },
 };
 
-export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number }) {
+export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride, thornsHitCountOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number; thornsHitCountOverride?: number }) {
   const p = getPassive(unit.passive);
   if (!p) return null;
   const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;
   const showStacks = stacks > 0 && (p.kind === 'spdOnHit' || p.kind === 'treeSpeedUp' || p.kind === 'spdOnAttack' || p.kind === 'speedBonus');
   const rockHits = p.kind === 'rockShellBreak' ? (rockShellHitsOverride ?? unit.rockShellHits ?? 0) : undefined;
+  const thornHits = p.kind === 'thornRoyal' ? (thornsHitCountOverride ?? unit.thornsHitCount ?? 0) : undefined;
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
       💠{p.name}{showStacks ? ` ×${stacks}` : ''}
       {rockHits !== undefined && p.value !== undefined ? ` ${rockHits}/${p.value}` : ''}
+      {thornHits !== undefined && p.value !== undefined ? ` ${thornHits % p.value}/${p.value}` : ''}
     </span>
   );
 }
@@ -271,9 +273,11 @@ export interface UnitCardProps {
   stacksOverride?: number;
   /** 动画期间覆盖岩壳崩解受击计数（逐段递增） */
   rockShellHitsOverride?: number;
+  /** 动画期间覆盖荆棘之躯受击计数（逐段递增） */
+  thornsHitCountOverride?: number;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -320,7 +324,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
       <div className="card-sub">
         {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
         <StatusIcons unit={unit} />
-        <PassiveBadge unit={unit} stacksOverride={stacksOverride} rockShellHitsOverride={rockShellHitsOverride} />
+        <PassiveBadge unit={unit} stacksOverride={stacksOverride} rockShellHitsOverride={rockShellHitsOverride} thornsHitCountOverride={thornsHitCountOverride} />
         <CurseBadge unit={unit} />
         <BattleBuffIcons unit={unit} />
       </div>
@@ -424,7 +428,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   comboBoost: (v) => `连击段数 +${v}`,
 };
 
-export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number }) {
+export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, thornsHitCountOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number; thornsHitCountOverride?: number }) {
   const passive = getPassive(unit.passive);
   const buffs = unit.battleBuffs;
   const battleBuffEntries = buffs
@@ -435,7 +439,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride }:
   const hasStatuses = statuses.length > 0;
   const hasBattleBuffs = battleBuffEntries.length > 0;
 
-  // 计算被动当前层数/加成
+  // 计算被动当前层数/加成（仅动态计数显示数字，固定效果数值在描述文字中）
   const passiveStacks = (() => {
     if (!passive) return null;
     // 速度叠加类被动：显示战斗中累计层数（被动层数随攻击/受击逐段递增）
@@ -447,11 +451,12 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride }:
     if (passive.kind === 'rockShellBreak') {
       return `${rockShellHitsOverride ?? unit.rockShellHits ?? 0}/${passive.value}`;
     }
-    // 效果类被动不显示数值（lifeSpring/guard/regen/thorns/drain/damageCap 的 value 是内部阈值，非叠加层数）
-    const noShowValue = ['lifeSpring', 'guard', 'regen', 'thorns', 'drain', 'damageCap', 'poisonBreak', 'ember_body', 'thornEntangle', 'tideRhythm', 'tideEcho'];
-    if (noShowValue.includes(passive.kind)) return null;
-    // 其他被动显示固定数值（如 hp+3, spd+1）
-    return `${passive.value}`;
+    // 荆棘之躯：显示当前受击计数（每受击 +1，每 3 次触发爆发反伤 + 回血）
+    if (passive.kind === 'thornRoyal') {
+      return `${(thornsHitCountOverride ?? unit.thornsHitCount ?? 0) % passive.value}/${passive.value}`;
+    }
+    // 非叠加型被动不显示数值（与卡片 PassiveBadge 规则统一）
+    return null;
   })();
 
   if (!hasPassive && !hasStatuses && !hasBattleBuffs) return null;
