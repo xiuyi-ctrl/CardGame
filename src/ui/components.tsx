@@ -199,8 +199,8 @@ export function StatusIcons({ unit }: { unit: Unit }) {
 const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
   atkUp: { icon: '⚔️', label: '伤害 +1' },
   spdUp: { icon: '💨', label: '速度 +1' },
-  atkDown: { icon: '🪄', label: '伤害 -1' },
-  spdDown: { icon: '🕸️', label: '速度 -1' },
+  atkDown: { icon: '🪄', label: '伤害 -2' },
+  spdDown: { icon: '🕸️', label: '速度 -2' },
   skillSpd: { icon: '💨', label: '技能速度加成' },
 };
 
@@ -218,8 +218,8 @@ export function PassiveBadge({ unit, stacksOverride }: { unit: Unit; stacksOverr
 
 const CURSE_ICON: Record<string, { icon: string; tip: string }> = {
   hpDown: { icon: '💔', tip: '血脆（生命 -5）' },
-  atkDown: { icon: '🪄', tip: '虚弱（伤害 -1）' },
-  spdDown: { icon: '🕸️', tip: '迟缓（速度 -1）' },
+  atkDown: { icon: '🪄', tip: '虚弱（伤害 -2）' },
+  spdDown: { icon: '🕸️', tip: '迟缓（速度 -2）' },
 };
 
 export function CurseBadge({ unit }: { unit: Unit }) {

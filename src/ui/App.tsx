@@ -1723,8 +1723,8 @@ function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   const u = state.roster.find((x) => x.uid === uid);
   if (!u) return null;
   const options = [
-    { stat: 'hp' as const, icon: '❤️', label: '生命 +3', value: 3 },
-    { stat: 'spd' as const, icon: '⚡', label: '速度 +1', value: 1 },
+    { stat: 'hp' as const, icon: '❤️', label: '生命 +5', value: 5 },
+    { stat: 'spd' as const, icon: '⚡', label: '速度 +2', value: 2 },
   ];
   return (
     <div className="screen">

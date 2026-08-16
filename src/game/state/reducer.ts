@@ -648,7 +648,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           break;
         case 'item':
           if (reward.itemId) {
-            next = { ...next, screen: 'map', postBattle: undefined, inventory: { ...next.inventory, [reward.itemId]: (next.inventory[reward.itemId] ?? 0) + 1 } };
+            next = { ...next, screen: 'map', postBattle: undefined, inventory: { ...next.inventory, [reward.itemId]: (next.inventory[reward.itemId] ?? 0) + (reward.amount ?? 1) } };
           }
           break;
         case 'evolve':
@@ -683,7 +683,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const log = state.specialPending.super
         ? [`超进化！${target.name} 进化成了 ${evolved.name}，但付出了代价`, ...state.log]
         : [`${target.name} 进化成了 ${evolved.name}！`, ...state.log];
-      return { ...state, roster, specialPending: undefined, log: log.slice(0, 20) };
+      return { ...state, screen: 'map', roster, specialPending: undefined, log: log.slice(0, 20) };
     }
 
     case 'SPECIAL_TARGET': {
@@ -717,8 +717,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!target) return state;
       const bonus = { ...target.bonusStats };
       const statCn = { hp: '生命', spd: '速度' }[action.stat];
-      if (action.stat === 'hp') bonus.hp = (bonus.hp ?? 0) + 3;
-      else bonus.spd = (bonus.spd ?? 0) + 1;
+      if (action.stat === 'hp') bonus.hp = (bonus.hp ?? 0) + 5;
+      else bonus.spd = (bonus.spd ?? 0) + 2;
       const roster = state.roster.map((u) => (u.uid === target.uid ? recomputeStats({ ...u, bonusStats: bonus }) : u));
       return {
         ...state,

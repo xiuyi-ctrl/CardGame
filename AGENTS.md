@@ -42,7 +42,7 @@
 ## 核心设计约定
 
 - 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`），无随机浮动；**受击减伤被动（guard）对多段技能的每一段都生效**（每段最低 1）。`getEffectiveSpd` 含药水 ±1。**速度加成技能**：`SkillDef.spdScaling?: number`，伤害 += 施法者当前速度 × spdScaling（狂叶/叶震波等）。
-- 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+3 / 速度+1。
+- 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+5 / 速度+2。
 - **反伤先打盾**：`applyCounterDmg(attacker, dmg)` 统一处理荆棘/盾反/棘刺王的反击伤害——先扣护盾再扣血，避免护盾失效后反伤仍穿透护盾的 bug。`thorns`/`thornRoyal`/`shieldCounter` 三处均已改为调用此函数。
 - **技能冷却**：`SkillDef.cooldown?: number` 设置使用后冷却回合数（缺省=0）；`Unit.skillCooldowns?: Record<string, number>` 追踪当前冷却；`applySkillCooldown` 存储 `skill.cooldown + 1`（因为 `startRound` 在回合开始时立即递减，+1 确保实际冷却回合数正确）；`skillCooldownLeft` 检查冷却是否归零。已设：盾反（shield_counter）冷却 1 回合。
 - **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫战禁用换位）。
@@ -58,7 +58,7 @@
 - **技能次数**：`SkillDef.uses?` 设置每场战斗的可用次数（缺省=无限，`skillUsesLeft` 返回 Infinity）。有限次技能在玩家/敌方使用后各扣 1（`consumeSkillUse` 需按当前状态重新取单位，勿用旧引用否则覆盖治疗等改动）；耗尽后 `playerSkill` 拒绝、UI 按钮禁用显示「剩 N 次/已用完」。已设：愈光（heal_light）2 次、战吼（roar）2 次。
 - **专属被动**：`MonsterSpecies.passive` + `Unit.passive`，所有生物（含 Boss/造物）各有 1 个，表在 `data/passives.ts`（`PASSIVES`/`getPassive`）。类型 `PassiveKind`：`hp`（最大生命+）`spd`（入场速度+）`regen`（回合开始回血）`thorns`（受击反伤）`drain`（造成伤害吸血）`power`（技能伤害+）`guard`（受击减伤，`getDamageGuard`）`venom`/`scorch`（攻击命中附中毒/灼烧）`frenzy`（血量<50% 伤害+）`venomPower`（对中毒目标伤害+）`damageCap`（每回合伤害上限）`poisonBreak`（攻击中毒目标无视护盾+真伤）`speedBonus`（速度差转伤害）`spdOnAttack`（攻击后速度+）`bigHitGuard`（大额伤害减免）`scorchPlus`（灼烧层数转伤害加成）。**guard 减伤、侵蚀「伤害加深」、thorns 反伤、drain 吸血对多段攻击均按段生效**（每段最低 1）。被动入口：`makeUnit` 应用 hp/spd 加成、`startRound` 处理 regen、攻击结算处理 guard/venom/scorch/thorns/drain、`getDamageBonus` 含 power/frenzy/venomPower/speedBonus/scorchPlus。UI 卡片显示 `PassiveBadge`（components.tsx）。
 - **超进化诅咒 UI**：`Unit.curse`（`hpDown`/`atkDown`/`spdDown`）在战斗卡片上通过 `CurseBadge` 显示（红色标签，图标+中文名），与 `PassiveBadge`/`BattleBuffIcons` 并列。
-- 属性强化固定值：生命 +3 / 速度 +1；诅咒：血脆=生命-5、虚弱=伤害-1、迟缓=速度-1；侵蚀节点：速度-2 / 受伤+2 / 每回合-2HP。
+- 属性强化固定值：生命 +5 / 速度 +2；诅咒：血脆=生命-5、虚弱=伤害-2、迟缓=速度-2；侵蚀节点：速度-2 / 受伤+2 / 每回合-2HP。
 - 敌人残血（≤40%）可喂食驯服加入队伍；宠物战斗阵亡永久删除；战后全体回血 60%。敌方治疗按各技能自身 `uses` 次数限制（用尽后不再选择该技能）。
 - 开局 2 只宠物（御三家之一 + 随机同伴），队伍上限 8、出战 5；队伍已满时驯服/孵化/招募的新宠物进「处理队伍」界面（替换/融合/放生，队伍有空位时可直接加入；融合时待处理宠物也可作为同物种材料）。
 - 地图生成：每幕层数按幕递进（幕1 8~10、幕2 10~12、幕3 12~14），出发后第 1 行强制全战斗；事件/商人数量随层数缩放（事件≈0.42×层数，上限6；商人≈0.28×层数，上限5，**最后两层必有 1 个商人**）；奇遇 ≤1；全战斗行 ≤2。

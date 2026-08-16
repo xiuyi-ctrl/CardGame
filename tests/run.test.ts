@@ -51,7 +51,7 @@ describe('成长与融合', () => {
     const fused = fuseUnit(cursed)!;
     expect(fused.bonusStats).toEqual({ hp: 3, spd: 1 });
     expect(fused.curse).toBe('spdDown');
-    expect(fused.spd).toBe(7); // 王后 spd7（base4+迅力3）+1 -1
+    expect(fused.spd).toBe(6); // 王后 spd7（base4+迅力3）+1 -2
   });
 
   it('FUSE reducer：材料不足被拒；材料足够融合并移除材料', () => {
@@ -624,7 +624,7 @@ describe('奇遇关', () => {
     expect(s.screen).toBe('roster');
     expect(s.specialPending).toBeUndefined();
     const boosted = s.roster.find((x) => x.uid === u.uid)!;
-    expect(boosted.maxHp).toBe(hp0 + 3);
+    expect(boosted.maxHp).toBe(hp0 + 5);
   });
 
   it('造物：选择模板后随机技能自创生物加入队伍', () => {

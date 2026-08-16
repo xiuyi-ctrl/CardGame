@@ -150,7 +150,7 @@ export interface Unit {
   skillCooldowns?: Record<string, number>;
   /** 属性强化：对基准属性的永久加成（来自奇遇关「属性强化」） */
   bonusStats?: { hp?: number; spd?: number };
-  /** 超进化带来的负面诅咒：hpDown=生命-5 / atkDown=伤害-1 / spdDown=速度-1 */
+  /** 超进化带来的负面诅咒：hpDown=生命-5 / atkDown=伤害-2 / spdDown=速度-2 */
   curse?: 'hpDown' | 'atkDown' | 'spdDown';
   /** 自创生物：创建时随机组合的技能，融合时保留而非按物种解锁 */
   customSkills?: string[];

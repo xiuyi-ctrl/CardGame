@@ -1836,7 +1836,7 @@ export function decrementBattleBuffs(b: BattleState): BattleState {
 /** 获取单位的固定伤害修正（诅咒虚弱 + 技能 atkUp/atkDown 状态 + 战斗药水 battleBuffs + 被动，整数） */
 export function getDamageBonus(u: Unit): number {
   let bonus = 0;
-  if (u.curse === 'atkDown') bonus -= 1;
+  if (u.curse === 'atkDown') bonus -= 2;
   for (const s of u.statuses) {
     if (s.kind === 'atkUp') bonus += s.value;
     else if (s.kind === 'atkDown') bonus -= s.value;

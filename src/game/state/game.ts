@@ -110,13 +110,13 @@ export interface SpecialNode {
 
 export const SPECIAL_REWARDS: SpecialReward[] = [
   { id: 'sr-evolve', label: '进化之光', desc: '选择一只宠物免费融合进化到下一形态', kind: 'evolve' },
-  { id: 'sr-gold', label: '龙之宝藏', desc: '获得 60 金币', kind: 'gold', amount: 60 },
-  { id: 'sr-golden-fruit', label: '圣果', desc: '获得 1 个必定驯服的圣果', kind: 'item', itemId: 'golden_fruit' },
-  { id: 'sr-boost', label: '属性强化', desc: '选择一只宠物，永久提升生命+3 或速度+1', kind: 'boost' },
+  { id: 'sr-gold', label: '龙之宝藏', desc: '获得 80 金币', kind: 'gold', amount: 80 },
+  { id: 'sr-golden-fruit', label: '圣果', desc: '获得 2 个必定驯服的圣果', kind: 'item', itemId: 'golden_fruit', amount: 2 },
+  { id: 'sr-boost', label: '属性强化', desc: '选择一只宠物，永久提升生命+5 或速度+2', kind: 'boost' },
   { id: 'sr-custom', label: '造物·自创生物', desc: '从三种属性模板中创造一只独特生物，技能随机组合', kind: 'custom' },
-  { id: 'sr-superevolve', label: '超进化', desc: '选择一只宠物融合进化，但附带随机负面诅咒', kind: 'superevolve' },
-  { id: 'sr-purify', label: '净化药水', desc: '获得 1 瓶清除负面诅咒的药水', kind: 'item', itemId: 'purify' },
-  { id: 'sr-skip', label: '跳关道具', desc: '获得 1 个可跳过战斗关卡的跳关道具', kind: 'item', itemId: 'skip' },
+  { id: 'sr-superevolve', label: '超进化', desc: '选择一只宠物免费融合进化到最高形态，但附带随机负面诅咒', kind: 'superevolve' },
+  { id: 'sr-purify', label: '净化药水', desc: '获得 2 瓶清除负面诅咒的药水', kind: 'item', itemId: 'purify', amount: 2 },
+  { id: 'sr-skip', label: '跳关道具', desc: '获得 3 个可跳过战斗关卡的跳关道具', kind: 'item', itemId: 'skip', amount: 3 },
 ];
 
 export const CUSTOM_PRESETS = ['custom_guardian', 'custom_fury', 'custom_gale'] as const;
@@ -1133,6 +1133,10 @@ export function generateMap(seed: number, act: number): RunMap {
   earlySpNodes.forEach((n) => setType(n, 'battle'));
   const remainingSp = mid.filter((n) => n.type === 'special');
   if (remainingSp.length > 1) remainingSp.slice(1).forEach((n) => setType(n, 'battle'));
+  // 第一幕不出现奇遇关
+  if (act === 1) {
+    mid.filter((n) => n.type === 'special').forEach((n) => setType(n, 'battle'));
+  }
   // 事件/商人目标随层数缩放，保持恢复节点占比基本不变
   const evTarget = Math.min(6, Math.round(layerCount * 0.42) + randInt(rng, 0, 1));
   const shopTarget = Math.min(5, Math.round(layerCount * 0.28) + randInt(rng, 0, 1));
@@ -1394,8 +1398,8 @@ export function applyMods(stats: BaseStats, u: Pick<Unit, 'bonusStats' | 'curse'
     };
   }
   if (u.curse === 'hpDown') out = { ...out, maxHp: Math.max(1, out.maxHp - 5) };
-  else if (u.curse === 'spdDown') out = { ...out, spd: Math.max(1, out.spd - 1) };
-  // 虚弱（atkDown）：伤害 -1，在战斗伤害结算中体现，不影响属性
+  else if (u.curse === 'spdDown') out = { ...out, spd: Math.max(1, out.spd - 2) };
+  // 虚弱（atkDown）：伤害 -2，在战斗伤害结算中体现，不影响属性
   return out;
 }
 
@@ -1436,7 +1440,7 @@ export function fuseUnit(primary: Unit): Unit | null {
   const b = primary.bonusStats;
   if (b) { hp += b.hp ?? 0; spd += b.spd ?? 0; }
   if (primary.curse === 'hpDown') hp = Math.max(1, hp - 5);
-  else if (primary.curse === 'spdDown') spd = Math.max(1, spd - 1);
+  else if (primary.curse === 'spdDown') spd = Math.max(1, spd - 2);
   return {
     ...fresh,
     uid: primary.uid,
