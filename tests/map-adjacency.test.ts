@@ -117,4 +117,26 @@ describe('地图相邻寻路回归', () => {
     }
     expect(missing).toEqual([]);
   });
+
+  it('钥匙门不作为唯一可进节点：从上一行任意可站立节点，下一行至少一个非钥匙门节点可达', () => {
+    const problems: string[] = [];
+    for (let seed = 1; seed < 200; seed++) {
+      for (let act = 1; act <= 3; act++) {
+        const map = generateMap(seed, act);
+        for (let r = 3; r < map.layers.length - 1; r++) {
+          const row = map.layers[r];
+          if (!row.some((n) => n.type === 'keydoor')) continue;
+          const prev = map.layers[r - 1];
+          for (const p of prev) {
+            if (p.type === 'keydoor') continue;
+            const reachable = row.filter((q) => Math.abs(q.col - p.col) <= 1);
+            if (reachable.length > 0 && reachable.every((q) => q.type === 'keydoor')) {
+              problems.push(`seed=${seed} act=${act} 从 ${p.label}(c${p.col}) 仅钥匙门可达`);
+            }
+          }
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
 });

@@ -111,18 +111,18 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     expect(luluAtk.hp?.[a.uid]).toBe(14 - luluDmg);
   });
 
-  it('侵蚀「伤害加深」对多段每段生效（连击 2 段各 +1）', () => {
+  it('侵蚀「伤害加深」对多段每段生效（连击 2 段各 +2）', () => {
     const p = makeUnit('lulu', true, 0, false);
     p.spd = 1; // 让敌方先手
     const raw = createBattle([p], [{ speciesId: 'boss_crab' }], 5, { corruptDebuff: 'dmg' });
-    // 移除 createBattle 自动触发的潮汐节律 atkUp，确保伤害为基础 4 + 侵蚀 1 = 5
+    // 移除 createBattle 自动触发的潮汐节律 atkUp，确保伤害为基础 4 + 侵蚀 2 = 6
     const enemy = { ...raw.enemyUnits[0], skills: ['double_hit'], statuses: raw.enemyUnits[0].statuses.filter((s) => s.kind !== 'atkUp') };
     const b0 = { ...raw, enemyUnits: [enemy] };
     const b1 = playerEndTurn(b0);
     const logs = b1.log.filter((l) => l.text.includes('使用「连击」攻击'));
     expect(logs.map((l) => l.text)).toEqual([
-      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 5 伤害`,
-      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 5 伤害`,
+      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 6 伤害`,
+      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 6 伤害`,
     ]);
   });
 });

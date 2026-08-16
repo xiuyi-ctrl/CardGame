@@ -216,8 +216,8 @@ export interface BattleState {
   rngCount: number;
   /** 玩家已下达的技能指令（uid → 指令；结束回合统一结算后清空） */
   orders?: Record<string, PlayerOrder>;
-  /** 被侵蚀节点的暗影 debuff：'spd' 我方速度 -10% | 'dmg' 我方受到伤害 +10% */
-  corruptDebuff?: 'spd' | 'dmg';
+/** 被侵蚀节点的暗影 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 */
+corruptDebuff?: 'spd' | 'dmg' | 'burn';
   /** 车轮战：total 总场数、current 当前上场序号（从 1 开始） */
   gauntlet?: { total: number; current: number };
   /** 车轮战：尚未上场的敌方后备队列 */

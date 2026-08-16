@@ -28,8 +28,8 @@ const SOFTMAX_TEMP = 12;
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
-  /** 被侵蚀 debuff：'spd' 我方速度 -1 | 'dmg' 我方受到伤害 +1 */
-  corruptDebuff?: 'spd' | 'dmg';
+/** 被侵蚀 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 */
+corruptDebuff?: 'spd' | 'dmg' | 'burn';
   /** 车轮战：敌方 2~3 只轮换上阵 */
   gauntlet?: boolean;
   /** 敌方不可驯服（斗兽场/车轮战） */
@@ -253,7 +253,7 @@ export function createBattle(
 ): BattleState {
   const preparedPlayer = playerUnits.map((u) => {
     const c = cloneUnit(u);
-    if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, c.spd - 1);
+    if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, c.spd - 2);
     return c;
   });
   // 只有 1 只宠物上场时，位置默认为前排居中
@@ -372,6 +372,17 @@ function startRound(b: BattleState): BattleState {
   }
   // DOT结算完毕后重置伤害累计（新回合开始）
   nb = { ...nb, roundDmgMap: {} };
+  // 被侵蚀 burn debuff：每回合结束受到 2 点伤害
+  if (nb.corruptDebuff === 'burn') {
+    for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+      if (u.hp <= 0 || !u.isPlayer) continue;
+      const dmg = 2;
+      const hitUnit = { ...u, hp: Math.max(0, u.hp - dmg) };
+      nb = replaceUnit(nb, hitUnit);
+      nb = pushLog(nb, `${u.name} 受到侵蚀伤害 ${dmg} 点`, sideOf(u), u.uid);
+    }
+    nb = checkEnd(nb);
+  }
   // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
   nb = {
     ...nb,
@@ -1095,7 +1106,7 @@ function resolveAttack(
     perHitDmg += getEffectiveSpd(actor) * skill.spdScaling;
   }
   if (target.isPlayer && nb.corruptDebuff === 'dmg') {
-    perHitDmg += 1;
+    perHitDmg += 2;
   }
   const passiveAdds: string[] = [];
   const ap = getUnitPassive(actor);

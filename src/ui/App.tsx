@@ -249,7 +249,7 @@ const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'arena', 'gauntlet', 'co
 
 function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [sel, setSel] = useState<MapNode['type']>('battle');
-  const [debuff, setDebuff] = useState<'spd' | 'dmg'>('spd');
+  const [debuff, setDebuff] = useState<'spd' | 'dmg' | 'burn'>('spd');
   const [reward, setReward] = useState<'gold' | 'food'>('gold');
   return (
     <div className="screen center-col">
@@ -274,9 +274,10 @@ function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
       {sel === 'corrupted' && (
         <div className="debug-row">
           <label>侵蚀</label>
-          <select value={debuff} onChange={(e) => setDebuff(e.target.value as 'spd' | 'dmg')}>
-            <option value="spd">速度 -1</option>
-            <option value="dmg">受伤 +1</option>
+          <select value={debuff} onChange={(e) => setDebuff(e.target.value as 'spd' | 'dmg' | 'burn')}>
+            <option value="spd">速度 -2</option>
+            <option value="dmg">受伤 +2</option>
+            <option value="burn">每回合 -2HP</option>
           </select>
           <label>胜利奖励</label>
           <select value={reward} onChange={(e) => setReward(e.target.value as 'gold' | 'food')}>
@@ -913,6 +914,20 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
     setLines(result);
   }, [isFirst, state.currentNodeId, optionsRow, nearIds, hoverNode, hoverNextRow, hoverReachIds, svgSize, state.map, state.inventory, state.visitedNodeIds]);
 
+  // 每次进入地图，滚动定位到当前所在节点（居中）
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const el = state.currentNodeId ? nodeEls.current[state.currentNodeId] : null;
+    if (!el) return;
+    const rect = canvas.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const targetTop = canvas.scrollTop + r.top - rect.top - (rect.height - r.height) / 2;
+    const targetLeft = canvas.scrollLeft + r.left - rect.left - (rect.width - r.width) / 2;
+    canvas.scrollTop = Math.max(0, targetTop);
+    canvas.scrollLeft = Math.max(0, targetLeft);
+  }, [state.currentNodeId]);
+
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
@@ -1307,7 +1322,7 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
         瞭望塔 🔭 {previewNode ? `(第 ${previewRow + 1} 行)` : ''}
       </div>
       <p className="card-sub" style={{ textAlign: 'center' }}>
-        预览该瞭望塔后 3 行内某一行的全部节点情报（敌人属性与数量、商店货物、事件与奇遇）
+        预览该瞭望塔后 3 行内某一行的全部节点情报（敌人属性与数量、商店货物、钥匙门/双生宝箱奖励、事件与奇遇）
       </p>
       <div className="panel-row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12 }}>
         {rows.map((r) => (
@@ -1462,12 +1477,15 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
   const tame = (state.tameOverflow ?? [])[0];
   if (!tame) return null;
   const remaining = state.tameOverflow!.length;
+  const hasSpace = state.roster.length < ROSTER_MAX;
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   return (
     <div className="screen">
-      <div className="section-title">{state.roster.length >= ROSTER_MAX ? '队伍已满' : '处理队伍'}（队伍 {state.roster.length}/{ROSTER_MAX}）</div>
+      <div className="section-title">{hasSpace ? '处理队伍' : '队伍已满'}（队伍 {state.roster.length}/{ROSTER_MAX}）</div>
       <p className="card-sub" style={{ maxWidth: 560, textAlign: 'center', margin: '0 auto 8px' }}>
-        你{state.tameOverflowReturn === 'map' ? '孵化了' : state.tameOverflowReturn === 'roster' ? '招募了' : '驯服了'}新的宠物，但队伍已满。选择：<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（同物种足够可直接进化，待处理宠物也可作为材料）／<b>放生</b>（丢弃）。
+        你{state.tameOverflowReturn === 'map' ? '孵化了' : state.tameOverflowReturn === 'roster' ? '招募了' : '驯服了'}新的宠物。{hasSpace
+          ? '队伍有空位，可直接加入。'
+          : '队伍已满，选择：'}<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（同物种足够可直接进化，待处理宠物也可作为材料）／<b>放生</b>（丢弃）。
       </p>
       <div className="center-col" style={{ flex: '0 0 auto', padding: '8px 0' }}>
         <UnitCard unit={tame} />
@@ -1527,6 +1545,14 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
           );
         })}
       </div>
+
+      {hasSpace && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
+          <button className="primary big-btn" onClick={() => dispatch({ type: 'TAME_OVERFLOW_JOIN', tameUid: tame.uid })}>
+            将「{tame.name}」加入队伍
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
         <button className="big-btn" onClick={() => dispatch({ type: 'TAME_OVERFLOW_DISCARD', tameUid: tame.uid })}>

@@ -73,7 +73,7 @@ describe('地图生成：新战斗节点', () => {
             expect(map.encounter[n.id]?.length).toBe(n.gauntletSize);
           } else if (n.type === 'corrupted') {
             sawCorrupted = true;
-            expect(['spd', 'dmg']).toContain(n.corruptDebuff);
+            expect(['spd', 'dmg', 'burn']).toContain(n.corruptDebuff);
             expect(['gold', 'food']).toContain(n.corruptReward);
             expect(map.encounter[n.id]).toBeDefined();
           }
@@ -382,10 +382,10 @@ describe('车轮战（轮换上阵）', () => {
 });
 
 describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
-  it('spd debuff：我方全体速度 -1', () => {
+  it('spd debuff：我方全体速度 -2', () => {
     const u = makeUnit('momo', true, 0, false);
     const b = createBattle([u], [{ speciesId: 'kiki' }], 1, { corruptDebuff: 'spd' });
-    expect(b.playerUnits[0].spd).toBe(Math.max(1, u.spd - 1));
+    expect(b.playerUnits[0].spd).toBe(Math.max(1, u.spd - 2));
   });
 
   it('dmg debuff：我方受到伤害更大（同种子同操作，总损失 ≥ 普通战斗）', () => {

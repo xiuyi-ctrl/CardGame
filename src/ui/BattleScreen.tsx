@@ -415,7 +415,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         )}
         {battle.corruptDebuff && (
           <span className="chip" title="被侵蚀区域的暗影 debuff">
-            🌑 暗影侵蚀：{battle.corruptDebuff === 'spd' ? '我方速度 -10%' : '我方受到伤害 +10%'}
+            🌑 暗影侵蚀：{battle.corruptDebuff === 'spd' ? '我方速度 -2' : battle.corruptDebuff === 'dmg' ? '我方受到伤害 +2' : '我方每回合受到 2 点侵蚀伤害'}
           </span>
         )}
         <span className="chip">

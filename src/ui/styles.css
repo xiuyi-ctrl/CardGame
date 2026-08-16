@@ -1414,7 +1414,7 @@ button.primary {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center;
   gap: 18px;
   overflow: auto;
   padding: 10px 0;

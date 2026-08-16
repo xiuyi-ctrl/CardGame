@@ -379,7 +379,9 @@ describe('完整肉鸽流程', () => {
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     s = dispatch(s, { type: 'NEXT_NODE' });
     expect(s.act).toBe(2);
-    expect(s.screen).toBe('map');
+    // 自动踏入新幕出发层（布阵界面）
+    expect(s.screen).toBe('formation');
+    expect(s.currentNodeId).toBe(s.map.layers[0][0].id);
   });
 
   it('第三层首领后通关', () => {
@@ -412,6 +414,62 @@ describe('完整肉鸽流程', () => {
     s = { ...s, screen: 'battle', battle: { ...battle, phase: 'won' as const } };
     s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
     expect(s.screen).toBe('reward');
+  });
+
+  it('首领战后进入下一层：重置 visitedNodeIds 与 visitedWatchtowers', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 21 });
+    // 模拟已走过若干节点 + 访问瞭望塔
+    s = { ...s, visitedNodeIds: ['a', 'b', 'c'], visitedWatchtowers: ['tw1'] };
+    s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.act).toBe(2);
+    // 自动踏入出发层：visitedNodeIds 重置后包含出发节点
+    const depId = s.map.layers[0][0].id;
+    expect(s.visitedNodeIds).toEqual([depId]);
+    expect(s.visitedWatchtowers).toEqual([]);
+  });
+
+  it('首领战后进入下一层：新幕地图可正常导航不被锁死', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 22 });
+    // 模拟旧幕已走过若干节点（id 与新幕可能重叠的场景）
+    s = { ...s, visitedNodeIds: ['n2_0_0', 'n2_1_2', 'n2_2_0'], visitedWatchtowers: ['old_tw'] };
+    s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.act).toBe(2);
+    // 自动踏入新幕出发层（布阵界面）
+    expect(s.screen).toBe('formation');
+    const dep = s.map.layers[0][0];
+    expect(s.currentNodeId).toBe(dep.id);
+    // 通过出发层战斗
+    const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'momo' }], 22);
+    const aliveEnemy = battle.enemyUnits.find((u) => u.hp > 0)!;
+    aliveEnemy.hp = 0;
+    s = { ...s, screen: 'battle', battle: { ...battle, phase: 'won' as const } };
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+    expect(s.screen).toBe('reward');
+    // 选奖励进入队伍界面
+    if (s.rewards.length > 0) {
+      s = dispatch(s, { type: 'PICK_REWARD', rewardId: s.rewards[0].id });
+    }
+    if (s.screen === 'tame-overflow') {
+      s = dispatch(s, { type: 'TAME_OVERFLOW_DISCARD', tameUid: '' });
+    }
+    expect(s.screen).toBe('roster');
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('map');
+    // 此时 currentNodeId=dep.id（出发层已走），optionsRow=1
+    // 下一行应有至少一个可选节点（不应被旧幕 visitedNodeIds 锁死）
+    const nextRow = s.map.layers[s.currentRow + 1];
+    const curCol = s.map.layers[s.currentRow].find((n) => n.id === s.currentNodeId)?.col;
+    const canGo = nextRow.filter((n) => {
+      if (s.map.disabled?.[n.id]) return false;
+      if (s.currentRow === 0) return true;
+      if (curCol == null || typeof n.col !== 'number') return true;
+      return Math.abs(n.col - curCol) <= 1;
+    });
+    expect(canGo.length).toBeGreaterThan(0);
   });
 });
 
@@ -805,7 +863,9 @@ describe('瞭望塔', () => {
     const next = dispatch(s, { type: 'NEXT_NODE' });
     expect(next.act).toBe(2);
     expect(next.currentRow).toBe(0);
-    expect(next.screen).toBe('map');
+    // 自动踏入新幕出发层（布阵界面）
+    expect(next.screen).toBe('formation');
+    expect(next.currentNodeId).toBe(next.map.layers[0][0].id);
   });
 });
 
@@ -898,6 +958,19 @@ describe('同步双节点', () => {
     expect((cur2.chestResult ?? []).length).toBe(1);
     expect(cur2.inventory.scout).toBe(1);
   });
+
+  it('侦查/瞭望塔的双生宝箱情报包含宝箱奖励内容（与实际开启一致）', () => {
+    const { s, node, parent } = atSyncParent();
+    const info = nodeInfo(s, node);
+    expect(info.detail).toContain('宝箱奖励');
+    // 实际开启并提取奖励文本
+    const row = s.map.layers.findIndex((r) => r.includes(node));
+    let cur: GameState = { ...s, screen: 'map', currentRow: row - 1, currentNodeId: parent.id };
+    cur = dispatch(cur, { type: 'MOVE', nodeId: node.id });
+    const opened = (cur.chestResult ?? [])[0];
+    const reward = opened.slice(opened.indexOf('：') + 1).trim();
+    expect(info.detail).toContain(reward);
+  });
 });
 
 describe('守卫与钥匙门', () => {
@@ -980,6 +1053,27 @@ describe('守卫与钥匙门', () => {
     expect(cur.inventory[`key_${guardian.id}`]).toBe(0);
     expect(cur.map.disabled?.[keydoor.id]).toBe(true);
     expect(cur.gold).toBeGreaterThanOrEqual(gold0 + 25);
+  });
+
+  it('侦查/瞭望塔的钥匙门情报包含宝箱奖励内容（与实际开启一致）', () => {
+    const { s, guardian, keydoor } = atGuardPair();
+    const dRow = s.map.layers.findIndex((r) => r.includes(keydoor));
+    const parent = s.map.layers[dRow - 1].find((n) => Math.abs(n.col - keydoor.col) <= 1)!;
+    // 侦查/瞭望塔显示宝箱奖励
+    const info = nodeInfo(s, keydoor);
+    expect(info.detail).toContain('宝箱奖励');
+    // 实际开启并提取奖励文本
+    let cur: GameState = {
+      ...s,
+      screen: 'map',
+      currentRow: dRow - 1,
+      currentNodeId: parent.id,
+      inventory: { ...s.inventory, [`key_${guardian.id}`]: 1 },
+    };
+    cur = dispatch(cur, { type: 'MOVE', nodeId: keydoor.id });
+    const opened = (cur.chestResult ?? [])[0];
+    const reward = opened.slice(opened.indexOf('：') + 1).trim();
+    expect(info.detail).toContain(reward);
   });
 
   it('商店随机出售 4 种商品，可购买侦察/双生符等库存中的道具', () => {
@@ -1242,5 +1336,108 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     expect(after.screen).toBe('roster');
     expect(after.tameOverflow).toBeUndefined();
     expect(after.postBattle).toBe(true);
+  });
+
+  it('队伍内融合腾出空位后，溢出宠物可通过 JOIN 直接入队', () => {
+    const s = { ...createInitialState() };
+    s.roster = Array.from({ length: ROSTER_MAX }, (_, i) => {
+      if (i === 0 || i === 1) return makeUnit('momo', true, 0, false);
+      return makeUnit('kiki', true, 0, false);
+    });
+    s.screen = 'tame-overflow';
+    s.tameOverflow = [makeUnit('fifi', false, 0, false)];
+    s.tameOverflowReturn = 'map';
+    const tameUid = s.tameOverflow[0].uid;
+    // 先融合两只 momo，腾出一个空位（8→7）
+    const primaryUid = s.roster.find((u) => u.speciesId === 'momo')!.uid;
+    const fused = dispatch(s, { type: 'FUSE_IN_OVERFLOW', uid: primaryUid });
+    expect(fused.roster.length).toBe(ROSTER_MAX - 1);
+    expect(fused.screen).toBe('tame-overflow');
+    // 直接加入队伍
+    const joined = dispatch(fused, { type: 'TAME_OVERFLOW_JOIN', tameUid });
+    expect(joined.screen).toBe('map');
+    expect(joined.tameOverflow).toBeUndefined();
+    expect(joined.tameOverflowReturn).toBeUndefined();
+    expect(joined.roster.length).toBe(ROSTER_MAX);
+    expect(joined.roster.some((u) => u.speciesId === 'fifi')).toBe(true);
+  });
+
+  it('队伍已满时 TAME_OVERFLOW_JOIN 被拒', () => {
+    const s = { ...createInitialState() };
+    s.roster = Array.from({ length: ROSTER_MAX }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
+    s.screen = 'tame-overflow';
+    s.tameOverflow = [makeUnit('fifi', false, 0, false)];
+    const tameUid = s.tameOverflow[0].uid;
+    const after = dispatch(s, { type: 'TAME_OVERFLOW_JOIN', tameUid });
+    expect(after).toBe(s);
+  });
+
+  it('多只溢出：加入 1 只后队伍回到满员，仍停留 tame-overflow', () => {
+    const s = { ...createInitialState() };
+    s.roster = Array.from({ length: ROSTER_MAX - 1 }, () => makeUnit('kiki', true, 0, false));
+    s.screen = 'tame-overflow';
+    s.tameOverflow = [makeUnit('momo', false, 0, false), makeUnit('fifi', false, 0, false)];
+    s.tameOverflowReturn = 'map';
+    const tameUid = s.tameOverflow[0].uid;
+    const joined = dispatch(s, { type: 'TAME_OVERFLOW_JOIN', tameUid });
+    // 加入一只后队伍回到满员（8），还有 1 只待处理
+    expect(joined.roster.length).toBe(ROSTER_MAX);
+    expect(joined.screen).toBe('tame-overflow');
+    expect(joined.tameOverflow).toHaveLength(1);
+    expect(joined.tameOverflow![0].speciesId).toBe('fifi');
+  });
+
+  it('NEXT_NODE（首领战）清除 skipSelecting/scoutSelecting/scoutResult', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 99 });
+    s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
+    // 模拟背包中使用跳关道具/侦查符后残留的选择模式状态
+    s = { ...s, skipSelecting: true, scoutSelecting: true, scoutResult: { nodeId: 'x', title: 'test', detail: 'test' } };
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.act).toBe(2);
+    expect(s.skipSelecting).toBe(false);
+    expect(s.scoutSelecting).toBe(false);
+    expect(s.scoutResult).toBeUndefined();
+    // 自动踏入新幕出发层
+    expect(s.screen).toBe('formation');
+    expect(s.currentNodeId).toBe(s.map.layers[0][0].id);
+  });
+
+  it('NEXT_NODE（普通行推进）清除 skipSelecting/scoutSelecting/scoutResult', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 100 });
+    // 正常走到第 1 行
+    const dep = s.map.layers[0][0];
+    s = dispatch(s, { type: 'MOVE', nodeId: dep.id });
+    expect(s.screen).toBe('formation');
+    // 模拟选择模式残留
+    s = { ...s, screen: 'map', skipSelecting: true, scoutSelecting: true, scoutResult: { nodeId: 'y', title: 'scout', detail: 'info' } };
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('map');
+    expect(s.skipSelecting).toBe(false);
+    expect(s.scoutSelecting).toBe(false);
+    expect(s.scoutResult).toBeUndefined();
+  });
+
+  it('LOAD_GAME 清除旧存档残留的 skipSelecting/scoutSelecting/scoutResult', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 101 });
+    // 模拟旧存档：有跳关选择模式残留
+    s = { ...s, skipSelecting: true, scoutSelecting: true, scoutResult: { nodeId: 'z', title: 'old', detail: 'old' } };
+    s = dispatch(s, { type: 'LOAD_GAME', state: s });
+    expect(s.skipSelecting).toBe(false);
+    expect(s.scoutSelecting).toBe(false);
+    expect(s.scoutResult).toBeUndefined();
+  });
+
+  it('NEXT_NODE 后 skipSelecting 已清，自动踏入出发层（布阵）', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 102 });
+    s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
+    s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
+    s = { ...s, skipSelecting: true };
+    s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.act).toBe(2);
+    expect(s.skipSelecting).toBe(false);
+    // 自动踏入出发层，直接进入布阵
+    expect(s.screen).toBe('formation');
+    expect(s.currentNodeId).toBe(s.map.layers[0][0].id);
   });
 });

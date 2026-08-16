@@ -1,10 +1,10 @@
 import type { GameState, MapNode, RewardChoice, RunMap } from './game';
-import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
-import { getFood, FOODS } from '../data/foods';
+import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
@@ -50,6 +50,7 @@ export type GameAction =
   | { type: 'TAME_OVERFLOW_REPLACE'; tameUid: string; discardUid: string }
   | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string }
   | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
+  | { type: 'TAME_OVERFLOW_JOIN'; tameUid: string }
   | { type: 'FUSE_IN_OVERFLOW'; uid: string }
   | { type: 'PLAYER_SKILL'; actorUid: string; skillId: string; targetUid?: string }
   | { type: 'PLAYER_REST'; actorUid: string }
@@ -74,7 +75,7 @@ export type GameAction =
   | { type: 'CLOSE_WATCHTOWER' }
   | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
   | { type: 'DEBUG_CUSTOM_TEST' }
-  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg'; corruptReward?: 'gold' | 'food' }
+  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn'; corruptReward?: 'gold' | 'food' }
   | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
@@ -92,8 +93,8 @@ export function createInitialState(): GameState {
     currentNodeId: '',
     roster: [],
     field: [],
-    inventory: { berry: 3, meat: 1 },
-    gold: 12,
+    inventory: { berry: 3, meat: 2 },
+    gold: 20,
     rewards: [],
     log: [],
     visitedWatchtowers: [],
@@ -145,8 +146,8 @@ function freshRun(starterId: string, seed: number): GameState {
     currentNodeId: '',
     roster: [starter, companion],
     field: [starter.uid, companion.uid],
-    inventory: { berry: 3, meat: 1 },
-    gold: 12,
+    inventory: { berry: 3, meat: 2 },
+    gold: 20,
     rewards: [],
     log: [],
     visitedWatchtowers: [],
@@ -250,53 +251,18 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   return result;
 }
 
-/** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+40% 概率道具，其中净化药水固定 20% 概率单独判定）。结果文本进 chestResult */
+/** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+概率道具）。结果文本进 chestResult。共用 rollChest 保证与瞭望塔/侦察符预览完全一致。 */
 function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: GameState; text: string } {
-  const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
+  const roll = rollChest(base.seed, base.currentRow, node.id, keydoor);
   let next = base;
-  let text: string;
-  const foodPool = Object.keys(FOODS).filter((id) => FOODS[id].shop !== false);
-  if (keydoor) {
-    const amt = 25 + Math.floor(rng() * 16);
-    const foodId = foodPool[Math.floor(rng() * foodPool.length)];
-    const food = getFood(foodId);
-    let extras: string[] = [];
-    // 钥匙门额外奖励：净化药水固定 20% 概率；其余道具（侦察符/双生符/跳关）共 20% 概率，均分
-    if (rng() < 0.2) {
-      // 净化药水
-      next = { ...next, inventory: { ...next.inventory, purify: (next.inventory.purify ?? 0) + 1 } };
-      extras.push(`额外获得「${getItem('purify').name}」`);
-    } else if (rng() < 0.25) { // 剩余 80% * 25% = 20% 给其他道具
-      const pool = ['scout', 'twin', 'skip'];
-      const extraId = pool[Math.floor(rng() * pool.length)];
-      const it = getItem(extraId);
-      next = { ...next, inventory: { ...next.inventory, [extraId]: (next.inventory[extraId] ?? 0) + 1 } };
-      extras.push(`额外获得「${it.name}」`);
-    }
-    // 圣果单独 10% 概率（原逻辑保留）
-    if (rng() < 0.1) {
-      next = { ...next, inventory: { ...next.inventory, golden_fruit: (next.inventory.golden_fruit ?? 0) + 1 } };
-      extras.push(`额外获得「${getFood('golden_fruit').name}」`);
-    }
-    next = { ...next, gold: next.gold + amt, inventory: { ...next.inventory, [foodId]: (next.inventory[foodId] ?? 0) + 1 } };
-    text = `开启「${labelOf(node.type, base.currentRow)}」：获得 ${amt} 金币、1 个${food.name}${extras.length ? '、' + extras.join('、') : ''}`;
-  } else {
-    const roll = rng();
-    if (roll < 0.4) {
-      const amt = 12 + Math.floor(rng() * 9);
-      next = { ...next, gold: next.gold + amt };
-      text = `开启「${labelOf(node.type, base.currentRow)}」：获得 ${amt} 金币`;
-    } else if (roll < 0.7) {
-      const foodId = foodPool[Math.floor(rng() * foodPool.length)];
-      const food = getFood(foodId);
-      next = { ...next, inventory: { ...next.inventory, [foodId]: (next.inventory[foodId] ?? 0) + 1 } };
-      text = `开启「${labelOf(node.type, base.currentRow)}」：获得 1 个${food.name}`;
-    } else {
-      const healed = next.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.3)) }));
-      next = { ...next, roster: healed };
-      text = `开启「${labelOf(node.type, base.currentRow)}」：全体宠物恢复 30% 生命`;
-    }
+  if (roll.gold) next = { ...next, gold: next.gold + roll.gold };
+  if (roll.foodId) next = { ...next, inventory: { ...next.inventory, [roll.foodId]: (next.inventory[roll.foodId] ?? 0) + 1 } };
+  for (const ex of roll.extras) next = { ...next, inventory: { ...next.inventory, [ex.id]: (next.inventory[ex.id] ?? 0) + 1 } };
+  if (roll.healRatio) {
+    const healed = next.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * roll.healRatio!)) }));
+    next = { ...next, roster: healed };
   }
+  const text = `开启「${labelOf(node.type, base.currentRow)}」：${roll.text}`;
   return { next, text };
 }
 
@@ -425,6 +391,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...action.state,
         map: { ...action.state.map, events: action.state.map.events ?? {}, specials: action.state.map.specials ?? {} },
+        skipSelecting: false,
+        scoutSelecting: false,
+        scoutResult: undefined,
       };
 
     case 'MOVE': {
@@ -485,6 +454,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         battle: undefined,
         specialPending: undefined,
         shopBought: false,
+        skipSelecting: false,
+        scoutSelecting: false,
+        scoutResult: undefined,
         log: [`[调试] 第 ${act} 幕 第 ${row} 层 → ${node.label}`, ...state.log].slice(0, 20),
       };
       return enterNode(base, node);
@@ -1152,6 +1124,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : next;
     }
 
+    case 'TAME_OVERFLOW_JOIN': {
+      const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
+      if (!tame) return state;
+      if (state.roster.length >= ROSTER_MAX) return state;
+      const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
+      const next: GameState = {
+        ...state,
+        roster: [...state.roster, tame],
+        tameOverflow: overflow,
+        log: [`刚驯服的 ${tame.name} 加入队伍`, ...state.log].slice(0, 20),
+      };
+      return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : next;
+    }
+
     case 'FUSE_IN_OVERFLOW': {
       if (state.screen !== 'tame-overflow') return state;
       const primary = state.roster.find((u) => u.uid === action.uid);
@@ -1249,21 +1235,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (bossCleared(state)) {
         if (state.act >= 3) return { ...state, screen: 'victory' };
         const act = state.act + 1;
-        return {
+        const map = generateMap(state.seed, act);
+        const dep = map.layers[0][0];
+        const base: GameState = {
           ...state,
           act,
-          map: generateMap(state.seed, act),
+          map,
           currentRow: 0,
-          currentNodeId: '',
+          currentNodeId: dep ? dep.id : '',
           screen: 'map',
           gauntletOrder: undefined,
           gauntletSize: undefined,
           postBattle: undefined,
+          visitedNodeIds: dep ? [dep.id] : [],
+          visitedWatchtowers: [],
+          skipSelecting: false,
+          scoutSelecting: false,
+          scoutResult: undefined,
         };
+        if (dep) return enterNode(base, dep, 0, '');
+        return base;
       }
       const nextRow = state.currentRow + 1;
       if (nextRow < state.map.layers.length) {
-        return { ...state, screen: 'map', chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined, postBattle: undefined };
+        return { ...state, screen: 'map', chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined, postBattle: undefined, skipSelecting: false, scoutSelecting: false, scoutResult: undefined };
       }
       return { ...state, screen: 'victory' };
     }

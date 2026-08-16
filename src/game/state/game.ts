@@ -34,8 +34,8 @@ export interface MapNode {
   label: string;
   /** 列序号：本行第几个节点，用于判断下一层相邻路线 */
   col: number;
-  /** 被侵蚀节点 debuff：'spd' 我方速度 -10% | 'dmg' 我方受到伤害 +10% */
-  corruptDebuff?: 'spd' | 'dmg';
+/** 被侵蚀节点 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 */
+corruptDebuff?: 'spd' | 'dmg' | 'burn';
   /** 被侵蚀节点奖励翻倍方式：'gold' 金币翻倍 | 'food' 食物翻倍 */
   corruptReward?: 'gold' | 'food';
   /** 车轮战敌人数：2 或 3 */
@@ -218,7 +218,7 @@ export interface GameState {
     initialField: Unit[];
     encounter: { speciesId: string }[];
     nodeId: string;
-    options?: { corruptDebuff?: 'spd' | 'dmg'; untameable?: boolean; act?: number; nodeType?: string };
+    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn'; untameable?: boolean; act?: number; nodeType?: string };
     /** 移动前的位置（BACK_TO_MAP 时恢复） */
     prevRow?: number;
     prevNodeId?: string;
@@ -246,7 +246,7 @@ export interface GameState {
   testPick?: {
     side: 'player' | 'enemy';
     nodeType: MapNode['type'];
-    corruptDebuff?: 'spd' | 'dmg';
+    corruptDebuff?: 'spd' | 'dmg' | 'burn';
     corruptReward?: 'gold' | 'food';
     playerUnits?: Unit[];
   };
@@ -255,7 +255,7 @@ export interface GameState {
     units: Unit[];
     encounter: { speciesId: string }[];
     seed: number;
-    options?: { corruptDebuff?: 'spd' | 'dmg'; gauntlet?: boolean; untameable?: boolean; enemyExact?: boolean };
+    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn'; gauntlet?: boolean; untameable?: boolean; enemyExact?: boolean };
     nodeType: NodeType;
   };
   /** 战斗胜利后进入队伍管理界面：禁止选择出战，只能释放/融合 */
@@ -296,7 +296,53 @@ export interface NodeInfo {
   detail: string;
 }
 
-/** 查看单个节点的情报（侦查符 / 瞭望塔共用）：按节点类型展示敌人/货物/事件等内容 */
+export interface ChestRoll {
+  gold: number;
+  foodId?: string;
+  healRatio?: number;
+  extras: { id: string; name: string }[];
+  text: string;
+}
+
+/**
+ * 确定性宝箱掷骰（钥匙门 / 双生宝箱共用），与 openChest 使用完全相同的 RNG 调用顺序。
+ * row 必须为节点所在行（openChest 用 base.currentRow，瞭望塔/侦察符用 layers.findIndex）。
+ */
+export function rollChest(seed: number, row: number, nodeId: string, keydoor: boolean): ChestRoll {
+  const rng = createRng(seed * 7919 + row * 104729 + hashStr(nodeId));
+  const foodPool = Object.keys(FOODS).filter((id) => FOODS[id].shop !== false);
+  if (keydoor) {
+    const amt = 25 + Math.floor(rng() * 16);
+    const foodId = foodPool[Math.floor(rng() * foodPool.length)];
+    const food = getFood(foodId);
+    const extras: { id: string; name: string }[] = [];
+    if (rng() < 0.2) {
+      extras.push({ id: 'purify', name: ITEMS.purify.name });
+    } else if (rng() < 0.25) {
+      const pool = ['scout', 'twin', 'skip'];
+      const extraId = pool[Math.floor(rng() * pool.length)];
+      extras.push({ id: extraId, name: ITEMS[extraId].name });
+    }
+    if (rng() < 0.1) {
+      extras.push({ id: 'golden_fruit', name: getFood('golden_fruit').name });
+    }
+    const extraText = extras.length ? '、' + extras.map((e) => `额外获得「${e.name}」`).join('、') : '';
+    return { gold: amt, foodId, extras, text: `获得 ${amt} 金币、1 个${food.name}${extraText}` };
+  }
+  const roll = rng();
+  if (roll < 0.4) {
+    const amt = 12 + Math.floor(rng() * 9);
+    return { gold: amt, extras: [], text: `获得 ${amt} 金币` };
+  }
+  if (roll < 0.7) {
+    const foodId = foodPool[Math.floor(rng() * foodPool.length)];
+    const food = getFood(foodId);
+    return { gold: 0, foodId, extras: [], text: `获得 1 个${food.name}` };
+  }
+  return { gold: 0, healRatio: 0.3, extras: [], text: '全体宠物恢复 30% 生命' };
+}
+
+/** 查看单个节点的情报（侦查符 / 瞭望塔共用）：按节点类型展示敌人/货物/事件/宝箱奖励等内容 */
 export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
   const enc = state.map.encounter[n.id];
   const encDetail = (list?: { speciesId: string }[]): string =>
@@ -350,19 +396,19 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
       return { icon: NODE_ICON.watchtower, title: '瞭望塔', detail: '可以在此继续瞭望更下层' };
     case 'guardian':
       return { icon: NODE_ICON.guardian, title: n.label, detail: `${encDetail(enc)}（守卫·不可驯服，击败获得专用钥匙）` };
-    case 'keydoor':
-      return { icon: NODE_ICON.keydoor, title: n.label, detail: '需击败对应守卫取得钥匙后开启高级宝箱' };
-    case 'sync':
-      return { icon: NODE_ICON.sync, title: n.label, detail: '双生宝箱：与配对宝箱二选一（持双生符可同时开启）' };
+    case 'keydoor': {
+      const row = state.map.layers.findIndex((r) => r.includes(n));
+      const roll = rollChest(state.seed, row, n.id, true);
+      return { icon: NODE_ICON.keydoor, title: n.label, detail: `宝箱奖励：${roll.text}（需先击败对应守卫取得钥匙）` };
+    }
+    case 'sync': {
+      const row = state.map.layers.findIndex((r) => r.includes(n));
+      const roll = rollChest(state.seed, row, n.id, false);
+      return { icon: NODE_ICON.sync, title: n.label, detail: `宝箱奖励：${roll.text}（与配对宝箱二选一，持双生符可同时开启）` };
+    }
     default:
       return { icon: NODE_ICON[n.type], title: n.label, detail: '' };
   }
-}
-
-let nodeSeq = 0;
-function nodeId(): string {
-  nodeSeq += 1;
-  return `n${nodeSeq}`;
 }
 
 // ---------- 地图生成 ----------
@@ -1020,7 +1066,7 @@ export function generateMap(seed: number, act: number): RunMap {
   const specials: Record<string, SpecialNode> = {};
 
   const make = (type: NodeType, row: number, col: number): MapNode => ({
-    id: nodeId(),
+    id: `n${act}_${row}_${col}`,
     type,
     label: labelOf(type, row),
     col,
@@ -1216,7 +1262,7 @@ export function generateMap(seed: number, act: number): RunMap {
       const n = battles[Math.floor(rng() * battles.length)];
       n.type = 'corrupted';
       n.label = labelOf('corrupted', row);
-      n.corruptDebuff = rng() < 0.5 ? 'spd' : 'dmg';
+      n.corruptDebuff = (['spd', 'dmg', 'burn'] as const)[Math.floor(rng() * 3)];
       n.corruptReward = rng() < 0.5 ? 'gold' : 'food';
       lastCorruptRow = row;
     }
@@ -1237,6 +1283,41 @@ export function generateMap(seed: number, act: number): RunMap {
         }
       }
     }
+  }
+
+  // 钥匙门死锁防护：钥匙门需钥匙才可进入（守卫在前一行），若某玩家跳过守卫，
+  // 下一行可达节点可能全部是钥匙门 → 卡死。保证从上一行任意可站立节点出发，
+  // 下一行始终至少有一个非钥匙门的可进入节点；否则把造成死锁的一对钥匙门+守卫还原为普通战斗。
+  const revertKeydoorPair = (door: MapNode): void => {
+    const guard = layers.flat().find((n) => n.id === door.guardianId);
+    if (guard) {
+      const gRow = layers.findIndex((row) => row.includes(guard));
+      guard.type = 'battle';
+      guard.label = labelOf('battle', gRow);
+    }
+    const dRow = layers.findIndex((row) => row.includes(door));
+    door.type = 'battle';
+    door.label = labelOf('battle', dRow);
+    door.guardianId = undefined;
+  };
+  const findKeydoorDeadlock = (): MapNode | null => {
+    for (let r = 3; r < lastRow; r++) {
+      const row = layers[r];
+      if (!row.some((n) => n.type === 'keydoor')) continue;
+      const prev = layers[r - 1];
+      for (const p of prev) {
+        if (p.type === 'keydoor') continue;
+        const reachable = row.filter((q) => Math.abs(q.col - p.col) <= 1);
+        if (reachable.length > 0 && reachable.every((q) => q.type === 'keydoor')) {
+          return reachable[0];
+        }
+      }
+    }
+    return null;
+  };
+  let deadlockDoor: MapNode | null;
+  while ((deadlockDoor = findKeydoorDeadlock()) !== null) {
+    revertKeydoorPair(deadlockDoor);
   }
 
   // 为所有节点生成遭遇/首领/事件/奇遇关内容
