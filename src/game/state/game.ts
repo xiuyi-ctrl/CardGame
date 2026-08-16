@@ -735,6 +735,7 @@ function middleNodeType(rng: () => number, progress: number): NodeType {
 export const BOSS_MINIONS: Record<string, string[]> = {
   boss_vine: ['boss_minion_tree_guard', 'boss_minion_thorn'],
   boss_crab: ['boss_minion_shrimp', 'boss_minion_hermit'],
+  boss_golem: ['boss_minion_rock', 'boss_minion_crystal'],
 };
 
 function buildEncounter(

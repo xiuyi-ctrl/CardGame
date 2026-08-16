@@ -4,7 +4,7 @@ import { SKILLS } from '../game/data/skills';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
 interface FxEvent {
-  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed';
+  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed' | 'burst';
   actorUid?: string;
   targetUid?: string;
   value: number;
@@ -21,6 +21,8 @@ interface FxEvent {
   skillName?: string;
   /** 攻击事件：本次攻击附加给 target 的状态 kind（来自日志 addsStatus），用于在该攻击动画播放时揭示 */
   addsStatus?: string[];
+  /** 范围伤害（岩壳碎片自爆/岩壳崩解）：波及的所有目标 uid，一次性同时挂飘字 */
+  burstTargets?: string[];
 }
 
 /** 伤害/治疗/buff 飘字 */
@@ -167,11 +169,24 @@ function passiveSpdOfUnits(b: BattleState): Record<string, number> {
 }
 
 /** 解析一条战斗日志为动画事件；无法识别或名字找不到目标时返回 null */
-function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
+export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const text = entry.text;
   const side = entry.side;
   if (side === 'info') return null;
   const opposite: 'player' | 'enemy' = side === 'player' ? 'enemy' : 'player';
+
+  // 范围伤害（岩壳碎片自爆 / 岩壳崩解）：由 burstTargets 标识，一次性给全体波及单位挂飘字，无抖动
+  if (entry.burstTargets && entry.burstTargets.length > 0) {
+    const dm = text.match(/造成 ?(\d+) ?点(?:真实)?伤害/);
+    return {
+      kind: 'burst',
+      value: dm ? Number(dm[1]) : 0,
+      burstTargets: entry.burstTargets,
+      hp: entry.hp,
+      statuses: entry.statuses,
+      shields: entry.shields,
+    };
+  }
 
   let m: RegExpMatchArray | null;
   if ((m = text.match(RE_ATTACK))) {
@@ -513,6 +528,11 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度+${ev.value}`, heal: false, buff: true }]);
               setSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + ev.value } : p);
               setPassiveSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + 1 } : p);
+            }
+          } else if (ev.kind === 'burst') {
+            // 范围伤害：仅挂飘字，不触发任何生物抖动（setFx）；同一 popId 让所有飘字同时出现、同时消失
+            for (const uid of ev.burstTargets ?? []) {
+              setPops((p) => [...p, { id: popId, uid, text: `-${ev.value}`, heal: false }]);
             }
           } else if (targetUid) {
             ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));

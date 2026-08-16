@@ -66,16 +66,16 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     expect(logs[1].hp?.[b1.enemyUnits[0].uid]).toBe(6);
   });
 
-  it('高减伤（磐岩护甲 -3）：多段每段都扣减伤，每段保底 1', () => {
+  it('高减伤（厚壳 -2）：多段每段都扣减伤，每段保底 1', () => {
     const a = makeUnit('fifi_king', true, 0, false);
-    const raw = createBattle([a], [{ speciesId: 'boss_golem' }], 9);
+    const raw = createBattle([a], [{ speciesId: 'gora' }], 9);
     const enemy = raw.enemyUnits[0];
     const b1 = playerEndTurn(playerSkill(raw, a.uid, 'double_hit', enemy.uid));
     const logs = attackLogs(b1, a.uid, '连击');
     expect(logs.length).toBe(2);
     expect(logs.map((l) => l.text)).toEqual([
-      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
-      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 2 伤害`,
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 2 伤害`,
     ]);
   });
 

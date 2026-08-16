@@ -70,7 +70,9 @@ export type PassiveKind =
   | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
   | 'lifeSpring' // 生命之泉：每回合开始恢复 3 点生命；受到超过 value 点伤害时，伤害 -2
   | 'tideRhythm' // 潮汐节律：每3回合触发一次，本回合伤害+2
-  | 'tideEcho'; // 潮汐共鸣：潮汐巨蟹爆发时本回合自身伤害+2
+  | 'tideEcho' // 潮汐共鸣：潮汐巨蟹爆发时本回合自身伤害+2
+  | 'rockShellBreak' // 岩壳崩解：每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益
+  | 'rockShard'; // 岩壳碎片：死亡时对全体敌我3真实伤害+可连锁+巨像受击计数+1
 
 export interface PassiveDef {
   id: string;
@@ -167,6 +169,8 @@ export interface Unit {
   };
   /** 荆棘之躯被动：本场战斗中受击次数（每 3 次触发强化反伤） */
   thornsHitCount?: number;
+  /** 岩壳崩解被动：本场战斗中受击计数（每 4 次触发全体伤害+清减益） */
+  rockShellHits?: number;
   /** 敌方换位次数（每场战斗最多 2 次） */
   swapCount?: number;
 }
@@ -189,6 +193,8 @@ export interface LogEntry {
   /** 攻击类日志：本次攻击结算附加给 target 的状态 kind 列表（灼烧/中毒/减防/眩晕等）。
    *  仅标在连击多段的最后一段上（状态在全部段结算后才生效），供动画在对应攻击动画播放时揭示该状态 */
   addsStatus?: string[];
+  /** 范围伤害日志（岩壳碎片自爆/岩壳崩解）：本条日志波及的所有目标 uid，供动画一次性同时挂飘字 */
+  burstTargets?: string[];
 }
 
 /** 玩家给某只宠物下达的指令（指令阶段记录，结束回合后按速度统一结算）。`skillId === 'rest'` 表示「休息」（本回合不行动，不消耗 AP，可再次点击取消） */

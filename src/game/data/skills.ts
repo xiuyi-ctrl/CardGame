@@ -309,6 +309,25 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'self', kind: 'buff',
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
   },
+  // —— 岩甲巨像专属 ——
+  rock_throw: {
+    id: 'rock_throw', name: '巨石投掷', desc: '先手：重击单个敌人并眩晕1回合（每场限3次）',
+    target: 'single', kind: 'attack', damage: 6,
+    priority: 'first', uses: 3,
+    effects: [{ kind: 'stun', value: 1, turns: 1 }],
+  },
+  gravel_throw: {
+    id: 'gravel_throw', name: '碎石投掷', desc: '攻击单个敌人',
+    target: 'single', kind: 'attack', damage: 5,
+  },
+  crystal_sting: {
+    id: 'crystal_sting', name: '晶刺', desc: '攻击单个敌人',
+    target: 'single', kind: 'attack', damage: 3,
+  },
+  rock_reforge: {
+    id: 'rock_reforge', name: '碎岩重组', desc: '消灭并重新召唤碎石傀儡和晶石虫，3回合冷却',
+    target: 'self', kind: 'buff', cooldown: 3,
+  },
 };
 
 export function getSkill(id: string): SkillDef {

@@ -40,6 +40,8 @@ export const PASSIVES: Record<string, PassiveDef> = {
   thorn_slow: { id: 'thorn_slow', name: '荆棘缠绕', desc: '攻击时有 40% 概率使目标伤害 -1，持续 2 回合；若古树之主在场，概率为 60%', kind: 'thornEntangle', value: 1 },
   tide_echo: { id: 'tide_echo', name: '潮汐共鸣', desc: '潮汐巨蟹爆发时本回合自身伤害 +2', kind: 'tideEcho', value: 2 },
   shell_guard: { id: 'shell_guard', name: '寄居壳', desc: '受到的所有伤害-1，潮汐巨蟹在场时-2', kind: 'guard', value: 1 },
+  rock_shell_break: { id: 'rock_shell_break', name: '岩壳崩解', desc: '每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益状态', kind: 'rockShellBreak', value: 4 },
+  rock_shard: { id: 'rock_shard', name: '岩壳碎片', desc: '死亡时对全体敌人和友方造成3点真实伤害（无视护盾），波及巨像计入其受击计数', kind: 'rockShard', value: 3 },
 
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },

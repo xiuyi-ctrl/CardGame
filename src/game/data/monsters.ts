@@ -197,6 +197,22 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     passive: 'shell_guard',
     tame: { difficulty: 0 }, rank: 4,
   },
+  boss_minion_rock: {
+    id: 'boss_minion_rock', name: '碎石傀儡', emoji: '🪨',
+    baseHp: 10, baseSpd: 1,
+    skills: ['steel_spike', 'gravel_throw'],
+    desc: '低血量自爆小怪，死亡时对全体敌人造成3点真实伤害并加速巨像岩壳崩解。',
+    passive: 'rock_shard',
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_minion_crystal: {
+    id: 'boss_minion_crystal', name: '晶石虫', emoji: '💎',
+    baseHp: 8, baseSpd: 5,
+    skills: ['double_hit', 'crystal_sting'],
+    desc: '高速多段小怪，连击快速堆叠巨像受击计数器，死亡自爆同样计入巨像计数。',
+    passive: 'rock_shard',
+    tame: { difficulty: 0 }, rank: 4,
+  },
   boss_dark: {
     id: 'boss_dark', name: '暗影之王', emoji: '😈',
     baseHp: 38, baseSpd: 5,
@@ -223,10 +239,10 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   boss_golem: {
     id: 'boss_golem', name: '岩甲巨像', emoji: '🗻',
-    baseHp: 42, baseSpd: 2,
-    skills: ['steel_spike', 'roar', 'double_hit', 'quake'],
-    desc: '高血量慢速堡垒，铁刺会持续压制我方输出。',
-    passive: 'rock_guard',
+    baseHp: 40, baseSpd: 2,
+    skills: ['steel_spike', 'quake', 'rock_reforge', 'rock_throw'],
+    desc: '受击计数惩罚机制，多段连击反而触发全屏伤害。碎岩重组可主动消灭小怪触发自爆，加速岩壳崩解。',
+    passive: 'rock_shell_break',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_moss: {

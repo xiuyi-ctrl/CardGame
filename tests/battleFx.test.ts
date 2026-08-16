@@ -96,3 +96,57 @@ describe('computeRevealAt：新增状态按附加它的攻击动画揭示', () =
     expect(computeRevealAt([], { 'enemy-1': ['burn'] })).toEqual({});
   });
 });
+
+import { parseEvent } from '../src/ui/battleFx';
+import type { BattleState, LogEntry } from '../src/game/types';
+
+const mkBattle = (): BattleState => ({
+  playerUnits: [],
+  enemyUnits: [],
+  turnOrder: [],
+  turnIndex: 0,
+  round: 1,
+  playerAp: 0,
+  playerApMax: 0,
+  enemyAp: 0,
+  phase: 'acting',
+  log: [],
+  pendingTame: [],
+  seed: 0,
+  rngCount: 0,
+});
+
+describe('parseEvent：范围伤害 burst 事件提取正确伤害值', () => {
+  it('岩壳碎片自爆：提取真实伤害值', () => {
+    const entry: LogEntry = {
+      text: '岩壳碎片 的「岩壳碎片」爆裂，对全体敌人和友方造成 3 点真实伤害！',
+      side: 'enemy',
+      burstTargets: ['u1', 'u2'],
+    };
+    const ev = parseEvent(mkBattle(), entry);
+    expect(ev).not.toBeNull();
+    expect(ev!.kind).toBe('burst');
+    expect(ev!.value).toBe(3);
+    expect(ev!.burstTargets).toEqual(['u1', 'u2']);
+  });
+
+  it('岩壳崩解 AOE：提取伤害值（无空格、无"真实"）', () => {
+    const entry: LogEntry = {
+      text: '岩甲巨像 的「岩壳崩解」触发！岩壳碎裂，对全体敌人造成5点伤害！',
+      side: 'enemy',
+      burstTargets: ['u1'],
+    };
+    const ev = parseEvent(mkBattle(), entry);
+    expect(ev).not.toBeNull();
+    expect(ev!.kind).toBe('burst');
+    expect(ev!.value).toBe(5);
+  });
+
+  it('无 burstTargets 的普通日志不触发 burst 解析', () => {
+    const entry: LogEntry = {
+      text: '岩壳碎片 的「岩壳碎片」爆裂，对全体敌人和友方造成 3 点真实伤害！',
+      side: 'enemy',
+    };
+    expect(parseEvent(mkBattle(), entry)).toBeNull();
+  });
+});

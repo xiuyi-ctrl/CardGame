@@ -16,6 +16,7 @@ export const REST_SKILL_ID = 'rest';
 const FRONT_PASSIVES: PassiveKind[] = [
   'hp', 'guard', 'thorns', 'regen', 'damageCap', 'thornRoyal',
   'bigHitGuard', 'spdOnHit', 'treeSpeedUp', 'lifeSpring',
+  'rockShellBreak', 'rockShard',
 ];
 /** 后排倾向被动：进攻/输出类，该被动生物站后排 */
 const BACK_PASSIVES: PassiveKind[] = [
@@ -498,6 +499,7 @@ export function pushLog(
   actorUid?: string,
   targetUid?: string,
   addsStatus?: string[],
+  burstTargets?: string[],
 ): BattleState {
   // 附加当下全体血量快照，供 UI 按动画事件逐步展示血量；log 不截断（由 UI 只展示尾部）
   const hp: Record<string, number> = {};
@@ -508,7 +510,7 @@ export function pushLog(
   // 附加当下全员护盾快照，供 UI 按动画事件逐步更新护盾显示
   const shields: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) shields[u.uid] = u.shield;
-  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus }] };
+  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus, burstTargets }] };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
@@ -893,6 +895,17 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           candidates.push({ kind: 'buff', skill: bs, score: 45 });
         }
       }
+      // 碎岩重组：有小怪死亡时高优先级（重新召唤）；小怪存活时中等概率使用（触发自爆链）
+      if (bs.id === 'rock_reforge') {
+        const allies = alliesOf(b2, actor);
+        const deadMinions = allies.filter((u) => u.hp <= 0 && u.speciesId.startsWith('boss_minion_'));
+        const aliveMinions = allies.filter((u) => u.hp > 0 && u.speciesId.startsWith('boss_minion_'));
+        if (deadMinions.length > 0) {
+          candidates.push({ kind: 'buff', skill: bs, score: 60 });
+        } else if (aliveMinions.length >= 2 && hpRatio > 0.3 && rngVal < 0.4) {
+          candidates.push({ kind: 'buff', skill: bs, score: 35 });
+        }
+      }
     }
 
     // ─── 3. 换位（限次 2 次，分层阈值；守卫/首领禁用） ───
@@ -1090,6 +1103,72 @@ function applyCounterDmg(attacker: Unit, dmg: number): Unit {
   return { ...a, hp: Math.max(0, a.hp - rd) };
 }
 
+/** 岩壳碎片连锁自爆：对场上全体单位造成真实伤害（无视护盾），被炸死的小怪连锁触发；Boss 被波及时受击计数 +1（被动受击叠加） */
+function applyRockShardDeath(b: BattleState, dead: Unit): BattleState {
+  const passive = getUnitPassive(dead);
+  if (!passive || passive.kind !== 'rockShard') return b;
+  let nb = b;
+  const queue: Unit[] = [dead];
+  while (queue.length > 0) {
+    const src = queue.shift()!;
+    const dmg = getUnitPassive(src)?.value ?? 3;
+    const victims = [...nb.playerUnits, ...nb.enemyUnits].filter((u) => u.hp > 0);
+    let bossWasHit = false;
+    const damagedUnits: Unit[] = [];
+    for (const v of victims) {
+      const after = { ...v, hp: Math.max(0, v.hp - dmg) };
+      nb = replaceUnit(nb, after);
+      damagedUnits.push(after);
+      if (after.speciesId === 'boss_golem' && after.hp > 0 && getUnitPassive(after)?.kind === 'rockShellBreak') {
+        bossWasHit = true;
+      }
+      if (after.hp <= 0 && after.uid !== src.uid && getUnitPassive(after)?.kind === 'rockShard') {
+        queue.push(after);
+      }
+    }
+    // 单条汇总日志，burstTargets 供动画一次性同时挂飘字（无抖动）
+    nb = pushLog(nb, `${src.name} 的「岩壳碎片」爆裂，对全体敌人和友方造成 ${dmg} 点真实伤害！`, sideOf(src), src.uid, undefined, undefined, damagedUnits.map((u) => u.uid));
+    if (bossWasHit) {
+      const boss = nb.enemyUnits.find((u) => u.speciesId === 'boss_golem' && u.hp > 0);
+      if (boss) {
+        const bossP = getUnitPassive(boss);
+        if (bossP?.kind === 'rockShellBreak') {
+          const newCount = (boss.rockShellHits ?? 0) + 1;
+          let updatedBoss: Unit = { ...boss, rockShellHits: newCount };
+          nb = replaceUnit(nb, updatedBoss);
+          if (newCount >= bossP.value) {
+            updatedBoss = { ...updatedBoss, rockShellHits: 0 };
+            nb = replaceUnit(nb, updatedBoss);
+            const pus = nb.playerUnits.filter((u) => u.hp > 0);
+            const shardBurstUids: string[] = [];
+            for (const pu of pus) {
+              let puDmg = 5;
+              let pu2 = pu;
+              if (pu2.shield > 0) {
+                const absorbed = Math.min(pu2.shield, puDmg);
+                pu2 = { ...pu2, shield: pu2.shield - absorbed };
+                puDmg -= absorbed;
+                if (pu2.shield <= 0) pu2 = { ...pu2, statuses: pu2.statuses.filter((s) => s.kind !== 'shield') };
+              }
+              pu2 = { ...pu2, hp: Math.max(0, pu2.hp - puDmg) };
+              nb = replaceUnit(nb, pu2);
+              shardBurstUids.push(pu2.uid);
+            }
+            const debuffKinds = ['burn', 'poison', 'atkDown', 'spdDown', 'taunt', 'stun', 'thorns'];
+            const refreshed = actorFromId(nb, updatedBoss.uid);
+            if (refreshed) {
+              updatedBoss = { ...refreshed, statuses: refreshed.statuses.filter((s) => !debuffKinds.includes(s.kind)) };
+            }
+            nb = replaceUnit(nb, updatedBoss);
+            nb = pushLog(nb, `${updatedBoss.name} 的「岩壳崩解」触发！岩壳碎裂，对全体敌人造成5点伤害！`, sideOf(updatedBoss), updatedBoss.uid, undefined, undefined, shardBurstUids);
+          }
+        }
+      }
+    }
+  }
+  return nb;
+}
+
 /** 逐目标攻击结算：伤害计算 + 段数拆分 + 护盾/吸血/反伤/状态写回 */
 function resolveAttack(
   b: BattleState,
@@ -1229,39 +1308,69 @@ function resolveAttack(
         nb = pushLog(nb, `${actor.name} 的「${ap.name}」使 ${t2.name} 伤害 -1`, sideOf(actor), actor.uid, t2.uid, ['atkDown']);
       }
     }
-    if (t2.hp > 0) {
-      const tp = getUnitPassive(t2);
-      if (tp?.kind === 'thorns') {
-        const attacker = actorFromId(nb, actor.uid);
-        if (attacker && attacker.hp > 0) {
-          const hurt = applyCounterDmg(attacker, tp.value);
-          nb = replaceUnit(nb, hurt);
-          nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
-        }
-      }
-      if (tp?.kind === 'thornRoyal') {
-        const attacker = actorFromId(nb, actor.uid);
-        if (attacker && attacker.hp > 0) {
-          const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').reduce((sum, s) => sum + s.value, 0);
-          const baseDmg = tp.value + rageThornStacks;
-          t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
-          const hitCount = t2.thornsHitCount!;
-          const isBurst = hitCount % 3 === 0;
-          const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
-          const newAttacker = applyCounterDmg(attacker, thornDmg);
-          nb = replaceUnit(nb, newAttacker);
-          nb = replaceUnit(nb, t2);
-          nb = pushLog(nb, `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`, sideOf(t2), t2.uid, attacker.uid);
-          if (isBurst) {
-            const freshT2 = actorFromId(nb, t2.uid) ?? t2;
-            t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
-            nb = replaceUnit(nb, t2);
-            nb = pushLog(nb, `${t2.name} 的「荆棘之躯」恢复 2 点生命`, sideOf(t2), t2.uid, t2.uid);
+      if (t2.hp > 0) {
+        const tp = getUnitPassive(t2);
+        if (tp?.kind === 'thorns') {
+          const attacker = actorFromId(nb, actor.uid);
+          if (attacker && attacker.hp > 0) {
+            const hurt = applyCounterDmg(attacker, tp.value);
+            nb = replaceUnit(nb, hurt);
+            nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
           }
         }
-      }
-      // 受击加速/古木加速：受到攻击后速度 +1（可叠加，上限按被动类型区分）
-      if ((tp?.kind === 'spdOnHit' || tp?.kind === 'treeSpeedUp') && t2.hp > 0) {
+        if (tp?.kind === 'thornRoyal') {
+          const attacker = actorFromId(nb, actor.uid);
+          if (attacker && attacker.hp > 0) {
+            const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').reduce((sum, s) => sum + s.value, 0);
+            const baseDmg = tp.value + rageThornStacks;
+            t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
+            const hitCount = t2.thornsHitCount!;
+            const isBurst = hitCount % 3 === 0;
+            const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
+            const newAttacker = applyCounterDmg(attacker, thornDmg);
+            nb = replaceUnit(nb, newAttacker);
+            nb = replaceUnit(nb, t2);
+            nb = pushLog(nb, `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`, sideOf(t2), t2.uid, attacker.uid);
+            if (isBurst) {
+              const freshT2 = actorFromId(nb, t2.uid) ?? t2;
+              t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
+              nb = replaceUnit(nb, t2);
+              nb = pushLog(nb, `${t2.name} 的「荆棘之躯」恢复 2 点生命`, sideOf(t2), t2.uid, t2.uid);
+            }
+          }
+        }
+        // 岩壳崩解：每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益
+        if (tp?.kind === 'rockShellBreak' && t2.hp > 0) {
+          t2 = { ...t2, rockShellHits: (t2.rockShellHits ?? 0) + 1 };
+          nb = replaceUnit(nb, t2);
+          if (t2.rockShellHits! >= tp.value) {
+            t2 = { ...t2, rockShellHits: 0 };
+            nb = replaceUnit(nb, t2);
+            // 对全体敌人（玩家单位）造成5点伤害
+            const playerUnits = nb.playerUnits.filter((u) => u.hp > 0);
+            const resolveShardBurstUids: string[] = [];
+            for (const pu of playerUnits) {
+              let puDmg = 5;
+              let pu2 = pu;
+              if (pu2.shield > 0) {
+                const absorbed = Math.min(pu2.shield, puDmg);
+                pu2 = { ...pu2, shield: pu2.shield - absorbed };
+                puDmg -= absorbed;
+                if (pu2.shield <= 0) pu2 = { ...pu2, statuses: pu2.statuses.filter((s) => s.kind !== 'shield') };
+              }
+              pu2 = { ...pu2, hp: Math.max(0, pu2.hp - puDmg) };
+              nb = replaceUnit(nb, pu2);
+              resolveShardBurstUids.push(pu2.uid);
+            }
+            // 清除自身所有减益状态
+            const debuffKinds = ['burn', 'poison', 'atkDown', 'spdDown', 'taunt', 'stun', 'thorns'];
+            t2 = { ...(actorFromId(nb, t2.uid) ?? t2), statuses: (actorFromId(nb, t2.uid) ?? t2).statuses.filter((s) => !debuffKinds.includes(s.kind)) };
+            nb = replaceUnit(nb, t2);
+            nb = pushLog(nb, `${t2.name} 的「岩壳崩解」触发！岩壳碎裂，对全体敌人造成5点伤害！`, sideOf(t2), t2.uid, undefined, undefined, resolveShardBurstUids);
+          }
+        }
+        // 受击加速/古木加速：受到攻击后速度 +1（可叠加，上限按被动类型区分）
+        if ((tp?.kind === 'spdOnHit' || tp?.kind === 'treeSpeedUp') && t2.hp > 0) {
         const stacks = t2.passiveSpdStacks ?? 0;
         const cap = tp.kind === 'treeSpeedUp' ? 8 : 6;
         if (stacks < cap) {
@@ -1311,6 +1420,7 @@ function resolveAttack(
   // 小怪死亡日志
   if (t2.hp <= 0 && t2.speciesId.startsWith('boss_minion_')) {
     nb = pushLog(nb, `${t2.name} 被击倒了`, sideOf(t2), t2.uid, t2.uid);
+    nb = applyRockShardDeath(nb, t2);
   }
   return { battle: nb, lastHitLog, passiveAdds };
 }
@@ -1383,6 +1493,28 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         const stunned = applyStatusTo(self, { kind: 'stun', value: 1, turns: 2 }, nb.round);
         nb = replaceUnit(nb, stunned);
         nb = pushLog(nb, `${self.name} 缩入壳中，下回合无法行动`, sideOf(self), self.uid);
+      }
+    }
+    // 碎岩重组：消灭并重新召唤碎石傀儡和晶石虫
+    if (skill.id === 'rock_reforge') {
+      const minionSpecies = ['boss_minion_rock', 'boss_minion_crystal'];
+      const cols: (0 | 1 | 2)[] = [0, 2];
+      for (let i = 0; i < minionSpecies.length; i++) {
+        const sid = minionSpecies[i];
+        const col = cols[i];
+        const existing = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp > 0);
+        if (existing) {
+          // 消灭存活的小怪 → 触发岩壳碎片
+          let killed = { ...existing, hp: 0 };
+          nb = replaceUnit(nb, killed);
+          nb = pushLog(nb, `${existing.name} 被巨像碾碎了`, sideOf(killed), killed.uid, killed.uid);
+          nb = applyRockShardDeath(nb, killed);
+        }
+        // 创建新的小怪
+        const fresh = makeEnemy({ speciesId: sid }, 'front', col, true);
+        const summoned = { ...fresh, acted: true };
+        nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
+        nb = pushLog(nb, `${actor.name} 使用「碎岩重组」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
       }
     }
   } else {

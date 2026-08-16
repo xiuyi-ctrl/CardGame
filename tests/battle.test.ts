@@ -616,8 +616,8 @@ describe('专属被动', () => {
   it('铁壁/厚壳等减伤被动降低受到伤害', () => {
     const kiki = makeUnit('kiki', true, 0, false); // 铁壁：-1
     expect(getDamageGuard(kiki)).toBe(1);
-    const boss = makeUnit('boss_golem', false, 0, false); // 磐岩护甲：-3
-    expect(getDamageGuard(boss)).toBe(3);
+    const shell = makeUnit('boss_minion_hermit', false, 0, false); // 寄居壳：-1（无巨蟹在场）
+    expect(getDamageGuard(shell)).toBe(1);
     const none = makeUnit('momo', true, 0, false);
     expect(getDamageGuard(none)).toBe(0);
   });
