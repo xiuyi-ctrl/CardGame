@@ -1236,6 +1236,7 @@ function applyToxicBurstDeath(b: BattleState, dead: Unit): BattleState {
     const poisoned = applyStatusTo(after, { kind: 'poison', value: 3, turns: 3 }, nb.round);
     nb = replaceUnit(nb, poisoned);
     hitUids.push(poisoned.uid);
+    nb = applyCorruptSpread(nb, poisoned.uid);
   }
   nb = pushLog(nb, `${dead.name} 的「毒性爆发」触发！对全体敌人造成 4 点伤害 + 中毒 3 层`, sideOf(dead), dead.uid, undefined, ['poison'], hitUids);
   return nb;
@@ -1269,7 +1270,7 @@ function resolveAttack(
   target: Unit,
   skill: SkillDef,
   count: number,
-): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[] } {
+): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[]; didPoison: boolean } {
   let nb = b;
   const base = (skill.damage ?? 0) + getDamageBonus(actor);
   let perHitDmg = base - getDamageGuard(target, nb);
@@ -1282,10 +1283,12 @@ function resolveAttack(
   }
   const passiveAdds: string[] = [];
   const ap = getUnitPassive(actor);
+  let didPoison = false;
   let tWithPassive = target;
   if (ap?.kind === 'venom') {
     tWithPassive = applyStatusTo(tWithPassive, { kind: 'poison', value: ap.value, turns: 2 }, nb.round);
     passiveAdds.push('poison');
+    didPoison = true;
   }
   if (ap?.kind === 'scorch') {
     tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
@@ -1383,6 +1386,7 @@ function resolveAttack(
         }
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
+        if (e.kind === 'poison') didPoison = true;
       }
     }
     nb = replaceUnit(nb, t2);
@@ -1498,6 +1502,7 @@ function resolveAttack(
               const poisoned = applyStatusTo(attacker2, { kind: 'poison', value: tp2.value, turns: 2 }, nb.round);
               nb = replaceUnit(nb, poisoned);
               nb = pushLog(nb, `${t2.name} 的「腐化囊体」使 ${attacker2.name} 中毒 ${tp2.value} 层`, sideOf(t2), t2.uid, attacker2.uid);
+              didPoison = true;
             }
           }
         }
@@ -1553,7 +1558,7 @@ function resolveAttack(
     nb = applyRockShardDeath(nb, t2);
     nb = applyToxicBurstDeath(nb, t2);
   }
-  return { battle: nb, lastHitLog, passiveAdds };
+  return { battle: nb, lastHitLog, passiveAdds, didPoison };
 }
 
 /** 玩家与敌方通用的技能结算（内部） */
@@ -1709,7 +1714,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (!t || t.hp <= 0) continue;
       const result = resolveAttack(nb, actor, t, skill, count);
       nb = result.battle;
-      nb = applyCorruptSpread(nb, t.uid);
+      if (result.didPoison) nb = applyCorruptSpread(nb, t.uid);
       if (skill.id === 'water_wave') waterWaveHits += 1;
     }
     // 风灵闪：若自身速度高于目标，额外攻击一次（对每个目标独立判定，与主攻击完全一致）
@@ -1722,7 +1727,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           if (getEffectiveSpd(freshActor) > getEffectiveSpd(freshTarget)) {
             const result = resolveAttack(nb, freshActor, freshTarget, skill, 1);
             nb = result.battle;
-            nb = applyCorruptSpread(nb, freshTarget.uid);
+            if (result.didPoison) nb = applyCorruptSpread(nb, freshTarget.uid);
           }
         }
       }
