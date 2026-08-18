@@ -645,6 +645,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (choice.kind === 'boost' && next.roster.length > 0) {
         // 永久属性提升：随机 1 只宠物
         const boostIdx = Math.floor(Math.random() * next.roster.length);
+        const boostedPet = next.roster[boostIdx];
         next = {
           ...next,
           roster: next.roster.map((u, i) => {
@@ -657,6 +658,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             return u;
           }),
         };
+        const statCn = choice.boostStat === 'hp' ? '生命' : '速度';
+        next = { ...next, toast: { msg: `${boostedPet.name} 永久 +${choice.amount ?? 0} ${statCn}`, kind: 'success' } };
       } else if (choice.kind === 'purify') {
         // 清除诅咒：随机 1 只宠物
         const purifyIdx = next.roster.findIndex((u) => u.curse);
@@ -697,25 +700,40 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           }),
         };
       }
-      // 设置 toast 提示（正面结果）
+      // 设置 toast 提示
       if (choice.kind === 'gold' && (choice.amount ?? 0) > 0) {
         next = { ...next, toast: { msg: `获得 ${choice.amount} 金币`, kind: 'success' } };
-      } else if (choice.kind === 'food' && choice.foodId) {
-        const f = FOODS[choice.foodId];
-        next = { ...next, toast: { msg: `${f?.emoji ?? '🍖'} ${f?.name ?? choice.foodId} ×1`, kind: 'success' } };
+      } else if (choice.kind === 'gold' && (choice.amount ?? 0) < 0) {
+        next = { ...next, toast: { msg: `失去 ${Math.abs(choice.amount!)} 金币`, kind: 'error' } };
+      } else if (choice.kind === 'gold' && (choice.amount ?? 0) === 0 && (choice.goldDelta ?? 0) < 0) {
+        next = { ...next, toast: { msg: '什么也没得到……', kind: 'error' } };
+      } else if (choice.kind === 'food' && choice.foodId && !next.toast) {
+        // 赠送食物等：先检查 goldDelta 决定输赢
+        const gd = choice.goldDelta ?? 0;
+        if (gd > 0) {
+          next = { ...next, toast: { msg: `获得 ${gd} 金币`, kind: 'success' } };
+        } else if (gd < 0) {
+          next = { ...next, toast: { msg: `失去 ${Math.abs(gd)} 金币`, kind: 'error' } };
+        } else {
+          const f = FOODS[choice.foodId];
+          next = { ...next, toast: { msg: `${f?.emoji ?? '🍖'} ${f?.name ?? choice.foodId} ×1`, kind: 'success' } };
+        }
       } else if (choice.kind === 'item' && choice.itemId) {
         const it = ITEMS[choice.itemId];
         next = { ...next, toast: { msg: `${it?.emoji ?? '🎒'} ${it?.name ?? choice.itemId} ×1`, kind: 'success' } };
       } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length <= ROSTER_MAX) {
         const m = getMonster(choice.monsterId);
         next = { ...next, toast: { msg: `招募了 ${m.emoji} ${m.name}！`, kind: 'success' } };
-      } else if (choice.kind === 'boost' && choice.boostStat) {
-        const statCn = choice.boostStat === 'hp' ? '生命' : '速度';
-        next = { ...next, toast: { msg: `随机宠物永久 +${choice.amount ?? 0} ${statCn}`, kind: 'success' } };
       } else if (choice.kind === 'purify') {
         next = { ...next, toast: { msg: '清除了一只宠物的诅咒', kind: 'success' } };
       } else if (choice.kind === 'heal' && (choice.amount ?? 0) > 0) {
         next = { ...next, toast: { msg: `全体恢复 ${choice.amount}% 生命`, kind: 'info' } };
+      } else if (choice.kind === 'damage' && (choice.amount ?? 0) > 0) {
+        next = { ...next, toast: { msg: `全体受到 ${choice.amount}% 伤害`, kind: 'error' } };
+      } else if (choice.kind === 'curse') {
+        next = { ...next, toast: { msg: '随机宠物被诅咒了！', kind: 'error' } };
+      } else if (choice.kind === 'status' && choice.statusKind === 'poison') {
+        next = { ...next, toast: { msg: `全体中毒 ${choice.statusValue ?? 0} 层！`, kind: 'error' } };
       }
       return { ...next, screen: 'map', log: [choice.label, ...next.log].slice(0, 20) };
     }
@@ -778,9 +796,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           next = { ...next, gold: next.gold + (eb.reward.amount ?? 0) };
         } else if (eb.reward.kind === 'food' && eb.reward.foodId) {
           next = { ...next, inventory: { ...next.inventory, [eb.reward.foodId]: (next.inventory[eb.reward.foodId] ?? 0) + 1 } };
-        } else if (eb.reward.kind === 'hp') {
+        } else         if (eb.reward.kind === 'hp') {
           const hpBonus = eb.reward.amount ?? 0;
           next = { ...next, roster: next.roster.map((u) => ({ ...u, maxHp: u.maxHp + hpBonus, hp: u.hp + hpBonus })) };
+        }
+        // 胜利 toast
+        if (eb.reward.kind === 'gold') {
+          next = { ...next, toast: { msg: `战斗胜利！获得 ${eb.reward.amount ?? 0} 金币`, kind: 'success' } };
+        } else if (eb.reward.kind === 'food') {
+          const f = eb.reward.foodId ? FOODS[eb.reward.foodId] : null;
+          next = { ...next, toast: { msg: `战斗胜利！获得 ${f?.emoji ?? '🍖'} ${f?.name ?? '食物'}`, kind: 'success' } };
+        } else if (eb.reward.kind === 'hp') {
+          next = { ...next, toast: { msg: `战斗胜利！全体永久 +${eb.reward.amount ?? 0} 最大 HP`, kind: 'success' } };
         }
         next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
       } else {
@@ -800,6 +827,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
           const ri = Math.floor(Math.random() * next.roster.length);
           next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+        }
+        // 失败 toast
+        if (eb.penalty.goldLoss) {
+          next = { ...next, toast: { msg: `战斗失败！失去 ${eb.penalty.goldLoss} 金币`, kind: 'error' } };
+        } else if (eb.penalty.percent) {
+          next = { ...next, toast: { msg: `战斗失败！全体受到 ${eb.penalty.percent}% 伤害`, kind: 'error' } };
+        } else if (eb.penalty.curseTarget) {
+          next = { ...next, toast: { msg: '战斗失败！随机宠物被诅咒了', kind: 'error' } };
         }
         next = { ...next, log: ['事件战斗失败', ...next.log].slice(0, 20) };
       }
@@ -1149,6 +1184,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           if (eb.bonusReward?.kind === 'food' && eb.bonusReward.foodId) {
             next = { ...next, inventory: { ...next.inventory, [eb.bonusReward.foodId]: (next.inventory[eb.bonusReward.foodId] ?? 0) + 1 } };
           }
+          // 胜利 toast
+          if (eb.reward.kind === 'gold') {
+            next = { ...next, toast: { msg: `战斗胜利！获得 ${eb.reward.amount ?? 0} 金币`, kind: 'success' } };
+          } else if (eb.reward.kind === 'food') {
+            const f = eb.reward.foodId ? FOODS[eb.reward.foodId] : null;
+            next = { ...next, toast: { msg: `战斗胜利！获得 ${f?.emoji ?? '🍖'} ${f?.name ?? '食物'}`, kind: 'success' } };
+          } else if (eb.reward.kind === 'hp') {
+            next = { ...next, toast: { msg: `战斗胜利！全体永久 +${eb.reward.amount ?? 0} 最大 HP`, kind: 'success' } };
+          }
           next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
         } else {
           // 失败：按 penalty 处理
@@ -1167,6 +1211,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
             const ri = Math.floor(Math.random() * next.roster.length);
             next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+          }
+          // 失败 toast
+          if (eb.penalty.goldLoss) {
+            next = { ...next, toast: { msg: `战斗失败！失去 ${eb.penalty.goldLoss} 金币`, kind: 'error' } };
+          } else if (eb.penalty.percent) {
+            next = { ...next, toast: { msg: `战斗失败！全体受到 ${eb.penalty.percent}% 伤害`, kind: 'error' } };
+          } else if (eb.penalty.curseTarget) {
+            next = { ...next, toast: { msg: '战斗失败！随机宠物被诅咒了', kind: 'error' } };
           }
           next = { ...next, log: ['事件战斗失败', ...next.log].slice(0, 20) };
         }

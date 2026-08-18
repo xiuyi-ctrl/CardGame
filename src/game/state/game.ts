@@ -256,7 +256,7 @@ export interface GameState {
   /** 跳关选择模式：打开背包使用跳关道具后跳回地图，点击可达的战斗类节点直接获得奖励 */
   skipSelecting?: boolean;
   /** 全局toast提示：选择奖励后显示获得的食物/宠物等信息 */
-  toast?: { msg: string; kind?: 'info' | 'success' | 'error' };
+  toast?: { msg: string; kind?: 'info' | 'success' | 'error' | 'warning' };
   /** 打开背包前所在的界面（关闭背包时返回） */
   backpackFrom?: Screen;
   /** 自定义测试进行中：战斗结束后直接回首页 */
@@ -967,7 +967,6 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   cursed_chest: '诅咒宝箱',
   '精灵': '流浪精灵',
   '训练': '训练场挑战',
-  corrupted_spring: '被侵蚀的圣泉',
 };
 
 /** 按类型构建事件（可导出供自定义测试直接调用） */
@@ -1063,18 +1062,20 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
     const bet30 = Math.floor(rng() * 100);
     const bet15 = Math.floor(rng() * 100);
     let e1: EventChoice;
-    if (bet30 < 35) {
-      e1 = c(1, '投入 30 金', '可能赢得更多金币', 'gold', { amount: 100, goldDelta: -30 });
-    } else if (bet30 < 80) {
-      e1 = c(1, '投入 30 金', '可能赢得更多金币', 'gold', { amount: 60, goldDelta: -30 });
+    if (bet30 < 20) {
+      e1 = c(1, '投入 30 金', '可能赢得更多金币', 'gold', { amount: 80, goldDelta: -30 });
+    } else if (bet30 < 50) {
+      e1 = c(1, '投入 30 金', '可能赢得一些金币', 'gold', { amount: 60, goldDelta: -30 });
     } else {
       e1 = c(1, '投入 30 金', '可能什么也得不到', 'gold', { amount: 0, goldDelta: -30 });
     }
     let e2: EventChoice;
-    if (bet15 < 50) {
+    if (bet15 < 20) {
       e2 = c(2, '投入 15 金', '可能赢得一些金币', 'gold', { amount: 40, goldDelta: -15 });
+    } else if (bet15 < 50) {
+      e2 = c(2, '投入 15 金', '可能赢得一些金币', 'gold', { amount: 30, goldDelta: -15 });
     } else {
-      e2 = c(2, '投入 15 金', '可能赢得一些金币', 'gold', { amount: 20, goldDelta: -15 });
+      e2 = c(2, '投入 15 金', '可能什么也得不到', 'gold', { amount: 0, goldDelta: -15 });
     }
     return {
       title: '命运之轮',
@@ -1102,7 +1103,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
         title: '宠物遗迹',
         desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
         choices: [
-          c(1, '探索', '可能找到宝物或触发陷阱', 'damage', { amount: 10 }),
+          c(1, '探索', '可能找到宝物或触发陷阱', 'damage', { amount: 30 }),
           c(2, '带走遗物', '随机 1 只宠物永久 +1 速度', 'boost', { boostStat: 'spd', amount: 1 }),
           c(3, '离开', '谨慎行事', 'none'),
         ],
@@ -1143,7 +1144,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
       desc: '一座古老的祭坛散发着幽蓝的光芒，似乎在呼唤着什么……',
       choices: [
         c(1, '献祭', '随机放生 1 只宠物，全队永久 +3 生命上限', 'sacrifice', { boostStat: 'hp', amount: 3 }),
-        c(2, '净化', '消耗 25 金币，随机 1 只宠物清除诅咒', 'purify', { goldDelta: -25 }),
+        c(2, '净化', '消耗 40 金币，随机 1 只宠物清除诅咒', 'purify', { goldDelta: -40 }),
         c(3, '离开', '敬畏地绕开', 'none'),
       ],
     };
