@@ -60,7 +60,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   dark_shock: {
     id: 'dark_shock', name: '暗影冲击', desc: '重击单个敌人',
-    target: 'single', kind: 'attack', damage: 9,
+    target: 'single', kind: 'attack', damage: 8,
   },
   shockwave: {
     id: 'shockwave', name: '冲击波', desc: '贯穿攻击前排敌人并波及对应位置后排',
@@ -68,7 +68,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   snipe: {
     id: 'snipe', name: '狙击', desc: '跳过前排，直接攻击后排敌人',
-    target: 'single', kind: 'attack', damage: 8, reach: 'back',
+    target: 'single', kind: 'attack', damage: 6, reach: 'back',
   },
   pierce_strike: {
     id: 'pierce_strike', name: '穿刺', desc: '无视前后排，指定攻击任意位置敌人',
@@ -137,9 +137,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'atkDown', value: 1, turns: 2 }],
   },
   shadow_flurry: {
-    id: 'shadow_flurry', name: '暗影乱舞', desc: '连续三次攻击单个敌人，每段附加中毒',
+    id: 'shadow_flurry', name: '暗影乱舞', desc: '连续三次攻击单个敌人',
     target: 'single', kind: 'attack', damage: 3, hits: 3,
-    effects: [{ kind: 'poison', value: 2, turns: 3 }],
   },
   inferno: {
     id: 'inferno', name: '炼狱烈焰', desc: '连续两次攻击全体敌人并附加灼烧',
@@ -327,6 +326,15 @@ export const SKILLS: Record<string, SkillDef> = {
   rock_reforge: {
     id: 'rock_reforge', name: '碎岩重组', desc: '消灭并重新召唤碎石傀儡和晶石虫，3回合冷却',
     target: 'self', kind: 'buff', cooldown: 3,
+  },
+  shadow_rift: {
+    id: 'shadow_rift', name: '暗影裂隙',     desc: '攻击全体敌人并施加暗影印记（下回合受伤+2，持续1回合）',
+    target: 'all', kind: 'attack', damage: 4,
+    effects: [{ kind: 'shadowMark', value: 2, turns: 1 }],
+  },
+  leech_bite: {
+    id: 'leech_bite', name: '嗜血', desc: '攻击单个敌人并恢复自身生命',
+    target: 'single', kind: 'attack', damage: 4, heal: 2,
   },
 };
 

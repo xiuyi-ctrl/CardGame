@@ -157,6 +157,15 @@ export function BattleScreen({ state, dispatch }: Props) {
             return targets;
           }
         }
+        // 嗜血嗅觉：攻击目标永远为血量最低的敌人
+        const actorPassive = actor ? getPassive(actor.passive) : undefined;
+        if (actorPassive?.kind === 'bloodScent') {
+          const lowest = aliveEnemies.reduce((min, t) => t.hp < min.hp ? t : min, aliveEnemies[0]);
+          if (lowest) {
+            targets.add(lowest.uid);
+            return targets;
+          }
+        }
         aliveEnemies.forEach((u) => {
           if (enemyTargetable(skill, u, aliveEnemies)) targets.add(u.uid);
         });

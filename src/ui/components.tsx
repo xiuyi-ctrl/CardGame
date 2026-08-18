@@ -32,6 +32,7 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   flameShield: '🔥',
   windSpd: '💨',
   comboBoost: '✖️',
+  shadowMark: '🌑',
 };
 
 function effectText(e: StatusEffect): string {
@@ -71,6 +72,8 @@ function effectText(e: StatusEffect): string {
       return `速度 +${e.value}${turns}`;
     case 'comboBoost':
       return `连击 +${e.value}${turns}`;
+    case 'shadowMark':
+      return `暗影印记 受伤+${e.value}${turns}`;
   }
 }
 
@@ -144,6 +147,7 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   flameShield: { icon: '🟠', label: '烈焰护盾' },
   windSpd: { icon: '💨', label: '风羽' },
   comboBoost: { icon: '✖️', label: '连击段数' },
+  shadowMark: { icon: '🌑', label: '暗影印记' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -209,11 +213,12 @@ export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride, thor
   if (!p) return null;
   const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;
   const showStacks = stacks > 0 && (p.kind === 'spdOnHit' || p.kind === 'treeSpeedUp' || p.kind === 'spdOnAttack' || p.kind === 'speedBonus');
+  const followStacks = p.kind === 'shadowFollow' ? (unit.passiveDmgBonus ?? 0) : 0;
   const rockHits = p.kind === 'rockShellBreak' ? (rockShellHitsOverride ?? unit.rockShellHits ?? 0) : undefined;
   const thornHits = p.kind === 'thornRoyal' ? (thornsHitCountOverride ?? unit.thornsHitCount ?? 0) : undefined;
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
-      💠{p.name}{showStacks ? ` ×${stacks}` : ''}
+      💠{p.name}{showStacks ? ` ×${stacks}` : ''}{followStacks > 0 ? ` ×${followStacks}` : ''}
       {rockHits !== undefined && p.value !== undefined ? ` ${rockHits}/${p.value}` : ''}
       {thornHits !== undefined && p.value !== undefined ? ` ${thornHits % p.value}/${p.value}` : ''}
     </span>
@@ -454,6 +459,11 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
     // 荆棘之躯：显示当前受击计数（每受击 +1，每 3 次触发爆发反伤 + 回血）
     if (passive.kind === 'thornRoyal') {
       return `${(thornsHitCountOverride ?? unit.thornsHitCount ?? 0) % passive.value}/${passive.value}`;
+    }
+    // 暗影追随：显示永久伤害加成层数
+    if (passive.kind === 'shadowFollow') {
+      const stacks = unit.passiveDmgBonus ?? 0;
+      return stacks > 0 ? `×${stacks}` : null;
     }
     // 非叠加型被动不显示数值（与卡片 PassiveBadge 规则统一）
     return null;

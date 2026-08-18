@@ -42,6 +42,9 @@ export const PASSIVES: Record<string, PassiveDef> = {
   shell_guard: { id: 'shell_guard', name: '寄居壳', desc: '受到的所有伤害-1，潮汐巨蟹在场时-2', kind: 'guard', value: 1 },
   rock_shell_break: { id: 'rock_shell_break', name: '岩壳崩解', desc: '每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益状态', kind: 'rockShellBreak', value: 4 },
   rock_shard: { id: 'rock_shard', name: '岩壳碎片', desc: '死亡时对全体敌人和友方造成3点真实伤害（无视护盾），波及巨像计入其受击计数', kind: 'rockShard', value: 3 },
+  shadow_hunter: { id: 'shadow_hunter', name: '暗影追猎', desc: '对生命值低于50%的目标伤害+3；击杀目标后立即获得一次额外行动', kind: 'shadowHunter', value: 3 },
+  shadow_follow: { id: 'shadow_follow', name: '暗影追随', desc: '暗影之王每击杀一个目标时，自身永久伤害+1', kind: 'shadowFollow', value: 1 },
+  blood_scent: { id: 'blood_scent', name: '嗜血嗅觉', desc: '攻击目标永远为血量最低的敌人', kind: 'bloodScent', value: 0 },
 
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },

@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost';
+  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -72,7 +72,10 @@ export type PassiveKind =
   | 'tideRhythm' // 潮汐节律：每3回合触发一次，本回合伤害+2
   | 'tideEcho' // 潮汐共鸣：潮汐巨蟹爆发时本回合自身伤害+2
   | 'rockShellBreak' // 岩壳崩解：每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益
-  | 'rockShard'; // 岩壳碎片：死亡时对全体敌我3真实伤害+可连锁+巨像受击计数+1
+  | 'rockShard' // 岩壳碎片：死亡时对全体敌我3真实伤害+可连锁+巨像受击计数+1
+  | 'shadowHunter' // 暗影追猎：对生命值低于50%的目标伤害+3；击杀目标后立即获得一次额外行动
+  | 'shadowFollow' // 暗影追随：暗影之王每击杀一个目标时，自身永久伤害+1
+  | 'bloodScent'; // 嗜血嗅觉：攻击目标永远为血量最低的敌人
 
 export interface PassiveDef {
   id: string;
@@ -171,6 +174,8 @@ export interface Unit {
   thornsHitCount?: number;
   /** 岩壳崩解被动：本场战斗中受击计数（每 4 次触发全体伤害+清减益） */
   rockShellHits?: number;
+  /** 暗影追随被动：永久伤害加成（暗影之王击杀时 +1） */
+  passiveDmgBonus?: number;
   /** 敌方换位次数（每场战斗最多 2 次） */
   swapCount?: number;
 }

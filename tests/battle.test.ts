@@ -956,4 +956,67 @@ describe('战斗日志与动画时序', () => {
     const totalDmg = (before[0] - after.enemyUnits[0].hp) + (before[1] - after.enemyUnits[1].hp);
     expect(totalDmg).toBe(6);
   });
+
+  describe('暗影追猎额外行动', () => {
+    it('暗影之王击杀目标后立即获得额外行动（再执行一次 AI）', () => {
+      // boss_dark 有暗影追猎被动：击杀后获得额外行动
+      // 我方放一个 1HP 脆皮，暗影之王杀掉后应触发额外行动
+      const weak = makeUnit('pipi', true, 0, false);
+      weak.hp = 1; weak.maxHp = 1;
+      const b = createBattle(
+        [weak],
+        [{ speciesId: 'boss_dark' }],
+        3
+      );
+      const after = autoPlay(b, 10);
+      // 脆皮应被击杀
+      const pipi = after.playerUnits.find(u => u.speciesId === 'pipi');
+      expect(pipi!.hp).toBe(0);
+      // 暗影之王的日志中应包含「暗影追猎」触发
+      const extraLogs = after.log.filter(l => l.text.includes('暗影追猎'));
+      expect(extraLogs.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('暗影之王击杀后额外行动的伤害应施加在剩余目标上', () => {
+      // boss_dark 有暗影追猎 + 暗影追随被动
+      // 我方放 3 个 1HP 脆皮，暗影之王每次击杀都触发额外行动
+      const w1 = makeUnit('pipi', true, 0, false); w1.hp = 1; w1.maxHp = 1;
+      const w2 = makeUnit('lulu', true, 1, false); w2.hp = 1; w2.maxHp = 1;
+      const w3 = makeUnit('fifi', true, 2, false); w3.hp = 1; w3.maxHp = 1;
+      const b = createBattle(
+        [w1, w2, w3],
+        [{ speciesId: 'boss_dark' }],
+        3
+      );
+      const after = autoPlay(b, 10);
+      // 所有脆皮应被击杀
+      for (const u of after.playerUnits.filter(u => u.speciesId !== 'boss_dark')) {
+        expect(u.hp).toBe(0);
+      }
+      // 暗影追猎应触发多次（每次击杀一次额外行动）
+      const extraLogs = after.log.filter(l => l.text.includes('暗影追猎'));
+      expect(extraLogs.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('暗影追猎+3伤害使暗影之王能击杀原本杀不死的目标（8伤→11伤）', () => {
+      // dark_shock 基础8伤，无被动只能打8（打不死10HP目标）
+      // 暗影追猎被动对<50%HP目标+3 → 11伤，能击杀10HP目标
+      const target = makeUnit('momo', true, 0, false);
+      target.hp = 10; target.maxHp = 14; // 10/14 ≈ 71% > 50%，不应触发+3
+      const target2 = makeUnit('lulu', true, 1, false);
+      target2.hp = 6; target2.maxHp = 14; // 6/14 ≈ 43% < 50%，应触发+3
+      const b = createBattle(
+        [target, target2],
+        [{ speciesId: 'boss_dark' }],
+        3
+      );
+      const after = autoPlay(b, 15);
+      // lulu 应被击杀（8+3=11 伤害 vs 6HP）
+      const lulu = after.playerUnits.find(u => u.speciesId === 'lulu');
+      expect(lulu!.hp).toBe(0);
+      // 日志中应有暗影追猎触发
+      const extraLogs = after.log.filter(l => l.text.includes('暗影追猎'));
+      expect(extraLogs.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

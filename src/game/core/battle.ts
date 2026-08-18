@@ -491,8 +491,8 @@ function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
     if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
-    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）、波光环（comboBoost）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
-    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd' || s.kind === 'comboBoost') && s.appliedRound !== undefined && s.appliedRound === round) continue;
+    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）、波光环（comboBoost）、暗影印记（shadowMark）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
+    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd' || s.kind === 'comboBoost' || s.kind === 'shadowMark') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
@@ -728,13 +728,19 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
             picked = res.pick;
           }
         } else {
-          const frontPool = front.length > 0 ? front : back;
-          if (explicitTarget && frontPool.some((u) => u.uid === explicitTarget)) {
-            picked = frontPool.find((u) => u.uid === explicitTarget)!;
+          // 嗜血嗅觉：无视前后排限制，强制攻击指定目标
+          const actorPassive = getUnitPassive(actor);
+          if (actorPassive?.kind === 'bloodScent' && explicitTarget && enemies.some((u) => u.uid === explicitTarget)) {
+            picked = enemies.find((u) => u.uid === explicitTarget)!;
           } else {
-            const res = rngPick(nb, frontPool);
-            nb = res.battle;
-            picked = res.pick;
+            const frontPool = front.length > 0 ? front : back;
+            if (explicitTarget && frontPool.some((u) => u.uid === explicitTarget)) {
+              picked = frontPool.find((u) => u.uid === explicitTarget)!;
+            } else {
+              const res = rngPick(nb, frontPool);
+              nb = res.battle;
+              picked = res.pick;
+            }
           }
         }
         // 连击：同一目标命中 hits 次（伤害按 hits 倍结算，perTarget 聚合）
@@ -950,6 +956,11 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     const actorPassive = getUnitPassive(actor);
     const hasVenomPower = actorPassive?.kind === 'venomPower';
     const hasScorchPlus = actorPassive?.kind === 'scorchPlus';
+    // 嗜血嗅觉：攻击目标永远为血量最低的敌人
+    if (actorPassive?.kind === 'bloodScent' && targetPool.length > 1) {
+      const lowest = targetPool.reduce((min, t) => t.hp < min.hp ? t : min, targetPool[0]);
+      if (lowest) targetPool = [lowest];
+    }
     // 波光环：拥有 comboBoost 时大幅倾向连击技能
     const hasComboBoost = actor.statuses.some((s) => s.kind === 'comboBoost');
     // 幕次 + 特殊模式
@@ -1020,6 +1031,10 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
         }
         // 技能伤害
         tScore += (atk.damage ?? 0) + getDamageBonus(actor);
+        // 暗影追猎：对生命值低于50%的目标伤害+3
+        if (actorPassive?.kind === 'shadowHunter' && t.hp / t.maxHp < 0.5) {
+          tScore += actorPassive.value;
+        }
         if (atk.target === 'all' && targetPool.length >= 3) tScore += 3;
         // 带状态效果的技能加分
         if (atk.effects?.some((e) => e.kind === 'poison' || e.kind === 'burn')) tScore += 2;
@@ -1234,11 +1249,20 @@ function resolveAttack(
       perHitDmg += Math.min(5, burnStacks);
     }
   }
+  // 暗影追猎：对生命值低于50%的目标伤害+3
+  if (ap?.kind === 'shadowHunter' && target.hp / target.maxHp < 0.5) {
+    perHitDmg += ap.value;
+  }
+  // 暗影印记：目标有 shadowMark 时，受到伤害 +value
+  const shadowMark = tWithPassive.statuses.find((s) => s.kind === 'shadowMark');
+  if (shadowMark) {
+    perHitDmg += shadowMark.value;
+  }
   const finalDmg = perHitDmg * count;
   const segments = splitDamage(finalDmg, count);
   let t2 = tWithPassive;
   const skillEffectKinds: string[] = (skill.effects ?? [])
-    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter')
+    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark')
     .map((e) => e.kind);
   let lastHitLog: number | undefined;
   let shieldIgnoreLeft = (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) ? 8 : 0;
@@ -1289,7 +1313,7 @@ function resolveAttack(
           nb = replaceUnit(nb, newShield);
           nb = pushLog(nb, `${shielded.name} 获得 ${e.value} 点护盾`, sideOf(shielded), actor.uid, actor.uid);
         }
-      } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns') {
+      } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
       }
     }
@@ -1595,6 +1619,46 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         nb = pushLog(nb, `${burnedActor.name} 的「焚身爆」反噬，损失 5 点生命`, sideOf(burnedActor), burnedActor.uid, burnedActor.uid);
       }
     }
+    // 暗影追随：暗影之王击杀时，暗影仆从永久伤害 +1（须在暗影追猎 return 前执行）
+    {
+      const curActor = actorFromId(nb, actor.uid);
+      if (curActor && curActor.hp > 0 && curActor.speciesId === 'boss_dark') {
+        const anyKilled = targets.some((t) => {
+          const fresh = actorFromId(nb, t.uid);
+          return fresh && fresh.hp <= 0;
+        });
+        if (anyKilled) {
+          const allies = (curActor.isPlayer ? nb.playerUnits : nb.enemyUnits).filter((u) => u.hp > 0);
+          for (const ally of allies) {
+            const ap2 = getUnitPassive(ally);
+            if (ap2?.kind === 'shadowFollow') {
+              const newBonus = (ally.passiveDmgBonus ?? 0) + ap2.value;
+              nb = replaceUnit(nb, { ...ally, passiveDmgBonus: newBonus });
+              nb = pushLog(nb, `${ally.name} 的「暗影追随」触发！永久伤害 +${ap2.value}`, sideOf(ally), ally.uid, ally.uid);
+            }
+          }
+        }
+      }
+    }
+    // 暗影追猎：击杀目标后立即获得一次额外行动（不标记 acted）
+    {
+      const curActor = actorFromId(nb, actor.uid);
+      if (curActor && curActor.hp > 0) {
+        const ap2 = getUnitPassive(curActor);
+        if (ap2?.kind === 'shadowHunter') {
+          const anyKilled = targets.some((t) => {
+            const fresh = actorFromId(nb, t.uid);
+            return fresh && fresh.hp <= 0;
+          });
+          if (anyKilled) {
+            // 不标记 acted，允许再次行动
+            nb = pushLog(nb, `${curActor.name} 的「暗影追猎」触发！击杀目标后获得额外行动`, sideOf(curActor), curActor.uid, curActor.uid);
+            // 直接返回，跳过 markActed
+            return nb;
+          }
+        }
+      }
+    }
     // 攻击技能附带自愈：水波冲击按命中人数回血，其他技能按固定值回血
     const healAmt = skill.id === 'water_wave' ? waterWaveHits : (skill.heal ?? 0);
     if (healAmt > 0) {
@@ -1628,10 +1692,14 @@ export function playerEndTurn(b: BattleState): BattleState {
   }
   // 回合结算：所有存活单位（敌我混排）按速度统一行动——
   // 我方执行已下达的指令，敌方由 AI 自动行动；未下指令的我方单位本回合不出手。
-  for (const uid of computeTurnOrder(nb)) {
+  // 使用索引循环以支持「暗影追猎」击杀后再行动（不标记 acted 的单位需重新处理）
+  const turnOrder = computeTurnOrder(nb);
+  let turnIdx = 0;
+  while (turnIdx < turnOrder.length) {
+    const uid = turnOrder[turnIdx];
     if (nb.phase !== 'acting') break;
     const unit = actorFromId(nb, uid);
-    if (!unit || unit.hp <= 0) continue;
+    if (!unit || unit.hp <= 0) { turnIdx++; continue; }
     if (unit.isPlayer) {
       const order = nb.orders?.[uid];
       if (order) {
@@ -1642,10 +1710,12 @@ export function playerEndTurn(b: BattleState): BattleState {
           nb = useSkillInner(nb, unit, getSkill(order.skillId), order.targetUid);
         }
       }
+      turnIdx++;
+      nb = checkEnd(nb);
     } else {
       // 车轮战：上一只阵亡后刚切入场的敌方替补本回合不出手，等下回合（startRound 重置 acted）再行动；
       // 眩晕单位仍走 enemyAct 正常打出「被眩晕」日志（startRound 也把它们标记为 acted）
-      if (unit.acted && !unit.statuses.some((s) => s.kind === 'stun')) continue;
+      if (unit.acted && !unit.statuses.some((s) => s.kind === 'stun')) { turnIdx++; continue; }
       // 先手技能：若敌方已被预选先手指令，直接执行而非走 AI
       const eOrder = nb.orders?.[uid];
       if (eOrder && getSkill(eOrder.skillId)?.priority === 'first') {
@@ -1653,8 +1723,17 @@ export function playerEndTurn(b: BattleState): BattleState {
       } else {
         nb = enemyAct(nb, unit);
       }
+      // 暗影追猎：useSkillInner 返回后若该单位仍「未行动」（跳过了 markActed），说明触发了额外行动，
+      // 不递增 turnIdx，立即重处理该单位（再执行一轮 AI）
+      const reUnit = actorFromId(nb, uid);
+      if (reUnit && reUnit.hp > 0 && !reUnit.acted) {
+        nb = checkEnd(nb);
+        if (nb.phase !== 'acting') break;
+        continue;
+      }
+      turnIdx++;
+      nb = checkEnd(nb);
     }
-    nb = checkEnd(nb);
   }
   nb = { ...nb, orders: {} };
   if (nb.phase !== 'acting') return nb;
@@ -1996,6 +2075,8 @@ export function getDamageBonus(u: Unit): number {
   const p = getUnitPassive(u);
   if (p?.kind === 'power') bonus += p.value;
   if (p?.kind === 'frenzy' && u.hp / u.maxHp < 0.5) bonus += p.value;
+  // 暗影追随：永久伤害加成
+  if (u.passiveDmgBonus) bonus += u.passiveDmgBonus;
   return bonus;
 }
 
