@@ -774,6 +774,9 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
     if (effect.kind === 'burn' || effect.kind === 'poison' || effect.kind === 'rageThorn') {
       // 灼烧/中毒/怒棘可叠加：层数相加（可挂多层）
       next[idx] = { ...next[idx], value: next[idx].value + effect.value };
+    } else if (effect.kind === 'spdDown') {
+      // 减速可叠加，上限 5 层；持续回合取最大值
+      next[idx] = { ...next[idx], value: Math.min(5, next[idx].value + effect.value), turns: Math.max(next[idx].turns, effect.turns) };
     } else {
       next[idx] = {
         ...next[idx],
