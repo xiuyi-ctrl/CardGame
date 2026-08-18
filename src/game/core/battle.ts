@@ -777,6 +777,9 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
     } else if (effect.kind === 'spdDown') {
       // 减速可叠加，上限 5 层；持续回合取最大值
       next[idx] = { ...next[idx], value: Math.min(5, next[idx].value + effect.value), turns: Math.max(next[idx].turns, effect.turns) };
+    } else if (effect.kind === 'atkDown') {
+      // 降攻可叠加，上限 2 层；持续回合取最大值
+      next[idx] = { ...next[idx], value: Math.min(2, next[idx].value + effect.value), turns: Math.max(next[idx].turns, effect.turns) };
     } else {
       next[idx] = {
         ...next[idx],
