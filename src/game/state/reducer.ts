@@ -681,6 +681,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           }),
         };
       }
+      // 设置 toast 提示（正面结果）
+      if (choice.kind === 'gold' && (choice.amount ?? 0) > 0) {
+        next = { ...next, toast: { msg: `获得 ${choice.amount} 金币`, kind: 'success' } };
+      } else if (choice.kind === 'food' && choice.foodId) {
+        const f = FOODS[choice.foodId];
+        next = { ...next, toast: { msg: `${f?.emoji ?? '🍖'} ${f?.name ?? choice.foodId} ×1`, kind: 'success' } };
+      } else if (choice.kind === 'item' && choice.itemId) {
+        const it = ITEMS[choice.itemId];
+        next = { ...next, toast: { msg: `${it?.emoji ?? '🎒'} ${it?.name ?? choice.itemId} ×1`, kind: 'success' } };
+      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length <= ROSTER_MAX) {
+        const m = getMonster(choice.monsterId);
+        next = { ...next, toast: { msg: `招募了 ${m.emoji} ${m.name}！`, kind: 'success' } };
+      } else if (choice.kind === 'boost' && choice.boostStat) {
+        const statCn = choice.boostStat === 'hp' ? '生命' : '速度';
+        next = { ...next, toast: { msg: `随机宠物永久 +${choice.amount ?? 0} ${statCn}`, kind: 'success' } };
+      } else if (choice.kind === 'purify') {
+        next = { ...next, toast: { msg: '清除了一只宠物的诅咒', kind: 'success' } };
+      } else if (choice.kind === 'heal' && (choice.amount ?? 0) > 0) {
+        next = { ...next, toast: { msg: `全体恢复 ${choice.amount}% 生命`, kind: 'info' } };
+      }
       return { ...next, screen: 'map', log: [choice.label, ...next.log].slice(0, 20) };
     }
 
