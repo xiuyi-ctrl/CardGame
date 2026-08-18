@@ -45,6 +45,9 @@ export const PASSIVES: Record<string, PassiveDef> = {
   shadow_hunter: { id: 'shadow_hunter', name: '暗影追猎', desc: '对生命值低于50%的目标伤害+3；击杀目标后立即获得一次额外行动', kind: 'shadowHunter', value: 3 },
   shadow_follow: { id: 'shadow_follow', name: '暗影追随', desc: '暗影之王每击杀一个目标时，自身永久伤害+1', kind: 'shadowFollow', value: 1 },
   blood_scent: { id: 'blood_scent', name: '嗜血嗅觉', desc: '攻击目标永远为血量最低的敌人', kind: 'bloodScent', value: 0 },
+  corrupt_spread: { id: 'corrupt_spread', name: '腐化蔓延', desc: '每当一个单位被附加中毒时，随机对另一个敌方单位附加中毒2层', kind: 'corruptSpread', value: 2 },
+  corrupt_sac: { id: 'corrupt_sac', name: '腐化囊体', desc: '被攻击时50%概率使攻击者中毒2层', kind: 'corruptSac', value: 2 },
+  sticky_body: { id: 'sticky_body', name: '粘滞躯体', desc: '攻击蛞蝓的单位速度-1，持续2回合', kind: 'stickyBody', value: 1 },
 
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },

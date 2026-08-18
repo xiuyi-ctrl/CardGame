@@ -53,6 +53,12 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 4,
     effects: [{ kind: 'poison', value: 2, turns: 3 }],
   },
+  toxic_burst: {
+    id: 'toxic_burst', name: '毒性爆发', desc: '蓄力：若本回合自身死亡，对全体敌人造成 4 伤害 + 中毒 3 层（冷却 1 回合）',
+    target: 'self', kind: 'buff', cooldown: 1,
+    effects: [{ kind: 'toxicBurstReady', value: 1, turns: 1 }],
+    hideEffects: true,
+  },
   flame_burst: {
     id: 'flame_burst', name: '烈焰爆发', desc: '攻击所有敌人并附加灼烧',
     target: 'all', kind: 'attack', damage: 5,
@@ -335,6 +341,21 @@ export const SKILLS: Record<string, SkillDef> = {
   leech_bite: {
     id: 'leech_bite', name: '嗜血', desc: '攻击单个敌人并恢复自身生命',
     target: 'single', kind: 'attack', damage: 4, heal: 2,
+  },
+  spore_summon: {
+    id: 'spore_summon', name: '孢子召唤', desc: '随机召唤一只毒孢囊或沼地蛞蝓（无空位则失败）',
+    target: 'allyAll', kind: 'buff',
+  },
+  spore_shield: {
+    id: 'spore_shield', name: '孢子防护', desc: '本回合受到的所有伤害-2，回合结束时回复8点生命值',
+    target: 'self', kind: 'buff',
+    effects: [{ kind: 'sporeShield', value: 2, turns: 1 }],
+    heal: 8,
+  },
+  slime_cover: {
+    id: 'slime_cover', name: '粘液覆盖', desc: '攻击单个敌人并减速',
+    target: 'single', kind: 'attack', damage: 2,
+    effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
   },
 };
 

@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark';
+  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -75,7 +75,10 @@ export type PassiveKind =
   | 'rockShard' // 岩壳碎片：死亡时对全体敌我3真实伤害+可连锁+巨像受击计数+1
   | 'shadowHunter' // 暗影追猎：对生命值低于50%的目标伤害+3；击杀目标后立即获得一次额外行动
   | 'shadowFollow' // 暗影追随：暗影之王每击杀一个目标时，自身永久伤害+1
-  | 'bloodScent'; // 嗜血嗅觉：攻击目标永远为血量最低的敌人
+  | 'bloodScent' // 嗜血嗅觉：攻击目标永远为血量最低的敌人
+  | 'corruptSpread' // 腐化蔓延：每当一个单位被附加中毒时，随机对另一个敌方单位附加中毒2层
+  | 'corruptSac' // 腐化囊体：被攻击时50%概率使攻击者中毒2层
+  | 'stickyBody'; // 粘滞躯体：攻击蛞蝓的单位速度-1，持续2回合
 
 export interface PassiveDef {
   id: string;

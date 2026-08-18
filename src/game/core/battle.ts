@@ -371,9 +371,20 @@ function startRound(b: BattleState): BattleState {
     const res = applyDot(nb, cur);
     nb = res.battle;
     if (res.unit.hp > 0) {
+      // 孢子防护回合结束回血：在 tickStatuses 移除前检查
+      const hadSporeShield = res.unit.statuses.some((s) => s.kind === 'sporeShield');
       tickStatuses(res.unit, prevRound);
+      if (hadSporeShield) {
+        const maxHp = getEffectiveMaxHp(res.unit);
+        const healed = { ...res.unit, hp: Math.min(maxHp, res.unit.hp + 8) };
+        nb = replaceUnit(nb, healed);
+        nb = pushLog(nb, `${healed.name} 的「孢子防护」恢复 8 点生命`, sideOf(healed), healed.uid, healed.uid);
+      } else {
+        nb = replaceUnit(nb, res.unit);
+      }
     } else if (res.unit.speciesId.startsWith('boss_minion_')) {
       nb = applyRockShardDeath(nb, res.unit);
+      nb = applyToxicBurstDeath(nb, res.unit);
     }
     nb = replaceUnit(nb, res.unit);
   }
@@ -907,6 +918,16 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           candidates.push({ kind: 'buff', skill: bs, score: 45 });
         }
       }
+      // 毒性爆发：蓄力技能，血量越低越倾向使用（死亡时触发全体爆发）
+      if (bs.id === 'toxic_burst' && !actor.statuses.some((s) => s.kind === 'toxicBurstReady')) {
+        // 血量 < 40% 高概率使用，< 70% 中概率，否则低概率
+        let burstChance = 0.15;
+        if (hpRatio < 0.4) burstChance = 0.8;
+        else if (hpRatio < 0.7) burstChance = 0.4;
+        if (rngVal < burstChance) {
+          candidates.push({ kind: 'buff', skill: bs, score: hpRatio < 0.4 ? 70 : 45 });
+        }
+      }
       // 碎岩重组：有次数且未冷却时（line 813 已过滤），小怪在场则高概率使用（触发自爆链加速岩壳崩解）
       if (bs.id === 'rock_reforge') {
         // 死亡小怪：从 enemyUnits 直接查（alliesOf 过滤了 hp <= 0）
@@ -1194,6 +1215,47 @@ function applyRockShardDeath(b: BattleState, dead: Unit): BattleState {
   return nb;
 }
 
+/** 毒孢囊死亡爆发：对全体敌人造成 4 点真实伤害 + 中毒 3 层 */
+function applyToxicBurstDeath(b: BattleState, dead: Unit): BattleState {
+  const hasBurst = dead.statuses.some((s) => s.kind === 'toxicBurstReady');
+  if (!hasBurst) return b;
+  let nb = { ...b };
+  // 移除 toxicBurstReady 状态
+  const cleaned = { ...dead, statuses: dead.statuses.filter((s) => s.kind !== 'toxicBurstReady') };
+  nb = replaceUnit(nb, cleaned);
+  const victims = (dead.isPlayer ? nb.enemyUnits : nb.playerUnits).filter((u) => u.hp > 0);
+  const hitUids: string[] = [];
+  for (const v of victims) {
+    const after = { ...v, hp: Math.max(0, v.hp - 4) };
+    const poisoned = applyStatusTo(after, { kind: 'poison', value: 3, turns: 3 }, nb.round);
+    nb = replaceUnit(nb, poisoned);
+    hitUids.push(poisoned.uid);
+  }
+  nb = pushLog(nb, `${dead.name} 的「毒性爆发」触发！对全体敌人造成 4 点伤害 + 中毒 3 层`, sideOf(dead), dead.uid, undefined, ['poison'], hitUids);
+  return nb;
+}
+
+/** 腐化蔓延：当场上有苔藓领主存活时，任何单位被附加中毒后，随机对另一个敌方单位附加中毒2层 */
+function applyCorruptSpread(b: BattleState, poisonedUid: string): BattleState {
+  const moss = b.enemyUnits.find((u) => u.speciesId === 'boss_moss' && u.hp > 0);
+  if (!moss) return b;
+  const p = getUnitPassive(moss);
+  if (p?.kind !== 'corruptSpread') return b;
+  // 随机选一个我方存活单位（非刚中毒的单位优先）
+  const candidates = b.playerUnits.filter((u) => u.hp > 0 && u.uid !== poisonedUid);
+  const pool = candidates.length > 0 ? candidates : b.playerUnits.filter((u) => u.hp > 0);
+  if (pool.length === 0) return b;
+  let nb = b;
+  const rngVal = Math.abs((nb.rngCount ?? 0)) % pool.length;
+  nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+  const target = pool[rngVal];
+  const fresh = actorFromId(nb, target.uid) ?? target;
+  const poisoned = applyStatusTo(fresh, { kind: 'poison', value: p.value, turns: 3 }, nb.round);
+  nb = replaceUnit(nb, poisoned);
+  nb = pushLog(nb, `${moss.name} 的「腐化蔓延」触发！${poisoned.name} 中毒 ${p.value} 层`, sideOf(moss), moss.uid, poisoned.uid);
+  return nb;
+}
+
 /** 逐目标攻击结算：伤害计算 + 段数拆分 + 护盾/吸血/反伤/状态写回 */
 function resolveAttack(
   b: BattleState,
@@ -1418,6 +1480,34 @@ function resolveAttack(
         nb = replaceUnit(nb, t2);
         nb = pushLog(nb, `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`, sideOf(t2), t2.uid, t2.uid);
       }
+      // 腐化囊体：被攻击时50%概率使攻击者中毒2层
+      if (t2.hp > 0) {
+        const tp2 = getUnitPassive(t2);
+        if (tp2?.kind === 'corruptSac') {
+          const roll = Math.abs((nb.rngCount ?? 0)) % 100;
+          nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+          if (roll < 50) {
+            const attacker2 = actorFromId(nb, actor.uid);
+            if (attacker2 && attacker2.hp > 0) {
+              const poisoned = applyStatusTo(attacker2, { kind: 'poison', value: tp2.value, turns: 2 }, nb.round);
+              nb = replaceUnit(nb, poisoned);
+              nb = pushLog(nb, `${t2.name} 的「腐化囊体」使 ${attacker2.name} 中毒 ${tp2.value} 层`, sideOf(t2), t2.uid, attacker2.uid);
+            }
+          }
+        }
+      }
+      // 粘滞躯体：攻击蛞蝓的单位速度-1，持续2回合
+      if (t2.hp > 0) {
+        const tp2 = getUnitPassive(t2);
+        if (tp2?.kind === 'stickyBody') {
+          const attacker3 = actorFromId(nb, actor.uid);
+          if (attacker3 && attacker3.hp > 0) {
+            const slowed = applyStatusTo(attacker3, { kind: 'spdDown', value: tp2.value, turns: 2 }, nb.round);
+            nb = replaceUnit(nb, slowed);
+            nb = pushLog(nb, `${t2.name} 的「粘滞躯体」使 ${attacker3.name} 速度 -${tp2.value}`, sideOf(t2), t2.uid, attacker3.uid);
+          }
+        }
+      }
     }
     if (t2.hp > 0) {
       const scIdx = t2.statuses.findIndex((s) => s.kind === 'shieldCounter');
@@ -1455,6 +1545,7 @@ function resolveAttack(
   if (t2.hp <= 0 && t2.speciesId.startsWith('boss_minion_')) {
     nb = pushLog(nb, `${t2.name} 被击倒了`, sideOf(t2), t2.uid, t2.uid);
     nb = applyRockShardDeath(nb, t2);
+    nb = applyToxicBurstDeath(nb, t2);
   }
   return { battle: nb, lastHitLog, passiveAdds };
 }
@@ -1543,6 +1634,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           nb = replaceUnit(nb, killed);
           nb = pushLog(nb, `${existing.name} 被巨像碾碎了`, sideOf(killed), killed.uid, killed.uid);
           nb = applyRockShardDeath(nb, killed);
+          nb = applyToxicBurstDeath(nb, killed);
         }
         // 复用同 species 的死亡单位：覆盖其 uid/槽位为新召唤个体，避免死卡占位
         const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
@@ -1556,6 +1648,50 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         nb = pushLog(nb, `${actor.name} 使用「碎岩重组」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
       }
     }
+    // 孢子召唤：随机召唤一只毒孢囊或沼地蛞蝓（无空位则失败）
+    if (skill.id === 'spore_summon') {
+      const minionSids = ['boss_minion_spore_sac', 'boss_minion_slug'];
+      const rngIdx = Math.abs((nb.rngCount ?? 0)) % minionSids.length;
+      nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+      const sid = minionSids[rngIdx];
+      // 找空位：优先复用同 species 的死亡单位槽位，否则在 3 列中找空
+      const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
+      if (dead) {
+        const fresh = makeEnemy({ speciesId: sid }, dead.row, dead.column, true);
+        const summoned = { ...fresh, acted: true, uid: dead.uid };
+        nb = replaceUnit(nb, summoned);
+        nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
+      } else {
+        // 在前排/后排找空列（0/1/2）
+        const usedCols = new Set(nb.enemyUnits.filter((u) => u.hp > 0).map((u) => `${u.row}:${u.column}`));
+        let placed = false;
+        for (const row of ['front', 'back'] as const) {
+          for (const col of [0, 1, 2] as const) {
+            if (!usedCols.has(`${row}:${col}`)) {
+              const fresh = makeEnemy({ speciesId: sid }, row, col, true);
+              const summoned = { ...fresh, acted: true };
+              nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
+              nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
+              placed = true;
+              break;
+            }
+          }
+          if (placed) break;
+        }
+        if (!placed) {
+          nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，但没有空位，召唤失败`, sideOf(actor), actor.uid, actor.uid);
+        }
+      }
+    }
+    // 孢子防护：自身获得孢子防护状态（受伤-2）+ 回合结束回血（由 startRound 处理）
+    if (skill.id === 'spore_shield') {
+      const self = actorFromId(nb, actor.uid);
+      if (self && self.hp > 0) {
+        const shielded = applyStatusTo(self, { kind: 'sporeShield', value: 2, turns: 1 }, nb.round);
+        nb = replaceUnit(nb, shielded);
+        nb = pushLog(nb, `${actor.name} 使用「孢子防护」，本回合受伤 -2`, sideOf(actor), actor.uid, actor.uid);
+      }
+    }
   } else {
     const perTarget = new Map<string, number>();
     let waterWaveHits = 0;
@@ -1567,6 +1703,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (!t || t.hp <= 0) continue;
       const result = resolveAttack(nb, actor, t, skill, count);
       nb = result.battle;
+      nb = applyCorruptSpread(nb, t.uid);
       if (skill.id === 'water_wave') waterWaveHits += 1;
     }
     // 风灵闪：若自身速度高于目标，额外攻击一次（对每个目标独立判定，与主攻击完全一致）
@@ -1579,6 +1716,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           if (getEffectiveSpd(freshActor) > getEffectiveSpd(freshTarget)) {
             const result = resolveAttack(nb, freshActor, freshTarget, skill, 1);
             nb = result.battle;
+            nb = applyCorruptSpread(nb, freshTarget.uid);
           }
         }
       }
@@ -2097,6 +2235,9 @@ export function getDamageGuard(u: Unit, b?: BattleState): number {
   // 水幕：减少伤害 value
   const wc = u.statuses.find((s) => s.kind === 'waterCurtain');
   if (wc) guard += wc.value;
+  // 孢子防护：减少伤害 value
+  const sporeShield = u.statuses.find((s) => s.kind === 'sporeShield');
+  if (sporeShield) guard += sporeShield.value;
   return guard;
 }
 

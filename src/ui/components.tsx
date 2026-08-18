@@ -33,6 +33,8 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   windSpd: '💨',
   comboBoost: '✖️',
   shadowMark: '🌑',
+  sporeShield: '🍄',
+  toxicBurstReady: '💀',
 };
 
 function effectText(e: StatusEffect): string {
@@ -74,6 +76,10 @@ function effectText(e: StatusEffect): string {
       return `连击 +${e.value}${turns}`;
     case 'shadowMark':
       return `暗影印记 受伤+${e.value}${turns}`;
+    case 'sporeShield':
+      return `孢子防护 受伤-${e.value}${turns}`;
+    case 'toxicBurstReady':
+      return `毒性爆发蓄力中（死亡时触发全体爆发）`;
   }
 }
 
@@ -148,6 +154,8 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   windSpd: { icon: '💨', label: '风羽' },
   comboBoost: { icon: '✖️', label: '连击段数' },
   shadowMark: { icon: '🌑', label: '暗影印记' },
+  sporeShield: { icon: '🍄', label: '孢子防护' },
+  toxicBurstReady: { icon: '💀', label: '毒性爆发蓄力' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
@@ -431,6 +439,8 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   waterCurtain: (v) => `下回合受到伤害 -${v}`,
   flameShield: (v) => `受攻击时灼烧攻击者 ${v} 层`,
   comboBoost: (v) => `连击段数 +${v}`,
+  sporeShield: (v) => `受到伤害 -${v}，回合结束恢复 8 点生命`,
+  toxicBurstReady: () => '死亡时对全体敌人造成 4 伤害 + 中毒 3 层',
 };
 
 export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, thornsHitCountOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number; thornsHitCountOverride?: number }) {

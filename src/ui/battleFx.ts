@@ -52,7 +52,7 @@ export interface RevealEntry {
  *  仍匹配不到归属（如治疗/药水产生）时，归入该单位作为目标的第一个事件（随施法/治疗动画揭示）；
  *  目标从未出现在事件中才兜底第一个事件，保证不迟于动画开始显示 */
 export function computeRevealAt(
-  events: readonly { targetUid?: string; kind?: string; addsStatus?: string[]; actorUid?: string }[],
+  events: readonly { targetUid?: string; kind?: string; addsStatus?: string[]; actorUid?: string; burstTargets?: string[] }[],
   newStatuses: Record<string, string[]>,
 ): Record<number, RevealEntry[]> {
   const revealAt: Record<number, RevealEntry[]> = {};
@@ -65,10 +65,21 @@ export function computeRevealAt(
   for (const uid of Object.keys(newStatuses)) {
     const kinds = [...newStatuses[uid]];
     const assigned = new Array<boolean>(kinds.length).fill(false);
-    // 1) 精确匹配：该 kind 由某次攻击附加，随那次攻击动画揭示
+    // 1) 精确匹配：该 kind 由某次攻击/爆发附加，随那次动画揭示
     for (let k = 0; k < kinds.length; k++) {
       const i = events.findIndex(
         (ev) => ev.targetUid === uid && ev.kind === 'attack' && (ev.addsStatus ?? []).includes(kinds[k]),
+      );
+      if (i >= 0) {
+        add(i, uid, [kinds[k]]);
+        assigned[k] = true;
+      }
+    }
+    // 1b) 爆发事件：burstTargets 中的单位随该爆发动画揭示 addsStatus
+    for (let k = 0; k < kinds.length; k++) {
+      if (assigned[k]) continue;
+      const i = events.findIndex(
+        (ev) => ev.kind === 'burst' && (ev.burstTargets ?? []).includes(uid) && (ev.addsStatus ?? []).includes(kinds[k]),
       );
       if (i >= 0) {
         add(i, uid, [kinds[k]]);
@@ -221,13 +232,14 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if (side === 'info') return null;
   const opposite: 'player' | 'enemy' = side === 'player' ? 'enemy' : 'player';
 
-  // 范围伤害（岩壳碎片自爆 / 岩壳崩解）：由 burstTargets 标识，一次性给全体波及单位挂飘字，无抖动
+  // 范围伤害（岩壳碎片自爆 / 岩壳崩解 / 毒性爆发）：由 burstTargets 标识，一次性给全体波及单位挂飘字，无抖动
   if (entry.burstTargets && entry.burstTargets.length > 0) {
     const dm = text.match(/造成 ?(\d+) ?点(?:真实)?伤害/);
     return {
       kind: 'burst',
       value: dm ? Number(dm[1]) : 0,
       burstTargets: entry.burstTargets,
+      addsStatus: entry.addsStatus,
       hp: entry.hp,
       statuses: entry.statuses,
       shields: entry.shields,
