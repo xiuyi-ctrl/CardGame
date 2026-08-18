@@ -7,8 +7,9 @@ import {
   type GameAction,
 } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { generateMap, fuseUnit, fusionNeedCount, nextStage, nodeInfo, recomputeStats, ROSTER_MAX, ACT_BOSS_POOLS, type SpecialReward, type MapNode } from '../src/game/state/game';
+import { generateMap, fuseUnit, fusionNeedCount, nextStage, nodeInfo, recomputeStats, ROSTER_MAX, ACT_BOSS_POOLS, buildEvent, type SpecialReward, type MapNode } from '../src/game/state/game';
 import { createBattle, makeUnit, isTameable } from '../src/game/core/battle';
+import { createRng } from '../src/game/rng';
 import { FOODS } from '../src/game/data/foods';
 import { ITEMS } from '../src/game/data/items';
 
@@ -1439,5 +1440,144 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     // 自动踏入出发层，直接进入布阵
     expect(s.screen).toBe('formation');
     expect(s.currentNodeId).toBe(s.map.layers[0][0].id);
+  });
+});
+
+describe('事件系统升级', () => {
+  it('幕1 事件池包含 8 个事件类型', () => {
+    const rng = createRng(42);
+    const act = 1;
+    const eventTypes = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      const ev = buildEvent(rng, act);
+      eventTypes.add(ev.title);
+    }
+    // 幕1 应包含：神秘泉水、古老祭坛、流浪商人、神秘蛋、训练营地、命运之轮、宠物遗迹、冒险者营地
+    expect(eventTypes.has('神秘泉水')).toBe(true);
+    expect(eventTypes.has('古老祭坛')).toBe(true);
+    expect(eventTypes.has('流浪商人')).toBe(true);
+    expect(eventTypes.has('神秘蛋')).toBe(true);
+    expect(eventTypes.has('训练营地')).toBe(true);
+    expect(eventTypes.has('命运之轮')).toBe(true);
+    expect(eventTypes.has('宠物遗迹')).toBe(true);
+    expect(eventTypes.has('冒险者营地')).toBe(true);
+  });
+
+  it('幕2-3 事件池包含 12 个事件类型', () => {
+    const rng = createRng(42);
+    const act = 2;
+    const eventTypes = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      const ev = buildEvent(rng, act);
+      eventTypes.add(ev.title);
+    }
+    // 幕2 应包含所有新事件
+    expect(eventTypes.has('神秘泉水')).toBe(true);
+    expect(eventTypes.has('古老祭坛')).toBe(true);
+    expect(eventTypes.has('流浪商人')).toBe(true);
+    expect(eventTypes.has('神秘蛋')).toBe(true);
+    expect(eventTypes.has('训练营地')).toBe(true);
+    expect(eventTypes.has('命运之轮')).toBe(true);
+    expect(eventTypes.has('宠物遗迹')).toBe(true);
+    expect(eventTypes.has('神秘商人的赌局')).toBe(true);
+    expect(eventTypes.has('灵魂祭坛')).toBe(true);
+    expect(eventTypes.has('诅咒宝箱')).toBe(true);
+    expect(eventTypes.has('流浪精灵')).toBe(true);
+    expect(eventTypes.has('训练场挑战')).toBe(true);
+  });
+
+  it('战斗交互事件包含 battleEnemies', () => {
+    const rng = createRng(42);
+    const act = 2; // 战斗交互事件在幕2+出现
+    let foundBattle = false;
+    for (let i = 0; i < 200; i++) {
+      const ev = buildEvent(rng, act);
+      if (ev.title === '流浪精灵' || ev.title === '训练场挑战') {
+        foundBattle = true;
+        const battleChoice = ev.choices.find((c) => c.kind === 'battle');
+        expect(battleChoice).toBeDefined();
+        expect(battleChoice!.battleEnemies).toBeDefined();
+        expect(battleChoice!.battleEnemies!.length).toBeGreaterThanOrEqual(1);
+        expect(battleChoice!.battleEnemies!.length).toBeLessThanOrEqual(3);
+        break;
+      }
+    }
+    expect(foundBattle).toBe(true);
+  });
+
+  it('赌博事件结果在生成时用种子预掷', () => {
+    const act = 1;
+    // 相同种子应产生相同结果
+    const rng1 = createRng(42);
+    const ev1 = buildEvent(rng1, act);
+    const rng2 = createRng(42);
+    const ev2 = buildEvent(rng2, act);
+    expect(ev1.title).toBe(ev2.title);
+    expect(ev1.choices.length).toBe(ev2.choices.length);
+    // 命运之轮的赌博结果应相同
+    if (ev1.title === '命运之轮') {
+      expect(ev1.choices[0].desc).toBe(ev2.choices[0].desc);
+      expect(ev1.choices[1].desc).toBe(ev2.choices[1].desc);
+    }
+  });
+
+  it('EventChoice 新类型包含必要字段', () => {
+    const rng = createRng(42);
+    const act = 2;
+    for (let i = 0; i < 50; i++) {
+      const ev = buildEvent(rng, act);
+      for (const choice of ev.choices) {
+        if (choice.kind === 'battle') {
+          expect(choice.battleEnemies).toBeDefined();
+          expect(choice.battleEnemies!.length).toBeGreaterThan(0);
+        }
+        if (choice.kind === 'boost') {
+          expect(choice.boostStat).toBeDefined();
+          expect(['hp', 'spd']).toContain(choice.boostStat);
+          expect(choice.amount).toBeDefined();
+        }
+        if (choice.kind === 'status') {
+          expect(choice.statusKind).toBeDefined();
+          expect(['burn', 'poison']).toContain(choice.statusKind);
+          expect(choice.statusValue).toBeDefined();
+        }
+      }
+    }
+  });
+
+  it('灵魂祭坛献祭选项正确', () => {
+    const rng = createRng(42);
+    const act = 2;
+    let foundAltar2 = false;
+    for (let i = 0; i < 100; i++) {
+      const ev = buildEvent(rng, act);
+      if (ev.title === '灵魂祭坛') {
+        foundAltar2 = true;
+        const sacrificeChoice = ev.choices.find((c) => c.kind === 'sacrifice');
+        expect(sacrificeChoice).toBeDefined();
+        expect(sacrificeChoice!.boostStat).toBe('hp');
+        expect(sacrificeChoice!.amount).toBe(3);
+        break;
+      }
+    }
+    expect(foundAltar2).toBe(true);
+  });
+
+  it('被侵蚀的圣泉选项正确', () => {
+    const rng = createRng(42);
+    const act = 2;
+    let foundCorruptedSpring = false;
+    for (let i = 0; i < 100; i++) {
+      const ev = buildEvent(rng, act);
+      if (ev.title === '被侵蚀的圣泉') {
+        foundCorruptedSpring = true;
+        const drinkChoice = ev.choices.find((c) => c.id === 'e1');
+        expect(drinkChoice).toBeDefined();
+        // 饮用选项可能是治愈或中毒
+        expect(['heal', 'status']).toContain(drinkChoice!.kind);
+        break;
+      }
+    }
+    expect(foundCorruptedSpring).toBe(true);
   });
 });

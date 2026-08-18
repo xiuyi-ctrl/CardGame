@@ -3,7 +3,7 @@ import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTING_CHOICES, getMonster } from '../game/data/monsters';
@@ -251,6 +251,7 @@ function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [sel, setSel] = useState<MapNode['type']>('battle');
   const [debuff, setDebuff] = useState<'spd' | 'dmg' | 'burn'>('spd');
   const [reward, setReward] = useState<'gold' | 'food'>('gold');
+  const [eventType, setEventType] = useState('spring');
   return (
     <div className="screen center-col">
       <div className="hud">
@@ -286,6 +287,16 @@ function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           </select>
         </div>
       )}
+      {sel === 'event' && (
+        <div className="debug-row">
+          <label>选择事件</label>
+          <select value={eventType} onChange={(e) => setEventType(e.target.value)}>
+            {Object.entries(EVENT_TYPE_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="formation-footer">
         <button
           className="primary big-btn"
@@ -295,6 +306,7 @@ function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
               nodeType: sel,
               corruptDebuff: sel === 'corrupted' ? debuff : undefined,
               corruptReward: sel === 'corrupted' ? reward : undefined,
+              eventType: sel === 'event' ? eventType : undefined,
             })
           }
         >
@@ -1592,6 +1604,13 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
                   if (cantAfford) return;
                   if (c.kind === 'recruit' && c.monsterId) {
                     dispatch({ type: 'EVENT_HATCH_PREVIEW', choiceId: c.id, monsterId: c.monsterId });
+                  } else if (c.kind === 'battle' && c.battleEnemies) {
+                    dispatch({
+                      type: 'EVENT_BATTLE_START',
+                      enemies: c.battleEnemies,
+                      reward: { kind: 'gold', amount: c.goldDelta ?? 0 },
+                      penalty: { percent: 15 },
+                    });
                   } else {
                     dispatch({ type: 'EVENT_CHOICE', choiceId: c.id });
                   }
@@ -1605,6 +1624,12 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
                 {c.kind === 'recruit' && '🥚'}
                 {c.kind === 'damage' && '☠️'}
                 {c.kind === 'none' && '🚶'}
+                {c.kind === 'battle' && '⚔️'}
+                {c.kind === 'sacrifice' && '🩸'}
+                {c.kind === 'boost' && '⬆️'}
+                {c.kind === 'purify' && '✨'}
+                {c.kind === 'curse' && '💀'}
+                {c.kind === 'status' && '🌀'}
               </div>
               <div className="rtitle">{c.label}</div>
               <div className="rdesc">{c.desc}</div>

@@ -71,7 +71,8 @@ export interface EventChoice {
   id: string;
   label: string;
   desc: string;
-  kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none';
+  kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none'
+      | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status';
   /** heal/damage=百分比，gold=金额 */
   amount?: number;
   /** 金币变动（food/exp 附加） */
@@ -80,6 +81,14 @@ export interface EventChoice {
   monsterId?: string;
   /** item 道具 id */
   itemId?: string;
+  /** 事件战斗敌人 */
+  battleEnemies?: { speciesId: string }[];
+  /** 永久属性提升类型 */
+  boostStat?: 'hp' | 'spd';
+  /** 状态类型 */
+  statusKind?: 'burn' | 'poison';
+  /** 状态层数 */
+  statusValue?: number;
 }
 
 export interface EventNode {
@@ -262,6 +271,12 @@ export interface GameState {
   postBattle?: boolean;
   /** 孵化预览：点击「孵化它」后暂存，弹出确认弹窗显示将孵化的宠物 */
   pendingEventHatch?: { choiceId: string; monsterId: string };
+  /** 事件战斗：记录战斗数据（敌人、奖励、惩罚），战斗结束后处理结果 */
+  eventBattle?: {
+    enemies: { speciesId: string }[];
+    reward: { kind: 'gold' | 'food'; amount?: number; foodId?: string };
+    penalty: { percent: number };
+  };
 }
 
 export const ROSTER_MAX = 8;
@@ -910,8 +925,43 @@ function buildEncounter(
   return [{ speciesId: 'momo' }];
 }
 
-/** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */export function buildEvent(rng: () => number, act: number): EventNode {
-  const roll = rng();
+/** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */
+export function buildEvent(rng: () => number, act: number): EventNode {
+  // 幕次专属池
+  const pool: string[] = [];
+  if (act === 1) {
+    pool.push('spring', 'altar', 'merchant', 'egg', 'camp', 'wheel', 'ruins', 'campfire');
+  } else {
+    pool.push('spring', 'altar', 'merchant', 'egg', '行商', 'camp',
+              'wheel', 'gambler', 'altar2', 'ruins', 'cursed_chest',
+              '精灵', '训练', 'corrupted_spring');
+  }
+  const pick2 = pool[Math.floor(rng() * pool.length)];
+
+  return buildEventByType(rng, pick2, act);
+}
+
+/** 事件类型映射：eventType → 中文标题（供自定义测试选择） */
+export const EVENT_TYPE_LABELS: Record<string, string> = {
+  spring: '神秘泉水',
+  altar: '古老祭坛',
+  merchant: '流浪商人',
+  egg: '神秘蛋',
+  '行商': '神秘行商',
+  camp: '训练营地',
+  wheel: '命运之轮',
+  ruins: '宠物遗迹',
+  campfire: '冒险者营地',
+  gambler: '神秘商人的赌局',
+  altar2: '灵魂祭坛',
+  cursed_chest: '诅咒宝箱',
+  '精灵': '流浪精灵',
+  '训练': '训练场挑战',
+  corrupted_spring: '被侵蚀的圣泉',
+};
+
+/** 按类型构建事件（可导出供自定义测试直接调用） */
+export function buildEventByType(rng: () => number, type: string, act: number): EventNode {
   const c = (id: number, label: string, desc: string, kind: EventChoice['kind'], extra?: Partial<EventChoice>): EventChoice => ({
     id: `e${id}`,
     label,
@@ -919,7 +969,8 @@ function buildEncounter(
     kind,
     ...extra,
   });
-  if (roll < 0.2) {
+
+  if (type === 'spring') {
     return {
       title: '神秘泉水',
       desc: '一汪泛着微光的泉水在密林深处静静流淌，似有治愈之力。',
@@ -930,7 +981,7 @@ function buildEncounter(
       ],
     };
   }
-  if (roll < 0.4) {
+  if (type === 'altar') {
     return {
       title: '古老祭坛',
       desc: '一座刻满符文的祭坛散发着危险而诱人的力量。',
@@ -941,8 +992,7 @@ function buildEncounter(
       ],
     };
   }
-  if (roll < 0.6) {
-    // 随机选择：食物（不含圣果）或道具
+  if (type === 'merchant') {
     const isItem = rng() < 0.5;
     const shopFoodPool = Object.keys(FOODS).filter((id) => id !== 'golden_fruit');
     const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
@@ -964,20 +1014,19 @@ function buildEncounter(
       ],
     };
   }
-  if (roll < 0.8) {
-    // 按幕数概率选择不同进化阶段的宠物
-    let pool: string[];
+  if (type === 'egg') {
+    let pool2: string[];
     const r = rng();
     if (act <= 1) {
-      pool = BASE_POOL;
+      pool2 = BASE_POOL;
     } else if (act === 2) {
-      pool = r < 0.7 ? EVO1_POOL : BASE_POOL;
+      pool2 = r < 0.7 ? EVO1_POOL : BASE_POOL;
     } else {
-      if (r < 0.6) pool = EVO2_POOL;
-      else if (r < 0.9) pool = EVO1_POOL;
-      else pool = BASE_POOL;
+      if (r < 0.6) pool2 = EVO2_POOL;
+      else if (r < 0.9) pool2 = EVO1_POOL;
+      else pool2 = BASE_POOL;
     }
-    const eggMonsterId = pick(rng, pool);
+    const eggMonsterId = pick(rng, pool2);
     return {
       title: '神秘蛋',
       desc: '一颗布满奇异纹路的蛋静静躺在草丛中，轻轻颤动。',
@@ -988,7 +1037,7 @@ function buildEncounter(
       ],
     };
   }
-  if (roll < 0.92) {
+  if (type === '行商') {
     return {
       title: '神秘行商',
       desc: '一位兜售奇物符文的游商，称他的货能解开远古双生宝箱的秘密。',
@@ -999,8 +1048,184 @@ function buildEncounter(
       ],
     };
   }
-  return {
+  if (type === 'camp') {
+    return {
       title: '训练营地',
+      desc: '一片被踩实的空地，似乎曾被勇者用作训练场。',
+      choices: [
+        c(1, '严格训练', '全体恢复 30% 生命', 'heal', { amount: 30 }),
+        c(2, '休整半天', '全体恢复 20% 生命', 'heal', { amount: 20 }),
+        c(3, '离开', '时间不等人', 'none'),
+      ],
+    };
+  }
+  // ===== 幕1-3 通用新事件 =====
+  if (type === 'wheel') {
+    // 命运之轮（赌博）
+    const bet30 = Math.floor(rng() * 100);
+    const bet15 = Math.floor(rng() * 100);
+    let e1: EventChoice;
+    if (bet30 < 35) {
+      e1 = c(1, '投入 30 金', '赢得 100 金币！', 'gold', { amount: 100, goldDelta: -30 });
+    } else if (bet30 < 80) {
+      e1 = c(1, '投入 30 金', '赢得 60 金币', 'gold', { amount: 60, goldDelta: -30 });
+    } else {
+      e1 = c(1, '投入 30 金', '什么也没得到……', 'gold', { amount: 0, goldDelta: -30 });
+    }
+    let e2: EventChoice;
+    if (bet15 < 50) {
+      e2 = c(2, '投入 15 金', '赢得 40 金币', 'gold', { amount: 40, goldDelta: -15 });
+    } else {
+      e2 = c(2, '投入 15 金', '赢得 20 金币', 'gold', { amount: 20, goldDelta: -15 });
+    }
+    return {
+      title: '命运之轮',
+      desc: '一个古老的轮盘在你面前缓缓转动，上面刻满了神秘的符文……',
+      choices: [e1, e2, c(3, '离开', '不参与赌博', 'none')],
+    };
+  }
+  if (type === 'ruins') {
+    // 宠物遗迹（养成，幕1-2）
+    const explore = Math.floor(rng() * 100);
+    if (explore < 30) {
+      const f1 = pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit'));
+      const f2 = pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit'));
+      return {
+        title: '宠物遗迹',
+        desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
+        choices: [
+          c(1, '探索', `找到了 ${FOODS[f1].emoji}${FOODS[f1].name} 和 ${FOODS[f2].emoji}${FOODS[f2].name}`, 'food', { foodId: f1 }),
+          c(2, '带走遗物', '随机 1 只宠物永久 +2 速度', 'boost', { boostStat: 'spd', amount: 2 }),
+          c(3, '离开', '谨慎行事', 'none'),
+        ],
+      };
+    }
+    return {
+      title: '宠物遗迹',
+      desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
+      choices: [
+        c(1, '探索', '陷阱触发！全队失去 8% 生命', 'damage', { amount: 8 }),
+        c(2, '带走遗物', '随机 1 只宠物永久 +2 速度', 'boost', { boostStat: 'spd', amount: 2 }),
+        c(3, '离开', '谨慎行事', 'none'),
+      ],
+    };
+  }
+  if (type === 'gambler') {
+    // 神秘商人的赌局（赌博，幕2-3）
+    const guess = Math.floor(rng() * 100);
+    const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
+    return {
+      title: '神秘商人的赌局',
+      desc: '一个蒙面商人向你提出一个赌约……',
+      choices: [
+        guess < 50
+          ? c(1, '猜硬币', `猜中了！获得 ${ITEMS[shopItemPool[0]].name}`, 'item', { itemId: shopItemPool[0] })
+          : c(1, '猜硬币', '猜错了……失去 25 金币', 'gold', { amount: -25 }),
+        c(2, '以小博大', '消耗 1 个随机食物，50% 获 50 金', 'food', { goldDelta: 50, foodId: pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit')) }),
+        c(3, '离开', '不参与赌博', 'none'),
+      ],
+    };
+  }
+  if (type === 'altar2') {
+    // 灵魂祭坛（宠物养成，幕2-3）
+    return {
+      title: '灵魂祭坛',
+      desc: '一座古老的祭坛散发着幽蓝的光芒，似乎在呼唤着什么……',
+      choices: [
+        c(1, '献祭', '随机放生 1 只宠物，全队永久 +3 生命上限', 'sacrifice', { boostStat: 'hp', amount: 3 }),
+        c(2, '净化', '消耗 25 金币，随机 1 只宠物清除诅咒', 'purify', { goldDelta: -25 }),
+        c(3, '离开', '敬畏地绕开', 'none'),
+      ],
+    };
+  }
+  if (type === 'cursed_chest') {
+    // 诅咒宝箱（赌博/联动，幕2-3）
+    const open = Math.floor(rng() * 100);
+    const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
+    const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
+    const curseCn: Record<string, string> = { hpDown: '血脆', atkDown: '虚弱', spdDown: '迟缓' };
+    const randomCurse = curseKinds[Math.floor(rng() * curseKinds.length)];
+    return {
+      title: '诅咒宝箱',
+      desc: '一个漆黑的宝箱散发着不祥的气息，上面缠绕着暗色的藤蔓……',
+      choices: [
+        open < 50
+          ? c(1, '打开', `陷阱触发！随机宠物获得 ${curseCn[randomCurse]} 诅咒`, 'curse', { amount: 0 })
+          : c(1, '打开', `获得了 ${ITEMS[shopItemPool[0]].name}`, 'item', { itemId: shopItemPool[0] }),
+        c(2, '砸碎', '获得 20 金币，但全体 -12% 生命', 'gold', { amount: 20 }),
+        c(3, '离开', '远离不祥之物', 'none'),
+      ],
+    };
+  }
+  if (type === '精灵') {
+    // 流浪精灵（战斗交互，全幕）
+    const enemyCount = rng() < 0.6 ? 1 : 2;
+    const actPool = act === 1 ? BASE_POOL : act === 2 ? EVO1_POOL : EVO2_POOL;
+    const enemies = Array.from({ length: enemyCount }, () => ({ speciesId: pick(rng, actPool) }));
+    const f1 = pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit'));
+    return {
+      title: '流浪精灵',
+      desc: '一只散发着微光的精灵挡在路中央，似乎想要较量一番……',
+      choices: [
+        c(1, '挑战', `战斗（${enemyCount} 只精灵），胜利获 30 金+随机食物`, 'battle', {
+          battleEnemies: enemies,
+          goldDelta: 30,
+          foodId: f1,
+        }),
+        c(2, '赠送食物', `消耗 1 个随机食物，获得 40 金币`, 'food', { foodId: f1, goldDelta: 40 }),
+        c(3, '离开', '绕道而行', 'none'),
+      ],
+    };
+  }
+  if (type === '训练') {
+    // 训练场挑战（战斗交互，全幕）
+    const enemyCount = 2 + Math.floor(rng() * 2);
+    const actPool = act === 1 ? BASE_POOL : act === 2 ? EVO1_POOL : EVO2_POOL;
+    const enemies = Array.from({ length: enemyCount }, () => ({ speciesId: pick(rng, actPool) }));
+    return {
+      title: '训练场挑战',
+      desc: '前方是一个训练场，几位训练家正在切磋……',
+      choices: [
+        c(1, '接受挑战', `战斗（${enemyCount} 只对手），胜利全体永久 +3% 最大 HP`, 'battle', {
+          battleEnemies: enemies,
+          boostStat: 'hp',
+          amount: 3,
+        }),
+        c(2, '观察学习', '获得 1 个随机战斗药水', 'item', { itemId: pick(rng, ['atk_potion', 'spd_potion', 'hp_potion']) }),
+        c(3, '离开', '继续赶路', 'none'),
+      ],
+    };
+  }
+  if (type === 'campfire') {
+    // 冒险者营地（幕次专属，幕1）
+    return {
+      title: '冒险者营地',
+      desc: '你遇到了一群友善的冒险者，他们愿意分享经验……',
+      choices: [
+        c(1, '交流', '获得 1 个随机道具', 'item', { itemId: pick(rng, Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)) }),
+        c(2, '训练', '全体 +5% 最大 HP', 'heal', { amount: 5 }),
+        c(3, '分道扬镳', '+25 金币', 'gold', { amount: 25 }),
+      ],
+    };
+  }
+  if (type === 'corrupted_spring') {
+    // 被侵蚀的圣泉（幕次专属，幕2-3）
+    const drink = Math.floor(rng() * 100);
+    return {
+      title: '被侵蚀的圣泉',
+      desc: '一汪清泉被暗影能量侵蚀，泉水呈现出诡异的颜色……',
+      choices: [
+        drink < 50
+          ? c(1, '饮用', '泉水纯净！全体恢复 40% 生命', 'heal', { amount: 40 })
+          : c(1, '饮用', '泉水被污染！全体中毒 3 层', 'status', { statusKind: 'poison', statusValue: 3 }),
+        c(2, '净化', '消耗 20 金币，全体清除负面状态 + 回 15% 血', 'heal', { amount: 15, goldDelta: -20 }),
+        c(3, '离开', '远离被污染的泉水', 'none'),
+      ],
+    };
+  }
+  // fallback
+  return {
+    title: '训练营地',
     desc: '一片被踩实的空地，似乎曾被勇者用作训练场。',
     choices: [
       c(1, '严格训练', '全体恢复 30% 生命', 'heal', { amount: 30 }),

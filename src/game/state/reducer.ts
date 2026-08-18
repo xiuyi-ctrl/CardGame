@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap } from './game';
-import { applyCorruptFoodReward, buildEvent, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -31,6 +31,8 @@ export type GameAction =
   | { type: 'EVENT_HATCH_PREVIEW'; choiceId: string; monsterId: string }
   | { type: 'EVENT_HATCH_CONFIRM' }
   | { type: 'EVENT_HATCH_CANCEL' }
+  | { type: 'EVENT_BATTLE_START'; enemies: { speciesId: string }[]; reward: { kind: 'gold' | 'food'; amount?: number; foodId?: string }; penalty: { percent: number } }
+  | { type: 'EVENT_BATTLE_END'; won: boolean }
   | { type: 'SPECIAL_CHOICE'; rewardId: string }
   | { type: 'EVOLVE_ONE'; uid: string }
   | { type: 'SPECIAL_TARGET'; uid: string }
@@ -75,7 +77,7 @@ export type GameAction =
   | { type: 'CLOSE_WATCHTOWER' }
   | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
   | { type: 'DEBUG_CUSTOM_TEST' }
-  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn'; corruptReward?: 'gold' | 'food' }
+  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn'; corruptReward?: 'gold' | 'food'; eventType?: string }
   | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
@@ -513,7 +515,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
       // 非战斗类：预生成事件/奇遇/钥匙，进入对应界面时展示
       if (nodeType === 'event') {
-        base.map.events[nodeId] = buildEvent(createRng(1 * 7 + 3), base.act);
+        const eventType = action.eventType || 'spring';
+        base.map.events[nodeId] = buildEventByType(createRng(1 * 7 + 3), eventType, base.act);
       } else if (nodeType === 'special') {
         base.map.specials[nodeId] = buildSpecial(createRng(1 * 7 + 3));
       } else if (nodeType === 'keydoor') {
@@ -581,7 +584,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!choice) return state;
       // 花费类选项若金币不足则视为无效选择（kind='gold' 的负数扣款选项除外，可直接为负扣款）
       if (choice.kind !== 'gold' && state.gold + (choice.goldDelta ?? 0) < 0) return state;
-      let next: GameState = { ...state, screen: 'map', gold: state.gold + (choice.goldDelta ?? 0), postBattle: undefined };
+      let next: GameState = { ...state, gold: state.gold + (choice.goldDelta ?? 0), postBattle: undefined };
       if (choice.kind === 'heal') {
         next = healRoster(next, (choice.amount ?? 0) / 100);
       } else if (choice.kind === 'gold') {
@@ -597,8 +600,88 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ...next,
           roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * (choice.amount ?? 0) / 100)) })),
         };
+      } else if (choice.kind === 'battle' && choice.battleEnemies) {
+        // 事件战斗：进入战斗界面
+        next = {
+          ...next,
+          screen: 'battle',
+          eventBattle: {
+            enemies: choice.battleEnemies,
+            reward: { kind: 'gold', amount: choice.goldDelta ?? 0 },
+            penalty: { percent: 15 },
+          },
+        };
+        return { ...next, log: ['进入事件战斗', ...next.log].slice(0, 20) };
+      } else if (choice.kind === 'sacrifice' && next.roster.length > 0) {
+        // 献祭：随机放生 1 只宠物，全队永久 +N 属性
+        const sacrificeIdx = Math.floor(Math.random() * next.roster.length);
+        next = {
+          ...next,
+          roster: next.roster.filter((_, i) => i !== sacrificeIdx).map((u) => {
+            if (choice.boostStat === 'hp') {
+              return { ...u, maxHp: u.maxHp + (choice.amount ?? 0), hp: u.hp + (choice.amount ?? 0) };
+            } else if (choice.boostStat === 'spd') {
+              return { ...u, spd: u.spd + (choice.amount ?? 0) };
+            }
+            return u;
+          }),
+        };
+      } else if (choice.kind === 'boost' && next.roster.length > 0) {
+        // 永久属性提升：随机 1 只宠物
+        const boostIdx = Math.floor(Math.random() * next.roster.length);
+        next = {
+          ...next,
+          roster: next.roster.map((u, i) => {
+            if (i !== boostIdx) return u;
+            if (choice.boostStat === 'hp') {
+              return { ...u, maxHp: u.maxHp + (choice.amount ?? 0), hp: u.hp + (choice.amount ?? 0) };
+            } else if (choice.boostStat === 'spd') {
+              return { ...u, spd: u.spd + (choice.amount ?? 0) };
+            }
+            return u;
+          }),
+        };
+      } else if (choice.kind === 'purify') {
+        // 清除诅咒：随机 1 只宠物
+        const purifyIdx = next.roster.findIndex((u) => u.curse);
+        if (purifyIdx >= 0) {
+          next = {
+            ...next,
+            roster: next.roster.map((u, i) => i === purifyIdx ? { ...u, curse: undefined } : u),
+          };
+        }
+      } else if (choice.kind === 'curse' && next.roster.length > 0) {
+        // 附加诅咒：随机 1 只宠物
+        const curseIdx = Math.floor(Math.random() * next.roster.length);
+        const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
+        const randomCurse = curseKinds[Math.floor(Math.random() * curseKinds.length)];
+        next = {
+          ...next,
+          roster: next.roster.map((u, i) => i === curseIdx ? { ...u, curse: randomCurse } : u),
+        };
+      } else if (choice.kind === 'status' && choice.statusKind) {
+        // 附加状态：全体
+        next = {
+          ...next,
+          roster: next.roster.map((u) => {
+            if (choice.statusKind === 'poison') {
+              const existing = u.statuses.find((s) => s.kind === 'poison');
+              if (existing) {
+                return { ...u, statuses: u.statuses.map((s) => s.kind === 'poison' ? { ...s, value: s.value + (choice.statusValue ?? 0) } : s) };
+              }
+              return { ...u, statuses: [...u.statuses, { kind: 'poison', value: choice.statusValue ?? 0, turns: 99 }] };
+            } else if (choice.statusKind === 'burn') {
+              const existing = u.statuses.find((s) => s.kind === 'burn');
+              if (existing) {
+                return { ...u, statuses: u.statuses.map((s) => s.kind === 'burn' ? { ...s, value: s.value + (choice.statusValue ?? 0) } : s) };
+              }
+              return { ...u, statuses: [...u.statuses, { kind: 'burn', value: choice.statusValue ?? 0, turns: 99 }] };
+            }
+            return u;
+          }),
+        };
       }
-      return { ...next, log: [choice.label, ...next.log].slice(0, 20) };
+      return { ...next, screen: 'map', log: [choice.label, ...next.log].slice(0, 20) };
     }
 
     case 'EVENT_HATCH_PREVIEW': {
@@ -633,6 +716,43 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const hatch = state.pendingEventHatch;
       const goldReward = hatch ? (getMonster(hatch.monsterId).rank === 1 ? 5 : getMonster(hatch.monsterId).rank === 2 ? 10 : getMonster(hatch.monsterId).rank === 3 ? 15 : 20) : 0;
       return { ...state, pendingEventHatch: undefined, screen: 'map', postBattle: undefined, gold: state.gold + goldReward, log: [`放生获得 ${goldReward} 金币`, ...state.log].slice(0, 20) };
+    }
+
+    case 'EVENT_BATTLE_START': {
+      if (state.screen !== 'event') return state;
+      // 创建战斗
+      const enemies = action.enemies.map((e, i) => makeUnit(e.speciesId, false, i as 0 | 1 | 2, false, 'front'));
+      const battle = createBattle(state.roster, enemies, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'battle' });
+      return {
+        ...state,
+        screen: 'battle',
+        battle,
+        eventBattle: { enemies: action.enemies, reward: action.reward, penalty: action.penalty },
+        log: ['进入事件战斗', ...state.log].slice(0, 20),
+      };
+    }
+
+    case 'EVENT_BATTLE_END': {
+      if (state.screen !== 'battle' || !state.eventBattle) return state;
+      const eb = state.eventBattle;
+      let next: GameState = { ...state, screen: 'map', battle: undefined, eventBattle: undefined, postBattle: undefined };
+      if (action.won) {
+        // 胜利：应用奖励
+        if (eb.reward.kind === 'gold') {
+          next = { ...next, gold: next.gold + (eb.reward.amount ?? 0) };
+        } else if (eb.reward.kind === 'food' && eb.reward.foodId) {
+          next = { ...next, inventory: { ...next.inventory, [eb.reward.foodId]: (next.inventory[eb.reward.foodId] ?? 0) + 1 } };
+        }
+        next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
+      } else {
+        // 失败：全体 -15% 血
+        next = {
+          ...next,
+          roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * eb.penalty.percent / 100)) })),
+          log: ['事件战斗失败，全体受伤', ...next.log].slice(0, 20),
+        };
+      }
+      return next;
     }
 
     case 'SPECIAL_CHOICE': {
@@ -960,6 +1080,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 自定义测试：胜负确认后直接回首页，不进入正常结算流程
       if (state.testRun) {
         return { ...createInitialState(), screen: 'title' };
+      }
+      // 事件战斗：胜负确认后返回地图
+      if (state.eventBattle) {
+        const eb = state.eventBattle;
+        let next: GameState = { ...state, screen: 'map', battle: undefined, eventBattle: undefined, postBattle: undefined };
+        if (state.battle.phase === 'won') {
+          // 胜利：应用奖励
+          if (eb.reward.kind === 'gold') {
+            next = { ...next, gold: next.gold + (eb.reward.amount ?? 0) };
+          } else if (eb.reward.kind === 'food' && eb.reward.foodId) {
+            next = { ...next, inventory: { ...next.inventory, [eb.reward.foodId]: (next.inventory[eb.reward.foodId] ?? 0) + 1 } };
+          }
+          next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
+        } else {
+          // 失败：全体 -15% 血
+          next = {
+            ...next,
+            roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * eb.penalty.percent / 100)) })),
+            log: ['事件战斗失败，全体受伤', ...next.log].slice(0, 20),
+          };
+        }
+        return next;
       }
       if (state.battle.phase === 'won') return resolveBattle(state, state.battle);
       if (state.battle.phase === 'lost') {
