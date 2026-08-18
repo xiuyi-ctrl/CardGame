@@ -31,7 +31,7 @@ export type GameAction =
   | { type: 'EVENT_HATCH_PREVIEW'; choiceId: string; monsterId: string }
   | { type: 'EVENT_HATCH_CONFIRM' }
   | { type: 'EVENT_HATCH_CANCEL' }
-  | { type: 'EVENT_BATTLE_START'; enemies: { speciesId: string }[]; reward: { kind: 'gold' | 'food'; amount?: number; foodId?: string }; penalty: { percent: number } }
+  | { type: 'EVENT_BATTLE_START'; enemies: { speciesId: string }[]; reward: { kind: 'gold' | 'food' | 'hp'; amount?: number; foodId?: string }; penalty: { percent?: number; goldLoss?: number; curseTarget?: boolean }; bonusReward?: { kind: 'food'; foodId: string } }
   | { type: 'EVENT_BATTLE_END'; won: boolean }
   | { type: 'SPECIAL_CHOICE'; rewardId: string }
   | { type: 'EVOLVE_ONE'; uid: string }
@@ -584,13 +584,29 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!choice) return state;
       // 花费类选项若金币不足则视为无效选择（kind='gold' 的负数扣款选项除外，可直接为负扣款）
       if (choice.kind !== 'gold' && state.gold + (choice.goldDelta ?? 0) < 0) return state;
+      // 消耗食物类选项若食物不足则视为无效
+      if (choice.consumeFood && choice.foodId && (state.inventory[choice.foodId] ?? 0) <= 0) return state;
       let next: GameState = { ...state, gold: state.gold + (choice.goldDelta ?? 0), postBattle: undefined };
       if (choice.kind === 'heal') {
         next = healRoster(next, (choice.amount ?? 0) / 100);
       } else if (choice.kind === 'gold') {
         next = { ...next, gold: Math.max(0, next.gold + (choice.amount ?? 0)) };
+        if (choice.curseTarget && next.roster.length > 0) {
+          const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
+          const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
+          const ri = Math.floor(Math.random() * next.roster.length);
+          next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+        }
       } else if (choice.kind === 'food' && choice.foodId) {
-        next = { ...next, inventory: { ...next.inventory, [choice.foodId]: (next.inventory[choice.foodId] ?? 0) + 1 } };
+        if (choice.consumeFood) {
+          next = { ...next, inventory: { ...next.inventory, [choice.foodId]: Math.max(0, (next.inventory[choice.foodId] ?? 0) - 1) } };
+        } else {
+          next = { ...next, inventory: { ...next.inventory, [choice.foodId]: (next.inventory[choice.foodId] ?? 0) + 1 } };
+        }
+        // food 类型也可附带 itemId 奖励（如赠送食物事件）
+        if (choice.itemId) {
+          next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
+        }
       } else if (choice.kind === 'item' && choice.itemId) {
         next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
       } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
@@ -762,15 +778,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           next = { ...next, gold: next.gold + (eb.reward.amount ?? 0) };
         } else if (eb.reward.kind === 'food' && eb.reward.foodId) {
           next = { ...next, inventory: { ...next.inventory, [eb.reward.foodId]: (next.inventory[eb.reward.foodId] ?? 0) + 1 } };
+        } else if (eb.reward.kind === 'hp') {
+          const hpBonus = eb.reward.amount ?? 0;
+          next = { ...next, roster: next.roster.map((u) => ({ ...u, maxHp: u.maxHp + hpBonus, hp: u.hp + hpBonus })) };
         }
         next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
       } else {
-        // 失败：全体 -15% 血
-        next = {
-          ...next,
-          roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * eb.penalty.percent / 100)) })),
-          log: ['事件战斗失败，全体受伤', ...next.log].slice(0, 20),
-        };
+        // 失败：按 penalty 处理
+        if (eb.penalty.goldLoss) {
+          next = { ...next, gold: Math.max(0, next.gold - eb.penalty.goldLoss) };
+        }
+        if (eb.penalty.percent) {
+          const pct = eb.penalty.percent;
+          next = {
+            ...next,
+            roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * pct / 100)) })),
+          };
+        }
+        if (eb.penalty.curseTarget && next.roster.length > 0) {
+          const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
+          const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
+          const ri = Math.floor(Math.random() * next.roster.length);
+          next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+        }
+        next = { ...next, log: ['事件战斗失败', ...next.log].slice(0, 20) };
       }
       return next;
     }
@@ -1111,15 +1142,33 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             next = { ...next, gold: next.gold + (eb.reward.amount ?? 0) };
           } else if (eb.reward.kind === 'food' && eb.reward.foodId) {
             next = { ...next, inventory: { ...next.inventory, [eb.reward.foodId]: (next.inventory[eb.reward.foodId] ?? 0) + 1 } };
+          } else if (eb.reward.kind === 'hp') {
+            const hpBonus = eb.reward.amount ?? 0;
+            next = { ...next, roster: next.roster.map((u) => ({ ...u, maxHp: u.maxHp + hpBonus, hp: u.hp + hpBonus })) };
+          }
+          if (eb.bonusReward?.kind === 'food' && eb.bonusReward.foodId) {
+            next = { ...next, inventory: { ...next.inventory, [eb.bonusReward.foodId]: (next.inventory[eb.bonusReward.foodId] ?? 0) + 1 } };
           }
           next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
         } else {
-          // 失败：全体 -15% 血
-          next = {
-            ...next,
-            roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * eb.penalty.percent / 100)) })),
-            log: ['事件战斗失败，全体受伤', ...next.log].slice(0, 20),
-          };
+          // 失败：按 penalty 处理
+          if (eb.penalty.goldLoss) {
+            next = { ...next, gold: Math.max(0, next.gold - eb.penalty.goldLoss) };
+          }
+          if (eb.penalty.percent) {
+            const pct = eb.penalty.percent;
+            next = {
+              ...next,
+              roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * pct / 100)) })),
+            };
+          }
+          if (eb.penalty.curseTarget && next.roster.length > 0) {
+            const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
+            const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
+            const ri = Math.floor(Math.random() * next.roster.length);
+            next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+          }
+          next = { ...next, log: ['事件战斗失败', ...next.log].slice(0, 20) };
         }
         return next;
       }

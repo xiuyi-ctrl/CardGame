@@ -1594,8 +1594,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
         <div className="reward-cards">
           {ev.choices.map((c) => {
             const cost = c.goldDelta ?? 0;
-            const totalCost = c.kind === 'gold' ? cost + Math.min(0, c.amount ?? 0) : cost;
-            const cantAfford = state.gold + totalCost < 0;
+            const cantAfford = state.gold + cost < 0 || (c.consumeFood && c.foodId && (state.inventory[c.foodId] ?? 0) <= 0);
             return (
               <div
                 key={c.id}
@@ -1608,8 +1607,9 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
                     dispatch({
                       type: 'EVENT_BATTLE_START',
                       enemies: c.battleEnemies,
-                      reward: { kind: 'gold', amount: c.goldDelta ?? 0 },
-                      penalty: { percent: 15 },
+                      reward: c.battleReward ?? { kind: 'gold', amount: c.goldDelta ?? 0 },
+                      penalty: c.battlePenalty ?? { percent: 15 },
+                      bonusReward: c.bonusReward,
                     });
                   } else {
                     dispatch({ type: 'EVENT_CHOICE', choiceId: c.id });

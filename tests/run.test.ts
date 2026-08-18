@@ -1452,12 +1452,11 @@ describe('事件系统升级', () => {
       const ev = buildEvent(rng, act);
       eventTypes.add(ev.title);
     }
-    // 幕1 应包含：神秘泉水、古老祭坛、流浪商人、神秘蛋、训练营地、命运之轮、宠物遗迹、冒险者营地
+    // 幕1 应包含：神秘泉水、古老祭坛、流浪商人、神秘蛋、命运之轮、宠物遗迹、冒险者营地
     expect(eventTypes.has('神秘泉水')).toBe(true);
     expect(eventTypes.has('古老祭坛')).toBe(true);
     expect(eventTypes.has('流浪商人')).toBe(true);
     expect(eventTypes.has('神秘蛋')).toBe(true);
-    expect(eventTypes.has('训练营地')).toBe(true);
     expect(eventTypes.has('命运之轮')).toBe(true);
     expect(eventTypes.has('宠物遗迹')).toBe(true);
     expect(eventTypes.has('冒险者营地')).toBe(true);
@@ -1476,7 +1475,6 @@ describe('事件系统升级', () => {
     expect(eventTypes.has('古老祭坛')).toBe(true);
     expect(eventTypes.has('流浪商人')).toBe(true);
     expect(eventTypes.has('神秘蛋')).toBe(true);
-    expect(eventTypes.has('训练营地')).toBe(true);
     expect(eventTypes.has('命运之轮')).toBe(true);
     expect(eventTypes.has('宠物遗迹')).toBe(true);
     expect(eventTypes.has('神秘商人的赌局')).toBe(true);
@@ -1561,23 +1559,5 @@ describe('事件系统升级', () => {
       }
     }
     expect(foundAltar2).toBe(true);
-  });
-
-  it('被侵蚀的圣泉选项正确', () => {
-    const rng = createRng(42);
-    const act = 2;
-    let foundCorruptedSpring = false;
-    for (let i = 0; i < 100; i++) {
-      const ev = buildEvent(rng, act);
-      if (ev.title === '被侵蚀的圣泉') {
-        foundCorruptedSpring = true;
-        const drinkChoice = ev.choices.find((c) => c.id === 'e1');
-        expect(drinkChoice).toBeDefined();
-        // 饮用选项可能是治愈或中毒
-        expect(['heal', 'status']).toContain(drinkChoice!.kind);
-        break;
-      }
-    }
-    expect(foundCorruptedSpring).toBe(true);
   });
 });
