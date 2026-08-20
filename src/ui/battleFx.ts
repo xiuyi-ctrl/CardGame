@@ -5,7 +5,7 @@ import { getPassive } from '../game/data/passives';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
 interface FxEvent {
-  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed' | 'burst';
+  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed' | 'burst' | 'summon';
   actorUid?: string;
   targetUid?: string;
   value: number;
@@ -120,11 +120,13 @@ const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
+const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
 
 /** buff 技能飘字：按技能施加的状态显示，如战吼→「攻击↑」；无法识别时兜底「强化」 */
 function buffText(skillName: string): string {
   const skill = Object.values(SKILLS).find((s) => s.name === skillName);
   if (skill?.kind === 'buff') {
+    if (skill.id === 'spore_summon') return '召唤';
     const e = skill.effects?.[0];
     if (e?.kind === 'atkUp') return '攻击↑';
     if (e?.kind === 'shield') return '🛡️护盾';
@@ -318,6 +320,18 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       shields: entry.shields,
     };
   }
+  if ((m = text.match(RE_SUMMON))) {
+    return {
+      kind: 'summon',
+      actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid,
+      value: 0,
+      skillName: m[2],
+      hp: entry.hp,
+      statuses: entry.statuses,
+      shields: entry.shields,
+    };
+  }
   return null;
 }
 
@@ -359,6 +373,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
   const [animating, setAnimating] = useState(false);
   const [revealedLogLen, setRevealedLogLen] = useState(0);
+  const [revealedSummons, setRevealedSummons] = useState<Set<string>>(new Set());
   const prevLen = useRef(0);
   const prevBattle = useRef<BattleState | null | undefined>(null);
   const prevStatusRef = useRef<BattleState | null | undefined>(null);
@@ -422,6 +437,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setPops([]);
       setRevealedKinds({});
       setEndingStatuses({});
+      setRevealedSummons(new Set());
       return;
     }
     const prevBattleBefore = prevBattle.current;
@@ -601,6 +617,11 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             for (const uid of ev.burstTargets ?? []) {
               setPops((p) => [...p, { id: popId, uid, text: `-${ev.value}`, heal: false }]);
             }
+          } else if (ev.kind === 'summon') {
+            // 召唤揭示：清除 summoning 标记，使被召唤的生物可见
+            if (targetUid) {
+              setRevealedSummons((p) => { const next = new Set(p); next.add(targetUid); return next; });
+            }
           } else if (targetUid) {
             ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
             setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
@@ -652,5 +673,5 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen };
+  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons };
 }

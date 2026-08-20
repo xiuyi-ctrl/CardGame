@@ -382,11 +382,13 @@ function startRound(b: BattleState): BattleState {
       } else {
         nb = replaceUnit(nb, res.unit);
       }
-    } else if (res.unit.speciesId.startsWith('boss_minion_')) {
-      nb = applyRockShardDeath(nb, res.unit);
-      nb = applyToxicBurstDeath(nb, res.unit);
+    } else {
+      if (res.unit.speciesId.startsWith('boss_minion_')) {
+        nb = applyRockShardDeath(nb, res.unit);
+        nb = applyToxicBurstDeath(nb, res.unit);
+      }
+      nb = replaceUnit(nb, res.unit);
     }
-    nb = replaceUnit(nb, res.unit);
   }
   // DOT结算完毕后重置伤害累计（新回合开始）
   nb = { ...nb, roundDmgMap: {} };
@@ -886,8 +888,28 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     const nTypeBuff = b2.nodeType ?? 'battle';
     const actorPassiveForBuff = getUnitPassive(actor);
     const hasThorns = actorPassiveForBuff?.kind === 'thorns';
+    // 孢子召唤（target=allyAll，不在下方循环中）：有空位时概率使用
+    const sporeSummonSkill = skills.find((s) => s.id === 'spore_summon');
+    if (sporeSummonSkill) {
+      const deadSpores = b2.enemyUnits.filter((u) => (u.speciesId === 'boss_minion_spore_sac' || u.speciesId === 'boss_minion_slug') && u.hp <= 0);
+      const usedCols = new Set(b2.enemyUnits.filter((u) => u.hp > 0).map((u) => `${u.row}:${u.column}`));
+      const hasSpace = deadSpores.length > 0 || usedCols.size < 6;
+      if (hasSpace) {
+        if (deadSpores.length > 0 && rngVal < 0.6) {
+          candidates.push({ kind: 'buff', skill: sporeSummonSkill, score: 68 });
+        } else if (rngVal < 0.4) {
+          candidates.push({ kind: 'buff', skill: sporeSummonSkill, score: 55 });
+        }
+      }
+    }
     const buffSkills = skills.filter((s) => s.kind === 'buff' && s.target !== 'allyAll');
     for (const bs of buffSkills) {
+      // 孢子防护：未有该状态且血量 < 50% 时使用
+      if (bs.id === 'spore_shield' && !actor.statuses.some((s) => s.kind === 'sporeShield')) {
+        if (hpRatio < 0.5 && rngVal < 0.55) {
+          candidates.push({ kind: 'buff', skill: bs, score: 55 });
+        }
+      }
       // 战吼：首回合 概率使用，后续回合降低
       if (bs.effects?.some((e) => e.kind === 'atkUp') && !actor.statuses.some((s) => s.kind === 'atkUp')) {
         let roarChance = 0.25;
@@ -1014,7 +1036,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
       const scoredTargets = targetPool.map((t) => {
         let tScore = 0;
         // ── 残血收割（幕次加权） ──
-        const lowHpBonus = currentAct >= 2 ? 15 : 10;
+        const lowHpBonus = currentAct >= 2 ? 12 : 8;
         if (t.hp / t.maxHp < 0.3) tScore += lowHpBonus;
         // ── 核心威胁（幕次加权） ──
         const hasHealSkill = t.skills.some((id) => getSkill(id)?.kind === 'heal');
@@ -1610,6 +1632,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         nb = replaceUnit(nb, buffed);
         nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
       }
+    } else {
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor), actor.uid, actor.uid);
     }
     // 缩壳：额外给同侧潮汐巨蟹5点护盾
     if (skill.id === 'shell_up') {
@@ -1670,7 +1694,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
       if (dead) {
         const fresh = makeEnemy({ speciesId: sid }, dead.row, dead.column, true);
-        const summoned = { ...fresh, acted: true, uid: dead.uid };
+        const summoned = { ...fresh, acted: true, uid: dead.uid, summoning: true };
         nb = replaceUnit(nb, summoned);
         nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
       } else {
@@ -1681,7 +1705,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           for (const col of [0, 1, 2] as const) {
             if (!usedCols.has(`${row}:${col}`)) {
               const fresh = makeEnemy({ speciesId: sid }, row, col, true);
-              const summoned = { ...fresh, acted: true };
+              const summoned = { ...fresh, acted: true, summoning: true };
               nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
               nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
               placed = true;
@@ -1694,10 +1718,6 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，但没有空位，召唤失败`, sideOf(actor), actor.uid, actor.uid);
         }
       }
-    }
-    // 孢子防护：通用循环已施加 sporeShield + heal，此处仅补充伤害减免日志
-    if (skill.id === 'spore_shield') {
-      nb = pushLog(nb, `${actor.name} 使用「孢子防护」，本回合受伤 -2`, sideOf(actor), actor.uid, actor.uid);
     }
   } else {
     const perTarget = new Map<string, number>();

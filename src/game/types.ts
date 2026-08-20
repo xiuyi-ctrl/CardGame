@@ -181,6 +181,8 @@ export interface Unit {
   passiveDmgBonus?: number;
   /** 敌方换位次数（每场战斗最多 2 次） */
   swapCount?: number;
+  /** 召唤动画标记：新召唤的生物设为 true，动画揭示后清除 */
+  summoning?: boolean;
 }
 
 export interface LogEntry {

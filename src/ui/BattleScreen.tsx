@@ -62,7 +62,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen } = useBattleFx(battle);
+  const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -74,7 +74,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [inspectEnemy, setInspectEnemy] = useState<string | null>(null);
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
-  const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0);
+  const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
   // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）；车轮战待换人时也禁止，等替补自动上场
   const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap;
 
@@ -380,8 +380,9 @@ export function BattleScreen({ state, dispatch }: Props) {
     );
   };
 
-  const enemyBack = [battle.enemyUnits.find((u) => u.row === 'back' && u.column === 0), battle.enemyUnits.find((u) => u.row === 'back' && u.column === 1), battle.enemyUnits.find((u) => u.row === 'back' && u.column === 2)];
-  const enemyFront = [battle.enemyUnits.find((u) => u.row === 'front' && u.column === 0), battle.enemyUnits.find((u) => u.row === 'front' && u.column === 1), battle.enemyUnits.find((u) => u.row === 'front' && u.column === 2)];
+  const visibleEnemyUnits = battle.enemyUnits.filter((u) => !u.summoning || revealedSummons.has(u.uid));
+  const enemyBack = [visibleEnemyUnits.find((u) => u.row === 'back' && u.column === 0), visibleEnemyUnits.find((u) => u.row === 'back' && u.column === 1), visibleEnemyUnits.find((u) => u.row === 'back' && u.column === 2)];
+  const enemyFront = [visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 0), visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 1), visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 2)];
   const playerFront = [battle.playerUnits.find((u) => u.row === 'front' && u.column === 0), battle.playerUnits.find((u) => u.row === 'front' && u.column === 1), battle.playerUnits.find((u) => u.row === 'front' && u.column === 2)];
   const playerBack = [battle.playerUnits.find((u) => u.row === 'back' && u.column === 0), battle.playerUnits.find((u) => u.row === 'back' && u.column === 1), battle.playerUnits.find((u) => u.row === 'back' && u.column === 2)];
 
