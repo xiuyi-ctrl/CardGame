@@ -1593,22 +1593,23 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     }
     nb = r;
   } else if (skill.kind === 'buff') {
-    for (const t of targets) {
-      let buffed = t;
-      // 治疗：buff技能也可附带治疗效果
-      if (skill.heal && skill.heal > 0) {
-        const maxHp = getEffectiveMaxHp(buffed);
-        buffed = { ...buffed, hp: Math.min(maxHp, buffed.hp + skill.heal) };
-      }
-      for (const e of skill.effects ?? []) {
-        buffed = applyStatusTo(buffed, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
-        // 护盾：同时更新 shield 字段
-        if (e.kind === 'shield') {
-          buffed = { ...buffed, shield: Math.min(99, buffed.shield + e.value) };
+    const hasRealBuff = (skill.effects && skill.effects.length > 0) || (skill.heal && skill.heal > 0);
+    if (hasRealBuff) {
+      for (const t of targets) {
+        let buffed = t;
+        if (skill.heal && skill.heal > 0) {
+          const maxHp = getEffectiveMaxHp(buffed);
+          buffed = { ...buffed, hp: Math.min(maxHp, buffed.hp + skill.heal) };
         }
+        for (const e of skill.effects ?? []) {
+          buffed = applyStatusTo(buffed, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
+          if (e.kind === 'shield') {
+            buffed = { ...buffed, shield: Math.min(99, buffed.shield + e.value) };
+          }
+        }
+        nb = replaceUnit(nb, buffed);
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
       }
-      nb = replaceUnit(nb, buffed);
-      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
     }
     // 缩壳：额外给同侧潮汐巨蟹5点护盾
     if (skill.id === 'shell_up') {
@@ -1694,14 +1695,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
       }
     }
-    // 孢子防护：自身获得孢子防护状态（受伤-2）+ 回合结束回血（由 startRound 处理）
+    // 孢子防护：通用循环已施加 sporeShield + heal，此处仅补充伤害减免日志
     if (skill.id === 'spore_shield') {
-      const self = actorFromId(nb, actor.uid);
-      if (self && self.hp > 0) {
-        const shielded = applyStatusTo(self, { kind: 'sporeShield', value: 2, turns: 1 }, nb.round);
-        nb = replaceUnit(nb, shielded);
-        nb = pushLog(nb, `${actor.name} 使用「孢子防护」，本回合受伤 -2`, sideOf(actor), actor.uid, actor.uid);
-      }
+      nb = pushLog(nb, `${actor.name} 使用「孢子防护」，本回合受伤 -2`, sideOf(actor), actor.uid, actor.uid);
     }
   } else {
     const perTarget = new Map<string, number>();
