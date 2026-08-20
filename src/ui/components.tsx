@@ -222,11 +222,12 @@ export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride, thor
   const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;
   const showStacks = stacks > 0 && (p.kind === 'spdOnHit' || p.kind === 'treeSpeedUp' || p.kind === 'spdOnAttack' || p.kind === 'speedBonus');
   const followStacks = p.kind === 'shadowFollow' ? (unit.passiveDmgBonus ?? 0) : 0;
+  const soulStacks = p.kind === 'soulSiphon' ? (unit.soul ?? 0) : 0;
   const rockHits = p.kind === 'rockShellBreak' ? (rockShellHitsOverride ?? unit.rockShellHits ?? 0) : undefined;
   const thornHits = p.kind === 'thornRoyal' ? (thornsHitCountOverride ?? unit.thornsHitCount ?? 0) : undefined;
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
-      💠{p.name}{showStacks ? ` ×${stacks}` : ''}{followStacks > 0 ? ` ×${followStacks}` : ''}
+      💠{p.name}{showStacks ? ` ×${stacks}` : ''}{followStacks > 0 ? ` ×${followStacks}` : ''}{soulStacks > 0 ? ` 💀×${soulStacks}` : ''}
       {rockHits !== undefined && p.value !== undefined ? ` ${rockHits}/${p.value}` : ''}
       {thornHits !== undefined && p.value !== undefined ? ` ${thornHits % p.value}/${p.value}` : ''}
     </span>
@@ -474,6 +475,11 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
     if (passive.kind === 'shadowFollow') {
       const stacks = unit.passiveDmgBonus ?? 0;
       return stacks > 0 ? `×${stacks}` : null;
+    }
+    // 灵魂汲取：显示灵魂数
+    if (passive.kind === 'soulSiphon') {
+      const souls = unit.soul ?? 0;
+      return souls > 0 ? `💀×${souls}` : null;
     }
     // 非叠加型被动不显示数值（与卡片 PassiveBadge 规则统一）
     return null;

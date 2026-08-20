@@ -49,6 +49,10 @@ export const PASSIVES: Record<string, PassiveDef> = {
   corrupt_sac: { id: 'corrupt_sac', name: '腐化囊体', desc: '被攻击时50%概率使攻击者中毒2层', kind: 'corruptSac', value: 2 },
   sticky_body: { id: 'sticky_body', name: '粘滞躯体', desc: '攻击蛞蝓的单位速度-1，持续2回合', kind: 'stickyBody', value: 1 },
 
+  // —— 幽灵船长 ——
+  soul_siphon: { id: 'soul_siphon', name: '灵魂汲取', desc: '每次攻击命中汲取1点灵魂：5点灵魂伤害+2，10点灵魂每回合回3HP，20点灵魂伤害+3', kind: 'soulSiphon', value: 1 },
+  ghost_soul: { id: 'ghost_soul', name: '灵魂链接', desc: '死亡时为幽灵船长+1灵魂', kind: 'ghostSoul', value: 1 },
+
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },
   berserk: { id: 'berserk', name: '狂战', desc: '生命低于 50% 时伤害 +2', kind: 'frenzy', value: 2 },

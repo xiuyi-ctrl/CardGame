@@ -22,7 +22,7 @@ const FRONT_PASSIVES: PassiveKind[] = [
 const BACK_PASSIVES: PassiveKind[] = [
   'power', 'frenzy', 'venom', 'scorch', 'drain', 'venomPower',
   'speedBonus', 'scorchPlus', 'poisonBreak', 'spdOnAttack',
-  'tideRhythm', 'tideEcho', 'thornEntangle',
+  'tideRhythm', 'tideEcho', 'thornEntangle', 'soulSiphon',
 ];
 /** AI 选择行动时 softmax 温度：越小越趋向最高分，越大越随机（默认 12） */
 const SOFTMAX_TEMP = 12;
@@ -88,6 +88,7 @@ export function makeUnit(
     isPlayer,
     tameable,
     acted: false,
+    soul: passive?.kind === 'soulSiphon' ? 0 : undefined,
   };
 }
 
@@ -424,9 +425,9 @@ function startRound(b: BattleState): BattleState {
   // 被动再生：每回合开始恢复（存活且未满血）
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     const p = getUnitPassive(u);
-    if ((p?.kind === 'regen' || p?.kind === 'lifeSpring' || p?.kind === 'treeSpeedUp') && u.hp > 0 && u.hp < u.maxHp) {
+    if ((p?.kind === 'regen' || p?.kind === 'lifeSpring' || p?.kind === 'treeSpeedUp' || (p?.kind === 'soulSiphon' && (u.soul ?? 0) >= 10)) && u.hp > 0 && u.hp < u.maxHp) {
       const maxHp = getEffectiveMaxHp(u);
-      let healAmt = p.kind === 'lifeSpring' ? 3 : (p.kind === 'treeSpeedUp' ? 3 : p.value);
+      let healAmt = p.kind === 'lifeSpring' ? 3 : (p.kind === 'treeSpeedUp' ? 3 : (p.kind === 'soulSiphon' ? 3 : p.value));
       // 共生树皮：若古树之主在场，恢复量翻倍
       if (u.passive === 'symbiotic_bark') {
         const allies = u.isPlayer ? nb.playerUnits : nb.enemyUnits;
@@ -969,6 +970,14 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           candidates.push({ kind: 'buff', skill: bs, score: 65 });
         }
       }
+      // 幽灵召唤：所有召唤物死亡时必用（score 80）
+      if (bs.id === 'ghostly_summon') {
+        const aliveMinions = allies.filter((u) => u.speciesId === 'boss_minion_ghost_sailor' || u.speciesId === 'boss_minion_phantom');
+        if (aliveMinions.length === 0) {
+          // 所有召唤物死亡，必用
+          candidates.push({ kind: 'buff', skill: bs, score: 80 });
+        }
+      }
     }
 
     // ─── 3. 换位（限次 2 次，分层阈值；守卫/首领禁用） ───
@@ -1087,6 +1096,13 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
         if (atk.target === 'all' && targetPool.length >= 3) tScore += 3;
         // 带状态效果的技能加分
         if (atk.effects?.some((e) => e.kind === 'poison' || e.kind === 'burn')) tScore += 2;
+        // ── 灵魂回响倾向：灵魂越多越倾向使用 ──
+        if (atk.id === 'soul_echo') {
+          const actorSoul = actor.soul ?? 0;
+          if (actorSoul >= 10) tScore += 25;
+          else if (actorSoul >= 5) tScore += 15;
+          else if (actorSoul >= 3) tScore += 8;
+        }
         // ── 速度加成技能倾向 ──
         const actorSpd = getEffectiveSpd(actor);
         if (atk.spdScaling && atk.spdScaling > 0) {
@@ -1295,7 +1311,12 @@ function resolveAttack(
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[]; didPoison: boolean } {
   let nb = b;
   const base = (skill.damage ?? 0) + getDamageBonus(actor);
-  let perHitDmg = base - getDamageGuard(target, nb);
+  // 灵魂回响：每5个灵魂额外+2伤害
+  let soulEchoBonus = 0;
+  if (skill.id === 'soul_echo' && actor.soul) {
+    soulEchoBonus = Math.floor(actor.soul / 5) * 2;
+  }
+  let perHitDmg = base + soulEchoBonus - getDamageGuard(target, nb);
   // 速度加成伤害
   if (skill.spdScaling && skill.spdScaling > 0) {
     perHitDmg += getEffectiveSpd(actor) * skill.spdScaling;
@@ -1422,6 +1443,24 @@ function resolveAttack(
         const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
         nb = replaceUnit(nb, healed);
         nb = pushLog(nb, `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`, sideOf(healedActor), healedActor.uid, healedActor.uid);
+      }
+    }
+    // 灵魂汲取：攻击命中时，攻击者灵魂 +1（上限 20）
+    if (t2.hp <= 0 || seg > 0) {
+      const freshActor = actorFromId(nb, actor.uid);
+      if (freshActor && freshActor.hp > 0) {
+        const fp = getUnitPassive(freshActor);
+        if (fp?.kind === 'soulSiphon') {
+          const curSoul = freshActor.soul ?? 0;
+          if (curSoul < 20) {
+            const newSoul = curSoul + 1;
+            nb = replaceUnit(nb, { ...freshActor, soul: newSoul });
+            // 阶梯触发日志
+            if (newSoul === 5) nb = pushLog(nb, `${freshActor.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`, sideOf(freshActor), freshActor.uid, freshActor.uid);
+            else if (newSoul === 10) nb = pushLog(nb, `${freshActor.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`, sideOf(freshActor), freshActor.uid, freshActor.uid);
+            else if (newSoul === 20) nb = pushLog(nb, `${freshActor.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`, sideOf(freshActor), freshActor.uid, freshActor.uid);
+          }
+        }
       }
     }
     // 荆棘缠绕：攻击时概率使目标伤害 -1（古树之主在场时概率更高）
@@ -1579,6 +1618,23 @@ function resolveAttack(
     nb = pushLog(nb, `${t2.name} 被击倒了`, sideOf(t2), t2.uid, t2.uid);
     nb = applyRockShardDeath(nb, t2);
     nb = applyToxicBurstDeath(nb, t2);
+    // 灵魂链接：死亡时为幽灵船长+1灵魂
+    const deadP = getUnitPassive(t2);
+    if (deadP?.kind === 'ghostSoul') {
+      const allies = t2.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const ghostCaptain = allies.find((u) => u.speciesId === 'boss_ghost' && u.hp > 0);
+      if (ghostCaptain) {
+        const curSoul = ghostCaptain.soul ?? 0;
+        if (curSoul < 20) {
+          const newSoul = curSoul + 1;
+          nb = replaceUnit(nb, { ...ghostCaptain, soul: newSoul });
+          nb = pushLog(nb, `${t2.name} 的「灵魂链接」触发！${ghostCaptain.name} 获得 1 个灵魂（共 ${newSoul}）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+          if (newSoul === 5) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+          else if (newSoul === 10) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+          else if (newSoul === 20) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+        }
+      }
+    }
   }
   return { battle: nb, lastHitLog, passiveAdds, didPoison };
 }
@@ -1656,6 +1712,22 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         nb = pushLog(nb, `${self.name} 缩入壳中，下回合无法行动`, sideOf(self), self.uid);
       }
     }
+    // 灵魂共享：为幽灵船长+2灵魂
+    if (skill.id === 'soul_share') {
+      const allies = actor.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const ghostCaptain = allies.find((a) => a.speciesId === 'boss_ghost' && a.hp > 0);
+      if (ghostCaptain) {
+        const curSoul = ghostCaptain.soul ?? 0;
+        if (curSoul < 20) {
+          const newSoul = Math.min(20, curSoul + 2);
+          nb = replaceUnit(nb, { ...ghostCaptain, soul: newSoul });
+          nb = pushLog(nb, `${actor.name} 使用「灵魂共享」，${ghostCaptain.name} 获得 2 个灵魂（共 ${newSoul}）`, sideOf(actor), actor.uid, ghostCaptain.uid);
+          if (curSoul < 5 && newSoul >= 5) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+          if (curSoul < 10 && newSoul >= 10) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+          if (curSoul < 20 && newSoul >= 20) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+        }
+      }
+    }
     // 碎岩重组：消灭并重新召唤碎石傀儡和晶石虫
     if (skill.id === 'rock_reforge') {
       const minionSpecies = ['boss_minion_rock', 'boss_minion_crystal'];
@@ -1716,6 +1788,40 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
         if (!placed) {
           nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，但没有空位，召唤失败`, sideOf(actor), actor.uid, actor.uid);
+        }
+      }
+    }
+    // 幽灵召唤：召唤幽灵水手和幽影（仅在所有召唤物死亡时可用）
+    if (skill.id === 'ghostly_summon') {
+      const minionSids = ['boss_minion_ghost_sailor', 'boss_minion_phantom'];
+      for (const sid of minionSids) {
+        // 优先复用同 species 的死亡单位槽位
+        const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
+        if (dead) {
+          const fresh = makeEnemy({ speciesId: sid }, dead.row, dead.column, true);
+          const summoned = { ...fresh, acted: true, uid: dead.uid, summoning: true };
+          nb = replaceUnit(nb, summoned);
+          nb = pushLog(nb, `${actor.name} 使用「幽灵召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
+        } else {
+          // 在前排/后排找空列
+          const usedCols = new Set(nb.enemyUnits.filter((u) => u.hp > 0).map((u) => `${u.row}:${u.column}`));
+          let placed = false;
+          for (const row of ['front', 'back'] as const) {
+            for (const col of [0, 1, 2] as const) {
+              if (!usedCols.has(`${row}:${col}`)) {
+                const fresh = makeEnemy({ speciesId: sid }, row, col, true);
+                const summoned = { ...fresh, acted: true, summoning: true };
+                nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
+                nb = pushLog(nb, `${actor.name} 使用「幽灵召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
+                placed = true;
+                break;
+              }
+            }
+            if (placed) break;
+          }
+          if (!placed) {
+            nb = pushLog(nb, `${actor.name} 使用「幽灵召唤」，但没有空位，召唤失败`, sideOf(actor), actor.uid, actor.uid);
+          }
         }
       }
     }
@@ -1820,6 +1926,28 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             nb = pushLog(nb, `${curActor.name} 的「暗影追猎」触发！击杀目标后获得额外行动`, sideOf(curActor), curActor.uid, curActor.uid);
             // 直接返回，跳过 markActed
             return nb;
+          }
+        }
+      }
+    }
+    // 幽爆：使用后自身立即死亡（自爆对全体敌人造成伤害后）
+    if (skill.id === 'ghost_burst') {
+      const burstActor = actorFromId(nb, actor.uid);
+      if (burstActor && burstActor.hp > 0) {
+        nb = replaceUnit(nb, { ...burstActor, hp: 0 });
+        nb = pushLog(nb, `${burstActor.name} 使用「幽爆」，自爆身亡！`, sideOf(burstActor), burstActor.uid, burstActor.uid);
+        // 灵魂链接：死亡时为幽灵船长+1灵魂
+        const bp = getUnitPassive(burstActor);
+        if (bp?.kind === 'ghostSoul') {
+          const allies = burstActor.isPlayer ? nb.playerUnits : nb.enemyUnits;
+          const ghostCaptain = allies.find((u) => u.speciesId === 'boss_ghost' && u.hp > 0);
+          if (ghostCaptain) {
+            const curSoul = ghostCaptain.soul ?? 0;
+            if (curSoul < 20) {
+              const newSoul = Math.min(20, curSoul + 1);
+              nb = replaceUnit(nb, { ...ghostCaptain, soul: newSoul });
+              nb = pushLog(nb, `${burstActor.name} 的「灵魂链接」触发！${ghostCaptain.name} 获得 1 个灵魂（共 ${newSoul}）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+            }
           }
         }
       }
@@ -2242,6 +2370,11 @@ export function getDamageBonus(u: Unit): number {
   if (p?.kind === 'frenzy' && u.hp / u.maxHp < 0.5) bonus += p.value;
   // 暗影追随：永久伤害加成
   if (u.passiveDmgBonus) bonus += u.passiveDmgBonus;
+  // 灵魂汲取：阶梯式伤害加成（5灵魂+2，20灵魂+3，共+5）
+  if (p?.kind === 'soulSiphon' && u.soul) {
+    if (u.soul >= 20) bonus += 5;
+    else if (u.soul >= 5) bonus += 2;
+  }
   return bonus;
 }
 

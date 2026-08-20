@@ -764,6 +764,7 @@ export const BOSS_MINIONS: Record<string, string[]> = {
   boss_golem: ['boss_minion_rock', 'boss_minion_crystal'],
   boss_dark: ['boss_minion_shadow_servant', 'boss_minion_shadow_bat'],
   boss_moss: ['boss_minion_spore_sac', 'boss_minion_slug'],
+  boss_ghost: ['boss_minion_ghost_sailor', 'boss_minion_phantom'],
 };
 
 function buildEncounter(

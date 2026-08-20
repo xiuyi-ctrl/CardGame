@@ -288,9 +288,25 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_ghost: {
     id: 'boss_ghost', name: '幽灵船长', emoji: '👻',
     baseHp: 42, baseSpd: 6,
-    skills: ['double_hit', 'dark_shock', 'roar', 'snipe', 'soul_rend'],
-    desc: '高输出高速，首轮即可压血线。',
-    passive: 'ghost_step',
+    skills: ['soul_echo', 'ghostly_harvest', 'roar', 'ghostly_summon', 'soul_rend'],
+    desc: '高速灵魂收集者，攻击命中汲取灵魂增强自身，灵魂越多伤害越高。小怪全灭时可重新召唤。',
+    passive: 'soul_siphon',
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_minion_ghost_sailor: {
+    id: 'boss_minion_ghost_sailor', name: '幽灵水手', emoji: '🧟',
+    baseHp: 16, baseSpd: 4,
+    skills: ['shadow_claw', 'soul_share'],
+    desc: '幽灵船长的船员，可主动为船长献祭灵魂。',
+    passive: 'ghost_soul',
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_minion_phantom: {
+    id: 'boss_minion_phantom', name: '幽影', emoji: '💨',
+    baseHp: 10, baseSpd: 6,
+    skills: ['shadow_claw', 'ghost_burst'],
+    desc: '高速幽灵刺客，可自爆对全体敌人造成3点伤害。',
+    passive: 'ghost_soul',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_dragon: {

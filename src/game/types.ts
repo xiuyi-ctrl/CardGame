@@ -78,7 +78,9 @@ export type PassiveKind =
   | 'bloodScent' // 嗜血嗅觉：攻击目标永远为血量最低的敌人
   | 'corruptSpread' // 腐化蔓延：每当一个单位被附加中毒时，随机对另一个敌方单位附加中毒2层
   | 'corruptSac' // 腐化囊体：被攻击时50%概率使攻击者中毒2层
-  | 'stickyBody'; // 粘滞躯体：攻击蛞蝓的单位速度-1，持续2回合
+  | 'stickyBody' // 粘滞躯体：攻击蛞蝓的单位速度-1，持续2回合
+  | 'soulSiphon' // 灵魂汲取：攻击命中汲取灵魂，5灵魂伤害+2，10灵魂回血3/回合，20灵魂伤害+3
+  | 'ghostSoul'; // 灵魂链接：死亡时为幽灵船长+1灵魂
 
 export interface PassiveDef {
   id: string;
@@ -179,6 +181,8 @@ export interface Unit {
   rockShellHits?: number;
   /** 暗影追随被动：永久伤害加成（暗影之王击杀时 +1） */
   passiveDmgBonus?: number;
+  /** 灵魂汲取被动：当前收集的灵魂数（攻击命中+1，上限20） */
+  soul?: number;
   /** 敌方换位次数（每场战斗最多 2 次） */
   swapCount?: number;
   /** 召唤动画标记：新召唤的生物设为 true，动画揭示后清除 */

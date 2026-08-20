@@ -356,6 +356,28 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 2,
     effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
   },
+
+  // —— 幽灵船长专属技能 ——
+  soul_echo: {
+    id: 'soul_echo', name: '灵魂回响', desc: '攻击全体敌人，每5个已收集的灵魂额外造成2点伤害',
+    target: 'all', kind: 'attack', damage: 2,
+  },
+  ghostly_harvest: {
+    id: 'ghostly_harvest', name: '亡魂收割', desc: '重击单个敌人（每场限2次）',
+    target: 'single', kind: 'attack', damage: 10, uses: 2,
+  },
+  soul_share: {
+    id: 'soul_share', name: '灵魂共享', desc: '为幽灵船长+2灵魂（每场限3次）',
+    target: 'ally', kind: 'buff', uses: 3,
+  },
+  ghost_burst: {
+    id: 'ghost_burst', name: '幽爆', desc: '自爆并对所有敌人造成3点伤害',
+    target: 'all', kind: 'attack', damage: 3,
+  },
+  ghostly_summon: {
+    id: 'ghostly_summon', name: '幽灵召唤', desc: '召唤幽灵水手和幽影（仅在所有召唤物死亡时可用）',
+    target: 'self', kind: 'buff',
+  },
 };
 
 export function getSkill(id: string): SkillDef {
