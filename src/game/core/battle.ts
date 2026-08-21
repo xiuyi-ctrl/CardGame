@@ -70,6 +70,11 @@ export function makeUnit(
     const def = getSkill(id);
     if (def.uses !== undefined) skillUses[id] = def.uses;
   }
+  // 也初始化第二形态技能的使用次数
+  for (const id of (s.altSkills ?? [])) {
+    const def = getSkill(id);
+    if (def.uses !== undefined && !(id in skillUses)) skillUses[id] = def.uses;
+  }
   return {
     uid: nextUid(isPlayer ? 'p' : 'e'),
     speciesId,
@@ -80,6 +85,8 @@ export function makeUnit(
     spd: s.baseSpd + spdBonus,
     skills: [...s.skills],
     passive: s.passive,
+    altSkills: s.altSkills ? [...s.altSkills] : undefined,
+    altPassive: s.altPassive,
     skillUses,
     statuses: [],
     shield: 0,
@@ -387,12 +394,22 @@ function startRound(b: BattleState): BattleState {
       if (res.unit.speciesId.startsWith('boss_minion_')) {
         nb = applyRockShardDeath(nb, res.unit);
         nb = applyToxicBurstDeath(nb, res.unit);
+        nb = applyEmberDeath(nb, res.unit);
       }
       nb = replaceUnit(nb, res.unit);
     }
   }
   // DOT结算完毕后重置伤害累计（新回合开始）
   nb = { ...nb, roundDmgMap: {} };
+  // 形态切换检查：HP≤50% 且有 altPassive 时切换形态
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0 || !u.altPassive) continue;
+    if (u.hp / u.maxHp > 0.5) continue;
+    if (u.passive === u.altPassive) continue; // 已切换
+    const switched = { ...u, passive: u.altPassive, skills: u.altSkills ?? u.skills, skillCooldowns: undefined };
+    nb = replaceUnit(nb, switched);
+    nb = pushLog(nb, `${switched.name} 的熔岩护甲碎裂，进入【爆发形态】！`, sideOf(switched), switched.uid, switched.uid);
+  }
   // 被侵蚀 burn debuff：每回合结束受到 2 点伤害
   if (nb.corruptDebuff === 'burn') {
     for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
@@ -683,13 +700,14 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
       targets = allies.filter((u) => u.hp > 0);
       break;
     }
-    case 'all':
-      if (skill.reach === 'front') {
-        targets = front.length > 0 ? front : back;
-      } else {
-        targets = enemies;
+    case 'all': {
+      const pool = skill.reach === 'front' ? (front.length > 0 ? front : back) : enemies;
+      targets = [];
+      for (let i = 0; i < effectiveHits; i++) {
+        targets.push(...pool);
       }
       break;
+    }
     case 'random': {
       if (enemies.length === 0) {
         targets = [];
@@ -1280,6 +1298,23 @@ function applyToxicBurstDeath(b: BattleState, dead: Unit): BattleState {
   return nb;
 }
 
+/** 余烬遗火：死亡时对全体敌人造成 3 点伤害 + 灼烧 3 层 */
+function applyEmberDeath(b: BattleState, dead: Unit): BattleState {
+  const passive = getUnitPassive(dead);
+  if (passive?.kind !== 'emberDeath') return b;
+  let nb = b;
+  const victims = (dead.isPlayer ? nb.enemyUnits : nb.playerUnits).filter((u) => u.hp > 0);
+  const hitUids: string[] = [];
+  for (const v of victims) {
+    let after = { ...v, hp: Math.max(0, v.hp - 3) };
+    after = applyStatusTo(after, { kind: 'burn', value: 3, turns: 2 }, nb.round);
+    nb = replaceUnit(nb, after);
+    hitUids.push(after.uid);
+  }
+  nb = pushLog(nb, `${dead.name} 的「余烬遗火」触发！对全体敌人造成 3 点伤害 + 灼烧 3 层`, sideOf(dead), dead.uid, undefined, ['burn'], hitUids);
+  return nb;
+}
+
 /** 腐化蔓延：当场上有苔藓领主存活时，任何单位被附加中毒后，随机对另一个敌方单位附加中毒2层 */
 function applyCorruptSpread(b: BattleState, poisonedUid: string): BattleState {
   const moss = b.enemyUnits.find((u) => u.speciesId === 'boss_moss' && u.hp > 0);
@@ -1362,6 +1397,10 @@ function resolveAttack(
     if (burnStacks > 0) {
       perHitDmg += Math.min(5, burnStacks);
     }
+  }
+  // 灼血撕咬：目标已灼烧时额外 +2
+  if (skill.id === 'blood_fang' && tWithPassive.statuses.some((s) => s.kind === 'burn')) {
+    perHitDmg += 2;
   }
   // 暗影追猎：对生命值低于50%的目标伤害+3
   if (ap?.kind === 'shadowHunter' && target.hp / target.maxHp < 0.5) {
@@ -1475,6 +1514,24 @@ function resolveAttack(
         nb = pushLog(nb, `${actor.name} 的「${ap.name}」使 ${t2.name} 伤害 -1`, sideOf(actor), actor.uid, t2.uid, ['atkDown']);
       }
     }
+    // 烈焰环绕：被攻击时 30% 概率使攻击者灼烧 1 层，熔火领主在场时 100%
+    if (t2.hp > 0) {
+      const tp = getUnitPassive(t2);
+      if (tp?.kind === 'flameAura') {
+        const attacker = actorFromId(nb, actor.uid);
+        if (attacker && attacker.hp > 0) {
+          const hasBossFire = alliesOf(nb, t2).some((a) => a.speciesId === 'boss_fire');
+          if (hasBossFire || Math.abs((nb.rngCount ?? 0)) % 100 < 30) {
+            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+            const burned = applyStatusTo(attacker, { kind: 'burn', value: tp.value, turns: 2 }, nb.round);
+            nb = replaceUnit(nb, burned);
+            nb = pushLog(nb, `${t2.name} 的「烈焰环绕」触发！${burned.name} 被灼烧 ${tp.value} 层`, sideOf(t2), t2.uid, attacker.uid, ['burn']);
+          } else {
+            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+          }
+        }
+      }
+    }
       if (t2.hp > 0) {
         const tp = getUnitPassive(t2);
         if (tp?.kind === 'thorns') {
@@ -1504,6 +1561,15 @@ function resolveAttack(
               nb = replaceUnit(nb, t2);
               nb = pushLog(nb, `${t2.name} 的「荆棘之躯」恢复 2 点生命`, sideOf(t2), t2.uid, t2.uid);
             }
+          }
+        }
+        // 熔岩护体：受到攻击时灼烧攻击者 1 层
+        if (tp?.id === 'molten_armor' && t2.hp > 0) {
+          const attacker = actorFromId(nb, actor.uid);
+          if (attacker && attacker.hp > 0) {
+            let burned = applyStatusTo(attacker, { kind: 'burn', value: 1, turns: 2 }, nb.round);
+            nb = replaceUnit(nb, burned);
+            nb = pushLog(nb, `${t2.name} 的「熔岩护体」触发！${burned.name} 被灼烧 1 层`, sideOf(t2), t2.uid, attacker.uid, ['burn']);
           }
         }
         // 岩壳崩解：每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益
@@ -1618,6 +1684,7 @@ function resolveAttack(
     nb = pushLog(nb, `${t2.name} 被击倒了`, sideOf(t2), t2.uid, t2.uid);
     nb = applyRockShardDeath(nb, t2);
     nb = applyToxicBurstDeath(nb, t2);
+    nb = applyEmberDeath(nb, t2);
     // 灵魂链接：死亡时为幽灵船长+1灵魂
     const deadP = getUnitPassive(t2);
     if (deadP?.kind === 'ghostSoul') {
@@ -2368,6 +2435,8 @@ export function getDamageBonus(u: Unit): number {
   const p = getUnitPassive(u);
   if (p?.kind === 'power') bonus += p.value;
   if (p?.kind === 'frenzy' && u.hp / u.maxHp < 0.5) bonus += p.value;
+  // 熔火狂暴：伤害 +1（与 scorch 3 叠加构成爆发形态）
+  if (p?.id === 'fire_rage') bonus += 1;
   // 暗影追随：永久伤害加成
   if (u.passiveDmgBonus) bonus += u.passiveDmgBonus;
   // 灵魂汲取：阶梯式伤害加成（5灵魂+2，20灵魂+3，共+5）

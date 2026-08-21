@@ -2239,6 +2239,30 @@ button.primary {
   font-style: italic;
 }
 
+/* 形态切换首领 · 双形态展示 */
+.codex-form-block {
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+}
+.codex-form-block.form-1 {
+  background: rgba(255, 140, 50, 0.08);
+  border-color: rgba(255, 140, 50, 0.35);
+}
+.codex-form-block.form-2 {
+  background: rgba(255, 60, 60, 0.08);
+  border-color: rgba(255, 60, 60, 0.35);
+}
+.codex-form-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+
 .toast {
   position: fixed;
   top: 20px;

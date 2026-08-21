@@ -113,8 +113,9 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'all', kind: 'attack', damage: 2, heal: 1, reach: 'front',
   },
   flame_combo: {
-    id: 'flame_combo', name: '火焰连击', desc: '连续两次攻击随机敌人',
+    id: 'flame_combo', name: '火焰连击', desc: '连续两次攻击随机敌人，附加灼烧 2 层',
     target: 'random', kind: 'attack', damage: 4, hits: 2,
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   fire_shock: {
     id: 'fire_shock', name: '火光冲击', desc: '贯穿攻击单个敌人并附加灼烧',
@@ -147,9 +148,10 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 3, hits: 3,
   },
   inferno: {
-    id: 'inferno', name: '炼狱烈焰', desc: '连续两次攻击全体敌人并附加灼烧',
+    id: 'inferno', name: '炼狱烈焰', desc: '连续两次攻击全体敌人并附加灼烧（每场限2次）',
     target: 'all', kind: 'attack', damage: 5, hits: 2,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
+    uses: 2,
   },
   tidal_slam: {
     id: 'tidal_slam', name: '潮涌重击', desc: '攻击全体敌人并恢复自身4点生命值',
@@ -268,11 +270,21 @@ export const SKILLS: Record<string, SkillDef> = {
     uses: 5, cooldown: 1,
   },
   flame_slash: {
-    id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人',
+    id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人并附加灼烧',
     kind: 'attack', damage: 8, hits: 1, target: 'single',
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
 
   // —— Boss 专属技能（小怪/首领）——
+  blood_fang: {
+    id: 'blood_fang', name: '灼血撕咬', desc: '攻击单个敌人，若目标已灼烧则额外造成2点伤害',
+    target: 'single', kind: 'attack', damage: 5,
+  },
+  flame_pillar: {
+    id: 'flame_pillar', name: '焰柱', desc: '贯穿攻击单个敌人并附加灼烧',
+    target: 'single', kind: 'attack', damage: 8, reach: 'pierce',
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
+  },
   wild_leaf: {
     id: 'wild_leaf', name: '狂叶', desc: '攻击全体敌人，伤害随自身速度提高',
     target: 'all', kind: 'attack', damage: 1, spdScaling: 1,

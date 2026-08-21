@@ -150,42 +150,42 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     vi.useRealTimers();
   });
 
-  it('真实战斗：灼烧层数随动画事件回放（攻击时 5 层 → dot 结算后 2 层）', () => {
+  it('真实战斗：灼烧层数随动画事件回放（攻击时 2 层 → dot 结算后 1 层）', () => {
     vi.useFakeTimers();
-    const lord = makeUnit('boss_fire', true, 0, false); // 熔火灼烧被动（灼烧 3 层）+ 烈焰爆发（灼烧 2 层）
+    const lord = makeUnit('boss_fire', true, 0, false); // 熔岩护体被动（无灼烧）+ 烈焰爆发（灼烧 2 层）
     const k = makeUnit(SPECIES[1], false, 1, false);
     const b0 = createBattle([lord], [{ speciesId: k.speciesId }], 12345);
     const bOrdered = playerSkill(b0, lord.uid, 'flame_burst', b0.enemyUnits[0].uid);
     const b1 = playerEndTurn(bOrdered);
     const kUid = b1.enemyUnits[0].uid;
-    // 引擎确实附加了 5 层（攻击后 dot 结算 3、剩 2），显示回放只是滞后
-    expect(b1.enemyUnits[0].statuses.find((s) => s.kind === 'burn')!.value).toBe(2);
+    // 引擎附加 2 层（仅技能），dot 结算 ceil(2/2)=1、剩 1
+    expect(b1.enemyUnits[0].statuses.find((s) => s.kind === 'burn')!.value).toBe(1);
 
     const { result, rerender } = renderHook(({ b }: { b: BattleState }) => useBattleFx(b), {
       initialProps: { b: bOrdered },
     });
 
     act(() => rerender({ b: b1 }));
-    // 攻击动画事件（0ms）触发：揭示灼烧，层数为施加时的 5 层（技能 2 + 被动 3）
+    // 攻击动画事件（0ms）触发：揭示灼烧，层数为施加时的 2 层
     act(() => vi.advanceTimersByTime(0));
-    expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(5);
+    expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(2);
 
-    // 敌方行动事件（800ms）：尚未到 dot 结算，仍显示 5 层
-    act(() => vi.advanceTimersByTime(800));
-    expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(5);
-
-    // dot 结算事件（1600ms）：层数降到剩 2 层，与 -3 掉血动画同步
+    // 敌方行动事件（800ms）：尚未到 dot 结算，仍显示 2 层
     act(() => vi.advanceTimersByTime(800));
     expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(2);
 
-    // 再生被动事件（2400ms）：灼烧仍为 2 层（regen heal 不影响灼烧层数）
+    // dot 结算事件（1600ms）：层数降到剩 1 层
     act(() => vi.advanceTimersByTime(800));
-    expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(2);
+    expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(1);
+
+    // 再生被动事件（2400ms）：灼烧仍为 1 层
+    act(() => vi.advanceTimersByTime(800));
+    expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(1);
 
     // 动画播放完：回退到真实最终状态
     act(() => vi.advanceTimersByTime(2100));
     expect(result.current.statusMap).toBeNull();
-    expect(b1.enemyUnits[0].statuses.find((s) => s.kind === 'burn')!.value).toBe(2);
+    expect(b1.enemyUnits[0].statuses.find((s) => s.kind === 'burn')!.value).toBe(1);
     vi.useRealTimers();
   });
 

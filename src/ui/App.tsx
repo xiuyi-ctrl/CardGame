@@ -724,27 +724,68 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {passive && (
-            <div className="codex-section">
-              <div className="codex-sec-title">💠 专属被动</div>
-              <div className="codex-passive" title={passive.desc}>
-                {passive.name}：{passive.desc}
-              </div>
-            </div>
-          )}
+          {sp.altSkills && sp.altPassive && (() => {
+            const p1 = getPassive(sp.passive);
+            const p2 = getPassive(sp.altPassive);
+            return (
+              <>
+                <div className="codex-form-block form-1">
+                  <div className="codex-form-title">🔥 形态1：HP &gt; 50%</div>
+                  {p1 && (
+                    <div className="codex-passive" title={p1.desc}>
+                      💠 {p1.name}：{p1.desc}
+                    </div>
+                  )}
+                  <div className="codex-skills">
+                    {sp.skills.map((sid) => {
+                      const s = getSkill(sid);
+                      return <SkillTag key={sid} skill={s} desc usesNote />;
+                    })}
+                  </div>
+                </div>
+                <div className="codex-form-block form-2">
+                  <div className="codex-form-title">💥 形态2：HP ≤ 50%</div>
+                  {p2 && (
+                    <div className="codex-passive" title={p2.desc}>
+                      💠 {p2.name}：{p2.desc}
+                    </div>
+                  )}
+                  <div className="codex-skills">
+                    {sp.altSkills.map((sid) => {
+                      const s = getSkill(sid);
+                      return <SkillTag key={sid} skill={s} desc usesNote />;
+                    })}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
-          <div className="codex-section">
-            <div className="codex-sec-title">⚔️ 技能</div>
-            <div className="codex-skills">
-              {sp.skills.map((sid) => {
-                const s = getSkill(sid);
-                return <SkillTag key={sid} skill={s} desc usesNote />;
-              })}
-            </div>
-            {sp.id.startsWith('custom_') && (
-              <div className="codex-note">造物：从上方技能池随机组合 3 个技能</div>
-            )}
-          </div>
+          {!sp.altSkills && (
+            <>
+              {passive && (
+                <div className="codex-section">
+                  <div className="codex-sec-title">💠 专属被动</div>
+                  <div className="codex-passive" title={passive.desc}>
+                    {passive.name}：{passive.desc}
+                  </div>
+                </div>
+              )}
+
+              <div className="codex-section">
+                <div className="codex-sec-title">⚔️ 技能</div>
+                <div className="codex-skills">
+                  {sp.skills.map((sid) => {
+                    const s = getSkill(sid);
+                    return <SkillTag key={sid} skill={s} desc usesNote />;
+                  })}
+                </div>
+                {sp.id.startsWith('custom_') && (
+                  <div className="codex-note">造物：从上方技能池随机组合 3 个技能</div>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="codex-section">
             <div className="codex-sec-title">🎣 驯服</div>

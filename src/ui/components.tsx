@@ -225,9 +225,10 @@ export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride, thor
   const soulStacks = p.kind === 'soulSiphon' ? (unit.soul ?? 0) : 0;
   const rockHits = p.kind === 'rockShellBreak' ? (rockShellHitsOverride ?? unit.rockShellHits ?? 0) : undefined;
   const thornHits = p.kind === 'thornRoyal' ? (thornsHitCountOverride ?? unit.thornsHitCount ?? 0) : undefined;
+  const formLabel = unit.altPassive ? (unit.passive === unit.altPassive ? '【爆发】' : '【熔岩】') : '';
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
-      💠{p.name}{showStacks ? ` ×${stacks}` : ''}{followStacks > 0 ? ` ×${followStacks}` : ''}{soulStacks > 0 ? ` 💀×${soulStacks}` : ''}
+      💠{p.name}{formLabel}{showStacks ? ` ×${stacks}` : ''}{followStacks > 0 ? ` ×${followStacks}` : ''}{soulStacks > 0 ? ` 💀×${soulStacks}` : ''}
       {rockHits !== undefined && p.value !== undefined ? ` ${rockHits}/${p.value}` : ''}
       {thornHits !== undefined && p.value !== undefined ? ` ${thornHits % p.value}/${p.value}` : ''}
     </span>

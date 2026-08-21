@@ -53,6 +53,12 @@ export const PASSIVES: Record<string, PassiveDef> = {
   soul_siphon: { id: 'soul_siphon', name: '灵魂汲取', desc: '每次攻击命中汲取1点灵魂：5点灵魂伤害+2，10点灵魂每回合回3HP，20点灵魂伤害+3', kind: 'soulSiphon', value: 1 },
   ghost_soul: { id: 'ghost_soul', name: '灵魂链接', desc: '死亡时为幽灵船长+1灵魂', kind: 'ghostSoul', value: 1 },
 
+  // —— 熔火领主 ——
+  molten_armor: { id: 'molten_armor', name: '熔岩护体', desc: '受到的伤害 -2，受到攻击时灼烧攻击者 1 层', kind: 'guard', value: 2 },
+  fire_rage: { id: 'fire_rage', name: '熔火狂暴', desc: '攻击命中附加灼烧 3 层；所有攻击伤害 +1', kind: 'scorch', value: 3 },
+  ember_death: { id: 'ember_death', name: '余烬遗火', desc: '死亡时对全体敌人造成 3 点伤害 + 灼烧 3 层', kind: 'emberDeath', value: 3 },
+  flame_aura: { id: 'flame_aura', name: '烈焰环绕', desc: '被攻击时 30% 概率使攻击者灼烧 2 层（熔火领主在场时 100%）', kind: 'flameAura', value: 2 },
+
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },
   berserk: { id: 'berserk', name: '狂战', desc: '生命低于 50% 时伤害 +2', kind: 'frenzy', value: 2 },

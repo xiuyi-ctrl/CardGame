@@ -80,7 +80,9 @@ export type PassiveKind =
   | 'corruptSac' // 腐化囊体：被攻击时50%概率使攻击者中毒2层
   | 'stickyBody' // 粘滞躯体：攻击蛞蝓的单位速度-1，持续2回合
   | 'soulSiphon' // 灵魂汲取：攻击命中汲取灵魂，5灵魂伤害+2，10灵魂回血3/回合，20灵魂伤害+3
-  | 'ghostSoul'; // 灵魂链接：死亡时为幽灵船长+1灵魂
+  | 'ghostSoul' // 灵魂链接：死亡时为幽灵船长+1灵魂
+  | 'emberDeath' // 余烬遗火：死亡时对全体敌人造成3伤害+灼烧3层
+  | 'flameAura'; // 烈焰环绕：被攻击时30%概率灼烧攻击者2层（熔火领主在场时100%）
 
 export interface PassiveDef {
   id: string;
@@ -106,6 +108,10 @@ export interface MonsterSpecies {
   desc?: string;
   /** 专属被动技能 id（见 PASSIVES 表），每只生物固定一个 */
   passive?: string;
+  /** 形态切换：第二形态的技能列表（HP≤50%时自动切换） */
+  altSkills?: string[];
+  /** 形态切换：第二形态的被动 id */
+  altPassive?: string;
   /** 进化链：依次 { 目标形态 }。缺省或空数组表示不可进化 */
   evolutions?: { to: string }[];
   tame: SpeciesTame;
@@ -187,6 +193,10 @@ export interface Unit {
   swapCount?: number;
   /** 召唤动画标记：新召唤的生物设为 true，动画揭示后清除 */
   summoning?: boolean;
+  /** 形态切换：第二形态的技能列表（HP≤50%时自动切换） */
+  altSkills?: string[];
+  /** 形态切换：第二形态的被动 id */
+  altPassive?: string;
 }
 
 export interface LogEntry {
