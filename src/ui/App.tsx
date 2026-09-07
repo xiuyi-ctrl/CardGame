@@ -59,6 +59,7 @@ export default function App() {
       {state.screen === 'boost' && <BoostScreen state={state} dispatch={dispatch} />}
       {state.screen === 'gameover' && <GameOverScreen state={state} dispatch={dispatch} />}
       {state.screen === 'victory' && <VictoryScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'inter_act' && <InterActScreen state={state} dispatch={dispatch} />}
       {state.screen === 'watchtower' && <WatchtowerScreen state={state} dispatch={dispatch} />}
       {state.screen === 'chest' && <ChestScreen state={state} dispatch={dispatch} />}
       {state.screen === 'backpack' && <BackpackScreen state={state} dispatch={dispatch} />}
@@ -1850,8 +1851,64 @@ function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   );
 }
 
-function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {  return (
+function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: number): { score: number; grade: string; label: string } {
+  const efficiency = 30 * Math.max(0, 1 - Math.min(stats.turnsPlayed, 300) / 300);
+  const survival = 30 * (1 - stats.petsLost / Math.max(rosterSize + stats.petsLost, 1));
+  const engagement = 20 * Math.min(stats.petsTamed, 10) / 10;
+  const resources = 20 * Math.min(stats.goldEarned, 500) / 500;
+  const score = Math.round(efficiency + survival + engagement + resources);
+  if (score >= 90) return { score, grade: 'S', label: '完美远征' };
+  if (score >= 75) return { score, grade: 'A', label: '卓越远征' };
+  if (score >= 60) return { score, grade: 'B', label: '出色远征' };
+  if (score >= 40) return { score, grade: 'C', label: '完成远征' };
+  return { score, grade: 'D', label: '艰难远征' };
+}
+
+function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const stats = state.runStats;
+  const snap = stats?.actSnapshot;
+  const actStats = {
+    battles: (stats?.battlesWon ?? 0) - (snap?.battlesWon ?? 0),
+    gold: (stats?.goldEarned ?? 0) - (snap?.goldEarned ?? 0),
+    tamed: (stats?.petsTamed ?? 0) - (snap?.petsTamed ?? 0),
+    lost: (stats?.petsLost ?? 0) - (snap?.petsLost ?? 0),
+    turns: (stats?.turnsPlayed ?? 0) - (snap?.turnsPlayed ?? 0),
+  };
+  const actNames = ['', '第一幕', '第二幕', '第三幕'];
+  const actName = actNames[state.act] ?? `第${state.act}幕`;
+  const nextName = actNames[state.act + 1] ?? `第${state.act + 1}幕`;
+  return (
     <div className="center-col">
+      <div style={{ fontSize: 48 }}>⚔️</div>
+      <div className="title-name">{actName} 完结</div>
+      <div className="inter-act-stats">
+        <div>🗡️ 战斗场次：{actStats.battles}</div>
+        <div>💰 金币获取：{actStats.gold}</div>
+        <div>🐾 驯服宠物：{actStats.tamed}</div>
+        <div>💀 宠物阵亡：{actStats.lost}</div>
+        <div>⏱️ 行动回合：{actStats.turns}</div>
+      </div>
+      <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
+        <span className="chip">队伍 {state.roster.length} 只</span>
+        <span className="chip">💰 {state.gold}</span>
+      </div>
+      <button className="primary big-btn" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>
+        远征{nextName} →
+      </button>
+    </div>
+  );
+}
+
+function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const rating = state.runStats ? computeRating(state.runStats, state.roster.length) : null;
+  return (
+    <div className="center-col">
+      {rating && (
+        <div className="rating-display">
+          <div className="rating-grade" style={{ color: '#e05555' }}>{rating.grade}</div>
+          <div className="rating-score">{rating.score}分 · {rating.label}</div>
+        </div>
+      )}
       <div style={{ fontSize: 56 }}>💀</div>
       <div className="title-name" style={{ color: '#e05555', letterSpacing: 4 }}>
         远征失败
@@ -1879,8 +1936,15 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
 }
 
 function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const rating = state.runStats ? computeRating(state.runStats, state.roster.length) : null;
   return (
     <div className="center-col">
+      {rating && (
+        <div className="rating-display">
+          <div className="rating-grade">{rating.grade}</div>
+          <div className="rating-score">{rating.score}分 · {rating.label}</div>
+        </div>
+      )}
       <div style={{ fontSize: 64 }}>👑</div>
       <div className="title-name">通关！</div>
       <p className="card-sub">你击败了所有首领，驯服了沿途的怪物军团</p>

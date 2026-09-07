@@ -87,6 +87,10 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
       return { result: 'gameover', detail: `act=${s.act} row=${s.currentRow} roster=${s.roster.length} hp=${s.roster.map((u) => u.hp).join(',')}`, specials };
 
     switch (s.screen) {
+      case 'inter_act': {
+        s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
+        continue;
+      }
       case 'map': {
         const best = [...s.roster]
           .sort((a, c) => c.maxHp - a.maxHp)

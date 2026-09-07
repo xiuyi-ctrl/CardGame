@@ -379,6 +379,8 @@ describe('完整肉鸽流程', () => {
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('inter_act');
+    s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
     // 自动踏入新幕出发层（布阵界面）
     expect(s.screen).toBe('formation');
@@ -424,6 +426,8 @@ describe('完整肉鸽流程', () => {
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('inter_act');
+    s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
     // 自动踏入出发层：visitedNodeIds 重置后包含出发节点
     const depId = s.map.layers[0][0].id;
@@ -438,6 +442,8 @@ describe('完整肉鸽流程', () => {
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('inter_act');
+    s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
     // 自动踏入新幕出发层（布阵界面）
     expect(s.screen).toBe('formation');
@@ -862,11 +868,13 @@ describe('瞭望塔', () => {
     // 站在末层第一个首领节点，模拟击败后通关
     s = { ...s, currentRow: lastRow, currentNodeId: bosses[0].id, screen: 'roster' };
     const next = dispatch(s, { type: 'NEXT_NODE' });
-    expect(next.act).toBe(2);
-    expect(next.currentRow).toBe(0);
+    expect(next.screen).toBe('inter_act');
+    const continued = dispatch(next, { type: 'INTER_ACT_CONTINUE' });
+    expect(continued.act).toBe(2);
+    expect(continued.currentRow).toBe(0);
     // 自动踏入新幕出发层（布阵界面）
-    expect(next.screen).toBe('formation');
-    expect(next.currentNodeId).toBe(next.map.layers[0][0].id);
+    expect(continued.screen).toBe('formation');
+    expect(continued.currentNodeId).toBe(continued.map.layers[0][0].id);
   });
 });
 
@@ -1395,6 +1403,8 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     // 模拟背包中使用跳关道具/侦查符后残留的选择模式状态
     s = { ...s, skipSelecting: true, scoutSelecting: true, scoutResult: { nodeId: 'x', title: 'test', detail: 'test' } };
     s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('inter_act');
+    s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
     expect(s.skipSelecting).toBe(false);
     expect(s.scoutSelecting).toBe(false);
@@ -1435,6 +1445,8 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     s = { ...s, skipSelecting: true };
     s = dispatch(s, { type: 'NEXT_NODE' });
+    expect(s.screen).toBe('inter_act');
+    s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
     expect(s.skipSelecting).toBe(false);
     // 自动踏入出发层，直接进入布阵

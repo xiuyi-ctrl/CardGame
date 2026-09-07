@@ -1,4 +1,4 @@
-import type { GameState, MapNode, RewardChoice, RunMap } from './game';
+import type { GameState, MapNode, RewardChoice, RunMap, RunStats } from './game';
 import { applyCorruptFoodReward, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
@@ -82,10 +82,12 @@ export type GameAction =
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
   | { type: 'RETRY'; seed: number }
+  | { type: 'INTER_ACT_CONTINUE' }
   | { type: 'CLEAR_TOAST' }
   | { type: 'TITLE' };
 
 export function createInitialState(): GameState {
+  const zeroSnap = { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0 };
   return {
     screen: 'title',
     seed: 0,
@@ -101,6 +103,7 @@ export function createInitialState(): GameState {
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
+    runStats: { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
   };
 }
 
@@ -108,7 +111,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'test-type', 'test-pick', 'test-config'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -136,6 +139,7 @@ function freshRun(starterId: string, companionId: string, seed: number): GameSta
   const starter = makeUnit(starterId, true, 0, false);
   const starter2 = makeUnit(starterId, true, 1, false);
   const companion = makeUnit(companionId, true, 2, false);
+  const zeroSnap = { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0 };
   return {
     screen: 'map',
     seed,
@@ -151,6 +155,7 @@ function freshRun(starterId: string, companionId: string, seed: number): GameSta
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
+    runStats: { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
   };
 }
 
@@ -245,9 +250,21 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     rewards = applyCorruptFoodReward(rewards, state.seed * 11 + state.currentRow * 7);
   }
   const result: GameState = { ...settled, roster: healed, rewards };
+  // 更新局内统计
+  const curLost = settled.roster.length < state.roster.length
+    ? state.roster.length - settled.roster.length
+    : 0;
+  const runStats = result.runStats ? {
+    ...result.runStats,
+    battlesWon: result.runStats.battlesWon + 1,
+    goldEarned: result.runStats.goldEarned + goldGain,
+    petsTamed: result.runStats.petsTamed + battle.pendingTame.length,
+    petsLost: result.runStats.petsLost + curLost,
+  } : result.runStats;
+  const withStats = { ...result, runStats };
   // 最后一幕（act 3）首领战胜利：直接进入通关界面，不再弹出战利品/队伍管理等中间界面
-  if (bossNode && state.act >= 3) return { ...result, screen: 'victory' };
-  return result;
+  if (bossNode && state.act >= 3) return { ...withStats, screen: 'victory' };
+  return withStats;
 }
 
 /** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+概率道具）。结果文本进 chestResult。共用 rollChest 保证与瞭望塔/侦察符预览完全一致。 */
@@ -387,13 +404,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'LOAD_GAME':
       if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title' };
-      return {
-        ...action.state,
-        map: { ...action.state.map, events: action.state.map.events ?? {}, specials: action.state.map.specials ?? {} },
-        skipSelecting: false,
-        scoutSelecting: false,
-        scoutResult: undefined,
-      };
+      {
+        const zeroSnap = { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0 };
+        const runStats: RunStats = action.state.runStats ?? {
+          battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap },
+        };
+        return {
+          ...action.state,
+          runStats,
+          map: { ...action.state.map, events: action.state.map.events ?? {}, specials: action.state.map.specials ?? {} },
+          skipSelecting: false,
+          scoutSelecting: false,
+          scoutResult: undefined,
+        };
+      }
 
     case 'MOVE': {
       const isFirst = state.currentNodeId === '';
@@ -1073,7 +1097,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'PLAYER_SKILL': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
       const battle = playerSkill(state.battle, action.actorUid, action.skillId, action.targetUid);
-      return { ...state, battle };
+      let runStats = state.runStats;
+      if (runStats) {
+        const prevRound = runStats.lastBattleRound;
+        const roundIncreased = battle.round > prevRound;
+        runStats = {
+          ...runStats,
+          turnsPlayed: runStats.turnsPlayed + (roundIncreased ? 1 : 0),
+          lastBattleRound: battle.round,
+        };
+      }
+      return { ...state, battle, runStats };
     }
 
     case 'PLAYER_REST': {
@@ -1168,6 +1202,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.eventBattle) {
         const eb = state.eventBattle;
         let next: GameState = { ...state, screen: 'map', battle: undefined, eventBattle: undefined, postBattle: undefined };
+        // 更新事件战斗统计
+        if (next.runStats) {
+          const rs = { ...next.runStats, lastBattleRound: 0 };
+          if (state.battle.phase === 'won') {
+            rs.battlesWon += 1;
+            if (eb.reward.kind === 'gold') rs.goldEarned += (eb.reward.amount ?? 0);
+          }
+          next = { ...next, runStats: rs };
+        }
         if (state.battle.phase === 'won') {
           // 胜利：应用奖励
           if (eb.reward.kind === 'gold') {
@@ -1229,11 +1272,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           const rng = createRng(state.seed * 97 + state.act * 29 + state.currentRow * 13 + state.battle.rngCount);
           const event = buildPunishmentEvent(rng);
           const roster = state.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp) }));
+          const runStats = state.runStats ? { ...state.runStats, lastBattleRound: 0 } : state.runStats;
           return {
             ...state,
             screen: 'event',
             battle: undefined,
             roster,
+            runStats,
             map: { ...state.map, events: { ...state.map.events, [state.currentNodeId]: event } },
             log: [`挑战失败：在「${node.label}」失利，承受代价`, ...state.log].slice(0, 20),
           };
@@ -1494,33 +1539,49 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'NEXT_NODE': {
       if (bossCleared(state)) {
         if (state.act >= 3) return { ...state, screen: 'victory' };
-        const act = state.act + 1;
-        const map = generateMap(state.seed, act);
-        const dep = map.layers[0][0];
-        const base: GameState = {
-          ...state,
-          act,
-          map,
-          currentRow: 0,
-          currentNodeId: dep ? dep.id : '',
-          screen: 'map',
-          gauntletOrder: undefined,
-          gauntletSize: undefined,
-          postBattle: undefined,
-          visitedNodeIds: dep ? [dep.id] : [],
-          visitedWatchtowers: [],
-          skipSelecting: false,
-          scoutSelecting: false,
-          scoutResult: undefined,
-        };
-        if (dep) return enterNode(base, dep, 0, '');
-        return base;
+        return { ...state, screen: 'inter_act' };
       }
       const nextRow = state.currentRow + 1;
       if (nextRow < state.map.layers.length) {
         return { ...state, screen: 'map', chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined, postBattle: undefined, skipSelecting: false, scoutSelecting: false, scoutResult: undefined };
       }
       return { ...state, screen: 'victory' };
+    }
+
+    case 'INTER_ACT_CONTINUE': {
+      const act = state.act + 1;
+      const map = generateMap(state.seed, act);
+      const dep = map.layers[0][0];
+      const runStats = state.runStats ? {
+        ...state.runStats,
+        lastBattleRound: 0,
+        actSnapshot: {
+          battlesWon: state.runStats.battlesWon,
+          goldEarned: state.runStats.goldEarned,
+          petsTamed: state.runStats.petsTamed,
+          petsLost: state.runStats.petsLost,
+          turnsPlayed: state.runStats.turnsPlayed,
+        },
+      } : undefined;
+      const base: GameState = {
+        ...state,
+        act,
+        map,
+        currentRow: 0,
+        currentNodeId: dep ? dep.id : '',
+        screen: 'map',
+        runStats,
+        gauntletOrder: undefined,
+        gauntletSize: undefined,
+        postBattle: undefined,
+        visitedNodeIds: dep ? [dep.id] : [],
+        visitedWatchtowers: [],
+        skipSelecting: false,
+        scoutSelecting: false,
+        scoutResult: undefined,
+      };
+      if (dep) return enterNode(base, dep, 0, '');
+      return base;
     }
 
     case 'BACK_TO_MAP': {

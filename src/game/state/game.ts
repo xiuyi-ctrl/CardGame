@@ -173,6 +173,7 @@ export type Screen =
   | 'boost'
   | 'gameover'
   | 'victory'
+  | 'inter_act'
   | 'watchtower'
   | 'chest'
   | 'backpack'
@@ -180,6 +181,22 @@ export type Screen =
   | 'test-type'
   | 'test-pick'
   | 'test-config';
+
+export interface RunStats {
+  battlesWon: number;
+  goldEarned: number;
+  petsTamed: number;
+  petsLost: number;
+  turnsPlayed: number;
+  lastBattleRound: number;
+  actSnapshot: {
+    battlesWon: number;
+    goldEarned: number;
+    petsTamed: number;
+    petsLost: number;
+    turnsPlayed: number;
+  };
+}
 
 export interface RewardChoice {
   id: string;
@@ -288,6 +305,7 @@ export interface GameState {
     penalty: { percent?: number; goldLoss?: number; curseTarget?: boolean };
     bonusReward?: { kind: 'food'; foodId: string };
   };
+  runStats?: RunStats;
 }
 
 export const ROSTER_MAX = 8;
