@@ -390,6 +390,34 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'ghostly_summon', name: '幽灵召唤', desc: '召唤幽灵水手和幽影（仅在所有召唤物死亡时可用）',
     target: 'self', kind: 'buff',
   },
+
+  // —— 玄铁渊龙 ——
+  chain_bind: {
+    id: 'chain_bind', name: '锁链束缚', desc: '用锁链连接一名敌人与随机另一名敌人（持续2回合，共享50%伤害）',
+    target: 'single', kind: 'buff', uses: 3,
+  },
+  chain_activate: {
+    id: 'chain_activate', name: '锁链引爆', desc: '激活所有锁链，每条锁链对被连接双方各造成5点伤害',
+    target: 'self', kind: 'attack', damage: 5,
+  },
+  chain_link: {
+    id: 'chain_link', name: '锁链链接', desc: '链接自身与Boss，持续2回合',
+    target: 'self', kind: 'buff',
+  },
+  iron_tail: {
+    id: 'iron_tail', name: '铁尾横扫', desc: '攻击全体前排敌人并附加减速',
+    target: 'all', reach: 'front', kind: 'attack', damage: 8,
+    effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
+  },
+  dragon_claw: {
+    id: 'dragon_claw', name: '龙爪撕裂', desc: '重击单个敌人',
+    target: 'single', kind: 'attack', damage: 12,
+  },
+  iron_wall: {
+    id: 'iron_wall', name: '铸甲', desc: '为全体友方附加5护盾（每场限5次）',
+    target: 'allyAll', kind: 'buff', uses: 5,
+    effects: [{ kind: 'shield', value: 5, turns: 99 }],
+  },
 };
 
 export function getSkill(id: string): SkillDef {

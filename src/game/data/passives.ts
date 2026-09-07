@@ -79,6 +79,11 @@ export const PASSIVES: Record<string, PassiveDef> = {
   gale_combo: { id: 'gale_combo', name: '疾风连携', desc: '每次使用攻击技能后，自身速度 +1（可叠加）；速度每高于目标 1 点，伤害 +1，上限 +5', kind: 'speedBonus', value: 5 },
   life_spring: { id: 'life_spring', name: '生命之泉', desc: '每回合开始恢复 3 点生命；每次受到伤害超过 6 点时，伤害减少 2 点', kind: 'lifeSpring', value: 6 },
   ember_body: { id: 'ember_body', name: '余烬焚身', desc: '攻击命中附加灼烧 4 层；对已灼烧的目标，每层灼烧使该次伤害 +1，上限 +5', kind: 'scorchPlus', value: 4 },
+
+  // —— 玄铁渊龙 ——
+  chain_master: { id: 'chain_master', name: '锁链掌控', desc: '锁链链接的敌人死亡时，回复15%最大生命+伤害+2持续2回合；自身被链接时，获取链接单位的被动效果', kind: 'chainMaster', value: 15 },
+  chain_anchor: { id: 'chain_anchor', name: '锁链锚定', desc: '被锁链连接时受到的伤害-2', kind: 'chainAnchor', value: 2 },
+  chain_spark: { id: 'chain_spark', name: '锁链火花', desc: '攻击锁链目标时伤害+2', kind: 'chainSpark', value: 2 },
 };
 
 export function getPassive(id?: string): PassiveDef | undefined {

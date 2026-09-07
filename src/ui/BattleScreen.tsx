@@ -85,7 +85,10 @@ export function BattleScreen({ state, dispatch }: Props) {
     let next = hpMap ? { ...u, hp: hpMap[u.uid] ?? u.hp } : u;
     if (shieldMap) next = { ...next, shield: shieldMap[u.uid] ?? next.shield };
     const sm = statusMap ? statusMap[u.uid] : undefined;
-    if (sm) next = { ...next, statuses: sm.map((s) => ({ ...s })) };
+    if (sm) {
+      const smMap = new Map(sm.map((s) => [s.kind, s]));
+      next = { ...next, statuses: next.statuses.map((s) => smMap.get(s.kind) ?? s) };
+    }
     const hidden = hiddenStatuses[u.uid];
     if (hidden && hidden.length > 0) {
       next = { ...next, statuses: next.statuses.filter((s) => !hidden.includes(s.kind)) };

@@ -16,13 +16,13 @@ export const REST_SKILL_ID = 'rest';
 const FRONT_PASSIVES: PassiveKind[] = [
   'hp', 'guard', 'thorns', 'regen', 'damageCap', 'thornRoyal',
   'bigHitGuard', 'spdOnHit', 'treeSpeedUp', 'lifeSpring',
-  'rockShellBreak', 'rockShard',
+  'rockShellBreak', 'rockShard', 'chainMaster', 'chainAnchor',
 ];
 /** 后排倾向被动：进攻/输出类，该被动生物站后排 */
 const BACK_PASSIVES: PassiveKind[] = [
   'power', 'frenzy', 'venom', 'scorch', 'drain', 'venomPower',
   'speedBonus', 'scorchPlus', 'poisonBreak', 'spdOnAttack',
-  'tideRhythm', 'tideEcho', 'thornEntangle', 'soulSiphon',
+  'tideRhythm', 'tideEcho', 'thornEntangle', 'soulSiphon', 'chainSpark',
 ];
 /** AI 选择行动时 softmax 温度：越小越趋向最高分，越大越随机（默认 12） */
 const SOFTMAX_TEMP = 12;
@@ -107,9 +107,17 @@ export function cloneUnit(u: Unit): Unit {
   };
 }
 
-/** 获取单位的被动技能定义 */
-export function getUnitPassive(u: Unit): PassiveDef | undefined {
-  return getPassive(u.passive);
+/** 获取单位的被动技能定义。当 chainMaster 被链接时，返回链接单位的被动 */
+export function getUnitPassive(u: Unit, b?: BattleState): PassiveDef | undefined {
+  const base = getPassive(u.passive);
+  if (base?.kind === 'chainMaster' && b) {
+    const chainLink = u.statuses.find((s) => s.kind === 'chainLink');
+    if (chainLink?.sourceUid) {
+      const linked = [...b.playerUnits, ...b.enemyUnits].find((x) => x.uid === chainLink.sourceUid && x.hp > 0);
+      if (linked) return getPassive(linked.passive);
+    }
+  }
+  return base;
 }
 
 /** 技能的剩余使用次数（无限制技能返回 Infinity） */
@@ -522,8 +530,8 @@ function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
     if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
-    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）、波光环（comboBoost）、暗影印记（shadowMark）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
-    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd' || s.kind === 'comboBoost' || s.kind === 'shadowMark') && s.appliedRound !== undefined && s.appliedRound === round) continue;
+    // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）、波光环（comboBoost）、暗影印记（shadowMark）、锁链连接（chainLink）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
+    if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd' || s.kind === 'comboBoost' || s.kind === 'shadowMark' || s.kind === 'chainLink') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
@@ -996,6 +1004,19 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           candidates.push({ kind: 'buff', skill: bs, score: 80 });
         }
       }
+      // 锁链束缚：所有敌人已有锁链时跳过
+      if (bs.id === 'chain_bind') {
+        const allChained = enemies.every((e) => e.statuses.some((s) => s.kind === 'chainLink'));
+        if (!allChained && rngVal < 0.8) {
+          candidates.push({ kind: 'buff', skill: bs, score: 65 });
+        }
+      }
+      // 铸甲：全体友方护盾
+      if (bs.id === 'iron_wall') {
+        if (hpRatio < 0.5 && rngVal < 0.5) {
+          candidates.push({ kind: 'buff', skill: bs, score: 50 });
+        }
+      }
     }
 
     // ─── 3. 换位（限次 2 次，分层阈值；守卫/首领禁用） ───
@@ -1017,7 +1038,17 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     }
 
     // ─── 4. 攻击行动 ───
-    const attackSkills = skills.filter((s) => s.kind === 'attack');
+    // 锁链引爆：有2+锁链敌人时使用
+    const chainActivateSkill = skills.find((s) => s.id === 'chain_activate');
+    if (chainActivateSkill) {
+      const chainCount = enemies.filter((e) => e.statuses.some((s) => s.kind === 'chainLink')).length;
+      if (chainCount >= 2) {
+        candidates.push({ kind: 'attack', skill: chainActivateSkill, score: 75 });
+      } else if (chainCount === 1) {
+        candidates.push({ kind: 'attack', skill: chainActivateSkill, score: 45 });
+      }
+    }
+    const attackSkills = skills.filter((s) => s.kind === 'attack' && s.id !== 'chain_activate');
     let targetPool = enemies.filter((u) => u.hp > 0);
     if (targetPool.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无目标可攻击`, sideOf(actor)), actor.uid);
@@ -1106,7 +1137,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           if (hasHealSkill) tScore += 10;
         }
         // 技能伤害
-        tScore += (atk.damage ?? 0) + getDamageBonus(actor);
+        tScore += (atk.damage ?? 0) + getDamageBonus(actor, b2);
         // 暗影追猎：对生命值低于50%的目标伤害+3
         if (actorPassive?.kind === 'shadowHunter' && t.hp / t.maxHp < 0.5) {
           tScore += actorPassive.value;
@@ -1345,13 +1376,16 @@ function resolveAttack(
   count: number,
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[]; didPoison: boolean } {
   let nb = b;
-  const base = (skill.damage ?? 0) + getDamageBonus(actor);
+  const base = (skill.damage ?? 0) + getDamageBonus(actor, nb);
+  // 锁链火花：攻击锁链目标时伤害+2
+  const ap0 = getUnitPassive(actor, nb);
+  const chainSparkBonus = ap0?.kind === 'chainSpark' && target.statuses.some((s) => s.kind === 'chainLink') ? ap0.value : 0;
   // 灵魂回响：每5个灵魂额外+2伤害
   let soulEchoBonus = 0;
   if (skill.id === 'soul_echo' && actor.soul) {
     soulEchoBonus = Math.floor(actor.soul / 5) * 2;
   }
-  let perHitDmg = base + soulEchoBonus - getDamageGuard(target, nb);
+  let perHitDmg = base + soulEchoBonus + chainSparkBonus - getDamageGuard(target, nb);
   // 速度加成伤害
   if (skill.spdScaling && skill.spdScaling > 0) {
     perHitDmg += getEffectiveSpd(actor) * skill.spdScaling;
@@ -1452,6 +1486,27 @@ function resolveAttack(
         }
       }
       t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
+      // 锁链传导：被锁链连接的单位受到伤害时，50%传导给伙伴（传导伤害不再触发连锁）
+      if (remainingDmg > 0) {
+        const chain = t2.statuses.find((s) => s.kind === 'chainLink');
+        if (chain?.sourceUid) {
+          const partner = actorFromId(nb, chain.sourceUid);
+          if (partner && partner.hp > 0 && partner.uid !== t2.uid) {
+            const chainGuard = getDamageGuard(partner, nb);
+            const chainDmg = Math.max(1, Math.floor(remainingDmg * chain.value / 100) - chainGuard);
+            let p2 = partner;
+            if (p2.shield > 0) {
+              const absorbed = Math.min(p2.shield, chainDmg);
+              p2 = { ...p2, shield: p2.shield - absorbed };
+              if (p2.shield <= 0) p2 = { ...p2, statuses: p2.statuses.filter((s) => s.kind !== 'shield') };
+            }
+            const actualDmg = chainDmg - Math.min(partner.shield, chainDmg);
+            p2 = { ...p2, hp: Math.max(0, p2.hp - actualDmg) };
+            nb = replaceUnit(nb, p2);
+            nb = pushLog(nb, `🔗 锁链传导！${partner.name} 受到 ${chainDmg} 点伤害`, sideOf(partner), t2.uid, partner.uid);
+          }
+        }
+      }
     }
     for (const e of skill.effects ?? []) {
       if (skill.id === 'weaken') {
@@ -1703,6 +1758,21 @@ function resolveAttack(
       }
     }
   }
+  // 锁链掌控：被锁链链接的单位死亡时，链接方回复15%最大生命+伤害+2持续2回合
+  if (t2.hp <= 0 && t2.statuses.some((s) => s.kind === 'chainLink')) {
+    const chain = t2.statuses.find((s) => s.kind === 'chainLink');
+    if (chain?.sourceUid) {
+      const allies = t2.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const master = allies.find((u) => u.hp > 0 && getUnitPassive(u)?.kind === 'chainMaster');
+      if (master) {
+        const healAmt = Math.floor(master.maxHp * 0.15);
+        let healed = { ...master, hp: Math.min(master.maxHp, master.hp + healAmt) };
+        healed = applyStatusTo(healed, { kind: 'atkUp', value: 2, turns: 2 }, nb.round);
+        nb = replaceUnit(nb, healed);
+        nb = pushLog(nb, `${master.name} 的「锁链掌控」触发！回复 ${healAmt} 生命 + 伤害+2`, sideOf(master), master.uid, master.uid);
+      }
+    }
+  }
   return { battle: nb, lastHitLog, passiveAdds, didPoison };
 }
 
@@ -1718,6 +1788,20 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   nb = battle;
   if (targets.length === 0) {
     return markActed(pushLog(nb, `${actor.name} 的${skill.name}没有目标`, sideOf(actor)), actor.uid);
+  }
+
+  // 锁链引爆：对所有被锁链连接的敌方单位造成伤害（独立于 kind 判断，避免 attack kind 走入通用攻击分支打自身）
+  if (skill.id === 'chain_activate') {
+    const enemies = enemiesOf(nb, actor);
+    const chainDmg = skill.damage ?? 5;
+    for (const e of enemies) {
+      if (e.statuses.some((s) => s.kind === 'chainLink')) {
+        let damaged = { ...e, hp: Math.max(0, e.hp - chainDmg) };
+        nb = replaceUnit(nb, damaged);
+        nb = pushLog(nb, `${actor.name} 引爆锁链！${damaged.name} 受到 ${chainDmg} 点伤害`, sideOf(actor), actor.uid, damaged.uid);
+      }
+    }
+    return markActed(nb, actor.uid);
   }
 
   if (skill.kind === 'heal') {
@@ -1794,6 +1878,46 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           if (curSoul < 20 && newSoul >= 20) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
         }
       }
+    }
+    // 锁链束缚：链接目标与随机另一名敌人（已有锁链的单位不可被选中）
+    if (skill.id === 'chain_bind') {
+      const enemiesAlive = enemiesOf(nb, actor).filter((e) => e.hp > 0);
+      let targetUnit = explicitTarget ? actorFromId(nb, explicitTarget) : undefined;
+      // 目标必须是敌方且未锁链，否则从未锁链敌人中随机选一个
+      if (!targetUnit || !enemiesAlive.some((e) => e.uid === targetUnit!.uid) || targetUnit.statuses.some((s) => s.kind === 'chainLink')) {
+        const validTargets = enemiesAlive.filter((e) => !e.statuses.some((s) => s.kind === 'chainLink'));
+        if (validTargets.length < 2) return markActed(nb, actor.uid);
+        const pick = rngPick(nb, validTargets);
+        nb = pick.battle;
+        targetUnit = pick.pick;
+      }
+      const otherEnemies = enemiesOf(nb, actor).filter((e) => e.uid !== targetUnit!.uid && e.hp > 0 && !e.statuses.some((s) => s.kind === 'chainLink'));
+      if (targetUnit && targetUnit.hp > 0 && otherEnemies.length > 0) {
+        const res = rngPick(nb, otherEnemies);
+        nb = res.battle;
+        const partner = res.pick;
+        if (partner) {
+          let t2 = applyStatusTo(targetUnit, { kind: 'chainLink', value: 50, turns: 2, sourceUid: partner.uid }, nb.round);
+          let p2 = applyStatusTo(partner, { kind: 'chainLink', value: 50, turns: 2, sourceUid: targetUnit.uid }, nb.round);
+          nb = replaceUnit(nb, t2);
+          nb = replaceUnit(nb, p2);
+          nb = pushLog(nb, `${actor.name} 使用「锁链束缚」！${t2.name} 和 ${p2.name} 被锁链连接`, sideOf(actor), actor.uid, t2.uid);
+        }
+      }
+      return markActed(nb, actor.uid);
+    }
+    // 锁链链接：链接自身与Boss（链卫专属，持续2回合）
+    if (skill.id === 'chain_link') {
+      const allies = actor.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const boss = allies.find((a) => a.speciesId === 'boss_dragon' && a.hp > 0);
+      if (boss) {
+        let a2 = applyStatusTo(actor, { kind: 'chainLink', value: 50, turns: 2, sourceUid: boss.uid }, nb.round);
+        let b2 = applyStatusTo(boss, { kind: 'chainLink', value: 50, turns: 2, sourceUid: actor.uid }, nb.round);
+        nb = replaceUnit(nb, a2);
+        nb = replaceUnit(nb, b2);
+        nb = pushLog(nb, `${actor.name} 使用「锁链链接」！与 ${b2.name} 链接 2 回合`, sideOf(actor), actor.uid, a2.uid);
+      }
+      return markActed(nb, actor.uid);
     }
     // 碎岩重组：消灭并重新召唤碎石傀儡和晶石虫
     if (skill.id === 'rock_reforge') {
@@ -2420,7 +2544,7 @@ export function decrementBattleBuffs(b: BattleState): BattleState {
 }
 
 /** 获取单位的固定伤害修正（诅咒虚弱 + 技能 atkUp/atkDown 状态 + 战斗药水 battleBuffs + 被动，整数） */
-export function getDamageBonus(u: Unit): number {
+export function getDamageBonus(u: Unit, b?: BattleState): number {
   let bonus = 0;
   if (u.curse === 'atkDown') bonus -= 2;
   for (const s of u.statuses) {
@@ -2432,7 +2556,7 @@ export function getDamageBonus(u: Unit): number {
     if (u.battleBuffs.atkUp) bonus += 2;
     if (u.battleBuffs.atkDown) bonus -= 2;
   }
-  const p = getUnitPassive(u);
+  const p = getUnitPassive(u, b);
   if (p?.kind === 'power') bonus += p.value;
   if (p?.kind === 'frenzy' && u.hp / u.maxHp < 0.5) bonus += p.value;
   // 熔火狂暴：伤害 +1（与 scorch 3 叠加构成爆发形态）
@@ -2450,7 +2574,7 @@ export function getDamageBonus(u: Unit): number {
 /** 获取单位的伤害减免（被动守护 + 水幕，整数） */
 export function getDamageGuard(u: Unit, b?: BattleState): number {
   let guard = 0;
-  const p = getUnitPassive(u);
+  const p = getUnitPassive(u, b);
   if (p?.kind === 'guard') {
     // 寄居壳：巨蟹在场时减伤提升至2
     if (p.id === 'shell_guard' && b) {
@@ -2467,6 +2591,10 @@ export function getDamageGuard(u: Unit, b?: BattleState): number {
   // 孢子防护：减少伤害 value
   const sporeShield = u.statuses.find((s) => s.kind === 'sporeShield');
   if (sporeShield) guard += sporeShield.value;
+  // 锁链锚定：被锁链连接时减伤
+  if (p?.kind === 'chainAnchor' && u.statuses.some((s) => s.kind === 'chainLink')) {
+    guard += p.value;
+  }
   return guard;
 }
 

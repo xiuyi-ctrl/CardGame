@@ -35,6 +35,7 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   shadowMark: '🌑',
   sporeShield: '🍄',
   toxicBurstReady: '💀',
+  chainLink: '🔗',
 };
 
 function effectText(e: StatusEffect): string {
@@ -80,6 +81,8 @@ function effectText(e: StatusEffect): string {
       return `孢子防护 受伤-${e.value}${turns}`;
     case 'toxicBurstReady':
       return `毒性爆发蓄力中（死亡时触发全体爆发）`;
+    case 'chainLink':
+      return `锁链连接 传导${e.value}%${turns}`;
   }
 }
 
@@ -156,6 +159,7 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   shadowMark: { icon: '🌑', label: '暗影印记' },
   sporeShield: { icon: '🍄', label: '孢子防护' },
   toxicBurstReady: { icon: '💀', label: '毒性爆发蓄力' },
+  chainLink: { icon: '🔗', label: '锁链连接' },
 };
 
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {

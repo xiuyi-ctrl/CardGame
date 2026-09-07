@@ -8,6 +8,9 @@ interface FxEvent {
   kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed' | 'burst' | 'summon';
   actorUid?: string;
   targetUid?: string;
+  secondTargetUid?: string;
+  /** 施法者不显示飘字（如锁链束缚：施法者只抖动，不飘字） */
+  noPop?: boolean;
   value: number;
   actorIsPlayer?: boolean;
   /** 该事件发生时的全体血量快照（uid → hp） */
@@ -24,6 +27,8 @@ interface FxEvent {
   addsStatus?: string[];
   /** 范围伤害（岩壳碎片自爆/岩壳崩解）：波及的所有目标 uid，一次性同时挂飘字 */
   burstTargets?: string[];
+  /** 该事件需要揭示状态的目标 uid 列表（如锁链束缚：施法者抖动，两个被链接敌人显示 buff 图标） */
+  revealUids?: string[];
 }
 
 /** 伤害/治疗/buff 飘字 */
@@ -52,7 +57,7 @@ export interface RevealEntry {
  *  仍匹配不到归属（如治疗/药水产生）时，归入该单位作为目标的第一个事件（随施法/治疗动画揭示）；
  *  目标从未出现在事件中才兜底第一个事件，保证不迟于动画开始显示 */
 export function computeRevealAt(
-  events: readonly { targetUid?: string; kind?: string; addsStatus?: string[]; actorUid?: string; burstTargets?: string[] }[],
+  events: readonly { targetUid?: string; secondTargetUid?: string; kind?: string; addsStatus?: string[]; actorUid?: string; burstTargets?: string[]; revealUids?: string[] }[],
   newStatuses: Record<string, string[]>,
 ): Record<number, RevealEntry[]> {
   const revealAt: Record<number, RevealEntry[]> = {};
@@ -62,6 +67,7 @@ export function computeRevealAt(
     if (existing) existing.kinds.push(...kinds);
     else (revealAt[i] ??= []).push({ uid, kinds: [...kinds] });
   };
+  const isTarget = (ev: { targetUid?: string; secondTargetUid?: string; revealUids?: string[] }, uid: string) => ev.targetUid === uid || ev.secondTargetUid === uid || (ev.revealUids ?? []).includes(uid);
   for (const uid of Object.keys(newStatuses)) {
     const kinds = [...newStatuses[uid]];
     const assigned = new Array<boolean>(kinds.length).fill(false);
@@ -98,7 +104,7 @@ export function computeRevealAt(
     // 3) 兜底：未归属状态归入该单位作为目标的第一个事件（buff 施法/治疗等），保证随对应动画出现
     const rest = kinds.filter((_, k) => !assigned[k]);
     if (rest.length > 0) {
-      const j = events.findIndex((ev) => ev.targetUid === uid);
+      const j = events.findIndex((ev) => isTarget(ev, uid));
       if (j >= 0) add(j, uid, rest);
       else if (events.length > 0) add(0, uid, rest);
     }
@@ -121,12 +127,14 @@ const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
+const RE_CHAIN_LINK = /^(.+?) 使用「(.+?)」！(.+?) 和 (.+?) 被锁链连接$/;
 
 /** buff 技能飘字：按技能施加的状态显示，如战吼→「攻击↑」；无法识别时兜底「强化」 */
 function buffText(skillName: string): string {
   const skill = Object.values(SKILLS).find((s) => s.name === skillName);
   if (skill?.kind === 'buff') {
     if (skill.id === 'spore_summon') return '召唤';
+    if (skill.id === 'chain_link') return '🔗锁链';
     const e = skill.effects?.[0];
     if (e?.kind === 'atkUp') return '攻击↑';
     if (e?.kind === 'shield') return '🛡️护盾';
@@ -331,6 +339,12 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       statuses: entry.statuses,
       shields: entry.shields,
     };
+  }
+  if ((m = text.match(RE_CHAIN_LINK))) {
+    const actorUid = entry.actorUid ?? findUid(b, side, m[1]);
+    const firstTargetUid = findUid(b, opposite, m[3])!;
+    const secondTargetUid = findUid(b, opposite, m[4])!;
+    return { kind: 'buff', actorUid, targetUid: actorUid, revealUids: [firstTargetUid, secondTargetUid], noPop: true, value: 0, skillName: m[2], hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   return null;
 }
@@ -596,13 +610,18 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             }
           } else if (ev.kind === 'buff') {
             if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
-            if (targetUid) {
-              const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
-              const isShield = sk?.effects?.[0]?.kind === 'shield';
-              const buffCls = isShield ? 'fx-shield' : 'fx-buff';
+            const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
+            const isShield = sk?.effects?.[0]?.kind === 'shield';
+            const buffCls = isShield ? 'fx-shield' : 'fx-buff';
+            if (targetUid && !ev.noPop) {
               ++fxSeq; capturedTargetSeq = fxSeq;
               setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
+            }
+            if (ev.secondTargetUid) {
+              ++fxSeq; capturedTargetSeq = fxSeq;
+              setFx((p) => ({ ...p, [ev.secondTargetUid!]: { cls: buffCls, seq: capturedTargetSeq } }));
+              setPops((p) => [...p, { id: popId, uid: ev.secondTargetUid!, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
             }
           } else if (ev.kind === 'speed') {
             if (targetUid) {

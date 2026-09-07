@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady';
+  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -82,7 +82,10 @@ export type PassiveKind =
   | 'soulSiphon' // 灵魂汲取：攻击命中汲取灵魂，5灵魂伤害+2，10灵魂回血3/回合，20灵魂伤害+3
   | 'ghostSoul' // 灵魂链接：死亡时为幽灵船长+1灵魂
   | 'emberDeath' // 余烬遗火：死亡时对全体敌人造成3伤害+灼烧3层
-  | 'flameAura'; // 烈焰环绕：被攻击时30%概率灼烧攻击者2层（熔火领主在场时100%）
+  | 'flameAura' // 烈焰环绕：被攻击时30%概率灼烧攻击者2层（熔火领主在场时100%）
+  | 'chainMaster' // 锁链掌控：锁链链接的敌人死亡时，回复15%最大生命+伤害+2持续2回合
+  | 'chainAnchor' // 锁链锚定：被锁链连接时受到的伤害-2
+  | 'chainSpark'; // 锁链火花：攻击锁链目标时伤害+2
 
 export interface PassiveDef {
   id: string;

@@ -330,9 +330,25 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_dragon: {
     id: 'boss_dragon', name: '玄铁渊龙', emoji: '🐉',
     baseHp: 60, baseSpd: 7,
-    skills: ['double_hit', 'tail', 'roar', 'shockwave', 'dragon_breath'],
-    desc: '最终幕最肉首领，数值怪。',
-    passive: 'dragon_thorns',
+    skills: ['chain_bind', 'chain_activate', 'iron_tail', 'dragon_claw', 'iron_wall'],
+    passive: 'chain_master',
+    desc: '锁链束缚型首领，用锁链连接玩家单位共享伤害，引爆锁链造成爆发。',
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_minion_chain_guard: {
+    id: 'boss_minion_chain_guard', name: '玄铁链卫', emoji: '⛓️',
+    baseHp: 24, baseSpd: 3,
+    skills: ['chain_link', 'iron_tail'],
+    passive: 'chain_anchor',
+    desc: '被锁链连接时减伤的坦克小怪，永久链接自身与Boss。',
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_minion_chain_smith: {
+    id: 'boss_minion_chain_smith', name: '渊龙锁匠', emoji: '🔗',
+    baseHp: 20, baseSpd: 6,
+    skills: ['pierce_strike', 'chain_bind'],
+    passive: 'chain_spark',
+    desc: '攻击锁链目标时伤害加成的输出小怪，能释放锁链束缚。',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_demon: {
