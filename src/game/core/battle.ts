@@ -2177,7 +2177,22 @@ export function playerEndTurn(b: BattleState): BattleState {
   // 回合结算：所有存活单位（敌我混排）按速度统一行动——
   // 我方执行已下达的指令，敌方由 AI 自动行动；未下指令的我方单位本回合不出手。
   // 使用索引循环以支持「暗影追猎」击杀后再行动（不标记 acted 的单位需重新处理）
-  const turnOrder = computeTurnOrder(nb);
+  // 行动顺序使用回合开始时的计算结果（b.turnOrder），不再重算——
+  // 避免本回合内速度变化（药水等）导致行动顺序不公平地改变。
+  // 敌方先手技能（priority:'first'）需额外提到最前。
+  const baseOrder = nb.turnOrder ?? [];
+  const firstEnemyUids = new Set(
+    nb.enemyUnits
+      .filter((eu) => {
+        const oid = nb.orders?.[eu.uid]?.skillId;
+        return eu.hp > 0 && oid && oid !== REST_SKILL_ID && getSkill(oid)?.priority === 'first';
+      })
+      .map((eu) => eu.uid),
+  );
+  const turnOrder = [
+    ...baseOrder.filter((uid) => firstEnemyUids.has(uid)),
+    ...baseOrder.filter((uid) => !firstEnemyUids.has(uid)),
+  ];
   let turnIdx = 0;
   while (turnIdx < turnOrder.length) {
     const uid = turnOrder[turnIdx];
