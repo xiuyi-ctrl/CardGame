@@ -1951,19 +1951,11 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
         <div className="inter-act-flavor">"{theme.flavor}"</div>
       </div>
       <div className="inter-act-stats">
-        <div className="inter-act-stat-row">
-          <span>⚔️ 战斗 {actStats.battlesWon + actStats.battlesLost} 场</span>
-          <span style={{ color: '#5b5' }}>胜 {actStats.battlesWon}</span>
-          <span style={{ color: '#e55' }}>负 {actStats.battlesLost}</span>
-        </div>
-        <div className="inter-act-stat-row">
-          <span>🐾 驯服 {actStats.tamed} 只</span>
-          <span>💀 阵亡 {actStats.lost} 只</span>
-        </div>
-        <div className="inter-act-stat-row">
-          <span>💰 +{actStats.goldEarned} / -{actStats.goldSpent}</span>
-          <span>⏱️ {actStats.turns} 回合</span>
-        </div>
+        <div>⚔️ 战斗场次：{actStats.battlesWon + actStats.battlesLost}</div>
+        <div>💰 金币获取：{actStats.goldEarned}</div>
+        <div>🐾 驯服宠物：{actStats.tamed}</div>
+        <div>💀 宠物阵亡：{actStats.lost}</div>
+        <div>⏱️ 行动回合：{actStats.turns}</div>
       </div>
       {highlights.length > 0 && (
         <div className="highlight-list">
