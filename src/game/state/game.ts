@@ -1775,7 +1775,7 @@ export function applyCorruptFoodReward(rewards: RewardChoice[], rngSeed: number)
       label: '暗影战利品',
       desc: '获得 2 个随机食物',
       kind: 'food',
-      foodId: pick(rng, Object.keys(FOODS)),
+      foodId: pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit')),
       amount: 2,
     };
   }

@@ -1019,9 +1019,9 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
       }
     }
 
-    // ─── 3. 换位（限次 2 次，分层阈值；守卫/首领禁用） ───
+    // ─── 3. 换位（限次 2 次，分层阈值；守卫/首领禁用；首回合禁用） ───
     const nTypeSwap = b2.nodeType ?? 'battle';
-    if (actor.row === 'front' && (actor.swapCount ?? 0) < 2 && nTypeSwap !== 'guardian') {
+    if (actor.row === 'front' && (actor.swapCount ?? 0) < 2 && nTypeSwap !== 'guardian' && b2.round > 1) {
       const healthyBack = allies.filter((u) => u.row === 'back' && u.hp > 0 && u.hp / u.maxHp > 0.5);
       if (healthyBack.length > 0) {
         if (hpRatio < 0.25 && rngVal < 0.65) {

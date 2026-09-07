@@ -45,7 +45,7 @@
 - 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+5 / 速度+2。
 - **反伤先打盾**：`applyCounterDmg(attacker, dmg)` 统一处理荆棘/盾反/棘刺王的反击伤害——先扣护盾再扣血，避免护盾失效后反伤仍穿透护盾的 bug。`thorns`/`thornRoyal`/`shieldCounter` 三处均已改为调用此函数。
 - **技能冷却**：`SkillDef.cooldown?: number` 设置使用后冷却回合数（缺省=0）；`Unit.skillCooldowns?: Record<string, number>` 追踪当前冷却；`applySkillCooldown` 存储 `skill.cooldown + 1`（因为 `startRound` 在回合开始时立即递减，+1 确保实际冷却回合数正确）；`skillCooldownLeft` 检查冷却是否归零。已设：盾反（shield_counter）冷却 1 回合、孢子防护（spore_shield）冷却 1 回合。
-- **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫战禁用换位）。
+- **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫战禁用换位，首回合禁用）。
 - **幕次+节点类型**：`BattleState.act?: number`（当前幕次 1/2/3）+ `BattleState.nodeType?: string`（battle/elite/arena/gauntlet/guardian/corrupted），从 `BattleOptions` 传入，AI 根据这些字段调整概率阈值和评分权重。
 - **复仇棘甲先手**：`revenge_thorn` 技能设 `priority: 'first'`，确保在所有非先手技能之前施放。
 - **Boss小怪系统**：`BOSS_MINIONS` 映射表定义每个 Boss 的小怪 speciesId 列表；`buildEncounter` 自动追加小怪；小怪 rank=4，不可驯服，击败无奖励，死亡时显示「XX 被击倒了」日志。岩壳碎片被动的死亡自爆对全体敌我造成真实伤害（无视护盾），可连锁触发，波及巨像时计入其受击计数器。灼烧/中毒击杀小怪时同样触发自爆。**碎岩重组 AI**：Boss 小怪死亡后（`deadMinions > 0`）无条件高优先使用碎岩重组（score 80）；小怪健全时（`aliveMinions ≥ 2`、血量 > 30%）高概率使用（score 65，`rngVal < 0.9`），3 回合冷却限制频率；血量 ≤ 30% 时避免自伤致死不使用。**碎岩重组召唤**：复用死亡小怪的 uid/槽位（`replaceUnit` 覆盖而非 `append`），避免同 species 死卡占位导致新召唤单位不可见。**范围伤害飘字**：岩壳碎片自爆与岩壳崩解的日志通过 `LogEntry.burstTargets` 标记全体波及目标 uid，动画层解析后一次性同时挂 `-N` 飘字、**不触发任何生物抖动**（`fx-hit`），连锁自爆按炸死顺序各自同时飘字。
