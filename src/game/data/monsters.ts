@@ -181,6 +181,14 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     passive: 'thorn_slow',
     tame: { difficulty: 0 }, rank: 4,
   },
+  boss_crab: {
+    id: 'boss_crab', name: '潮汐巨蟹', emoji: '🦀',
+    baseHp: 36, baseSpd: 3,
+    skills: ['double_hit', 'claw_smash', 'wave_aura', 'water_cannon', 'tidal_slam'],
+    desc: '多段连击手，每2回合爆发一次，配合波光环强化连击。',
+    passive: 'tide_rhythm',
+    tame: { difficulty: 0 }, rank: 4,
+  },
   boss_minion_shrimp: {
     id: 'boss_minion_shrimp', name: '潮汐虾兵', emoji: '🦐',
     baseHp: 16, baseSpd: 4,
@@ -195,6 +203,14 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['punch', 'shell_up'],
     desc: '纯肉盾，缩壳拖慢节奏让巨蟹等到爆发回合。',
     passive: 'shell_guard',
+    tame: { difficulty: 0 }, rank: 4,
+  },
+  boss_golem: {
+    id: 'boss_golem', name: '岩甲巨像', emoji: '🗻',
+    baseHp: 40, baseSpd: 2,
+    skills: ['steel_spike', 'quake', 'rock_reforge', 'rock_throw'],
+    desc: '受击计数惩罚机制，多段连击反而触发全屏伤害。碎岩重组可主动消灭小怪触发自爆，加速岩壳崩解。',
+    passive: 'rock_shell_break',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_rock: {
@@ -213,6 +229,14 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     passive: 'rock_shard',
     tame: { difficulty: 0 }, rank: 4,
   },
+  boss_dark: {
+    id: 'boss_dark', name: '暗影之王', emoji: '😈',
+    baseHp: 36, baseSpd: 5,
+    skills: ['dark_shock', 'shadow_flurry', 'roar', 'shadow_rift'],
+    desc: '残血收割者，暗影印记+乱舞打出斩杀连段，击杀再动滚雪球。',
+    passive: 'shadow_hunter',
+    tame: { difficulty: 0 }, rank: 4,
+  },
   boss_minion_shadow_servant: {
     id: 'boss_minion_shadow_servant', name: '暗影仆从', emoji: '👤',
     baseHp: 14, baseSpd: 5,
@@ -227,14 +251,6 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['shadow_claw', 'leech_bite'],
     desc: '残血收割者，与王共同压制低血量目标。',
     passive: 'blood_scent',
-    tame: { difficulty: 0 }, rank: 4,
-  },
-  boss_dark: {
-    id: 'boss_dark', name: '暗影之王', emoji: '😈',
-    baseHp: 36, baseSpd: 5,
-    skills: ['dark_shock', 'shadow_flurry', 'roar', 'shadow_rift'],
-    desc: '残血收割者，暗影印记+乱舞打出斩杀连段，击杀再动滚雪球。',
-    passive: 'shadow_hunter',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_fire: {
@@ -263,20 +279,12 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     passive: 'flame_aura',
     tame: { difficulty: 0 }, rank: 4,
   },
-  boss_crab: {
-    id: 'boss_crab', name: '潮汐巨蟹', emoji: '🦀',
-    baseHp: 36, baseSpd: 3,
-    skills: ['double_hit', 'claw_smash', 'wave_aura', 'water_cannon', 'tidal_slam'],
-    desc: '多段连击手，每2回合爆发一次，配合波光环强化连击。',
-    passive: 'tide_rhythm',
-    tame: { difficulty: 0 }, rank: 4,
-  },
-  boss_golem: {
-    id: 'boss_golem', name: '岩甲巨像', emoji: '🗻',
-    baseHp: 40, baseSpd: 2,
-    skills: ['steel_spike', 'quake', 'rock_reforge', 'rock_throw'],
-    desc: '受击计数惩罚机制，多段连击反而触发全屏伤害。碎岩重组可主动消灭小怪触发自爆，加速岩壳崩解。',
-    passive: 'rock_shell_break',
+  boss_moss: {
+    id: 'boss_moss', name: '苔藓领主', emoji: '🍄',
+    baseHp: 44, baseSpd: 3,
+    skills: ['poison_sting', 'spore_burst', 'spore_summon', 'spore_shield'],
+    desc: '全首领最高血量之一，中毒扩散全队，愈光/解毒手段变得关键。',
+    passive: 'corrupt_spread',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_spore_sac: {
@@ -293,14 +301,6 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['poison_sting', 'slime_cover'],
     desc: '减速坦克，拖慢玩家给领主铺毒时间。',
     passive: 'sticky_body',
-    tame: { difficulty: 0 }, rank: 4,
-  },
-  boss_moss: {
-    id: 'boss_moss', name: '苔藓领主', emoji: '🍄',
-    baseHp: 44, baseSpd: 3,
-    skills: ['poison_sting', 'spore_burst', 'spore_summon', 'spore_shield'],
-    desc: '全首领最高血量之一，中毒扩散全队，愈光/解毒手段变得关键。',
-    passive: 'corrupt_spread',
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_ghost: {
@@ -328,7 +328,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_dragon: {
-    id: 'boss_dragon', name: '玄铁渊龙', emoji: '🐉',
+    id: 'boss_dragon', name: '玄铁渊龙', emoji: '⚔️',
     baseHp: 60, baseSpd: 7,
     skills: ['chain_bind', 'chain_activate', 'iron_tail', 'dragon_claw', 'iron_wall'],
     passive: 'chain_master',
@@ -386,7 +386,10 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
 };
 
-export const STARTING_CHOICES = ['momo', 'lulu', 'fifi'];
+/** 第一组：迅迅/泡泡/灼灼 → 选一只获得2只 */
+export const STARTER_GROUP_1 = ['momo', 'lulu', 'fifi'];
+/** 第二组：铁墩/咪咪/刺刺 → 选一只获得1只 */
+export const STARTER_GROUP_2 = ['kiki', 'mimi', 'pipi'];
 
 export function getMonster(id: string): MonsterSpecies {
   const m = MONSTERS[id];

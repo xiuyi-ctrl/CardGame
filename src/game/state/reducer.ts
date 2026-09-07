@@ -23,7 +23,7 @@ function hasKeyFor(state: GameState, node: MapNode): boolean {
 const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrupted', 'guardian', 'arena', 'gauntlet'];
 
 export type GameAction =
-  | { type: 'START_RUN'; starterId: string; seed: number }
+  | { type: 'START_RUN'; starterId: string; companionId: string; seed: number }
   | { type: 'STARTER' }
   | { type: 'LOAD_GAME'; state: GameState }
   | { type: 'MOVE'; nodeId: string }
@@ -132,13 +132,10 @@ export function newSeed(): number {
   return Math.floor(Math.random() * 1000000000);
 }
 
-function freshRun(starterId: string, seed: number): GameState {
+function freshRun(starterId: string, companionId: string, seed: number): GameState {
   const starter = makeUnit(starterId, true, 0, false);
-  // 开局赠送一只同伴，避免单宠打不过第 1 战
-  const rng = createRng(seed);
-  const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'].filter((id) => id !== starterId);
-  const companionId = pool[Math.floor(rng() * pool.length)];
-  const companion = makeUnit(companionId, true, 1, false);
+  const starter2 = makeUnit(starterId, true, 1, false);
+  const companion = makeUnit(companionId, true, 2, false);
   return {
     screen: 'map',
     seed,
@@ -146,8 +143,8 @@ function freshRun(starterId: string, seed: number): GameState {
     map: generateMap(seed, 1),
     currentRow: 0,
     currentNodeId: '',
-    roster: [starter, companion],
-    field: [starter.uid, companion.uid],
+    roster: [starter, starter2, companion],
+    field: [starter.uid, starter2.uid, companion.uid],
     inventory: { berry: 3, meat: 2 },
     gold: 20,
     rewards: [],
@@ -383,7 +380,7 @@ function bossCleared(state: GameState): boolean {
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'START_RUN':
-      return freshRun(action.starterId, action.seed);
+      return freshRun(action.starterId, action.companionId, action.seed);
 
     case 'STARTER':
       return { ...createInitialState(), screen: 'starter' };

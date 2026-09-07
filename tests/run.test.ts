@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import {
   createInitialState,
   gameReducer,
@@ -56,7 +56,7 @@ describe('成长与融合', () => {
   });
 
   it('FUSE reducer：材料不足被拒；材料足够融合并移除材料', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const a = makeUnit('momo', true, 0, false);
     const b = makeUnit('momo', true, 1, false);
     s = { ...s, screen: 'roster', roster: [a, b], field: [a.uid, b.uid] };
@@ -162,7 +162,7 @@ describe('地图生成', () => {
   });
 
   it('MOVE：出发层可直达任意下一层节点，进入第一层后只能走相邻列', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 7 });
     const start = s.map.layers[0][0];
     s = dispatch(s, { type: 'MOVE', nodeId: start.id });
     expect(['battle', 'formation', 'roster', 'event', 'shop', 'rest', 'special']).toContain(s.screen);
@@ -195,7 +195,7 @@ describe('地图生成', () => {
   });
 
   it('MOVE 后清除跳关/侦查选择态，避免模式残留', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 7 });
     const start = s.map.layers[0][0];
     s = dispatch(s, { type: 'MOVE', nodeId: start.id });
     s = { ...s, screen: 'backpack', battle: undefined, formation: undefined, currentNodeId: start.id, currentRow: 0, inventory: { ...s.inventory, skip: 1, scout: 1 } };
@@ -218,7 +218,7 @@ describe('地图生成', () => {
   });
 
   it('奇遇节点可进入并做出抉择', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 13 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 13 });
     const evNodes = s.map.layers.flat().filter((n) => n.type === 'event');
     expect(evNodes.length).toBeGreaterThanOrEqual(1);
     const evNode = evNodes[0];
@@ -361,7 +361,7 @@ describe('完整肉鸽流程', () => {
   });
 
   it('驯服获得的新宠物会进入队伍', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 5 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 5 });
     const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'momo' }], 5);
     const enemy = battle.enemyUnits[0];
     enemy.hp = Math.floor(enemy.maxHp * 0.1);
@@ -370,11 +370,11 @@ describe('完整肉鸽流程', () => {
     // 模拟玩家驯服：把敌人加入 pendingTame 再胜利
     tamed.pendingTame.push(makeUnit(enemy.speciesId, true, 2, false));
     s = resolveBattle(s, tamed);
-    expect(s.roster.length).toBe(3);
+    expect(s.roster.length).toBe(4);
   });
 
   it('首领战胜利后进入下一层', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 11 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 11 });
     // 直接放置首领战状态
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
@@ -386,7 +386,7 @@ describe('完整肉鸽流程', () => {
   });
 
   it('第三层首领后通关', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 12 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 12 });
     s = { ...s, act: 3, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_fire' }] } } };
     s = dispatch(s, { type: 'NEXT_NODE' });
@@ -394,7 +394,7 @@ describe('完整肉鸽流程', () => {
   });
 
   it('最后一幕首领战胜利直接进入通关界面，不再弹出战利品/队伍界面', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 13 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 13 });
     s = { ...s, act: 3, currentRow: 4, currentNodeId: 'boss1' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_fire' }] } } };
     const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'boss_fire' }], 13);
@@ -406,7 +406,7 @@ describe('完整肉鸽流程', () => {
   });
 
   it('前两幕首领战胜利仍走正常结算（战利品界面）', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 14 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 14 });
     s = { ...s, act: 2, currentRow: 4, currentNodeId: 'boss1' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_dark' }] } } };
     const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'boss_dark' }], 14);
@@ -418,7 +418,7 @@ describe('完整肉鸽流程', () => {
   });
 
   it('首领战后进入下一层：重置 visitedNodeIds 与 visitedWatchtowers', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 21 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 21 });
     // 模拟已走过若干节点 + 访问瞭望塔
     s = { ...s, visitedNodeIds: ['a', 'b', 'c'], visitedWatchtowers: ['tw1'] };
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
@@ -432,7 +432,7 @@ describe('完整肉鸽流程', () => {
   });
 
   it('首领战后进入下一层：新幕地图可正常导航不被锁死', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 22 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 22 });
     // 模拟旧幕已走过若干节点（id 与新幕可能重叠的场景）
     s = { ...s, visitedNodeIds: ['n2_0_0', 'n2_1_2', 'n2_2_0'], visitedWatchtowers: ['old_tw'] };
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
@@ -476,7 +476,7 @@ describe('完整肉鸽流程', () => {
 
 describe('队伍上限', () => {
   it('招募奖励不会超过队伍上限', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 2 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 2 });
     const filler = Array.from({ length: ROSTER_MAX }, () => makeUnit('kiki', true, 0, false));
     s = { ...s, roster: filler };
     const rec = { id: 'r', label: '', desc: '', kind: 'recruit' as const, monsterId: 'mimi' };
@@ -488,14 +488,14 @@ describe('队伍上限', () => {
 
 describe('存档读档', () => {
   it('合法存档可 LOAD_GAME 恢复，非法存档回首页', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const moved = dispatch(run, { type: 'MOVE', nodeId: run.map.layers[0][0].id });
     expect(moved.screen).toBe('formation');
 
     const restored = dispatch(createInitialState(), { type: 'LOAD_GAME', state: moved });
     expect(restored.screen).toBe('formation');
     expect(restored.seed).toBe(3);
-    expect(restored.roster.length).toBe(2);
+    expect(restored.roster.length).toBe(3);
 
     const bad = dispatch(createInitialState(), { type: 'LOAD_GAME', state: { seed: 1 } as GameState });
     expect(bad.screen).toBe('title');
@@ -504,7 +504,7 @@ describe('存档读档', () => {
   it('isValidGameState 能识别残缺对象', () => {
     expect(isValidGameState(null)).toBe(false);
     expect(isValidGameState({ seed: 1 })).toBe(false);
-    const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 4 });
+    const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 4 });
     expect(isValidGameState(s)).toBe(true);
   });
 });
@@ -544,7 +544,7 @@ describe('奇遇关', () => {
   });
 
   it('SPECIAL_CHOICE gold 奖励金币并返回地图', () => {
-    const s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+    const s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('g', 'gold', { amount: 60 }),
     ]);
     const before = s.gold;
@@ -554,7 +554,7 @@ describe('奇遇关', () => {
   });
 
   it('SPECIAL_CHOICE item 获得跳关道具/净化药水/圣果', () => {
-    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('i', 'item', { itemId: 'skip' }),
     ]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'i' });
@@ -573,7 +573,7 @@ describe('奇遇关', () => {
   });
 
   it('进化之光：点选宠物后无视等级进化', () => {
-    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('e', 'evolve'),
     ]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'e' });
@@ -586,7 +586,7 @@ describe('奇遇关', () => {
   });
 
   it('无可进化宠物时进化奖励被拒绝', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const noEvo = { ...run, roster: [makeUnit('custom_fury', true, 0, false)] };
     const s = atSpecial(noEvo, [reward('e', 'evolve')]);
     const next = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'e' });
@@ -594,7 +594,7 @@ describe('奇遇关', () => {
   });
 
   it('超进化：进化并附带随机负面诅咒，净化药水可解除', () => {
-    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('x', 'superevolve'),
     ]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'x' });
@@ -612,7 +612,7 @@ describe('奇遇关', () => {
   });
 
   it('属性强化：选宠物 → 选属性 → 属性提升', () => {
-    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('b', 'boost'),
     ]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'b' });
@@ -629,7 +629,7 @@ describe('奇遇关', () => {
   });
 
   it('造物：选择模板后随机技能自创生物加入队伍', () => {
-    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 }), [
+    let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('c', 'custom'),
     ]);
     const len0 = s.roster.length;
@@ -644,7 +644,7 @@ describe('奇遇关', () => {
   });
 
   it('USE_SKIP 跳过战斗节点直接结算奖励，首领/非战斗节点拒绝', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 5 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 5 });
     const first = s.map.layers[0][0];
     s = { ...s, screen: 'map', inventory: { ...s.inventory, skip: 1 } };
     const gold0 = s.gold;
@@ -680,7 +680,7 @@ describe('奇遇关', () => {
 
 describe('商人·立即休整', () => {
   it('未购买时可花 5 金币回满血并离开，扣金币不解诅咒', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
@@ -701,7 +701,7 @@ describe('商人·立即休整', () => {
   });
 
   it('购买食物后仍可休整', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
@@ -715,7 +715,7 @@ describe('商人·立即休整', () => {
   });
 
   it('金币不足休整被拒，仍停留商店', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
@@ -727,7 +727,7 @@ describe('商人·立即休整', () => {
   });
 
   it('旧存档的休整节点仍可用 REST_HEAL 恢复', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const s: GameState = {
       ...run,
       screen: 'rest',
@@ -741,7 +741,7 @@ describe('商人·立即休整', () => {
 
 describe('商人·每店限购', () => {
   function enterShop(gold: number): GameState {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
@@ -798,7 +798,7 @@ describe('瞭望塔', () => {
     let run: GameState | null = null;
     let target: MapNode | null = null;
     for (let seed = 1; seed < 300 && !target; seed++) {
-      const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
+      const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed });
       const n = s.map.layers.flat().find((x) => x.type === 'watchtower');
       if (n) {
         run = s;
@@ -854,7 +854,7 @@ describe('瞭望塔', () => {
   });
 
   it('末层多个首领：击败任意一个即可通关本幕', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 7 });
     const lastRow = s.map.layers.length - 1;
     const bosses = s.map.layers[lastRow];
     expect(bosses.length).toBeGreaterThanOrEqual(2);
@@ -875,7 +875,7 @@ describe('同步双节点', () => {
   function atSyncParent(): { s: GameState; node: MapNode; parent: MapNode } {
     for (let seed = 1; seed < 200; seed++) {
       for (let act = 1; act <= 3; act++) {
-        const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
+        const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed });
         const map = generateMap(seed, act);
         const node = map.layers.flat().find((n) => n.type === 'sync');
         if (!node) continue;
@@ -979,7 +979,7 @@ describe('守卫与钥匙门', () => {
   function atGuardPair(): { s: GameState; guardian: MapNode; keydoor: MapNode } {
     for (let seed = 1; seed < 300; seed++) {
       for (let act = 1; act <= 3; act++) {
-        const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
+        const s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed });
         const map = generateMap(seed, act);
         const keydoor = map.layers.flat().find((n) => n.type === 'keydoor');
         if (!keydoor || !keydoor.guardianId) continue;
@@ -1078,7 +1078,7 @@ describe('守卫与钥匙门', () => {
   });
 
   it('商店随机出售 4 种商品，可购买侦察/双生符等库存中的道具', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
@@ -1097,7 +1097,7 @@ describe('守卫与钥匙门', () => {
   });
 
   it('侦查/瞭望塔的商店情报与实际库存一致（含价格与休整说明）', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
@@ -1116,7 +1116,7 @@ describe('守卫与钥匙门', () => {
 
 describe('同层锁定：布阵返回地图后不可改选同层其他节点', () => {
   it('布阵改选被拒：只能重选已进入的节点', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 6 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 6 });
     const r0 = run.map.layers[0]; // row 0: 唯一节点
     const r1 = run.map.layers[1]; // row 1: 强制全战斗，≥3 个节点
     const a = r1[0];
@@ -1151,7 +1151,7 @@ describe('同层锁定：布阵返回地图后不可改选同层其他节点', (
 
 describe('同层锁定：跳关道具不可跳同层其他节点', () => {
   it('USE_SKIP 改选被拒：只能跳已进入的节点', () => {
-    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 6 });
+    const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 6 });
     const r0 = run.map.layers[0];
     const r1 = run.map.layers[1];
     const a = r1[0];
@@ -1389,7 +1389,7 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
   });
 
   it('NEXT_NODE（首领战）清除 skipSelecting/scoutSelecting/scoutResult', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 99 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 99 });
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     // 模拟背包中使用跳关道具/侦查符后残留的选择模式状态
@@ -1405,7 +1405,7 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
   });
 
   it('NEXT_NODE（普通行推进）清除 skipSelecting/scoutSelecting/scoutResult', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 100 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 100 });
     // 正常走到第 1 行
     const dep = s.map.layers[0][0];
     s = dispatch(s, { type: 'MOVE', nodeId: dep.id });
@@ -1420,7 +1420,7 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
   });
 
   it('LOAD_GAME 清除旧存档残留的 skipSelecting/scoutSelecting/scoutResult', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 101 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 101 });
     // 模拟旧存档：有跳关选择模式残留
     s = { ...s, skipSelecting: true, scoutSelecting: true, scoutResult: { nodeId: 'z', title: 'old', detail: 'old' } };
     s = dispatch(s, { type: 'LOAD_GAME', state: s });
@@ -1430,7 +1430,7 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
   });
 
   it('NEXT_NODE 后 skipSelecting 已清，自动踏入出发层（布阵）', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 102 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 102 });
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
     s = { ...s, skipSelecting: true };

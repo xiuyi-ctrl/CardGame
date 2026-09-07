@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
@@ -12,7 +12,7 @@ describe('地图相邻寻路回归', () => {
   it('出发层（row 0）可直达任意下一层节点；此后 MOVE 不接受非相邻列', () => {
     const problems: string[] = [];
     for (let seed = 1; seed < 25; seed++) {
-      const s: GameState = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed });
+      const s: GameState = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed });
       const seen = new Set<string>();
       const walk = (cur: GameState) => {
         const key = `${cur.currentRow}:${cur.currentNodeId}`;
@@ -66,7 +66,7 @@ describe('地图相邻寻路回归', () => {
   });
 
   it('USE_SKIP 遵守相同路线规则：出发层任意节点、此后相邻列', () => {
-    let s: GameState = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 7 });
+    let s: GameState = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 7 });
     const start = s.map.layers[0][0];
     s = dispatch(s, { type: 'MOVE', nodeId: start.id });
     s = { ...s, screen: 'map', battle: undefined, currentNodeId: start.id, currentRow: 0, inventory: { ...s.inventory, skip: 1 } };

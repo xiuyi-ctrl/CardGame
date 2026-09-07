@@ -6,7 +6,7 @@ import type { GameState } from '../game/state/game';
 import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
-import { MONSTERS, STARTING_CHOICES, getMonster } from '../game/data/monsters';
+import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
@@ -821,19 +821,56 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
 }
 
 function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+  const [firstPick, setFirstPick] = useState<string | null>(null);
+
+  if (firstPick) {
+    return (
+      <div className="center-col">
+        <div className="section-title">选择你的初始伙伴</div>
+        <div className="starter-hint">
+          <span className="chosen-one">{getMonster(firstPick).emoji} {getMonster(firstPick).name} ×2</span> 已选择
+        </div>
+        <div className="section-sub">再选一只同伴（获得 1 只）</div>
+        <div className="starter-grid">
+          {STARTER_GROUP_2.map((id) => {
+            const sp = getMonster(id);
+            const stats = computeStats(id);
+            return (
+              <div key={id} className="unit-card clickable" onClick={() => dispatch({ type: 'START_RUN', starterId: firstPick, companionId: id, seed: newSeed() })}>
+                <div className="card-top">
+                  <span className="emoji">{sp.emoji}</span>
+                </div>
+                <div className="card-name">{sp.name}</div>
+                <div className="card-sub">
+                  生命 {stats.maxHp} · 速度 {stats.spd}
+                </div>
+                <div className="skill-list">
+                  {sp.skills.map((s) => (
+                    <SkillTag key={s} skill={getSkill(s)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="center-col">
       <div className="section-title">选择你的初始伙伴</div>
+      <div className="section-sub">选一只主力（获得 2 只）</div>
       <div className="starter-grid">
-        {STARTING_CHOICES.map((id) => {
+        {STARTER_GROUP_1.map((id) => {
           const sp = getMonster(id);
           const stats = computeStats(id);
           return (
-            <div key={id} className="unit-card clickable" onClick={() => dispatch({ type: 'START_RUN', starterId: id, seed: newSeed() })}>
+            <div key={id} className="unit-card clickable" onClick={() => setFirstPick(id)}>
               <div className="card-top">
                 <span className="emoji">{sp.emoji}</span>
               </div>
-              <div className="card-name">{sp.name}</div>
+              <div className="card-name">{sp.name} ×2</div>
               <div className="card-sub">
                 生命 {stats.maxHp} · 速度 {stats.spd}
               </div>

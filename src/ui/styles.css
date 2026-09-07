@@ -1938,6 +1938,20 @@ button.primary {
   flex-wrap: wrap;
   justify-content: center;
 }
+.starter-hint {
+  font-size: 16px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.starter-hint .chosen-one {
+  color: #f0c040;
+  font-weight: bold;
+}
+.section-sub {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
 
 .skill-list {
   display: flex;

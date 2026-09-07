@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
@@ -105,7 +105,7 @@ describe('地图生成：新战斗节点', () => {
 
 describe('斗兽场（1v1 单挑）', () => {
   it('MOVE 进入后先选择 1 只出战，SPECIAL_TARGET 后进入单挑战斗', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
@@ -121,7 +121,7 @@ describe('斗兽场（1v1 单挑）', () => {
   });
 
   it('失败不 Game Over：进入坏事件选择，宠物保留不死', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
@@ -150,7 +150,7 @@ describe('斗兽场（1v1 单挑）', () => {
   });
 
   it('惩罚事件的金币扣款选项即使金币不足也能选择，且不会扣成负数', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
@@ -310,7 +310,7 @@ describe('车轮战（轮换上阵）', () => {
   });
 
   it('失败不 Game Over：进入坏事件惩罚，全队保留', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 4, 'gauntlet', [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
@@ -330,7 +330,7 @@ describe('车轮战（轮换上阵）', () => {
   });
 
   it('胜利结算为挑战奖励（3 选 1）且不加固定金币', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 4, 'gauntlet', [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
@@ -347,7 +347,7 @@ describe('车轮战（轮换上阵）', () => {
   });
 
   it('车轮战胜利时替补席与阵亡单位全部保留（保底 1 血）', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 4, 'gauntlet', [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
@@ -355,8 +355,8 @@ describe('车轮战（轮换上阵）', () => {
     const g = s.map.layers[4].find((n) => n.type === 'gauntlet')!;
     s = dispatch(s, { type: 'MOVE', nodeId: g.id });
     s = dispatch(s, { type: 'GAUNTLET_ORDER_CONFIRM', units: s.gauntletOrder! });
-    // 当前场上第 1 只，替补席 1 只
-    expect(s.battle!.playerBench?.length).toBe(1);
+    // 当前场上第 1 只，替补席 2 只
+    expect(s.battle!.playerBench?.length).toBe(2);
     const fieldUid = s.battle!.playerUnits[0].uid;
     const benchUid = s.battle!.playerBench![0].uid;
     // 模拟：场上这只被击杀 → 退场进入 playerDown；替补顶上但直接获胜
@@ -404,7 +404,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
   });
 
   it('MOVE 进入被侵蚀节点会携带 debuff 进入战斗', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const corrupted = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     s = dispatch(s, { type: 'MOVE', nodeId: corrupted.id });
@@ -416,7 +416,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
   });
 
   it('胜利后金币翻倍（corruptReward=gold）', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const corrupted = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     s = dispatch(s, { type: 'MOVE', nodeId: corrupted.id });
@@ -428,7 +428,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
   });
 
   it('胜利后食物奖励翻倍（corruptReward=food）', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]);
     const node = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     node.corruptReward = 'food';
@@ -448,7 +448,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
 
 describe('跳关道具：可跳过 3 种新战斗节点', () => {
   it('跳过斗兽场：直接领取 3 选 1 挑战奖励，不加固定金币', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = { ...stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]), inventory: { ...s.inventory, skip: 1 } };
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     const gold0 = s.gold;
@@ -460,7 +460,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
   });
 
   it('跳过车轮战：直接领取 3 选 1 挑战奖励', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = {
       ...stateAtNode(s, 4, 'gauntlet', [
         { speciesId: 'kiki' },
@@ -475,7 +475,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
   });
 
   it('跳过被侵蚀（corruptReward=gold）：金币翻倍 16', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = { ...stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]), inventory: { ...s.inventory, skip: 1 } };
     const c = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     const gold0 = s.gold;
@@ -485,7 +485,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
   });
 
   it('跳过被侵蚀（corruptReward=food）：奖励池必含双份食物', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = { ...stateAtNode(s, 3, 'corrupted', [{ speciesId: 'kiki' }]), inventory: { ...s.inventory, skip: 1 } };
     const c = s.map.layers[3].find((n) => n.type === 'corrupted')!;
     c.corruptReward = 'food';
@@ -496,7 +496,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
   });
 
   it('跳关普通战斗：食物不翻倍、无食物奖励时也不强制塞暗影战利品', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = { ...stateAtNode(s, 1, 'battle', [{ speciesId: 'kiki' }]), inventory: { ...s.inventory, skip: 1 } };
     const b = s.map.layers[1].find((n) => n.type === 'battle')!;
     const gold0 = s.gold;
@@ -512,7 +512,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
   });
 
   it('跳关精英：金币 16、食物不翻倍', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = { ...stateAtNode(s, 1, 'elite', [{ speciesId: 'gora' }]), inventory: { ...s.inventory, skip: 1 } };
     const e = s.map.layers[1].find((n) => n.type === 'elite')!;
     const gold0 = s.gold;
@@ -588,7 +588,7 @@ describe('斗兽场/车轮战：敌方不可驯服', () => {
   });
 
   it('经 reducer 进入斗兽场/车轮战：敌方 tameable=false', () => {
-    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', seed: 3 });
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     s = stateAtNode(s, 3, 'arena', [{ speciesId: 'gora' }]);
     const arena = s.map.layers[3].find((n) => n.type === 'arena')!;
     s = dispatch(s, { type: 'MOVE', nodeId: arena.id });
