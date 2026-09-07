@@ -1851,50 +1851,160 @@ function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   );
 }
 
-function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: number): { score: number; grade: string; label: string } {
-  const efficiency = 30 * Math.max(0, 1 - Math.min(stats.turnsPlayed, 300) / 300);
-  const survival = 30 * (1 - stats.petsLost / Math.max(rosterSize + stats.petsLost, 1));
-  const engagement = 20 * Math.min(stats.petsTamed, 10) / 10;
-  const resources = 20 * Math.min(stats.goldEarned, 500) / 500;
-  const score = Math.round(efficiency + survival + engagement + resources);
-  if (score >= 90) return { score, grade: 'S', label: '完美远征' };
-  if (score >= 75) return { score, grade: 'A', label: '卓越远征' };
-  if (score >= 60) return { score, grade: 'B', label: '出色远征' };
-  if (score >= 40) return { score, grade: 'C', label: '完成远征' };
-  return { score, grade: 'D', label: '艰难远征' };
+interface RatingDimension {
+  key: string;
+  name: string;
+  weight: number;
+  score: number; // 0-100
+  grade: string;
+}
+
+function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: number): {
+  score: number; grade: string; label: string; dimensions: RatingDimension[];
+} {
+  // 征服者 (30%)：总胜率
+  const totalBattles = stats.battlesWon + stats.battlesLost;
+  const winRate = totalBattles > 0 ? stats.battlesWon / totalBattles : 0.5;
+  const conqueror = Math.round(Math.min(1, winRate / 0.9) * 100);
+
+  // 驯兽师 (25%)：驯服成功率
+  const tameRate = stats.tameAttempts > 0 ? stats.petsTamed / stats.tameAttempts : 0.5;
+  const tamer = Math.round(Math.min(1, tameRate / 0.8) * 100);
+
+  // 经济大师 (20%)：金币结余率
+  const goldKeptRate = stats.goldEarned > 0 ? (stats.goldEarned - stats.goldSpent) / stats.goldEarned : 0.5;
+  const economy = Math.round(Math.min(1, goldKeptRate / 0.3) * 100);
+
+  // 战斗效率 (15%)：总回合数 ≤ 90 满分
+  const efficiency = Math.round(Math.max(0, 1 - (stats.turnsPlayed - 90) / 210) * 100);
+
+  // 队伍完整性 (10%)：终局队伍 / 8
+  const completeness = Math.round(Math.min(1, rosterSize / 7) * 100);
+
+  const dimGrade = (s: number) => s >= 90 ? 'S' : s >= 75 ? 'A' : s >= 55 ? 'B' : s >= 40 ? 'C' : 'D';
+
+  const dimensions: RatingDimension[] = [
+    { key: 'conqueror', name: '征服者', weight: 30, score: conqueror, grade: dimGrade(conqueror) },
+    { key: 'tamer', name: '驯兽师', weight: 25, score: tamer, grade: dimGrade(tamer) },
+    { key: 'economy', name: '经济大师', weight: 20, score: economy, grade: dimGrade(economy) },
+    { key: 'efficiency', name: '战斗效率', weight: 15, score: efficiency, grade: dimGrade(efficiency) },
+    { key: 'completeness', name: '队伍完整性', weight: 10, score: completeness, grade: dimGrade(completeness) },
+  ];
+
+  const score = Math.round(
+    conqueror * 0.3 + tamer * 0.25 + economy * 0.2 + efficiency * 0.15 + completeness * 0.1,
+  );
+
+  if (score >= 90) return { score, grade: 'S', label: '传奇远征者', dimensions };
+  if (score >= 75) return { score, grade: 'A', label: '精锐指挥官', dimensions };
+  if (score >= 55) return { score, grade: 'B', label: '可靠旅人', dimensions };
+  if (score >= 40) return { score, grade: 'C', label: '初生牛犊', dimensions };
+  return { score, grade: 'D', label: '幸存者', dimensions };
+}
+
+const ACT_THEMES = [
+  { emoji: '', name: '', flavor: '' },
+  { emoji: '🏕️', name: '远征启程', flavor: '翠绿之径的风已歇，前方的路尚在雾中。整顿行装，你已踏出第一步。' },
+  { emoji: '🌑', name: '暗影渡口', flavor: '暗影沼泽的瘴气渐散，你听到了更深处的回响。真正的考验，才刚刚开始。' },
+  { emoji: '⚔️', name: '终局之前', flavor: '火焰与铁链的咆哮在身后沉寂。前方，是远征的终点——或是一切湮灭的起点。' },
+];
+
+function getHighlights(stats: NonNullable<GameState['runStats']>, snap: NonNullable<NonNullable<GameState['runStats']>['actSnapshot']>): string[] {
+  const highlights: string[] = [];
+  const tamed = stats.petsTamed - snap.petsTamed;
+  if (tamed >= 3) highlights.push(`成功驯服了 ${tamed} 只宠物，队伍不断壮大`);
+  else if (tamed > 0) highlights.push(`驯服了 ${tamed} 只新宠物`);
+  const lost = stats.petsLost - snap.petsLost;
+  if (lost === 0 && tamed > 0) highlights.push('无损驯服，完美执行');
+  if (lost > 0) highlights.push(`${lost} 只宠物在战斗中倒下，它们的牺牲不会被遗忘`);
+  const gold = (stats.goldEarned - snap.goldEarned);
+  if (gold >= 80) highlights.push(`积累了 ${gold} 金币，经济充裕`);
+  const turns = stats.turnsPlayed - snap.turnsPlayed;
+  if (turns <= 25 && stats.battlesWon - snap.battlesWon >= 3) highlights.push('高效率推进，速战速决');
+  if (highlights.length === 0) highlights.push('一路平稳，远征的考验永远在下一座山丘之后');
+  return highlights.slice(0, 3);
 }
 
 function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const stats = state.runStats;
   const snap = stats?.actSnapshot;
-  const actStats = {
-    battles: (stats?.battlesWon ?? 0) - (snap?.battlesWon ?? 0),
-    gold: (stats?.goldEarned ?? 0) - (snap?.goldEarned ?? 0),
-    tamed: (stats?.petsTamed ?? 0) - (snap?.petsTamed ?? 0),
-    lost: (stats?.petsLost ?? 0) - (snap?.petsLost ?? 0),
-    turns: (stats?.turnsPlayed ?? 0) - (snap?.turnsPlayed ?? 0),
-  };
+  const actStats = snap ? {
+    battlesWon: (stats?.battlesWon ?? 0) - snap.battlesWon,
+    battlesLost: (stats?.battlesLost ?? 0) - snap.battlesLost,
+    goldEarned: (stats?.goldEarned ?? 0) - snap.goldEarned,
+    goldSpent: (stats?.goldSpent ?? 0) - snap.goldSpent,
+    tamed: (stats?.petsTamed ?? 0) - snap.petsTamed,
+    lost: (stats?.petsLost ?? 0) - snap.petsLost,
+    turns: (stats?.turnsPlayed ?? 0) - snap.turnsPlayed,
+  } : { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, tamed: 0, lost: 0, turns: 0 };
   const actNames = ['', '第一幕', '第二幕', '第三幕'];
   const actName = actNames[state.act] ?? `第${state.act}幕`;
   const nextName = actNames[state.act + 1] ?? `第${state.act + 1}幕`;
+  const theme = ACT_THEMES[state.act] ?? ACT_THEMES[1];
+  const rating = stats ? computeRating(stats, state.roster.length) : null;
+  const highlights = snap ? getHighlights(stats!, snap) : [];
   return (
     <div className="center-col">
-      <div style={{ fontSize: 48 }}>⚔️</div>
-      <div className="title-name">{actName} 完结</div>
+      <div className="inter-act-header">
+        <div style={{ fontSize: 48 }}>{theme.emoji}</div>
+        <div className="title-name">{theme.name} · {actName}结算</div>
+        <div className="inter-act-flavor">"{theme.flavor}"</div>
+      </div>
       <div className="inter-act-stats">
-        <div>🗡️ 战斗场次：{actStats.battles}</div>
-        <div>💰 金币获取：{actStats.gold}</div>
-        <div>🐾 驯服宠物：{actStats.tamed}</div>
-        <div>💀 宠物阵亡：{actStats.lost}</div>
-        <div>⏱️ 行动回合：{actStats.turns}</div>
+        <div className="inter-act-stat-row">
+          <span>⚔️ 战斗 {actStats.battlesWon + actStats.battlesLost} 场</span>
+          <span style={{ color: '#5b5' }}>胜 {actStats.battlesWon}</span>
+          <span style={{ color: '#e55' }}>负 {actStats.battlesLost}</span>
+        </div>
+        <div className="inter-act-stat-row">
+          <span>🐾 驯服 {actStats.tamed} 只</span>
+          <span>💀 阵亡 {actStats.lost} 只</span>
+        </div>
+        <div className="inter-act-stat-row">
+          <span>💰 +{actStats.goldEarned} / -{actStats.goldSpent}</span>
+          <span>⏱️ {actStats.turns} 回合</span>
+        </div>
       </div>
-      <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
-        <span className="chip">队伍 {state.roster.length} 只</span>
-        <span className="chip">💰 {state.gold}</span>
+      {highlights.length > 0 && (
+        <div className="highlight-list">
+          {highlights.map((h, i) => <div key={i} className="highlight-item">★ {h}</div>)}
+        </div>
+      )}
+      <div className="team-snapshot">
+        {state.roster.slice(0, 5).map((u) => (
+          <span key={u.uid} className="team-snapshot-pet">{u.emoji} {u.name}</span>
+        ))}
+        {state.roster.length > 5 && <span className="team-snapshot-pet">+{state.roster.length - 5}</span>}
       </div>
+      {rating && (
+        <div className="rating-display inter-act-rating">
+          <span className="rating-grade" style={{ fontSize: 28 }}>{rating.grade}</span>
+          <span className="rating-score">{rating.score}分 · {rating.label}</span>
+        </div>
+      )}
       <button className="primary big-btn" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>
         远征{nextName} →
       </button>
+    </div>
+  );
+}
+
+function RatingDisplay({ rating, color }: { rating: NonNullable<ReturnType<typeof computeRating>>; color?: string }) {
+  return (
+    <div className="rating-display">
+      <div className="rating-grade" style={{ color: color ?? '#4ecdc4' }}>{rating.grade}</div>
+      <div className="rating-score">{rating.score}分 · {rating.label}</div>
+      <div className="rating-dimensions">
+        {rating.dimensions.map((d) => (
+          <div key={d.key} className="rating-dim-row">
+            <span className="rating-dim-name">{d.name} ({d.weight}%)</span>
+            <div className="rating-dim-bar">
+              <div className="rating-dim-fill" style={{ width: `${d.score}%` }} />
+            </div>
+            <span className="rating-dim-score">{d.score} {d.grade}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1903,27 +2013,18 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const rating = state.runStats ? computeRating(state.runStats, state.roster.length) : null;
   return (
     <div className="center-col">
-      {rating && (
-        <div className="rating-display">
-          <div className="rating-grade" style={{ color: '#e05555' }}>{rating.grade}</div>
-          <div className="rating-score">{rating.score}分 · {rating.label}</div>
-        </div>
-      )}
+      {rating && <RatingDisplay rating={rating} color="#e05555" />}
       <div style={{ fontSize: 56 }}>💀</div>
       <div className="title-name" style={{ color: '#e05555', letterSpacing: 4 }}>
         远征失败
       </div>
       <p className="card-sub">阵亡的宠物已永远消失，但这只是旅程的开始</p>
       {state.roster.length > 0 && (
-        <>
-          <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
-            {state.roster.map((u) => (
-              <span className="chip" key={u.uid}>
-                {u.emoji} {u.name}
-              </span>
-            ))}
-          </div>
-        </>
+        <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
+          {state.roster.map((u) => (
+            <span className="chip" key={u.uid}>{u.emoji} {u.name}</span>
+          ))}
+        </div>
       )}
       <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
         再来一次
@@ -1939,23 +2040,19 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
   const rating = state.runStats ? computeRating(state.runStats, state.roster.length) : null;
   return (
     <div className="center-col">
-      {rating && (
-        <div className="rating-display">
-          <div className="rating-grade">{rating.grade}</div>
-          <div className="rating-score">{rating.score}分 · {rating.label}</div>
-        </div>
-      )}
+      {rating && <RatingDisplay rating={rating} />}
       <div style={{ fontSize: 64 }}>👑</div>
       <div className="title-name">通关！</div>
       <p className="card-sub">你击败了所有首领，驯服了沿途的怪物军团</p>
       <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
         {state.roster.map((u) => (
-          <span className="chip" key={u.uid}>
-            {u.emoji} {u.name}
-          </span>
+          <span className="chip" key={u.uid}>{u.emoji} {u.name}</span>
         ))}
       </div>
-      <button className="primary big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+      <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
+        再来一次
+      </button>
+      <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
         返回标题
       </button>
     </div>

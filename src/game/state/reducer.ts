@@ -87,7 +87,7 @@ export type GameAction =
   | { type: 'TITLE' };
 
 export function createInitialState(): GameState {
-  const zeroSnap = { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0 };
+  const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
   return {
     screen: 'title',
     seed: 0,
@@ -103,7 +103,7 @@ export function createInitialState(): GameState {
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
-    runStats: { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
   };
 }
 
@@ -139,7 +139,7 @@ function freshRun(starterId: string, companionId: string, seed: number): GameSta
   const starter = makeUnit(starterId, true, 0, false);
   const starter2 = makeUnit(starterId, true, 1, false);
   const companion = makeUnit(companionId, true, 2, false);
-  const zeroSnap = { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0 };
+  const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
   return {
     screen: 'map',
     seed,
@@ -155,7 +155,7 @@ function freshRun(starterId: string, companionId: string, seed: number): GameSta
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
-    runStats: { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
   };
 }
 
@@ -260,6 +260,8 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     goldEarned: result.runStats.goldEarned + goldGain,
     petsTamed: result.runStats.petsTamed + battle.pendingTame.length,
     petsLost: result.runStats.petsLost + curLost,
+    tameAttempts: result.runStats.tameAttempts + (battle.tameAttempts ?? 0),
+    圣果Used: result.runStats.圣果Used + (battle.圣果Used ?? 0),
   } : result.runStats;
   const withStats = { ...result, runStats };
   // 最后一幕（act 3）首领战胜利：直接进入通关界面，不再弹出战利品/队伍管理等中间界面
@@ -302,7 +304,8 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
     const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
     const stock = shuffle(rng, pool).slice(0, 4);
-    return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0 };
+    const rs = base.runStats ? { ...base.runStats, shopVisits: base.runStats.shopVisits + 1 } : base.runStats;
+    return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0, runStats: rs };
   }
   if (node.type === 'event') return { ...base, screen: 'event' };
   if (node.type === 'special') return { ...base, screen: 'special' };
@@ -405,9 +408,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'LOAD_GAME':
       if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title' };
       {
-        const zeroSnap = { battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0 };
-        const runStats: RunStats = action.state.runStats ?? {
-          battlesWon: 0, goldEarned: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap },
+  const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
+        const saved = action.state.runStats;
+        const runStats: RunStats = {
+          battlesWon: saved?.battlesWon ?? 0,
+          battlesLost: saved?.battlesLost ?? 0,
+          goldEarned: saved?.goldEarned ?? 0,
+          goldSpent: saved?.goldSpent ?? 0,
+          petsTamed: saved?.petsTamed ?? 0,
+          petsLost: saved?.petsLost ?? 0,
+          turnsPlayed: saved?.turnsPlayed ?? 0,
+          tameAttempts: saved?.tameAttempts ?? 0,
+          圣果Used: saved?.圣果Used ?? 0,
+          fusions: saved?.fusions ?? 0,
+          shopVisits: saved?.shopVisits ?? 0,
+          lastBattleRound: saved?.lastBattleRound ?? 0,
+          actSnapshot: saved?.actSnapshot ?? { ...zeroSnap },
         };
         return {
           ...action.state,
@@ -1208,6 +1224,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           if (state.battle.phase === 'won') {
             rs.battlesWon += 1;
             if (eb.reward.kind === 'gold') rs.goldEarned += (eb.reward.amount ?? 0);
+          } else {
+            rs.battlesLost += 1;
           }
           next = { ...next, runStats: rs };
         }
@@ -1272,7 +1290,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           const rng = createRng(state.seed * 97 + state.act * 29 + state.currentRow * 13 + state.battle.rngCount);
           const event = buildPunishmentEvent(rng);
           const roster = state.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp) }));
-          const runStats = state.runStats ? { ...state.runStats, lastBattleRound: 0 } : state.runStats;
+          const runStats = state.runStats ? { ...state.runStats, lastBattleRound: 0, battlesLost: state.runStats.battlesLost + 1 } : state.runStats;
           return {
             ...state,
             screen: 'event',
@@ -1283,7 +1301,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             log: [`挑战失败：在「${node.label}」失利，承受代价`, ...state.log].slice(0, 20),
           };
         }
-        return { ...state, screen: 'gameover', battle: undefined };
+        const rsLoss = state.runStats ? { ...state.runStats, battlesLost: state.runStats.battlesLost + 1 } : state.runStats;
+        return { ...state, screen: 'gameover', battle: undefined, runStats: rsLoss };
       }
       return state;
     }
@@ -1342,11 +1361,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const roster = state.roster
         .filter((u) => !materialUids.includes(u.uid))
         .map((u) => (u.uid === primary.uid ? evolved : u));
+      const rs = state.runStats ? { ...state.runStats, fusions: state.runStats.fusions + 1 } : state.runStats;
       return {
         ...state,
         roster,
         field: state.field.filter((uid) => roster.some((u) => u.uid === uid)),
         log: [`融合！${materials.map((m) => m.name).join('+')} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
+        runStats: rs,
       };
     }
 
@@ -1459,11 +1480,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         .filter((u) => !materialUids.includes(u.uid))
         .map((u) => (u.uid === primary.uid ? evolved : u));
       const overflow = (state.tameOverflow ?? []).filter((u) => roster.some((r) => r.uid === u.uid) || u.uid !== primary.uid);
+      const rs = state.runStats ? { ...state.runStats, fusions: state.runStats.fusions + 1 } : state.runStats;
       const next: GameState = {
         ...state,
         roster,
         field: state.field.filter((uid) => roster.some((u) => u.uid === uid)),
         log: [`融合！${materials.map((m) => m.name).join('+')} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
+        runStats: rs,
       };
       return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : { ...next, tameOverflow: overflow };
     }
@@ -1477,11 +1500,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const price = food ? food.price : item.price;
       if (state.gold < price) return state;
       if ((state.shopBoughtItems ?? []).includes(action.foodId)) return state;
+      const rs = state.runStats ? { ...state.runStats, goldSpent: state.runStats.goldSpent + price } : state.runStats;
       return {
         ...state,
         gold: state.gold - price,
         shopBoughtItems: [...(state.shopBoughtItems ?? []), action.foodId],
         inventory: { ...state.inventory, [action.foodId]: (state.inventory[action.foodId] ?? 0) + 1 },
+        runStats: rs,
       };
     }
 
@@ -1557,10 +1582,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         lastBattleRound: 0,
         actSnapshot: {
           battlesWon: state.runStats.battlesWon,
+          battlesLost: state.runStats.battlesLost,
           goldEarned: state.runStats.goldEarned,
+          goldSpent: state.runStats.goldSpent,
           petsTamed: state.runStats.petsTamed,
           petsLost: state.runStats.petsLost,
           turnsPlayed: state.runStats.turnsPlayed,
+          tameAttempts: state.runStats.tameAttempts,
+          圣果Used: state.runStats.圣果Used,
+          fusions: state.runStats.fusions,
+          shopVisits: state.runStats.shopVisits,
         },
       } : undefined;
       const base: GameState = {

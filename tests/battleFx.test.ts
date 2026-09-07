@@ -112,6 +112,8 @@ const mkBattle = (): BattleState => ({
   phase: 'acting',
   log: [],
   pendingTame: [],
+  tameAttempts: 0,
+  圣果Used: 0,
   seed: 0,
   rngCount: 0,
 });

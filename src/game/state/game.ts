@@ -184,17 +184,29 @@ export type Screen =
 
 export interface RunStats {
   battlesWon: number;
+  battlesLost: number;
   goldEarned: number;
+  goldSpent: number;
   petsTamed: number;
   petsLost: number;
   turnsPlayed: number;
+  tameAttempts: number;
+  圣果Used: number;
+  fusions: number;
+  shopVisits: number;
   lastBattleRound: number;
   actSnapshot: {
     battlesWon: number;
+    battlesLost: number;
     goldEarned: number;
+    goldSpent: number;
     petsTamed: number;
     petsLost: number;
     turnsPlayed: number;
+    tameAttempts: number;
+    圣果Used: number;
+    fusions: number;
+    shopVisits: number;
   };
 }
 

@@ -289,6 +289,8 @@ export function createBattle(
     phase: 'acting',
     log: [],
     pendingTame: [],
+    tameAttempts: 0,
+    圣果Used: 0,
     seed,
     rngCount: 0,
     orders: {},
@@ -2365,8 +2367,10 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
   }
   const food = getFood(foodId);
   const chance = tameChance(enemy, foodId);
+  // 驯服尝试计数 +1；圣果使用计数
+  const nb0 = { ...b, tameAttempts: (b.tameAttempts ?? 0) + 1, 圣果Used: (b.圣果Used ?? 0) + (foodId === 'golden_fruit' ? 1 : 0) };
 
-  const nb = useRng(b, (rng, nb2) => {
+  const nb = useRng(nb0, (rng, nb2) => {
     const guaranteed = enemy.hp === 1 || food.guaranteed;
     const success = guaranteed ? true : rng < chance;
     let after: BattleState = nb2;

@@ -245,6 +245,10 @@ export interface BattleState {
   phase: 'acting' | 'won' | 'lost';
   log: LogEntry[];
   pendingTame: Unit[];
+  /** 本场战斗驯服尝试次数（含成功与失败） */
+  tameAttempts: number;
+  /** 本场战斗圣果使用次数 */
+  圣果Used: number;
   seed: number;
   rngCount: number;
   /** 玩家已下达的技能指令（uid → 指令；结束回合统一结算后清空） */
