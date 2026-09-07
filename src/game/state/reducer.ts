@@ -1327,7 +1327,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'FUSE': {
-      if (state.screen !== 'roster') return state;
+      if (state.screen !== 'roster' && state.screen !== 'backpack') return state;
       const primary = state.roster.find((u) => u.uid === action.primaryUid);
       if (!primary) return state;
       if (!nextStage(primary.speciesId)) return state;
