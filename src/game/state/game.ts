@@ -1,5 +1,6 @@
 import type { BattleState, FoodDef, Unit } from '../types';
 import { getMonster, fusionNeed, BASE_POOL, EVO1_POOL, EVO2_POOL } from '../data/monsters';
+export { EVO2_POOL } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
 import { ITEMS } from '../data/items';
 import { createRng, pick, randInt, shuffle, weightedPick } from '../rng';
@@ -180,7 +181,9 @@ export type Screen =
   | 'tame-overflow'
   | 'test-type'
   | 'test-pick'
-  | 'test-config';
+  | 'test-config'
+  | 'achievements'
+  | 'difficulty-select';
 
 export interface RunStats {
   battlesWon: number;
@@ -266,7 +269,7 @@ export interface GameState {
     initialField: Unit[];
     encounter: { speciesId: string }[];
     nodeId: string;
-    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn'; untameable?: boolean; act?: number; nodeType?: string };
+    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn'; untameable?: boolean; act?: number; nodeType?: string; difficulty?: Difficulty };
     /** 移动前的位置（BACK_TO_MAP 时恢复） */
     prevRow?: number;
     prevNodeId?: string;
@@ -318,7 +321,59 @@ export interface GameState {
     bonusReward?: { kind: 'food'; foodId: string };
   };
   runStats?: RunStats;
+  /** 难度等级 */
+  difficulty?: Difficulty;
+  /** 本局携带的遗物 ID */
+  relics?: string[];
+  /** 跨局解锁（持久化到 localStorage） */
+  unlocks?: Unlocks;
 }
+
+export type Difficulty = 'normal' | 'hard' | 'nightmare';
+
+export interface DifficultyConfig {
+  label: string;
+  enemyHpMult: number;
+  enemySpdBonus: number;
+  shopPriceMult: number;
+  healRatio: number;
+  eliteBoost: number;
+}
+
+export const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
+  normal:    { label: '普通', enemyHpMult: 1.0, enemySpdBonus: 0, shopPriceMult: 1.0, healRatio: 0.6, eliteBoost: 0 },
+  hard:      { label: '困难', enemyHpMult: 1.2, enemySpdBonus: 1, shopPriceMult: 1.2, healRatio: 0.4, eliteBoost: 0.1 },
+  nightmare: { label: '地狱', enemyHpMult: 1.5, enemySpdBonus: 2, shopPriceMult: 1.4, healRatio: 0.2, eliteBoost: 0.15 },
+};
+
+export const DIFFICULTY_ORDER: Difficulty[] = ['normal', 'hard', 'nightmare'];
+
+export interface RelicDef {
+  name: string;
+  emoji: string;
+  desc: string;
+  unlockGrade: string;
+  style?: string;
+}
+
+export const RELIC_DEFS: Record<string, RelicDef> = {
+  traveler_charm: { name: '旅者护符', emoji: '🧭', desc: '开局金币 +15', unlockGrade: 'B' },
+  elite_badge:    { name: '精锐之证', emoji: '⚔️', desc: '初始赠送 1 个跳关道具 + 1 个侦察符', unlockGrade: 'A' },
+  legend_seal:    { name: '传奇之印', emoji: '👑', desc: '初始赠送 1 个圣果 + 开局额外 1 只随机二阶宠物', unlockGrade: 'S' },
+  flame_medal:    { name: '赤红勋章', emoji: '🔥', desc: '开局赠送 1 只灼灼 + 2 个攻击药水', unlockGrade: 'S', style: 'scorch' },
+  nature_medal:   { name: '翠绿勋章', emoji: '🌿', desc: '开局赠送 1 只铁墩 + 2 个生命药水', unlockGrade: 'S', style: 'tank' },
+  shadow_medal:   { name: '暗影勋章', emoji: '🌙', desc: '开局赠送 1 只咪咪 + 2 个腐蚀药水', unlockGrade: 'S', style: 'poison' },
+};
+
+export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'legend_seal', 'flame_medal', 'nature_medal', 'shadow_medal'];
+
+export interface Unlocks {
+  difficulties: string[];
+  relics: string[];
+  bestGrade?: string;
+}
+
+export const DEFAULT_UNLOCKS: Unlocks = { difficulties: ['normal'], relics: [], bestGrade: undefined };
 
 export const ROSTER_MAX = 8;
 /** 出战宠物上限（最大 5 只，实际受敌方数量限制：敌方 n 只时玩家最多 n+1 只） */
@@ -756,8 +811,9 @@ export const ACT_BOSS_POOLS: Record<number, string[]> = {
 };
 
 /** 中间层节点类型加权随机：越靠后精英越多，前期偏战斗/事件；奇遇关为低概率稀有节点；休整并入商人（不再生成 rest） */
-function middleNodeType(rng: () => number, progress: number): NodeType {
+function middleNodeType(rng: () => number, progress: number, difficulty?: Difficulty): NodeType {
   const r = rng();
+  const eliteBoost = difficulty ? DIFFICULTY_CONFIG[difficulty].eliteBoost : 0;
   // 战斗类节点变体：80% 普通遭遇战、10% 斗兽场（1v1）、10% 车轮战（轮换上阵）
   const battleVariant = (): NodeType => {
     const vr = rng();
@@ -766,20 +822,20 @@ function middleNodeType(rng: () => number, progress: number): NodeType {
     return 'gauntlet';
   };
   if (progress < 0.2) {
-    if (r < 0.77) return battleVariant();
+    if (r < 0.77 - eliteBoost) return battleVariant();
     if (r < 0.92) return 'event';
     return 'elite';
   }
   if (progress < 0.6) {
-    if (r < 0.34) return battleVariant();
+    if (r < 0.34 - eliteBoost) return battleVariant();
     if (r < 0.51) return 'shop';
     if (r < 0.73) return 'event';
-    if (r < 0.9) return 'elite';
+    if (r < 0.9 + eliteBoost) return 'elite';
     if (r < 0.94) return 'special';
     return 'watchtower';
   }
-  if (r < 0.3) return battleVariant();
-  if (r < 0.5) return 'elite';
+  if (r < 0.3 - eliteBoost) return battleVariant();
+  if (r < 0.5 + eliteBoost) return 'elite';
   if (r < 0.68) return 'shop';
   if (r < 0.76) return 'event';
   if (r < 0.85) return 'special';
@@ -1312,7 +1368,7 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
   return shuffle(rng, options).slice(0, 3);
 }
 
-export function generateMap(seed: number, act: number): RunMap {
+export function generateMap(seed: number, act: number, difficulty?: Difficulty): RunMap {
   const rng = createRng(seed + act * 1013);
   const LAYER_RANGES: Record<number, [number, number]> = { 1: [8, 10], 2: [10, 12], 3: [12, 14] };
   const [lo, hi] = LAYER_RANGES[act] ?? LAYER_RANGES[1];
@@ -1361,7 +1417,7 @@ export function generateMap(seed: number, act: number): RunMap {
     const progress = row / (layerCount - 1);
     const nodes: MapNode[] = [];
     for (let i = 0; i < count; i++) {
-      const n = make(middleNodeType(rng, progress), row, i);
+      const n = make(middleNodeType(rng, progress, difficulty), row, i);
       if (n.type === 'gauntlet') n.gauntletSize = rng() < 0.5 ? 2 : 3;
       nodes.push(n);
     }

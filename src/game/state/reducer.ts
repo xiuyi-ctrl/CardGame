@@ -1,5 +1,5 @@
-import type { GameState, MapNode, RewardChoice, RunMap, RunStats } from './game';
-import { applyCorruptFoodReward, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
+import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty } from './game';
+import { applyCorruptFoodReward, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -23,7 +23,7 @@ function hasKeyFor(state: GameState, node: MapNode): boolean {
 const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrupted', 'guardian', 'arena', 'gauntlet'];
 
 export type GameAction =
-  | { type: 'START_RUN'; starterId: string; companionId: string; seed: number }
+  | { type: 'START_RUN'; starterId: string; companionId: string; seed: number; difficulty?: Difficulty; relic?: string }
   | { type: 'STARTER' }
   | { type: 'LOAD_GAME'; state: GameState }
   | { type: 'MOVE'; nodeId: string }
@@ -84,7 +84,11 @@ export type GameAction =
   | { type: 'RETRY'; seed: number }
   | { type: 'INTER_ACT_CONTINUE' }
   | { type: 'CLEAR_TOAST' }
-  | { type: 'TITLE' };
+  | { type: 'TITLE' }
+  | { type: 'ACHIEVEMENTS' }
+  | { type: 'SELECT_DIFFICULTY' }
+  | { type: 'SELECT_DIFFICULTY_BACK' }
+  | { type: 'SET_PRERUN_CONFIG'; difficulty: Difficulty; relic?: string };
 
 export function createInitialState(): GameState {
   const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
@@ -104,6 +108,8 @@ export function createInitialState(): GameState {
     visitedWatchtowers: [],
     visitedNodeIds: [],
     runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    difficulty: 'normal',
+    unlocks: { ...DEFAULT_UNLOCKS },
   };
 }
 
@@ -135,27 +141,54 @@ export function newSeed(): number {
   return Math.floor(Math.random() * 1000000000);
 }
 
-function freshRun(starterId: string, companionId: string, seed: number): GameState {
+function freshRun(starterId: string, companionId: string, seed: number, difficulty?: Difficulty, relicId?: string): GameState {
   const starter = makeUnit(starterId, true, 0, false);
   const starter2 = makeUnit(starterId, true, 1, false);
   const companion = makeUnit(companionId, true, 2, false);
   const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
+  let roster = [starter, starter2, companion];
+  let inventory: Record<string, number> = { berry: 3, meat: 2 };
+  let gold = 20;
+  const relics = relicId ? [relicId] : [];
+  // 应用遗物效果
+  if (relicId) {
+    switch (relicId) {
+      case 'traveler_charm': gold += 15; break;
+      case 'elite_badge': inventory.scout = (inventory.scout ?? 0) + 1; inventory.skip = (inventory.skip ?? 0) + 1; break;
+      case 'legend_seal': inventory.golden_fruit = (inventory.golden_fruit ?? 0) + 1; {
+        // 额外1只随机二阶宠物
+        if (EVO2_POOL && EVO2_POOL.length > 0) {
+          const pick2 = EVO2_POOL[Math.floor(Math.random() * EVO2_POOL.length)];
+          if (pick2) roster.push(makeUnit(pick2, true, (roster.length % 3) as 0 | 1 | 2, false));
+        }
+        break;
+      }
+      case 'flame_medal': roster.push(makeUnit('chuchu', true, (roster.length % 3) as 0 | 1 | 2, false)); inventory.atk_potion = (inventory.atk_potion ?? 0) + 2; break;
+      case 'nature_medal': roster.push(makeUnit('tiedun', true, (roster.length % 3) as 0 | 1 | 2, false)); inventory.hp_potion = (inventory.hp_potion ?? 0) + 2; break;
+      case 'shadow_medal': roster.push(makeUnit('mimi', true, (roster.length % 3) as 0 | 1 | 2, false)); inventory.poison_potion = (inventory.poison_potion ?? 0) + 2; break;
+    }
+  }
+  const map = generateMap(seed, 1, difficulty);
+  const field = roster.slice(0, 3).map((u) => u.uid);
   return {
     screen: 'map',
     seed,
     act: 1,
-    map: generateMap(seed, 1),
+    map,
     currentRow: 0,
     currentNodeId: '',
-    roster: [starter, starter2, companion],
-    field: [starter.uid, starter2.uid, companion.uid],
-    inventory: { berry: 3, meat: 2 },
-    gold: 20,
+    roster,
+    field,
+    inventory,
+    gold,
     rewards: [],
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
     runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    difficulty: difficulty ?? 'normal',
+    unlocks: { ...DEFAULT_UNLOCKS },
+    relics,
   };
 }
 
@@ -242,7 +275,8 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     ].slice(0, 20),
   };
   // 战后全体恢复 60%，缓解减员滚雪球
-  const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.6)) }));
+  const healCfg = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'];
+  const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * healCfg.healRatio)) }));
   let rewards = challenge
     ? generateChallengeRewards({ ...settled, roster: healed }, node!.type as 'arena' | 'gauntlet')
     : generateRewards({ ...settled, roster: healed });
@@ -321,7 +355,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     if (!encounter || base.roster.length === 0) return { ...base, screen: 'map' };
     const maxField = maxFieldForEnemy(encounter.length);
     const initial = autoPosition(fieldUnits(base, maxField));
-    const options = { act: base.act, nodeType: 'boss' as const };
+    const options = { act: base.act, nodeType: 'boss' as const, difficulty: base.difficulty };
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
   }
   // 同步双节点（双生宝箱）：抵达开箱；持有双生符（加速道具）时消耗 1 个、同时开启两个宝箱（侦察符只用于查看情报，不双开）
@@ -356,7 +390,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     if (base.roster.length === 0) return { ...base, screen: 'map' };
     const maxField = maxFieldForEnemy(encounter.length);
     const initial = autoPosition(fieldUnits(base, maxField));
-    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true, act: base.act, nodeType: 'guardian' }, prevRow, prevNodeId } };
+    return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true, act: base.act, nodeType: 'guardian', difficulty: base.difficulty }, prevRow, prevNodeId } };
   }
   // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
   if (node.type === 'keydoor') {
@@ -386,6 +420,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     ...(node.type === 'corrupted' ? { corruptDebuff: node.corruptDebuff } : {}),
     act: base.act,
     nodeType: node.type,
+    difficulty: base.difficulty,
   };
   if (base.roster.length === 0) return { ...base, screen: 'map' };
   const maxField = maxFieldForEnemy(encounter.length);
@@ -399,11 +434,14 @@ function bossCleared(state: GameState): boolean {
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
-    case 'START_RUN':
-      return freshRun(action.starterId, action.companionId, action.seed);
+    case 'START_RUN': {
+      const diff = action.difficulty ?? state.difficulty ?? 'normal';
+      const rel = action.relic ?? state.relics?.[0];
+      return freshRun(action.starterId, action.companionId, action.seed, diff, rel);
+    }
 
     case 'STARTER':
-      return { ...createInitialState(), screen: 'starter' };
+      return { ...createInitialState(), screen: 'difficulty-select' };
 
     case 'LOAD_GAME':
       if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title' };
@@ -428,6 +466,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return {
           ...action.state,
           runStats,
+          difficulty: action.state.difficulty ?? 'normal',
+          unlocks: action.state.unlocks ?? { ...DEFAULT_UNLOCKS },
           map: { ...action.state.map, events: action.state.map.events ?? {}, specials: action.state.map.specials ?? {} },
           skipSelecting: false,
           scoutSelecting: false,
@@ -813,7 +853,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'event') return state;
       // 创建战斗
       const enemies = action.enemies.map((e, i) => makeUnit(e.speciesId, false, i as 0 | 1 | 2, false, 'front'));
-      const battle = createBattle(state.roster, enemies, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'battle' });
+      const battle = createBattle(state.roster, enemies, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'battle', difficulty: state.difficulty });
       return {
         ...state,
         screen: 'battle',
@@ -940,7 +980,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const node = currentNode(state);
         const encounter = node ? state.map.encounter[node.id] : undefined;
         if (!encounter) return { ...state, screen: 'map', specialPending: undefined };
-        const battle = createBattle([unit], encounter, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'arena' });
+        const battle = createBattle([unit], encounter, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'arena', difficulty: state.difficulty });
         return {
           ...state,
           screen: 'battle',
@@ -1106,7 +1146,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.currentNodeId === '' || action.units.length === 0) return state;
       const encounter = state.map.encounter[state.currentNodeId];
       if (!encounter) return state;
-      const battle = createBattle(action.units, encounter, state.seed + state.currentRow * 17, { gauntlet: true, untameable: true, act: state.act, nodeType: 'gauntlet' });
+      const battle = createBattle(action.units, encounter, state.seed + state.currentRow * 17, { gauntlet: true, untameable: true, act: state.act, nodeType: 'gauntlet', difficulty: state.difficulty });
       return { ...state, screen: 'battle', battle, gauntletOrder: undefined, gauntletSize: undefined };
     }
 
@@ -1497,7 +1537,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const item = ITEMS[action.foodId];
       if (!food && !item) return state;
       if (!(state.shopStock ?? []).includes(action.foodId)) return state;
-      const price = food ? food.price : item.price;
+      const rawPrice = food ? food.price : item.price;
+      const priceCfg = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'];
+      const price = Math.round(rawPrice * priceCfg.shopPriceMult);
       if (state.gold < price) return state;
       if ((state.shopBoughtItems ?? []).includes(action.foodId)) return state;
       const rs = state.runStats ? { ...state.runStats, goldSpent: state.runStats.goldSpent + price } : state.runStats;
@@ -1524,7 +1566,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'shop') return state;
       const count = state.shopRefreshCount ?? 0;
       if (count >= 3) return { ...state, toast: { msg: '刷新次数已用尽', kind: 'error' } };
-      const cost = 5 + count * 5;
+      const cost = Math.round((5 + count * 5) * (DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult));
       if (state.gold < cost) return state;
       // 重新生成商店库存
       const currentNode = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
@@ -1575,7 +1617,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'INTER_ACT_CONTINUE': {
       const act = state.act + 1;
-      const map = generateMap(state.seed, act);
+      const map = generateMap(state.seed, act, state.difficulty);
       const dep = map.layers[0][0];
       const runStats = state.runStats ? {
         ...state.runStats,
@@ -1636,6 +1678,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'CLEAR_TOAST':
       return { ...state, toast: undefined };
+
+    case 'ACHIEVEMENTS':
+      return { ...state, screen: 'achievements' };
+
+    case 'SELECT_DIFFICULTY':
+      return { ...state, screen: 'difficulty-select' };
+
+    case 'SELECT_DIFFICULTY_BACK':
+      return { ...state, screen: 'difficulty-select' };
+
+    case 'SET_PRERUN_CONFIG':
+      return { ...state, difficulty: action.difficulty, relics: action.relic ? [action.relic] : [], screen: 'starter' };
 
     case 'TITLE':
       return { ...createInitialState(), screen: 'title' };

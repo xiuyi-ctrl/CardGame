@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } fro
 import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
-import type { GameState } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, type MapNode, type SpecialReward } from '../game/state/game';
+import type { GameState, Difficulty } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, getMonster } from '../game/data/monsters';
@@ -16,9 +16,9 @@ import { UnitCard, SkillTag, DragScrollRow } from './components';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
-import { loadSave, persistSave, quitGame } from './persistence';
+import { loadSave, persistSave, quitGame, loadUnlocks, persistUnlocks, detectUnlocks } from './persistence';
 
-const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory'];
+const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
 const EMPTY_ROW: MapNode[] = [];
 
@@ -67,6 +67,8 @@ export default function App() {
       {state.screen === 'test-type' && <TestTypeScreen dispatch={dispatch} />}
       {state.screen === 'test-pick' && <TestPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'achievements' && <AchievementsScreen dispatch={dispatch} />}
+      {state.screen === 'difficulty-select' && <DifficultyScreen dispatch={dispatch} />}
       {state.toast && (
         <div className={`toast ${state.toast.kind ?? 'info'}`}>
           {state.toast.msg}
@@ -594,6 +596,9 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
         <button className="big-btn" onClick={() => setShowCodex(true)}>
           📖 生物图鉴
         </button>
+        <button className="big-btn" onClick={() => dispatch({ type: 'ACHIEVEMENTS' })}>
+          🏆 成就
+        </button>
         <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
           {showDebug ? '收起测试面板' : '🔬 测试关卡'}
         </button>
@@ -821,8 +826,102 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
   );
 }
 
+function DifficultyScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('normal');
+  const [selectedRelic, setSelectedRelic] = useState<string>('');
+  const unlocks = loadUnlocks();
+  const diffCfg = DIFFICULTY_CONFIG[selectedDifficulty];
+
+  const handleNext = () => {
+    dispatch({ type: 'SET_PRERUN_CONFIG', difficulty: selectedDifficulty, relic: selectedRelic || undefined });
+  };
+
+  const diffEffects: string[] = [];
+  if (diffCfg.enemyHpMult !== 1) diffEffects.push(`敌方生命 ×${diffCfg.enemyHpMult}`);
+  if (diffCfg.enemySpdBonus !== 0) diffEffects.push(`敌方速度 +${diffCfg.enemySpdBonus}`);
+  if (diffCfg.shopPriceMult !== 1) diffEffects.push(`商品价格 ×${diffCfg.shopPriceMult}`);
+  if (diffCfg.healRatio !== 0.6) diffEffects.push(`战后回血 ${Math.round(diffCfg.healRatio * 100)}%`);
+  if (diffCfg.eliteBoost !== 0) diffEffects.push(`精英额外加成`);
+
+  const relicDef = selectedRelic ? RELIC_DEFS[selectedRelic] : null;
+
+  return (
+    <div className="center-col">
+      <div className="section-title">选择难度与遗物</div>
+      {/* 难度选择 */}
+      <div className="config-section">
+        <div className="config-label">难度</div>
+        <div className="config-row">
+          {DIFFICULTY_ORDER.map((d) => {
+            const cfg = DIFFICULTY_CONFIG[d];
+            const locked = !unlocks.difficulties.includes(d);
+            return (
+              <button
+                key={d}
+                className={`config-btn ${selectedDifficulty === d ? 'selected' : ''} ${locked ? 'locked' : ''}`}
+                disabled={locked}
+                onClick={() => setSelectedDifficulty(d)}
+                title={locked ? '未解锁' : cfg.label}
+              >
+                {locked ? '🔒' : ''} {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+        {diffEffects.length > 0 && (
+          <div className="config-effect">{diffEffects.join(' · ')}</div>
+        )}
+        {diffEffects.length === 0 && (
+          <div className="config-effect">标准难度，无额外修正</div>
+        )}
+      </div>
+      {/* 遗物选择 */}
+      <div className="config-section">
+        <div className="config-label">初始遗物（可选）</div>
+        <div className="config-row">
+          <button
+            className={`config-btn ${selectedRelic === '' ? 'selected' : ''}`}
+            onClick={() => setSelectedRelic('')}
+          >
+            无
+          </button>
+          {RELIC_ORDER.filter((id) => unlocks.relics.includes(id)).map((id) => {
+            const def = RELIC_DEFS[id];
+            return (
+              <button
+                key={id}
+                className={`config-btn ${selectedRelic === id ? 'selected' : ''}`}
+                onClick={() => setSelectedRelic(id)}
+              >
+                {def.emoji} {def.name}
+              </button>
+            );
+          })}
+          {RELIC_ORDER.every((id) => !unlocks.relics.includes(id)) && (
+            <span className="config-hint">通关后解锁遗物</span>
+          )}
+        </div>
+        {relicDef && (
+          <div className="config-effect">{relicDef.emoji} {relicDef.name}：{relicDef.desc}</div>
+        )}
+        {!relicDef && (
+          <div className="config-effect">未选择遗物</div>
+        )}
+      </div>
+      <div className="panel-row" style={{ gap: 12, marginTop: 16 }}>
+        <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>返回</button>
+        <button className="primary big-btn" onClick={handleNext}>下一步：选择伙伴</button>
+      </div>
+    </div>
+  );
+}
+
 function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [firstPick, setFirstPick] = useState<string | null>(null);
+
+  const startRun = (starterId: string, companionId: string) => {
+    dispatch({ type: 'START_RUN', starterId, companionId, seed: newSeed() });
+  };
 
   if (firstPick) {
     return (
@@ -837,7 +936,7 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
             const sp = getMonster(id);
             const stats = computeStats(id);
             return (
-              <div key={id} className="unit-card clickable" onClick={() => dispatch({ type: 'START_RUN', starterId: firstPick, companionId: id, seed: newSeed() })}>
+              <div key={id} className="unit-card clickable" onClick={() => startRun(firstPick, id)}>
                 <div className="card-top">
                   <span className="emoji">{sp.emoji}</span>
                 </div>
@@ -854,6 +953,7 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
             );
           })}
         </div>
+        <button className="big-btn" style={{ marginTop: 12 }} onClick={() => setFirstPick(null)}>返回重选</button>
       </div>
     );
   }
@@ -884,6 +984,7 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           );
         })}
       </div>
+      <button className="big-btn" style={{ marginTop: 12 }} onClick={() => dispatch({ type: 'SELECT_DIFFICULTY_BACK' })}>返回：重新选择难度</button>
     </div>
   );
 }
@@ -1909,20 +2010,77 @@ const ACT_THEMES = [
   { emoji: '⚔️', name: '终局之前', flavor: '火焰与铁链的咆哮在身后沉寂。前方，是远征的终点——或是一切湮灭的起点。' },
 ];
 
-function getHighlights(stats: NonNullable<GameState['runStats']>, snap: NonNullable<NonNullable<GameState['runStats']>['actSnapshot']>): string[] {
+function getHighlights(stats: NonNullable<GameState['runStats']>, snap: NonNullable<NonNullable<GameState['runStats']>['actSnapshot']>, roster: Unit[]): string[] {
   const highlights: string[] = [];
   const tamed = stats.petsTamed - snap.petsTamed;
-  if (tamed >= 3) highlights.push(`成功驯服了 ${tamed} 只宠物，队伍不断壮大`);
-  else if (tamed > 0) highlights.push(`驯服了 ${tamed} 只新宠物`);
+
+  // 检测传奇品质驯服（rank 3）
+  const legendaryTamed = roster.filter((u) => {
+    const sp = getMonster(u.speciesId);
+    return sp && sp.rank === 3;
+  });
+  if (legendaryTamed.length > 0) {
+    const names = legendaryTamed.map((u) => u.name).join('、');
+    highlights.push(`成功驯服了传奇品质的【${names}】，远征路上的强援`);
+  } else if (tamed >= 3) {
+    highlights.push(`成功驯服了 ${tamed} 只宠物，队伍不断壮大`);
+  } else if (tamed > 0) {
+    highlights.push(`驯服了 ${tamed} 只新宠物`);
+  }
+
   const lost = stats.petsLost - snap.petsLost;
   if (lost === 0 && tamed > 0) highlights.push('无损驯服，完美执行');
   if (lost > 0) highlights.push(`${lost} 只宠物在战斗中倒下，它们的牺牲不会被遗忘`);
+
   const gold = (stats.goldEarned - snap.goldEarned);
-  if (gold >= 80) highlights.push(`积累了 ${gold} 金币，经济充裕`);
+  if (gold >= 100) highlights.push(`积累了 ${gold} 金币，财源广进`);
+  else if (gold >= 60) highlights.push(`积累了 ${gold} 金币，经济充裕`);
+
   const turns = stats.turnsPlayed - snap.turnsPlayed;
-  if (turns <= 25 && stats.battlesWon - snap.battlesWon >= 3) highlights.push('高效率推进，速战速决');
+  const battles = stats.battlesWon - snap.battlesWon;
+  if (turns <= 20 && battles >= 3) highlights.push('高效率推进，速战速决');
+
+  if (stats.圣果Used - (snap.圣果Used ?? 0) > 0) highlights.push('圣果发挥了作用，这份馈赠铭记于心');
+
   if (highlights.length === 0) highlights.push('一路平稳，远征的考验永远在下一座山丘之后');
   return highlights.slice(0, 3);
+}
+
+/** 远征日志：根据本幕关键事件生成叙事文本 */
+function getExpeditionLog(stats: NonNullable<GameState['runStats']>, snap: NonNullable<NonNullable<GameState['runStats']>['actSnapshot']>, roster: Unit[], act: number): string {
+  const actNames = ['', '翠绿之径', '暗影沼泽', '火焰山脉'];
+  const actName = actNames[act] ?? '未知之地';
+
+  // 优先级1：驯服传奇宠物
+  const legendaryTamed = roster.filter((u) => {
+    const sp = getMonster(u.speciesId);
+    return sp && sp.rank === 3;
+  });
+  if (legendaryTamed.length > 0) {
+    const u = legendaryTamed[0];
+    return `在${actName}的深处，我以一枚圣果赢得了【${u.name}】的信任。它眼中的光芒，将照亮前路。`;
+  }
+
+  // 优先级2：宠物阵亡
+  const lost = stats.petsLost - snap.petsLost;
+  if (lost > 0) {
+    return `${lost}只伙伴在${actName}的最后一战中倒下。它们的盾牌已碎，但它们的意志将与我同行。`;
+  }
+
+  // 优先级3：高效率通关
+  const turns = stats.turnsPlayed - snap.turnsPlayed;
+  const battles = stats.battlesWon - snap.battlesWon;
+  if (turns <= 20 && battles >= 3) {
+    return `穿越${actName}的过程出奇顺利，每一次决策都精准到位。强者的道路，从不拖泥带水。`;
+  }
+
+  // 兜底
+  const defaults = [
+    `一路平静地走过了${actName}，但我深知——远征的真正考验，永远在下一座山丘之后。`,
+    `${actName}的风声渐歇，前方的路尚在雾中。整顿行装，继续前行。`,
+    `离开了${actName}，身后留下的是战斗的痕迹。前方，是更深处的回响。`,
+  ];
+  return defaults[act % defaults.length];
 }
 
 function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
@@ -1942,7 +2100,8 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const nextName = actNames[state.act + 1] ?? `第${state.act + 1}幕`;
   const theme = ACT_THEMES[state.act] ?? ACT_THEMES[1];
   const rating = stats ? computeRating(stats, state.roster.length) : null;
-  const highlights = snap ? getHighlights(stats!, snap) : [];
+  const highlights = snap ? getHighlights(stats!, snap, state.roster) : [];
+  const expeditionLog = snap ? getExpeditionLog(stats!, snap, state.roster, state.act) : '';
   return (
     <div className="center-col">
       <div className="inter-act-header">
@@ -1950,6 +2109,7 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
         <div className="title-name">{theme.name} · {actName}结算</div>
         <div className="inter-act-flavor">"{theme.flavor}"</div>
       </div>
+      {expeditionLog && <div className="inter-act-log">{expeditionLog}</div>}
       <div className="inter-act-stats">
         <div>⚔️ 战斗场次：{actStats.battlesWon + actStats.battlesLost}</div>
         <div>💰 金币获取：{actStats.goldEarned}</div>
@@ -2030,12 +2190,40 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
 
 function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const rating = state.runStats ? computeRating(state.runStats, state.roster.length) : null;
+  const [unlocked, setUnlocked] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!rating) return;
+    const currentUnlocks = loadUnlocks();
+    const rosterInfo = state.roster.map((u) => ({ speciesId: u.speciesId, passive: u.passive }));
+    const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo);
+    // 找出新解锁的项
+    const newItems: string[] = [];
+    for (const d of nextUnlocks.difficulties) {
+      if (!currentUnlocks.difficulties.includes(d)) newItems.push(`难度：${DIFFICULTY_CONFIG[d as Difficulty].label}`);
+    }
+    for (const r of nextUnlocks.relics) {
+      if (!currentUnlocks.relics.includes(r)) newItems.push(`遗物：${RELIC_DEFS[r].name}`);
+    }
+    if (nextUnlocks.bestGrade !== currentUnlocks.bestGrade) newItems.push(`最高评级：${nextUnlocks.bestGrade}`);
+    setUnlocked(newItems);
+    persistUnlocks(nextUnlocks);
+  }, [rating]);
+
   return (
     <div className="center-col">
       {rating && <RatingDisplay rating={rating} />}
       <div style={{ fontSize: 64 }}>👑</div>
       <div className="title-name">通关！</div>
       <p className="card-sub">你击败了所有首领，驯服了沿途的怪物军团</p>
+      {unlocked.length > 0 && (
+        <div className="unlock-notify">
+          <div className="unlock-title">🔓 解锁新内容</div>
+          {unlocked.map((item) => (
+            <div key={item} className="unlock-item">{item}</div>
+          ))}
+        </div>
+      )}
       <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
         {state.roster.map((u) => (
           <span className="chip" key={u.uid}>{u.emoji} {u.name}</span>
@@ -2045,6 +2233,77 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
         再来一次
       </button>
       <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+        返回标题
+      </button>
+    </div>
+  );
+}
+
+function AchievementsScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+  const unlocks = loadUnlocks();
+  const allDifficulties: { id: Difficulty; label: string; desc: string }[] = [
+    { id: 'normal', label: '普通', desc: '标准难度，无额外修正' },
+    { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%' },
+    { id: 'nightmare', label: '地狱', desc: '敌方 HP+50%、SPD+2，战后回血 20%，商品加价 40%' },
+  ];
+  const allRelics = RELIC_ORDER.map((id) => ({ id, ...RELIC_DEFS[id] }));
+  const grades = ['S', 'A', 'B', 'C', 'D'];
+
+  return (
+    <div className="center-col">
+      <div className="section-title">🏆 成就</div>
+      <div className="section-sub">最高评级：{unlocks.bestGrade ?? '无'}</div>
+      {/* 难度解锁 */}
+      <div className="achievement-group">
+        <div className="achievement-group-title">难度</div>
+        {allDifficulties.map((d) => {
+          const unlocked = unlocks.difficulties.includes(d.id);
+          return (
+            <div key={d.id} className={`achievement-item ${unlocked ? 'unlocked' : 'locked'}`}>
+              <span className="achievement-icon">{unlocked ? '🔓' : '🔒'}</span>
+              <span className="achievement-name">{d.label}</span>
+              <span className="achievement-desc">{unlocked ? d.desc : '未解锁'}</span>
+            </div>
+          );
+        })}
+      </div>
+      {/* 遗物解锁 */}
+      <div className="achievement-group">
+        <div className="achievement-group-title">遗物</div>
+        {allRelics.map((r) => {
+          const unlocked = unlocks.relics.includes(r.id);
+          return (
+            <div key={r.id} className={`achievement-item ${unlocked ? 'unlocked' : 'locked'}`}>
+              <span className="achievement-icon">{unlocked ? r.emoji : '🔒'}</span>
+              <span className="achievement-name">{r.name}</span>
+              <span className="achievement-desc">{unlocked ? r.desc : '未解锁'}</span>
+            </div>
+          );
+        })}
+      </div>
+      {/* 评级里程碑 */}
+      <div className="achievement-group">
+        <div className="achievement-group-title">评级里程碑</div>
+        {grades.map((g) => {
+          const rank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[g] ?? 0;
+          const bestRank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[unlocks.bestGrade ?? 'D'] ?? 0;
+          const reached = bestRank >= rank;
+          return (
+            <div key={g} className={`achievement-item ${reached ? 'unlocked' : 'locked'}`}>
+              <span className="achievement-icon">{reached ? '⭐' : '☆'}</span>
+              <span className="achievement-name">评级 {g}</span>
+              <span className="achievement-desc">
+                {g === 'D' && '完成任意通关'}
+                {g === 'C' && 'B 级通关解锁困难难度'}
+                {g === 'B' && 'A 级通关解锁旅行者护符'}
+                {g === 'A' && 'S 级通关解锁精英勋章 + 地狱难度'}
+                {g === 'S' && 'S 级通关解锁传说印章 + 勋章检测'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })} style={{ marginTop: 12 }}>
         返回标题
       </button>
     </div>

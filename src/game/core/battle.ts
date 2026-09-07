@@ -4,6 +4,8 @@ import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
 import { getPassive } from '../data/passives';
 import { createRng } from '../rng';
+import type { Difficulty } from '../state/game';
+import { DIFFICULTY_CONFIG } from '../state/game';
 
 export const TAME_THRESHOLD = 0.4;
 /** 每次驯服失败对该敌人捕捉概率的乘法加成（如 0.25 = +25%） */
@@ -41,6 +43,8 @@ corruptDebuff?: 'spd' | 'dmg' | 'burn';
   act?: number;
   /** 节点类型（battle/elite/arena/gauntlet/corrupted/guardian），影响 AI 行为差异 */
   nodeType?: string;
+  /** 难度等级，影响敌方属性缩放 */
+  difficulty?: Difficulty;
 }
 
 export function computeStats(speciesId: string) {
@@ -180,9 +184,17 @@ function makeEnemy(
   row: 'front' | 'back',
   col: 0 | 1 | 2,
   untameable = false,
+  difficulty?: Difficulty,
 ): Unit {
   const s = getMonster(e.speciesId);
-  return makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
+  const unit = makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
+  if (difficulty && difficulty !== 'normal') {
+    const cfg = DIFFICULTY_CONFIG[difficulty];
+    unit.maxHp = Math.round(unit.maxHp * cfg.enemyHpMult);
+    unit.hp = unit.maxHp;
+    unit.spd = Math.max(1, unit.spd + cfg.enemySpdBonus);
+  }
+  return unit;
 }
 
 /**
@@ -297,8 +309,10 @@ export function createBattle(
     corruptDebuff: options?.corruptDebuff,
     act: options?.act,
     nodeType: options?.nodeType,
+    difficulty: options?.difficulty,
   };
   const untameable = options?.untameable === true;
+  const difficulty = options?.difficulty;
   if (options?.gauntlet) {
     const [first, ...playerRest] = preparedPlayer;
     // 车轮战：我方也一次只上一只，其余进入替补席，阵亡后按序顶替
@@ -306,8 +320,8 @@ export function createBattle(
     b.playerBench = playerRest;
     b.playerDown = [];
     const [firstEnemy, ...enemyRest] = enemySpecies;
-    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable), row: 'front', column: 1 }] : [];
-    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable));
+    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty), row: 'front', column: 1 }] : [];
+    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
     // 敌方数量固定为 encounter 原始数量（不再复制补齐）；
@@ -316,7 +330,7 @@ export function createBattle(
     const picked = exact ? [...enemySpecies] : [...enemySpecies];
     const layout = planEnemyLayout(picked);
     b.playerUnits = preparedPlayer;
-    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable));
+    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty));
     // Boss 小怪战：Boss 显示在前排中间（column 1），与两侧小怪互换位置
     if (b.enemyUnits.length >= 2 && b.enemyUnits[0]?.speciesId.startsWith('boss_')) {
       const boss = b.enemyUnits[0];
@@ -1939,7 +1953,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
         // 复用同 species 的死亡单位：覆盖其 uid/槽位为新召唤个体，避免死卡占位
         const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
-        const fresh = makeEnemy({ speciesId: sid }, dead ? dead.row : 'front', dead ? dead.column : col, true);
+        const fresh = makeEnemy({ speciesId: sid }, dead ? dead.row : 'front', dead ? dead.column : col, true, nb.difficulty);
         const summoned = { ...fresh, acted: true, ...(dead ? { uid: dead.uid } : {}) };
         if (dead) {
           nb = replaceUnit(nb, summoned);
@@ -1958,7 +1972,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       // 找空位：优先复用同 species 的死亡单位槽位，否则在 3 列中找空
       const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
       if (dead) {
-        const fresh = makeEnemy({ speciesId: sid }, dead.row, dead.column, true);
+        const fresh = makeEnemy({ speciesId: sid }, dead.row, dead.column, true, nb.difficulty);
         const summoned = { ...fresh, acted: true, uid: dead.uid, summoning: true };
         nb = replaceUnit(nb, summoned);
         nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
@@ -1969,7 +1983,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         for (const row of ['front', 'back'] as const) {
           for (const col of [0, 1, 2] as const) {
             if (!usedCols.has(`${row}:${col}`)) {
-              const fresh = makeEnemy({ speciesId: sid }, row, col, true);
+              const fresh = makeEnemy({ speciesId: sid }, row, col, true, nb.difficulty);
               const summoned = { ...fresh, acted: true, summoning: true };
               nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
               nb = pushLog(nb, `${actor.name} 使用「孢子召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
@@ -1991,7 +2005,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         // 优先复用同 species 的死亡单位槽位
         const dead = nb.enemyUnits.find((u) => u.speciesId === sid && u.hp <= 0);
         if (dead) {
-          const fresh = makeEnemy({ speciesId: sid }, dead.row, dead.column, true);
+          const fresh = makeEnemy({ speciesId: sid }, dead.row, dead.column, true, nb.difficulty);
           const summoned = { ...fresh, acted: true, uid: dead.uid, summoning: true };
           nb = replaceUnit(nb, summoned);
           nb = pushLog(nb, `${actor.name} 使用「幽灵召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
@@ -2002,7 +2016,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           for (const row of ['front', 'back'] as const) {
             for (const col of [0, 1, 2] as const) {
               if (!usedCols.has(`${row}:${col}`)) {
-                const fresh = makeEnemy({ speciesId: sid }, row, col, true);
+                const fresh = makeEnemy({ speciesId: sid }, row, col, true, nb.difficulty);
                 const summoned = { ...fresh, acted: true, summoning: true };
                 nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
                 nb = pushLog(nb, `${actor.name} 使用「幽灵召唤」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);

@@ -271,4 +271,6 @@ corruptDebuff?: 'spd' | 'dmg' | 'burn';
   act?: number;
   /** 节点类型（battle/elite/arena/gauntlet/corrupted/guardian），AI 行为差异用 */
   nodeType?: string;
+  /** 难度等级，敌方属性缩放用 */
+  difficulty?: 'normal' | 'hard' | 'nightmare';
 }
