@@ -1020,3 +1020,120 @@ describe('战斗日志与动画时序', () => {
     });
   });
 });
+
+describe('priority first 技能回合顺序', () => {
+  it('flame_shield (fifi_god) 在首回合应排到第一顺位', () => {
+    const slow = makeUnit('momo', true, 0, false); // spd 2
+    const b = createBattle([slow], [{ speciesId: 'fifi_god' }], 1);
+    const fifi = b.enemyUnits[0];
+    expect(b.turnOrder[0]).toBe(fifi.uid);
+  });
+
+  it('shield_counter (gora) 在首回合应排到第一顺位（即使速度慢于玩家）', () => {
+    // 首回合无冷却，computeTurnOrder 应检测到先手技能并排前
+    const fast = makeUnit('fifi', true, 0, false); // spd 4
+    const b = createBattle([fast], [{ speciesId: 'gora' }], 1);
+    const gora = b.enemyUnits[0];
+    // 首回合 turnOrder 应该将 gora 排第一（因为 shield_counter 无冷却）
+    expect(b.turnOrder[0]).toBe(gora.uid);
+  });
+
+  it('shield_counter 执行顺序验证：gora 应在 fifi 之前行动', () => {
+    const fast = makeUnit('fifi', true, 0, false); // spd 4
+    const b = createBattle([fast], [{ speciesId: 'gora' }], 1);
+    const gora = b.enemyUnits[0];
+    const cur = currentPlayerUnit(b)!;
+    const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], gora.uid));
+    // 在日志中找到 gorra 的行动（盾反 buff 施放），检查它在 fifi 的攻击之前
+    const goraActIdx = after.log.findIndex(l => l.text.includes('盾反') && l.side === 'enemy');
+    const fifiActIdx = after.log.findIndex(l => l.side === 'player' && l.actorUid === cur.uid);
+    expect(goraActIdx).toBeGreaterThanOrEqual(0);
+    expect(fifiActIdx).toBeGreaterThanOrEqual(0);
+    expect(goraActIdx).toBeLessThan(fifiActIdx);
+  });
+
+  it('flame_shield 实际执行：日志应包含烈焰护盾', () => {
+    const slow = makeUnit('momo', true, 0, false);
+    const b = createBattle([slow], [{ speciesId: 'fifi_god' }], 1);
+    const fifi = b.enemyUnits[0];
+    const cur = currentPlayerUnit(b)!;
+    const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], fifi.uid));
+    const flameLogs = after.log.filter(l => l.text.includes('烈焰护盾'));
+    expect(flameLogs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shield_counter 实际执行：日志应包含盾反', () => {
+    const fast = makeUnit('fifi', true, 0, false);
+    const b = createBattle([fast], [{ speciesId: 'gora' }], 1);
+    const gora = b.enemyUnits[0];
+    const cur = currentPlayerUnit(b)!;
+    const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], gora.uid));
+    const shieldLogs = after.log.filter(l => l.text.includes('盾反'));
+    expect(shieldLogs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('revenge_thorn (sisi_god) 在首回合应排到第一顺位', () => {
+    const fast = makeUnit('fifi', true, 0, false); // spd 4
+    const b = createBattle([fast], [{ speciesId: 'sisi_god' }], 1);
+    const sisi = b.enemyUnits[0];
+    expect(b.turnOrder[0]).toBe(sisi.uid);
+  });
+
+  it('revenge_thorn 执行顺序验证：sisi_god 应在 fifi 之前行动', () => {
+    const fast = makeUnit('fifi', true, 0, false); // spd 4
+    const b = createBattle([fast], [{ speciesId: 'sisi_god' }], 1);
+    const sisi = b.enemyUnits[0];
+    const cur = currentPlayerUnit(b)!;
+    const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], sisi.uid));
+    const sisiActIdx = after.log.findIndex(l => l.text.includes('复仇棘甲') && l.side === 'enemy');
+    const fifiActIdx = after.log.findIndex(l => l.side === 'player' && l.actorUid === cur.uid);
+    expect(sisiActIdx).toBeGreaterThanOrEqual(0);
+    expect(fifiActIdx).toBeGreaterThanOrEqual(0);
+    expect(sisiActIdx).toBeLessThan(fifiActIdx);
+  });
+
+  it('flame_shield 在冷却中时不应用先手排序（纯速度排序）', () => {
+    const fast = makeUnit('fifi', true, 0, false); // spd 4
+    const b = createBattle([fast], [{ speciesId: 'gora' }], 1);
+    const goraUnit = b.enemyUnits[0];
+    const cur = currentPlayerUnit(b)!;
+    const after1 = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], goraUnit.uid));
+    expect(after1.turnOrder[0]).toBe(cur.uid);
+  });
+
+  it('玩家选择先手技能后，慢速我方单位应在当前轮执行顺序第一', () => {
+    const slow = makeUnit('gora', true, 0, false); // spd 2, has shield_counter (priority:'first')
+    const fast = makeUnit('fifi', true, 1, false); // spd 4
+    const b = createBattle([slow, fast], [{ speciesId: 'kiki' }], 1);
+    const gora = b.playerUnits.find(u => u.speciesId === 'gora')!;
+    const fifi = b.playerUnits.find(u => u.speciesId === 'fifi')!;
+    // gora 选 shield_counter（target='self'，不需要指定目标）
+    let s = playerSkill(b, gora.uid, 'shield_counter');
+    // fifi 选第一个技能
+    s = playerSkill(s, fifi.uid, s.playerUnits.find(u => u.speciesId === 'fifi')!.skills[0], b.enemyUnits[0].uid);
+    const after = playerEndTurn(s);
+    // 日志中 gora 的盾反应先于 fifi 的行动（验证当前轮实际执行顺序）
+    const goraLog = after.log.findIndex(l => l.text.includes('盾反'));
+    const fifiLog = after.log.findIndex(l => l.side === 'player' && l.actorUid === fifi.uid);
+    expect(goraLog).toBeGreaterThanOrEqual(0);
+    expect(goraLog).toBeLessThan(fifiLog);
+  });
+
+  it('玩家选择迅击（swift_strike）后，慢速我方单位应在当前轮执行顺序第一', () => {
+    const slow = makeUnit('momo_god', true, 0, false); // spd 6, has swift_strike (priority:'first')
+    const fast = makeUnit('fifi', true, 1, false); // spd 4
+    const b = createBattle([slow, fast], [{ speciesId: 'kiki' }], 1);
+    const momo = b.playerUnits.find(u => u.speciesId === 'momo_god')!;
+    const fifi = b.playerUnits.find(u => u.speciesId === 'fifi')!;
+    let s = playerSkill(b, momo.uid, 'swift_strike', b.enemyUnits[0].uid);
+    s = playerSkill(s, fifi.uid, s.playerUnits.find(u => u.speciesId === 'fifi')!.skills[0], b.enemyUnits[0].uid);
+    const after = playerEndTurn(s);
+    const momoIdx = after.turnOrder.indexOf(momo.uid);
+    const fifiIdx = after.turnOrder.indexOf(fifi.uid);
+    expect(momoIdx).toBeLessThan(fifiIdx);
+    const momoLog = after.log.findIndex(l => l.text.includes('迅击'));
+    const fifiLog = after.log.findIndex(l => l.side === 'player' && l.actorUid === fifi.uid);
+    expect(momoLog).toBeGreaterThanOrEqual(0);
+    expect(momoLog).toBeLessThan(fifiLog);
+  });
+});

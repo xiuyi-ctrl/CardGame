@@ -47,7 +47,7 @@
 - **技能冷却**：`SkillDef.cooldown?: number` 设置使用后冷却回合数（缺省=0）；`Unit.skillCooldowns?: Record<string, number>` 追踪当前冷却；`applySkillCooldown` 存储 `skill.cooldown + 1`（因为 `startRound` 在回合开始时立即递减，+1 确保实际冷却回合数正确）；`skillCooldownLeft` 检查冷却是否归零。已设：盾反（shield_counter）冷却 1 回合、孢子防护（spore_shield）冷却 1 回合。
 - **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫战禁用换位，首回合禁用）。
 - **幕次+节点类型**：`BattleState.act?: number`（当前幕次 1/2/3）+ `BattleState.nodeType?: string`（battle/elite/arena/gauntlet/guardian/corrupted），从 `BattleOptions` 传入，AI 根据这些字段调整概率阈值和评分权重。
-- **复仇棘甲先手**：`revenge_thorn` 技能设 `priority: 'first'`，确保在所有非先手技能之前施放。
+- **复仇棘甲先手**：`revenge_thorn` 技能设 `priority: 'first'`，确保在所有非先手技能之前施放。**所有 priority:'first' 技能**（shield_counter/flame_shield/revenge_thorn/swift_strike/rock_throw）均通过 `computeTurnOrder` 的双路径保障执行顺序：① `playerEndTurn` 预选敌方先手技能写入 orders（执行路径）；② `computeTurnOrder` 的 skill 列表回退检测（无显式 orders 时扫描可用先手技能，用于 UI 显示预测和 `createBattle`/`startRound` 阶段）。
 - **Boss小怪系统**：`BOSS_MINIONS` 映射表定义每个 Boss 的小怪 speciesId 列表；`buildEncounter` 自动追加小怪；小怪 rank=4，不可驯服，击败无奖励，死亡时显示「XX 被击倒了」日志。岩壳碎片被动的死亡自爆对全体敌我造成真实伤害（无视护盾），可连锁触发，波及巨像时计入其受击计数器。灼烧/中毒击杀小怪时同样触发自爆。**碎岩重组 AI**：Boss 小怪死亡后（`deadMinions > 0`）无条件高优先使用碎岩重组（score 80）；小怪健全时（`aliveMinions ≥ 2`、血量 > 30%）高概率使用（score 65，`rngVal < 0.9`），3 回合冷却限制频率；血量 ≤ 30% 时避免自伤致死不使用。**碎岩重组召唤**：复用死亡小怪的 uid/槽位（`replaceUnit` 覆盖而非 `append`），避免同 species 死卡占位导致新召唤单位不可见。**范围伤害飘字**：岩壳碎片自爆与岩壳崩解的日志通过 `LogEntry.burstTargets` 标记全体波及目标 uid，动画层解析后一次性同时挂 `-N` 飘字、**不触发任何生物抖动**（`fx-hit`），连锁自爆按炸死顺序各自同时飘字。
 - **敌方按角色布局**：`planEnemyLayout` 按被动/治疗技能/等级分类——防守被动（guard/thorns/regen/hp/damageCap/thornRoyal/bigHitGuard/spdOnHit/treeSpeedUp/lifeSpring/rockShellBreak/rockShard/corruptSac/stickyBody）或 Boss（rank 4）→ 前排；进攻被动（power/frenzy/venom/scorch/drain/venomPower/speedBonus/scorchPlus/poisonBreak/spdOnAttack/tideRhythm/tideEcho/thornEntangle/shadowHunter/corruptSpread）或治疗技能（heal>0）或嗜血嗅觉（bloodScent）→ 后排；前排满 3 列溢出后排；全后排时 baseHp 最高者挪前排（保底 ≥1 前排）。Boss 在首领战中强制前排居中，与小怪互换位置。
 - **受击加速**：`hit_speed_up` 被动，每次受到攻击后速度 +1，可叠加最多 6 层（古树之主专属）。
@@ -76,7 +76,7 @@
 ## 会话约定
 
 - **一律用中文描述**（回复、总结、说明均用中文，代码注释/标识符保持英文）。
-- **每次修改代码后，必须同步更新相应的文档**：战斗逻辑/数值 → `战斗文档.md`、`游戏玩法说明.md`；地图/节点 → `关卡图鉴.md`；生物/道具数据 → `生物图鉴.md`、`道具图鉴.md`；README 若描述受影响也一并更新。文档改动与代码同一次提交。
+- **每次修改代码后，必须同步更新相应的文档**：README 若描述受影响也一并更新。文档改动与代码同一次提交。
 - **提交 GitHub 时 commit message 一律用中文**（英文 message 不适用）。
 - **浏览器/UI 实测需用户明确要求后才做**：默认只写代码 + 跑 `vitest`/`typecheck`/`build` 验证；用户没让测 UI，就不启动 agent-browser。
 - 没要求提交github就不用提交

@@ -171,8 +171,17 @@ export function computeTurnOrder(b: BattleState): string[] {
       const cOrder = b.orders?.[c.uid];
       const aSkill = aOrder && aOrder.skillId !== REST_SKILL_ID ? getSkill(aOrder.skillId) : undefined;
       const cSkill = cOrder && cOrder.skillId !== REST_SKILL_ID ? getSkill(cOrder.skillId) : undefined;
-      const aFirst = aSkill?.priority === 'first' ? 1 : 0;
-      const cFirst = cSkill?.priority === 'first' ? 1 : 0;
+      let aFirst = aSkill?.priority === 'first' ? 1 : 0;
+      let cFirst = cSkill?.priority === 'first' ? 1 : 0;
+      // 若无显式 orders，检查单位技能列表中是否有可用的先手技能（用于显示预测）
+      if (!aFirst && !aOrder) {
+        const avail = a.skills.map(getSkill).find((s) => s.priority === 'first' && skillUsesLeft(a, s.id) > 0 && skillCooldownLeft(a, s.id) <= 0);
+        if (avail) aFirst = 1;
+      }
+      if (!cFirst && !cOrder) {
+        const avail = c.skills.map(getSkill).find((s) => s.priority === 'first' && skillUsesLeft(c, s.id) > 0 && skillCooldownLeft(c, s.id) <= 0);
+        if (avail) cFirst = 1;
+      }
       if (aFirst !== cFirst) return cFirst - aFirst;
       return getEffectiveSpd(c) - getEffectiveSpd(a) || (a.isPlayer === c.isPlayer ? 0 : a.isPlayer ? -1 : 1);
     });
@@ -969,8 +978,18 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
           candidates.push({ kind: 'buff', skill: bs, score: 55 });
         }
       }
-      // 坚盾/盾反：血量 < 40% 时 50%
-      if (bs.effects?.some((e) => e.kind === 'shield') && actor.shield <= 0 && !actor.statuses.some((s) => s.kind === 'shield')) {
+      // 先手技能（priority:'first'）：首回合高概率使用，后续回合中概率
+      if (bs.priority === 'first' && skillUsesLeft(actor, bs.id) > 0 && skillCooldownLeft(actor, bs.id) <= 0) {
+        if (!actor.statuses.some((s) => s.kind === 'shield' || s.kind === 'shieldCounter' || s.kind === 'atkUp' || s.kind === 'comboBoost')) {
+          let firstChance = b2.round <= 1 ? 0.8 : 0.5;
+          if (hpRatio < 0.4) firstChance = Math.max(firstChance, 0.7);
+          if (rngVal < firstChance) {
+            candidates.push({ kind: 'buff', skill: bs, score: 70 });
+          }
+        }
+      }
+      // 坚盾：血量 < 40% 时 50%（非先手的纯护盾技能）
+      if (bs.effects?.some((e) => e.kind === 'shield') && !bs.priority && actor.shield <= 0 && !actor.statuses.some((s) => s.kind === 'shield')) {
         if (hpRatio < 0.4 && rngVal < 0.5) {
           candidates.push({ kind: 'buff', skill: bs, score: 50 });
         }
@@ -2190,28 +2209,14 @@ export function playerEndTurn(b: BattleState): BattleState {
       nb = { ...nb, orders: { ...(nb.orders ?? {}), [eu.uid]: { skillId: firstSkill.id } } };
     }
   }
+  // 预选完成后重新计算回合顺序：orders 已填充先手指令，computeTurnOrder 会将 priority:'first' 的单位排到最前
+  nb = { ...nb, turnOrder: computeTurnOrder(nb) };
   // 回合结算：所有存活单位（敌我混排）按速度统一行动——
   // 我方执行已下达的指令，敌方由 AI 自动行动；未下指令的我方单位本回合不出手。
   // 使用索引循环以支持「暗影追猎」击杀后再行动（不标记 acted 的单位需重新处理）
-  // 行动顺序使用回合开始时的计算结果（b.turnOrder），不再重算——
-  // 避免本回合内速度变化（药水等）导致行动顺序不公平地改变。
-  // 敌方先手技能（priority:'first'）需额外提到最前。
-  const baseOrder = nb.turnOrder ?? [];
-  const firstEnemyUids = new Set(
-    nb.enemyUnits
-      .filter((eu) => {
-        const oid = nb.orders?.[eu.uid]?.skillId;
-        return eu.hp > 0 && oid && oid !== REST_SKILL_ID && getSkill(oid)?.priority === 'first';
-      })
-      .map((eu) => eu.uid),
-  );
-  const turnOrder = [
-    ...baseOrder.filter((uid) => firstEnemyUids.has(uid)),
-    ...baseOrder.filter((uid) => !firstEnemyUids.has(uid)),
-  ];
   let turnIdx = 0;
-  while (turnIdx < turnOrder.length) {
-    const uid = turnOrder[turnIdx];
+  while (turnIdx < (nb.turnOrder ?? []).length) {
+    const uid = (nb.turnOrder ?? [])[turnIdx];
     if (nb.phase !== 'acting') break;
     const unit = actorFromId(nb, uid);
     if (!unit || unit.hp <= 0) { turnIdx++; continue; }
