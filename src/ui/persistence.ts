@@ -4,8 +4,9 @@ import { isValidGameState } from '../game/state/reducer';
 
 export interface PetCardBridge {
   platform: string;
-  saveGame: (json: string) => Promise<boolean>;
-  loadGame: () => Promise<string | null>;
+  saveGame: (slot: number, json: string) => Promise<boolean>;
+  loadGame: (slot: number) => Promise<string | null>;
+  deleteSave: (slot: number) => Promise<boolean>;
   quit: () => void;
 }
 
@@ -15,39 +16,41 @@ declare global {
   }
 }
 
-const LS_KEY = 'petCardSave';
+export const SAVE_SLOT_COUNT = 6;
+
+const deletedSlots = new Set<number>();
+
+function slotKey(slot: number): string {
+  return `petCardSave_${slot}`;
+}
 
 export async function persistSave(state: GameState): Promise<void> {
+  const slot = state.saveSlot;
+  if (typeof slot !== 'number' || slot < 1 || slot > SAVE_SLOT_COUNT) return;
+  if (deletedSlots.has(slot)) return;
   const json = JSON.stringify(state);
   if (window.petCard) {
     try {
-      await window.petCard.saveGame(json);
-    } catch {
-      /* ignore */
-    }
+      await window.petCard.saveGame(slot, json);
+    } catch { /* ignore */ }
   } else {
     try {
-      localStorage.setItem(LS_KEY, json);
-    } catch {
-      /* ignore */
-    }
+      localStorage.setItem(slotKey(slot), json);
+    } catch { /* ignore */ }
   }
 }
 
-export async function loadSave(): Promise<GameState | null> {
+export async function loadSave(slot: number): Promise<GameState | null> {
+  if (slot < 1 || slot > SAVE_SLOT_COUNT) return null;
   let json: string | null = null;
   if (window.petCard) {
     try {
-      json = await window.petCard.loadGame();
-    } catch {
-      json = null;
-    }
+      json = await window.petCard.loadGame(slot);
+    } catch { json = null; }
   } else {
     try {
-      json = localStorage.getItem(LS_KEY);
-    } catch {
-      json = null;
-    }
+      json = localStorage.getItem(slotKey(slot));
+    } catch { json = null; }
   }
   if (!json) return null;
   try {
@@ -58,21 +61,51 @@ export async function loadSave(): Promise<GameState | null> {
   }
 }
 
+export async function deleteSave(slot: number): Promise<boolean> {
+  if (slot < 1 || slot > SAVE_SLOT_COUNT) return false;
+  try {
+    if (window.petCard) {
+      await window.petCard.deleteSave(slot);
+    } else {
+      localStorage.removeItem(slotKey(slot));
+    }
+  } catch { /* best effort */ }
+  deletedSlots.add(slot);
+  return true;
+}
+
+export function clearDeletedSlot(slot: number): void {
+  deletedSlots.delete(slot);
+}
+
+export interface SaveSlotInfo {
+  slot: number;
+  state: GameState | null;
+  timestamp?: number;
+}
+
+export async function listSaves(): Promise<SaveSlotInfo[]> {
+  const results: SaveSlotInfo[] = [];
+  for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
+    const state = await loadSave(i);
+    results.push({ slot: i, state });
+  }
+  return results;
+}
+
 export function quitGame(): void {
   if (window.petCard) window.petCard.quit();
 }
 
-const UNLOCKS_KEY = 'petCardUnlocks';
-
 export function persistUnlocks(unlocks: Unlocks): void {
   try {
-    localStorage.setItem(UNLOCKS_KEY, JSON.stringify(unlocks));
+    localStorage.setItem('petCardUnlocks', JSON.stringify(unlocks));
   } catch { /* ignore */ }
 }
 
 export function loadUnlocks(): Unlocks {
   try {
-    const json = localStorage.getItem(UNLOCKS_KEY);
+    const json = localStorage.getItem('petCardUnlocks');
     if (json) {
       const parsed = JSON.parse(json) as Partial<Unlocks>;
       return {
@@ -92,16 +125,13 @@ export function detectUnlocks(
   roster: { speciesId: string; passive?: string }[],
 ): Unlocks {
   const next = { ...currentUnlocks, difficulties: [...currentUnlocks.difficulties], relics: [...currentUnlocks.relics] };
-  // 难度解锁
   if ((grade === 'A' || grade === 'S') && !next.difficulties.includes('hard')) next.difficulties.push('hard');
   if (grade === 'S' && !next.difficulties.includes('nightmare')) next.difficulties.push('nightmare');
-  // 遗物解锁（评级阈值）
   const gradeRank: Record<string, number> = { S: 4, A: 3, B: 2, C: 1, D: 0 };
   const rank = gradeRank[grade] ?? 0;
   if (rank >= 2 && !next.relics.includes('traveler_charm')) next.relics.push('traveler_charm');
   if (rank >= 3 && !next.relics.includes('elite_badge')) next.relics.push('elite_badge');
   if (rank >= 4 && !next.relics.includes('legend_seal')) next.relics.push('legend_seal');
-  // 勋章解锁（S 评级 + 队伍流派检测）
   if (rank >= 4) {
     const passiveCounts: Record<string, number> = {};
     for (const p of roster) {
@@ -115,7 +145,6 @@ export function detectUnlocks(
     if (countOf(tankTypes) >= 3 && !next.relics.includes('nature_medal')) next.relics.push('nature_medal');
     if (countOf(poisonTypes) >= 3 && !next.relics.includes('shadow_medal')) next.relics.push('shadow_medal');
   }
-  // 最高评级
   if (rank > (gradeRank[next.bestGrade ?? 'D'] ?? 0)) next.bestGrade = grade;
   return next;
 }

@@ -224,6 +224,7 @@ export interface RewardChoice {
 }
 
 export interface GameState {
+  saveSlot?: number;
   screen: Screen;
   seed: number;
   act: number;

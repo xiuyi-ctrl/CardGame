@@ -117,6 +117,112 @@ button.primary {
   background: rgba(255, 215, 0, 0.12);
 }
 
+.save-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 180px);
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.save-slot {
+  position: relative;
+  border: 2px solid rgba(255, 215, 0, 0.25);
+  border-radius: 8px;
+  padding: 14px 12px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.save-slot:hover {
+  border-color: var(--gold);
+  background: rgba(255, 215, 0, 0.08);
+}
+
+.save-slot.empty {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.save-slot.empty:hover {
+  opacity: 1;
+}
+
+.save-slot.active {
+  border-color: var(--gold);
+  background: rgba(255, 215, 0, 0.15);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+.save-slot.active:hover {
+  background: rgba(255, 215, 0, 0.2);
+}
+
+.save-slot-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.save-slot-text {
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.save-slot-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.save-slot-del {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.save-slot:hover .save-slot-del {
+  opacity: 1;
+}
+
+.save-slot-del:hover {
+  color: #e74c3c;
+}
+
+.save-mgmt-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.save-mgmt-panel {
+  background: var(--bg-panel);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 620px;
+  width: 90%;
+  text-align: center;
+}
+
 .home-menu {
   display: flex;
   flex-direction: column;

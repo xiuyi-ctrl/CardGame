@@ -1,4 +1,4 @@
-import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty } from './game';
+import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks } from './game';
 import { applyCorruptFoodReward, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
@@ -24,8 +24,9 @@ const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrup
 
 export type GameAction =
   | { type: 'START_RUN'; starterId: string; companionId: string; seed: number; difficulty?: Difficulty; relic?: string }
-  | { type: 'STARTER' }
+  | { type: 'STARTER'; saveSlot?: number }
   | { type: 'LOAD_GAME'; state: GameState }
+  | { type: 'DELETE_SAVE'; slot: number }
   | { type: 'MOVE'; nodeId: string }
   | { type: 'EVENT_CHOICE'; choiceId: string }
   | { type: 'EVENT_HATCH_PREVIEW'; choiceId: string; monsterId: string }
@@ -84,8 +85,9 @@ export type GameAction =
   | { type: 'RETRY'; seed: number }
   | { type: 'INTER_ACT_CONTINUE' }
   | { type: 'CLEAR_TOAST' }
+  | { type: 'SHOW_TOAST'; msg: string; kind?: 'info' | 'success' | 'error' | 'warning' }
   | { type: 'TITLE' }
-  | { type: 'ACHIEVEMENTS' }
+  | { type: 'ACHIEVEMENTS'; unlocks?: Unlocks }
   | { type: 'SELECT_DIFFICULTY' }
   | { type: 'SELECT_DIFFICULTY_BACK' }
   | { type: 'SET_PRERUN_CONFIG'; difficulty: Difficulty; relic?: string };
@@ -141,7 +143,7 @@ export function newSeed(): number {
   return Math.floor(Math.random() * 1000000000);
 }
 
-function freshRun(starterId: string, companionId: string, seed: number, difficulty?: Difficulty, relicId?: string): GameState {
+function freshRun(starterId: string, companionId: string, seed: number, difficulty?: Difficulty, relicId?: string, saveSlot?: number): GameState {
   const starter = makeUnit(starterId, true, 0, false);
   const starter2 = makeUnit(starterId, true, 1, false);
   const companion = makeUnit(companionId, true, 2, false);
@@ -189,6 +191,7 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
     difficulty: difficulty ?? 'normal',
     unlocks: { ...DEFAULT_UNLOCKS },
     relics,
+    saveSlot,
   };
 }
 
@@ -437,11 +440,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_RUN': {
       const diff = action.difficulty ?? state.difficulty ?? 'normal';
       const rel = action.relic ?? state.relics?.[0];
-      return freshRun(action.starterId, action.companionId, action.seed, diff, rel);
+      return freshRun(action.starterId, action.companionId, action.seed, diff, rel, state.saveSlot);
     }
 
     case 'STARTER':
-      return { ...createInitialState(), screen: 'difficulty-select' };
+      return { ...createInitialState(), screen: 'difficulty-select', saveSlot: action.saveSlot };
 
     case 'LOAD_GAME':
       if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title' };
@@ -472,6 +475,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           skipSelecting: false,
           scoutSelecting: false,
           scoutResult: undefined,
+          saveSlot: action.state.saveSlot,
         };
       }
 
@@ -1679,8 +1683,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'CLEAR_TOAST':
       return { ...state, toast: undefined };
 
+    case 'SHOW_TOAST':
+      return { ...state, toast: { msg: action.msg, kind: action.kind ?? 'info' } };
+
     case 'ACHIEVEMENTS':
-      return { ...state, screen: 'achievements' };
+      return { ...state, screen: 'achievements', unlocks: action.unlocks ?? state.unlocks };
 
     case 'SELECT_DIFFICULTY':
       return { ...state, screen: 'difficulty-select' };

@@ -2,24 +2,33 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
-function saveFile(): string {
-  return path.join(app.getPath('userData'), 'save.json');
+function saveFile(slot: number): string {
+  return path.join(app.getPath('userData'), `save_${slot}.json`);
 }
 
 function registerIpc(): void {
-  ipcMain.handle('save-game', (_event, json: string) => {
+  ipcMain.handle('save-game', (_event, slot: number, json: string) => {
     try {
-      fs.writeFileSync(saveFile(), json, 'utf8');
+      fs.writeFileSync(saveFile(slot), json, 'utf8');
       return true;
     } catch {
       return false;
     }
   });
-  ipcMain.handle('load-game', () => {
+  ipcMain.handle('load-game', (_event, slot: number) => {
     try {
-      return fs.readFileSync(saveFile(), 'utf8');
+      return fs.readFileSync(saveFile(slot), 'utf8');
     } catch {
       return null;
+    }
+  });
+  ipcMain.handle('delete-save', (_event, slot: number) => {
+    try {
+      const fp = saveFile(slot);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      return true;
+    } catch {
+      return false;
     }
   });
   ipcMain.on('quit', () => app.quit());

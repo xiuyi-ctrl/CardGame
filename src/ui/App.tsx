@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } fro
 import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
-import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, type MapNode, type SpecialReward } from '../game/state/game';
+import type { GameState, Difficulty, Unlocks } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, getMonster } from '../game/data/monsters';
@@ -16,7 +16,7 @@ import { UnitCard, SkillTag, DragScrollRow } from './components';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
-import { loadSave, persistSave, quitGame, loadUnlocks, persistUnlocks, detectUnlocks } from './persistence';
+import { persistSave, quitGame, detectUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
@@ -43,7 +43,7 @@ export default function App() {
 
   return (
     <div className="screen">
-      {state.screen === 'title' && <HomeScreen dispatch={dispatch} />}
+      {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
       {state.screen === 'formation' && <FormationScreen state={state} dispatch={dispatch} />}
@@ -67,8 +67,8 @@ export default function App() {
       {state.screen === 'test-type' && <TestTypeScreen dispatch={dispatch} />}
       {state.screen === 'test-pick' && <TestPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
-      {state.screen === 'achievements' && <AchievementsScreen dispatch={dispatch} />}
-      {state.screen === 'difficulty-select' && <DifficultyScreen dispatch={dispatch} />}
+      {state.screen === 'achievements' && <AchievementsScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'difficulty-select' && <DifficultyScreen state={state} dispatch={dispatch} />}
       {state.toast && (
         <div className={`toast ${state.toast.kind ?? 'info'}`}>
           {state.toast.msg}
@@ -531,29 +531,105 @@ function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   );
 }
 
-function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameAction>; currentSaveSlot?: number }) {
   const [hasSave, setHasSave] = useState<boolean | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
+  const [showSaveMgmt, setShowSaveMgmt] = useState(false);
+  const [slots, setSlots] = useState<SaveSlotInfo[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<number | undefined>(() => {
+    try { return Number(localStorage.getItem('petCardSaveSelected')) || undefined; } catch { return undefined; }
+  });
+  const [selectedUnlocks, setSelectedUnlocks] = useState<Unlocks | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [dbgAct, setDbgAct] = useState(1);
   const [dbgRow, setDbgRow] = useState(5);
   const [dbgType, setDbgType] = useState<MapNode['type'] | 'all'>('all');
   const [dbgSeed, setDbgSeed] = useState(42);
 
+  function selectSlot(slot: number | undefined, unlocks?: Unlocks) {
+    setSelectedSlot(slot);
+    setSelectedUnlocks(unlocks);
+    try {
+      if (slot) localStorage.setItem('petCardSaveSelected', String(slot));
+      else localStorage.removeItem('petCardSaveSelected');
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     let cancelled = false;
-    void loadSave().then((s) => {
-      if (!cancelled) setHasSave(s !== null);
+    void listSaves().then((s) => {
+      if (!cancelled) {
+        setSlots(s);
+        setHasSave(s.some((x) => x.state !== null));
+      }
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (currentSaveSlot) {
+      const target = slots.find((s) => s.slot === currentSaveSlot);
+      selectSlot(currentSaveSlot, target?.state?.unlocks);
+    }
+  }, [currentSaveSlot, slots]);
+
+  function onNewGame() {
+    const empty = slots.find((s) => !s.state);
+    if (empty) {
+      clearDeletedSlot(empty.slot);
+      selectSlot(empty.slot);
+      dispatch({ type: 'STARTER', saveSlot: empty.slot });
+    } else {
+      alert('存档已满，请在「存档管理」中删除一个存档');
+    }
+  }
+
   function onContinue() {
-    void loadSave().then((s) => {
-      if (s) dispatch({ type: 'LOAD_GAME', state: s });
+    if (!selectedSlot) return;
+    const target = slots.find((s) => s.slot === selectedSlot && s.state);
+    if (target?.state) {
+      dispatch({ type: 'LOAD_GAME', state: target.state });
+    }
+  }
+
+  function onSlotClick(slot: SaveSlotInfo) {
+    if (!slot.state) return;
+    selectSlot(slot.slot, slot.state.unlocks);
+    dispatch({ type: 'SHOW_TOAST', msg: `已切换到存档 ${slot.slot}`, kind: 'success' });
+  }
+
+  function onDeleteSlot(slotNum: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDeleteTarget(slotNum);
+  }
+
+  function confirmDelete() {
+    if (deleteTarget === null) return;
+    const slotNum = deleteTarget;
+    setDeleteTarget(null);
+    void deleteSave(slotNum).then(() => {
+      setSlots((prev) => {
+        const next = prev.map((s) => s.slot === slotNum ? { ...s, state: null } : s);
+        setHasSave(next.some((x) => x.state !== null));
+        return next;
+      });
+      if (selectedSlot === slotNum) {
+        selectSlot(undefined);
+      }
     });
+  }
+
+  function slotSummary(s: SaveSlotInfo) {
+    if (!s.state) return { text: '空', sub: '', cls: 'empty' };
+    const st = s.state;
+    const rosterCount = st.roster.length;
+    const diffLabel = DIFFICULTY_CONFIG[st.difficulty ?? 'normal'].label;
+    return {
+      text: `第${st.act}幕 · ${rosterCount}只 · ${st.gold}金`,
+      sub: `${diffLabel} · ${new Date().toLocaleDateString()}`,
+      cls: 'occupied',
+    };
   }
 
   const DEBUG_TYPES_ALL: { value: MapNode['type'] | 'all'; label: string }[] = [
@@ -573,7 +649,6 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
     { value: 'keydoor', label: '钥匙门' },
   ];
 
-  // 测试面板联动：按当前幕/种子实时生成地图，仅展示该幕该层实际存在的节点类型与层数
   const dbgMap = useMemo(() => generateMap(dbgSeed, dbgAct), [dbgSeed, dbgAct]);
   const dbgRows = dbgMap.layers.length;
   const dbgRowClamped = Math.min(dbgRow, dbgRows - 1);
@@ -587,16 +662,22 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
       <div className="title-name">驯牌远征</div>
       <div className="title-sub">肉鸽卡牌 · 宠物对战 · 生死相随</div>
       <div className="home-menu">
-        <button className="primary big-btn" onClick={() => dispatch({ type: 'STARTER' })}>
+        <button className="primary big-btn" onClick={onNewGame}>
           新游戏
         </button>
-        <button className="big-btn" onClick={onContinue} disabled={hasSave !== true}>
-          {hasSave === null ? '检查存档…' : hasSave ? '继续游戏' : '继续游戏（暂无存档）'}
+        <button className="big-btn" onClick={onContinue} disabled={!selectedSlot || !slots.find((s) => s.slot === selectedSlot && s.state)}>
+          {hasSave === null ? '检查存档…' : selectedSlot ? '继续游戏' : '请先选择存档'}
+        </button>
+        <button className="big-btn" onClick={() => setShowSaveMgmt(true)}>
+          💾 存档管理
         </button>
         <button className="big-btn" onClick={() => setShowCodex(true)}>
           📖 生物图鉴
         </button>
-        <button className="big-btn" onClick={() => dispatch({ type: 'ACHIEVEMENTS' })}>
+        <button className="big-btn" onClick={() => {
+          const unlocks = selectedUnlocks ?? { ...DEFAULT_UNLOCKS };
+          dispatch({ type: 'ACHIEVEMENTS', unlocks });
+        }}>
           🏆 成就
         </button>
         <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
@@ -606,6 +687,52 @@ function HomeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           退出游戏
         </button>
       </div>
+      {showSaveMgmt && (
+        <div className="save-mgmt-overlay" onClick={() => setShowSaveMgmt(false)}>
+          <div className="save-mgmt-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">存档管理</div>
+            <div className="save-grid">
+              {slots.map((s) => {
+                const info = slotSummary(s);
+                const isActive = s.slot === selectedSlot;
+                return (
+                  <div
+                    key={s.slot}
+                    className={`save-slot ${info.cls}${isActive ? ' active' : ''}`}
+                    onClick={() => onSlotClick(s)}
+                    style={!s.state ? { pointerEvents: 'none' } : undefined}
+                  >
+                    <div className="save-slot-num">存档 {s.slot}{isActive ? '（当前）' : ''}</div>
+                    <div className="save-slot-text">{info.text}</div>
+                    {info.sub && <div className="save-slot-sub">{info.sub}</div>}
+                    {s.state && (
+                      <button className="save-slot-del" onClick={(e) => onDeleteSlot(s.slot, e)} title="删除存档">✕</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <button className="big-btn" style={{ marginTop: 16 }} onClick={() => setShowSaveMgmt(false)}>关闭</button>
+          </div>
+        </div>
+      )}
+      {deleteTarget !== null && (
+        <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setDeleteTarget(null)}>
+          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">⚠️ 删除存档</div>
+            <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
+              确定要删除存档 <b style={{ color: 'var(--gold)' }}>{deleteTarget}</b> 吗？
+            </p>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
+              此操作不可撤销。
+            </p>
+            <div className="panel-row" style={{ justifyContent: 'center' }}>
+              <button className="primary" onClick={confirmDelete}>确定删除</button>
+              <button onClick={() => setDeleteTarget(null)}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDebug && (
         <div className="debug-panel">
           <div className="debug-row">
@@ -826,10 +953,10 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DifficultyScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+function DifficultyScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('normal');
   const [selectedRelic, setSelectedRelic] = useState<string>('');
-  const unlocks = loadUnlocks();
+  const unlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
   const diffCfg = DIFFICULTY_CONFIG[selectedDifficulty];
 
   const handleNext = () => {
@@ -2194,10 +2321,9 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
 
   useEffect(() => {
     if (!rating) return;
-    const currentUnlocks = loadUnlocks();
+    const currentUnlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
     const rosterInfo = state.roster.map((u) => ({ speciesId: u.speciesId, passive: u.passive }));
     const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo);
-    // 找出新解锁的项
     const newItems: string[] = [];
     for (const d of nextUnlocks.difficulties) {
       if (!currentUnlocks.difficulties.includes(d)) newItems.push(`难度：${DIFFICULTY_CONFIG[d as Difficulty].label}`);
@@ -2207,7 +2333,9 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
     }
     if (nextUnlocks.bestGrade !== currentUnlocks.bestGrade) newItems.push(`最高评级：${nextUnlocks.bestGrade}`);
     setUnlocked(newItems);
-    persistUnlocks(nextUnlocks);
+    // 保存 unlocks 到当前存档槽
+    const updatedState = { ...state, unlocks: nextUnlocks };
+    void persistSave(updatedState);
   }, [rating]);
 
   return (
@@ -2239,8 +2367,8 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
   );
 }
 
-function AchievementsScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
-  const unlocks = loadUnlocks();
+function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const unlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
   const allDifficulties: { id: Difficulty; label: string; desc: string }[] = [
     { id: 'normal', label: '普通', desc: '标准难度，无额外修正' },
     { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%' },
