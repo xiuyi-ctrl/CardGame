@@ -126,8 +126,6 @@ const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
-const RE_SPD_DOWN = /^(.+?) 的「(.+?)」使 (.+?) 速度 -(\d+)$/;
-const RE_ITEM_SPD = /^对 (.+?) 使用道具：速度 ([+-]\d+)/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
 const RE_CHAIN_LINK = /^(.+?) 使用「(.+?)」！(.+?) 和 (.+?) 被锁链连接$/;
 
@@ -140,7 +138,6 @@ function buffText(skillName: string): string {
     const e = skill.effects?.[0];
     if (e?.kind === 'atkUp') return '攻击↑';
     if (e?.kind === 'shield') return '🛡️护盾';
-    if (e?.kind === 'windSpd') return '速度↑';
   }
   return '强化';
 }
@@ -326,33 +323,6 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       targetUid: uid,
       value: Number(m[3]),
       skillName: m[2],
-      hp: entry.hp,
-      statuses: entry.statuses,
-      shields: entry.shields,
-    };
-  }
-  if ((m = text.match(RE_SPD_DOWN))) {
-    const actorUid = entry.actorUid ?? findUid(b, side, m[1]);
-    const targetUid = entry.targetUid ?? findUid(b, opposite, m[3]);
-    return {
-      kind: 'speed',
-      actorUid,
-      targetUid,
-      value: -Number(m[4]),
-      skillName: m[2],
-      hp: entry.hp,
-      statuses: entry.statuses,
-      shields: entry.shields,
-    };
-  }
-  if ((m = text.match(RE_ITEM_SPD))) {
-    const targetUid = entry.targetUid ?? findUid(b, opposite, m[1]);
-    return {
-      kind: 'speed',
-      actorUid: targetUid,
-      targetUid,
-      value: Number(m[2]),
-      skillName: '道具',
       hp: entry.hp,
       statuses: entry.statuses,
       shields: entry.shields,
@@ -581,42 +551,10 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setThornRoyalHitsMap(prevBattleBefore ? thornRoyalHitsOfUnits(prevBattleBefore) : null);
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
-    // 预计算每个日志条目的速度快照差值（覆盖风羽/药水/粘滞躯体等非 speed 事件的速度变化）
-    const spdDeltas: Array<Record<string, number>> = [];
-    {
-      let prevSpdSnap = prevSpd;
-      for (const entry of newEntries) {
-        const curSpdSnap = entry.hp ? spdOfUnits(battle) : prevSpdSnap;
-        const delta: Record<string, number> = {};
-        const allUids = new Set([...Object.keys(prevSpdSnap), ...Object.keys(curSpdSnap)]);
-        for (const uid of allUids) {
-          delta[uid] = (curSpdSnap[uid] ?? 0) - (prevSpdSnap[uid] ?? 0);
-        }
-        spdDeltas.push(delta);
-        prevSpdSnap = curSpdSnap;
-      }
-    }
-    const appliedSpdDelta = new Set<number>();
     events.forEach((ev, i) => {
       const t = window.setTimeout(
         () => {
           setRevealedLogLen((cur) => Math.max(cur, startLen + eventSrcIdx[i] + 1));
-          // 应用该日志条目的速度快照差值（风羽/药水/粘滞躯体等非 speed 事件的速度变化）
-          const srcIdx = eventSrcIdx[i];
-          if (!appliedSpdDelta.has(srcIdx)) {
-            appliedSpdDelta.add(srcIdx);
-            const delta = spdDeltas[srcIdx];
-            if (delta && Object.values(delta).some((d) => d !== 0)) {
-              setSpdMap((p) => {
-                if (!p) return p;
-                const next = { ...p };
-                for (const [uid, d] of Object.entries(delta)) {
-                  if (d !== 0) next[uid] = (next[uid] ?? 0) + d;
-                }
-                return next;
-              });
-            }
-          }
           const popId = ++popSeq;
           const actorUid = ev.actorUid;
           const targetUid = ev.targetUid;
@@ -688,11 +626,10 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           } else if (ev.kind === 'speed') {
             if (targetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq;
-              const isDebuff = ev.value < 0;
-              setFx((p) => ({ ...p, [targetUid]: { cls: isDebuff ? 'fx-hit' : 'fx-buff', seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: targetUid, text: isDebuff ? `速度${ev.value}` : `速度+${ev.value}`, heal: false, buff: !isDebuff }]);
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-buff', seq: capturedTargetSeq } }));
+              setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度 +${ev.value}`, heal: false, buff: true }]);
               setSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + ev.value } : p);
-              if (!isDebuff) setPassiveSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + 1 } : p);
+              if (ev.value > 0) setPassiveSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + 1 } : p);
             }
           } else if (ev.kind === 'burst') {
             // 范围伤害：仅挂飘字，不触发任何生物抖动（setFx）；同一 popId 让所有飘字同时出现、同时消失

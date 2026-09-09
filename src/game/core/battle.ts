@@ -1484,7 +1484,7 @@ function resolveAttack(
   const segments = splitDamage(finalDmg, count);
   let t2 = tWithPassive;
   const skillEffectKinds: string[] = (skill.effects ?? [])
-    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark' || e.kind === 'spdDown')
+    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark')
     .map((e) => e.kind);
   let lastHitLog: number | undefined;
   let shieldIgnoreLeft = (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) ? 8 : 0;

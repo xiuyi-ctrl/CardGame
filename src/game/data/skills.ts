@@ -31,27 +31,30 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 6,
   },
   steel_spike: {
-    id: 'steel_spike', name: '铁刺', desc: '攻击单个敌人，降低其伤害',
+    id: 'steel_spike', name: '铁刺', desc: '攻击单个敌人，降低其伤害1层，持续2回合',
     target: 'single', kind: 'attack', damage: 3,
     effects: [{ kind: 'atkDown', value: 1, turns: 2 }],
+    hideEffects: true,
   },
   heal_light: {
     id: 'heal_light', name: '愈光', desc: '治疗一个队友',
     target: 'ally', kind: 'heal', heal: 8, uses: 2,
   },
   roar: {
-    id: 'roar', name: '战吼', desc: '提升自身伤害',
+    id: 'roar', name: '战吼', desc: '提升自身伤害+2，持续2回合',
     target: 'self', kind: 'buff', uses: 2,
     effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   double_hit: {
     id: 'double_hit', name: '连击', desc: '连续两次攻击单个敌人',
     target: 'single', kind: 'attack', damage: 4, hits: 2,
   },
   poison_sting: {
-    id: 'poison_sting', name: '毒刺', desc: '攻击并施加中毒',
+    id: 'poison_sting', name: '毒刺', desc: '攻击单个敌人，附加中毒2层',
     target: 'single', kind: 'attack', damage: 4,
     effects: [{ kind: 'poison', value: 2, turns: 3 }],
+    hideEffects: true,
   },
   toxic_burst: {
     id: 'toxic_burst', name: '毒性爆发', desc: '蓄力：若本回合自身死亡，对全体敌人造成 4 伤害 + 中毒 3 层（冷却 1 回合）',
@@ -60,9 +63,10 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   flame_burst: {
-    id: 'flame_burst', name: '烈焰爆发', desc: '攻击所有敌人并附加灼烧',
+    id: 'flame_burst', name: '烈焰爆发', desc: '攻击所有敌人，附加灼烧2层',
     target: 'all', kind: 'attack', damage: 5,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   dark_shock: {
     id: 'dark_shock', name: '暗影冲击', desc: '重击单个敌人',
@@ -116,11 +120,13 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'flame_combo', name: '火焰连击', desc: '连续两次攻击随机敌人，附加灼烧 2 层',
     target: 'random', kind: 'attack', damage: 4, hits: 2,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   fire_shock: {
-    id: 'fire_shock', name: '火光冲击', desc: '贯穿攻击单个敌人并附加灼烧',
+    id: 'fire_shock', name: '火光冲击', desc: '贯穿攻击单个敌人，附加灼烧1层',
     target: 'single', kind: 'attack', damage: 4, reach: 'pierce',
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
+    hideEffects: true,
   },
   shield_counter: {
     id: 'shield_counter', name: '盾反', desc: '先手：为自身附加3层护盾，受攻击时反击敌人并降低其伤害（仅当前回合有效，使用后冷却1回合）',
@@ -139,47 +145,53 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // —— Boss 专属技能 ——
   vine_whip: {
-    id: 'vine_whip', name: '藤鞭缠绕', desc: '攻击全体敌人并降低其伤害',
+    id: 'vine_whip', name: '藤鞭缠绕', desc: '攻击全体敌人，降低其伤害1层，持续2回合',
     target: 'all', kind: 'attack', damage: 3,
     effects: [{ kind: 'atkDown', value: 1, turns: 2 }],
+    hideEffects: true,
   },
   shadow_flurry: {
     id: 'shadow_flurry', name: '暗影乱舞', desc: '连续三次攻击单个敌人',
     target: 'single', kind: 'attack', damage: 3, hits: 3,
   },
   inferno: {
-    id: 'inferno', name: '炼狱烈焰', desc: '连续两次攻击全体敌人并附加灼烧（每场限2次）',
+    id: 'inferno', name: '炼狱烈焰', desc: '连续两次攻击全体敌人，附加灼烧2层（每场限2次）',
     target: 'all', kind: 'attack', damage: 5, hits: 2,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
     uses: 2,
+    hideEffects: true,
   },
   tidal_slam: {
     id: 'tidal_slam', name: '潮涌重击', desc: '攻击全体敌人并恢复自身4点生命值',
     target: 'all', kind: 'attack', damage: 4, heal: 4,
   },
   quake: {
-    id: 'quake', name: '震地', desc: '攻击全体敌人并使其眩晕',
+    id: 'quake', name: '震地', desc: '攻击全体敌人并使其眩晕1回合',
     target: 'all', kind: 'attack', damage: 3,
     effects: [{ kind: 'stun', value: 1, turns: 1 }],
+    hideEffects: true,
   },
   spore_burst: {
-    id: 'spore_burst', name: '孢子爆裂', desc: '攻击全体敌人并施加中毒',
+    id: 'spore_burst', name: '孢子爆裂', desc: '攻击全体敌人，附加中毒3层',
     target: 'all', kind: 'attack', damage: 3,
     effects: [{ kind: 'poison', value: 3, turns: 3 }],
+    hideEffects: true,
   },
   soul_rend: {
     id: 'soul_rend', name: '噬魂斩', desc: '重击单个敌人（每场限 2 次）',
     target: 'single', kind: 'attack', damage: 12, uses: 2,
   },
   dragon_breath: {
-    id: 'dragon_breath', name: '龙息', desc: '连续两次攻击全体敌人并附加灼烧',
+    id: 'dragon_breath', name: '龙息', desc: '连续两次攻击全体敌人，附加灼烧2层',
     target: 'all', kind: 'attack', damage: 4, hits: 2,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   hellfire: {
-    id: 'hellfire', name: '地狱火', desc: '攻击全体敌人并附加灼烧',
+    id: 'hellfire', name: '地狱火', desc: '攻击全体敌人，附加灼烧3层',
     target: 'all', kind: 'attack', damage: 6,
     effects: [{ kind: 'burn', value: 3, turns: 2 }],
+    hideEffects: true,
   },
   revenge_thorn: {
     id: 'revenge_thorn', name: '复仇棘甲', desc: '【先手】本回合内每次受到攻击后获得怒棘（攻击+1，可叠加），每层额外使被动反伤+1（每场限 2 次）',
@@ -187,9 +199,10 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'thornSpikes', value: 1, turns: 1 }],
   },
   group_taunt: {
-    id: 'group_taunt', name: '群体嘲刺', desc: '攻击所有前排敌人并施加嘲讽（前排空则攻击后排，每场限 2 次）',
+    id: 'group_taunt', name: '群体嘲刺', desc: '攻击所有前排敌人并施加嘲讽2回合（前排空则攻击后排，每场限 2 次）',
     target: 'all', kind: 'attack', damage: 3, uses: 2, reach: 'front',
     effects: [{ kind: 'taunt', value: 1, turns: 2 }],
+    hideEffects: true,
   },
 
   // —— 传奇宠物重做技能 ——
@@ -198,6 +211,7 @@ export const SKILLS: Record<string, SkillDef> = {
     kind: 'buff', target: 'allyAll',
     effects: [{ kind: 'shield', value: 6, turns: 99 }],
     uses: 2,
+    hideEffects: true,
   },
   shield_quake: {
     id: 'shield_quake', name: '盾震', desc: '攻击前排所有敌人',
@@ -208,18 +222,21 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'iron_double', name: '铁壁双击', desc: '随机攻击两个敌人，每命中一个自身获得 5 层护盾',
     kind: 'attack', damage: 3, hits: 2, target: 'random',
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
+    hideEffects: true,
   },
   poison_mist: {
     id: 'poison_mist', name: '毒雾', desc: '使所有敌人中毒 5 层',
     kind: 'attack', damage: 0, hits: 1, target: 'all',
     effects: [{ kind: 'poison', value: 5, turns: 3 }],
     uses: 2,
+    hideEffects: true,
   },
   toxic_bite: {
-    id: 'toxic_bite', name: '淬毒噬咬', desc: '攻击单个敌人，若目标已中毒则伤害翻倍',
+    id: 'toxic_bite', name: '淬毒噬咬', desc: '攻击单个敌人，附加中毒4层，若目标已中毒则伤害翻倍',
     kind: 'attack', damage: 6, hits: 1, target: 'single',
     effects: [{ kind: 'poison', value: 4, turns: 3 }],
     uses: 3,
+    hideEffects: true,
   },
   wind_flash: {
     id: 'wind_flash', name: '风灵闪', desc: '攻击单个敌人，若自身速度高于目标则额外攻击一次',
@@ -247,6 +264,7 @@ export const SKILLS: Record<string, SkillDef> = {
     heal: 4,
     effects: [{ kind: 'waterCurtain', value: 2, turns: 1 }],
     uses: 2,
+    hideEffects: true,
   },
   water_shot: {
     id: 'water_shot', name: '水波弹', desc: '攻击单个敌人',
@@ -258,21 +276,24 @@ export const SKILLS: Record<string, SkillDef> = {
     reach: 'front',
   },
   burn_burst: {
-    id: 'burn_burst', name: '焚身爆', desc: '攻击所有敌人并附加灼烧；使用后自身损失 5 点生命（不可减免）',
+    id: 'burn_burst', name: '焚身爆', desc: '攻击所有敌人，附加灼烧3层；使用后自身损失 5 点生命（不可减免）',
     kind: 'attack', damage: 8, hits: 1, target: 'all',
     effects: [{ kind: 'burn', value: 3, turns: 2 }],
     uses: 1,
+    hideEffects: true,
   },
   flame_shield: {
     id: 'flame_shield', name: '烈焰护盾',     desc: '先手：获得 5 层护盾；本回合受攻击则灼烧攻击者 10 层（使用后冷却1回合）',
     kind: 'buff', target: 'self', priority: 'first',
     effects: [{ kind: 'shield', value: 5, turns: 99 }, { kind: 'flameShield', value: 10, turns: 1 }],
     uses: 5, cooldown: 1,
+    hideEffects: true,
   },
   flame_slash: {
-    id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人并附加灼烧',
+    id: 'flame_slash', name: '火焰斩击', desc: '重击单个敌人，附加灼烧2层',
     kind: 'attack', damage: 8, hits: 1, target: 'single',
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
+    hideEffects: true,
   },
 
   // —— Boss 专属技能（小怪/首领）——
@@ -281,9 +302,10 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 5,
   },
   flame_pillar: {
-    id: 'flame_pillar', name: '焰柱', desc: '贯穿攻击单个敌人并附加灼烧',
+    id: 'flame_pillar', name: '焰柱', desc: '贯穿攻击单个敌人，附加灼烧2层',
     target: 'single', kind: 'attack', damage: 8, reach: 'pierce',
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   wild_leaf: {
     id: 'wild_leaf', name: '狂叶', desc: '攻击全体敌人，伤害随自身速度提高',
@@ -297,16 +319,19 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'boss_vine_shield', name: '古树庇护', desc: '全体友方获得5点护盾并回复2点生命',
     target: 'allyAll', kind: 'buff', heal: 2, uses: 2,
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
+    hideEffects: true,
   },
   poison_vine: {
-    id: 'poison_vine', name: '毒刺藤', desc: '攻击单个敌人并施加中毒',
+    id: 'poison_vine', name: '毒刺藤', desc: '攻击单个敌人，附加中毒3层',
     target: 'single', kind: 'attack', damage: 3,
     effects: [{ kind: 'poison', value: 3, turns: 3 }],
+    hideEffects: true,
   },
   entangle: {
-    id: 'entangle', name: '缠绕', desc: '攻击单个敌人并降低其速度',
+    id: 'entangle', name: '缠绕', desc: '攻击单个敌人，降低其速度2层，持续2回合',
     target: 'single', kind: 'attack', damage: 2,
     effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   claw_smash: {
     id: 'claw_smash', name: '蟹钳重击', desc: '重击单个敌人，目标生命值高于80%时额外造成2点伤害',
@@ -316,6 +341,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'wave_aura', name: '波光环', desc: '使自身下回合连击段数+2',
     target: 'self', kind: 'buff',
     effects: [{ kind: 'comboBoost', value: 2, turns: 1 }],
+    hideEffects: true,
   },
   water_cannon: {
     id: 'water_cannon', name: '水炮射击', desc: '连续三次随机攻击敌人',
@@ -325,6 +351,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'shell_up', name: '缩壳', desc: '自身和潮汐巨蟹获得5点护盾，自身下回合无法行动',
     target: 'self', kind: 'buff',
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
+    hideEffects: true,
   },
   // —— 岩甲巨像专属 ——
   rock_throw: {
@@ -332,6 +359,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 6,
     priority: 'first', uses: 3,
     effects: [{ kind: 'stun', value: 1, turns: 1 }],
+    hideEffects: true,
   },
   gravel_throw: {
     id: 'gravel_throw', name: '碎石投掷', desc: '攻击单个敌人',
@@ -349,6 +377,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'shadow_rift', name: '暗影裂隙',     desc: '攻击全体敌人并施加暗影印记（下回合受伤+2，持续1回合）',
     target: 'all', kind: 'attack', damage: 4,
     effects: [{ kind: 'shadowMark', value: 2, turns: 1 }],
+    hideEffects: true,
   },
   leech_bite: {
     id: 'leech_bite', name: '嗜血', desc: '攻击单个敌人并恢复自身生命',
@@ -362,11 +391,13 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'spore_shield', name: '孢子防护', desc: '本回合受到的所有伤害-2，回合结束时回复8点生命值',
     target: 'self', kind: 'buff', cooldown: 1,
     effects: [{ kind: 'sporeShield', value: 2, turns: 1 }],
+    hideEffects: true,
   },
   slime_cover: {
-    id: 'slime_cover', name: '粘液覆盖', desc: '攻击单个敌人并减速',
+    id: 'slime_cover', name: '粘液覆盖', desc: '攻击单个敌人，减速2层，持续2回合',
     target: 'single', kind: 'attack', damage: 2,
     effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
+    hideEffects: true,
   },
 
   // —— 幽灵船长专属技能 ——
@@ -405,9 +436,10 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'self', kind: 'buff',
   },
   iron_tail: {
-    id: 'iron_tail', name: '铁尾横扫', desc: '攻击全体前排敌人并附加减速',
+    id: 'iron_tail', name: '铁尾横扫', desc: '攻击全体前排敌人，附加减速2层，持续2回合',
     target: 'all', reach: 'front', kind: 'attack', damage: 8,
     effects: [{ kind: 'spdDown', value: 2, turns: 2 }],
+    hideEffects: true,
   },
   dragon_claw: {
     id: 'dragon_claw', name: '龙爪撕裂', desc: '重击单个敌人',
@@ -417,6 +449,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'iron_wall', name: '铸甲', desc: '为全体友方附加5护盾（每场限5次）',
     target: 'allyAll', kind: 'buff', uses: 5,
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
+    hideEffects: true,
   },
 };
 

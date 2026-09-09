@@ -573,7 +573,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
                     onClick={() => onSkillClick(s)}
                     disabled={exhausted || onCooldown || cannotOrder || animating}
-                    title={`${s.desc}（${skillBrief(s)}）${limited ? `，本场剩余 ${Math.max(0, left)} 次` : ''}${onCooldown ? `，冷却中（${cd} 回合）` : ''}`}
+                    title={`${s.desc}${limited ? `，本场剩余 ${Math.max(0, left)} 次` : ''}${onCooldown ? `，冷却中（${cd} 回合）` : ''}`}
                   >
                     {onCooldown && (
                       <span className="skill-cooldown-overlay">冷却 {cd} 回合</span>
