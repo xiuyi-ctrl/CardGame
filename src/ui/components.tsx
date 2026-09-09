@@ -307,7 +307,8 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
   const windSpdStatus = unit.statuses.find((s) => s.kind === 'windSpd');
   const windSpd = windSpdStatus ? windSpdStatus.value : 0;
   const effectiveSpd = speedOverride ?? Math.max(1, unit.spd + buffSpd + skillSpd + statusSpd + windSpd);
-  const totalDelta = buffSpd + skillSpd + statusSpd + windSpd;
+  const passiveSpd = unit.passiveSpdBonus ?? 0;
+  const totalDelta = passiveSpd + buffSpd + skillSpd + statusSpd + windSpd;
   const spdColor = totalDelta > 0 ? 'var(--hp-good)' : totalDelta < 0 ? 'var(--hp-low)' : undefined;
   return (
     <div

@@ -175,6 +175,8 @@ export interface Unit {
   customSkills?: string[];
   /** 被动速度技能叠加层数（受击加速上限6层/古木加速上限8层/疾风连携无上限） */
   passiveSpdStacks?: number;
+  /** 被动给予的永久速度加成（kind: 'spd' 的被动，如迅捷+2/迅力+3/幽灵疾步+3） */
+  passiveSpdBonus?: number;
   /** 战斗药水临时效果（uid -> {atkUp?, spdUp?, atkDown?, spdDown?} 回合数；hpUp/hpDown 为即时生效不入此表） */
   battleBuffs?: {
     atkUp?: number;

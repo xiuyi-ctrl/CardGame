@@ -1354,7 +1354,7 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
   const rng = createRng(state.seed * 173 + state.act * 37 + state.currentRow * 59 + (type === 'arena' ? 1 : 2));
   const options: RewardChoice[] = [
     { id: 'ch-gold', label: '冠军赏金', desc: '获得 30 金币', kind: 'gold', amount: 30 },
-    { id: 'ch-food', label: '美味补给', desc: '获得 1 个随机食物', kind: 'food', foodId: pick(rng, Object.keys(FOODS)) },
+    { id: 'ch-food', label: '美味补给', desc: '获得 1 个随机食物', kind: 'food', foodId: pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit')) },
     { id: 'ch-heal', label: '庆功宴', desc: '全体恢复 50% 生命', kind: 'heal', amount: 50 },
   ];
   if (state.roster.length < ROSTER_MAX) {
@@ -1802,7 +1802,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
       label: '补给品',
       desc: '获得 1 个随机食物',
       kind: 'food',
-      foodId: pick(rng, Object.keys(FOODS)),
+      foodId: pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit')),
     },
     {
       id: 'r-heal',

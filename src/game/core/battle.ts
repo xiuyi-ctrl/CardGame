@@ -100,6 +100,7 @@ export function makeUnit(
     tameable,
     acted: false,
     soul: passive?.kind === 'soulSiphon' ? 0 : undefined,
+    passiveSpdBonus: spdBonus || undefined,
   };
 }
 
