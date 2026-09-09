@@ -167,6 +167,8 @@ export interface Unit {
   skillUses?: Record<string, number>;
   /** 本场战斗中各技能冷却剩余回合数（skillId -> 剩余回合；冷却结束后归零） */
   skillCooldowns?: Record<string, number>;
+  /** 上一回合使用的技能 id（敌方 AI 用于降低连续重复使用同一技能的概率） */
+  lastSkillId?: string;
   /** 属性强化：对基准属性的永久加成（来自奇遇关「属性强化」） */
   bonusStats?: { hp?: number; spd?: number };
   /** 超进化带来的负面诅咒：hpDown=生命-5 / atkDown=伤害-2 / spdDown=速度-2 */

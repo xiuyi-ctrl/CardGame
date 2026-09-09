@@ -71,10 +71,10 @@ export function computeRevealAt(
   for (const uid of Object.keys(newStatuses)) {
     const kinds = [...newStatuses[uid]];
     const assigned = new Array<boolean>(kinds.length).fill(false);
-    // 1) 精确匹配：该 kind 由某次攻击/爆发附加，随那次动画揭示
+    // 1) 精确匹配：该 kind 由某次攻击/爆发/治疗/buff 附加，随那次动画揭示
     for (let k = 0; k < kinds.length; k++) {
       const i = events.findIndex(
-        (ev) => ev.targetUid === uid && ev.kind === 'attack' && (ev.addsStatus ?? []).includes(kinds[k]),
+        (ev) => ev.targetUid === uid && (ev.kind === 'attack' || ev.kind === 'heal' || ev.kind === 'buff') && (ev.addsStatus ?? []).includes(kinds[k]),
       );
       if (i >= 0) {
         add(i, uid, [kinds[k]]);
@@ -278,6 +278,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       actorUid,
       targetUid,
       value: Number(m[4]),
+      addsStatus: entry.addsStatus,
       hp: entry.hp,
       statuses: entry.statuses,
       shields: entry.shields,
@@ -291,7 +292,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     const actorUid = entry.actorUid ?? findUid(b, side, m[1]);
     const targetName = m[3];
     const targetUid = entry.targetUid ?? (targetName === '自身' ? actorUid : findUid(b, side, targetName));
-    return { kind: 'buff', actorUid, targetUid, value: 0, skillName: m[2], hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+    return { kind: 'buff', actorUid, targetUid, value: 0, skillName: m[2], addsStatus: entry.addsStatus, hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   if ((m = text.match(RE_DOT))) {
     return {

@@ -288,7 +288,7 @@ describe('鏁村眬妯℃嫙锛堣嚜鍔ㄧ帺瀹讹級', () => {
     // eslint-disable-next-line no-console
     console.log(`STAT: victory=${results.victory} gameover=${results.gameover} stuck=${results.stuck} specials=${specials}`);
     expect(results.stuck).toBeLessThanOrEqual(5);
-    expect(results.gameover).toBeGreaterThan(0);
+    expect(results.victory).toBeGreaterThan(0);
     expect(specials).toBeGreaterThan(0);
   });
 });

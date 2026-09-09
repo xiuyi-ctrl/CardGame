@@ -1141,7 +1141,18 @@ function selectEnemyAction(
       candidates.push({ kind: 'attack', skill: atk, targetUid: best.target.uid, score: best.score + limitedBonus + comboBoostBonus + 5 });
     }
   }
-  // ─── 5. softmax 选择 ───
+  // ─── 5. 连续重复惩罚：上回合使用过的技能降低分数 ───
+  const lastId = actor.lastSkillId;
+  if (lastId) {
+    for (const c of candidates) {
+      if (c.skill && c.skill.id === lastId) {
+        if (c.kind === 'attack') c.score -= 15;
+        else if (c.kind === 'buff') c.score -= 10;
+        // heal 和 swap 不惩罚（治疗是刚需，换位有次数限制）
+      }
+    }
+  }
+  // ─── 6. softmax 选择 ───
   if (candidates.length === 0) return undefined;
   const maxScore = Math.max(...candidates.map((c) => c.score));
   const weights = candidates.map((c) => Math.exp((c.score - maxScore) / SOFTMAX_TEMP));
@@ -1788,6 +1799,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (skill.kind === 'heal') {
     let r = nb;
     const amt = Math.max(1, skill.heal ?? 0);
+    const addsKinds = (skill.effects ?? []).map((e) => e.kind);
     for (const t of targets) {
       const maxHp = getEffectiveMaxHp(t);
       let healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
@@ -1799,7 +1811,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
       }
       r = replaceUnit(r, healed);
-      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`, sideOf(actor), actor.uid, t.uid);
+      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`, sideOf(actor), actor.uid, t.uid, addsKinds);
     }
     nb = r;
   } else if (skill.kind === 'buff') {
@@ -2135,6 +2147,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         nb = pushLog(nb, `${actor.name} 使用「${skill.name}」恢复 ${healAmt} 点生命`, sideOf(actor), actor.uid, actor.uid);
       }
     }
+  }
+  // 记录上一回合使用的技能（敌方 AI 用于降低连续重复使用概率）
+  const updatedActor = actorFromId(nb, actor.uid);
+  if (updatedActor && !updatedActor.isPlayer) {
+    nb = replaceUnit(nb, { ...updatedActor, lastSkillId: skill.id });
   }
   return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
 }

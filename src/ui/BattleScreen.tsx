@@ -87,7 +87,12 @@ export function BattleScreen({ state, dispatch }: Props) {
     const sm = statusMap ? statusMap[u.uid] : undefined;
     if (sm) {
       const smMap = new Map(sm.map((s) => [s.kind, s]));
-      next = { ...next, statuses: next.statuses.map((s) => smMap.get(s.kind) ?? s) };
+      // 合并而非替换：sm 中有的更新 value/turns（如灼烧层数变化），sm 中没有的保留原样（新增状态如水幕）
+      const merged = next.statuses.map((s) => smMap.get(s.kind) ?? s);
+      for (const s of sm) {
+        if (!merged.some((ms) => ms.kind === s.kind)) merged.push(s);
+      }
+      next = { ...next, statuses: merged };
     }
     const hidden = hiddenStatuses[u.uid];
     if (hidden && hidden.length > 0) {
