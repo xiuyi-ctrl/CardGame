@@ -196,6 +196,72 @@ describe('rockShellHitsAfterEvent：岩壳崩解计数动画递增', () => {
 
   it('attack 命中非 boss 目标不改变计数', () => {
     const ev = { kind: 'attack' as const, targetUid: 'other-unit', value: 3 };
-    expect(rockShellHitsAfterEvent(base, ev, bossUid)).toEqual(base);
+    expect(rockShellHitsAfterEvent(base, ev, undefined)).toEqual(base);
+  });
+});
+
+describe('parseEvent：速度变化日志解析', () => {
+  const mkBattle = (...units: Array<{ uid: string; name: string; isPlayer: boolean }>) => ({
+    playerUnits: units.filter((u) => u.isPlayer).map((u) => ({ ...u, hp: 10, maxHp: 20, spd: 3, statuses: [], shield: 0, skills: [] })),
+    enemyUnits: units.filter((u) => !u.isPlayer).map((u) => ({ ...u, hp: 10, maxHp: 20, spd: 3, statuses: [], shield: 0, skills: [] })),
+    log: [],
+    round: 1,
+    phase: 'acting' as const,
+    playerAp: 3,
+    field: [],
+    roster: [],
+    gold: 0,
+    seed: 0,
+    act: 1,
+    currentNode: 0,
+    currentRow: 0,
+    inventory: {},
+  });
+
+  it('RE_SPD_UP：受击加速/疾风连携等正向速度日志', async () => {
+    const { parseEvent } = await import('../src/ui/battleFx');
+    const b = mkBattle({ uid: 'p1', name: '奇奇', isPlayer: true });
+    const entry = { text: '奇奇 的「疾风连携」速度 +1', side: 'player' as const, actorUid: 'p1', targetUid: 'p1', hp: {} as Record<string, number> };
+    const ev = parseEvent(b as any, entry);
+    expect(ev).not.toBeNull();
+    expect(ev!.kind).toBe('speed');
+    expect(ev!.value).toBe(1);
+    expect(ev!.targetUid).toBe('p1');
+  });
+
+  it('RE_SPD_DOWN：粘滞躯体减速日志', async () => {
+    const { parseEvent } = await import('../src/ui/battleFx');
+    const b = mkBattle(
+      { uid: 'p1', name: '奇奇', isPlayer: true },
+      { uid: 'e1', name: '敌人', isPlayer: false },
+    );
+    const entry = { text: '敌人 的「粘滞躯体」使 奇奇 速度 -1', side: 'enemy' as const, actorUid: 'e1', targetUid: 'p1', hp: {} as Record<string, number> };
+    const ev = parseEvent(b as any, entry);
+    expect(ev).not.toBeNull();
+    expect(ev!.kind).toBe('speed');
+    expect(ev!.value).toBe(-1);
+    expect(ev!.targetUid).toBe('p1');
+  });
+
+  it('RE_ITEM_SPD：速度药水日志', async () => {
+    const { parseEvent } = await import('../src/ui/battleFx');
+    const b = mkBattle({ uid: 'p1', name: '奇奇', isPlayer: true });
+    const entry = { text: '对 奇奇 使用道具：速度 +2（持续 2 回合）', side: 'player' as const, targetUid: 'p1', hp: {} as Record<string, number> };
+    const ev = parseEvent(b as any, entry);
+    expect(ev).not.toBeNull();
+    expect(ev!.kind).toBe('speed');
+    expect(ev!.value).toBe(2);
+    expect(ev!.targetUid).toBe('p1');
+  });
+
+  it('RE_ITEM_SPD：缓速药水日志', async () => {
+    const { parseEvent } = await import('../src/ui/battleFx');
+    const b = mkBattle({ uid: 'p1', name: '奇奇', isPlayer: true });
+    const entry = { text: '对 奇奇 使用道具：速度 -2（持续 2 回合）', side: 'player' as const, targetUid: 'p1', hp: {} as Record<string, number> };
+    const ev = parseEvent(b as any, entry);
+    expect(ev).not.toBeNull();
+    expect(ev!.kind).toBe('speed');
+    expect(ev!.value).toBe(-2);
+    expect(ev!.targetUid).toBe('p1');
   });
 });

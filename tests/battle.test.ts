@@ -21,6 +21,7 @@ import {
   getDamageGuard,
   performGauntletSwap,
 } from '../src/game/core/battle';
+import { applyCurseToUnit, removeCurseFromUnit } from '../src/game/state/game';
 import type { BattleState, StatusEffect } from '../src/game/types';
 import { MONSTERS } from '../src/game/data/monsters';
 import { SKILLS } from '../src/game/data/skills';
@@ -1135,5 +1136,157 @@ describe('priority first 技能回合顺序', () => {
     const fifiLog = after.log.findIndex(l => l.side === 'player' && l.actorUid === fifi.uid);
     expect(momoLog).toBeGreaterThanOrEqual(0);
     expect(momoLog).toBeLessThan(fifiLog);
+  });
+
+  it('玩家双单位都选先手技能：两个都应在非先手单位之前执行', () => {
+    // gora(spd 2, shield_counter) + sisi_god(spd 4, revenge_thorn) vs kiki
+    const gora = makeUnit('gora', true, 0, false);
+    const sisi = makeUnit('sisi_god', true, 1, false);
+    const b = createBattle([gora, sisi], [{ speciesId: 'kiki' }], 1);
+    const g = b.playerUnits.find(u => u.speciesId === 'gora')!;
+    const si = b.playerUnits.find(u => u.speciesId === 'sisi_god')!;
+    let s = playerSkill(b, g.uid, 'shield_counter');
+    s = playerSkill(s, si.uid, 'revenge_thorn');
+    const after = playerEndTurn(s);
+    // turnOrder 中 gora 和 sisi_god 都应在 kiki（非先手敌方）之前
+    const gIdx = after.turnOrder.indexOf(g.uid);
+    const siIdx = after.turnOrder.indexOf(si.uid);
+    const kikiIdx = after.turnOrder.indexOf(b.enemyUnits[0].uid);
+    expect(gIdx).toBeLessThan(kikiIdx);
+    expect(siIdx).toBeLessThan(kikiIdx);
+    // 日志顺序：盾反 + 复仇棘甲 都在 kiki 行动之前
+    const gLog = after.log.findIndex(l => l.text.includes('盾反'));
+    const siLog = after.log.findIndex(l => l.text.includes('复仇棘甲'));
+    const kikiLog = after.log.findIndex(l => l.side === 'enemy' && l.actorUid === b.enemyUnits[0].uid);
+    expect(gLog).toBeGreaterThanOrEqual(0);
+    expect(siLog).toBeGreaterThanOrEqual(0);
+    expect(kikiLog).toBeGreaterThanOrEqual(0);
+    expect(gLog).toBeLessThan(kikiLog);
+    expect(siLog).toBeLessThan(kikiLog);
+  });
+
+  it('玩家+敌方都有先手：两个先手技能都应在日志中体现', () => {
+    // 玩家 gora(spd 2, shield_counter) vs 敌方 fifi_god(spd 7, flame_shield)
+    const gora = makeUnit('gora', true, 0, false);
+    const b = createBattle([gora], [{ speciesId: 'fifi_god' }], 1);
+    const g = b.playerUnits.find(u => u.speciesId === 'gora')!;
+    let s = playerSkill(b, g.uid, 'shield_counter');
+    const after = playerEndTurn(s);
+    // 日志中 gora 的盾反和 fifi 的烈焰护盾都应出现
+    const gLog = after.log.findIndex(l => l.text.includes('盾反'));
+    const fLog = after.log.findIndex(l => l.text.includes('烈焰护盾'));
+    expect(gLog).toBeGreaterThanOrEqual(0);
+    expect(fLog).toBeGreaterThanOrEqual(0);
+  });
+
+  it('敌方双先手：灼天+铁卫都应触发先手技能', () => {
+    // 敌方 fifi_god(flame_shield) + gora(shield_counter) vs 玩家 kiki
+    const kiki = makeUnit('kiki', true, 0, false);
+    const b = createBattle([kiki], [{ speciesId: 'fifi_god' }, { speciesId: 'gora' }], 1);
+    const cur = currentPlayerUnit(b)!;
+    const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid));
+    // 两个敌方都应执行先手技能
+    const fLog = after.log.findIndex(l => l.text.includes('烈焰护盾'));
+    const gLog = after.log.findIndex(l => l.text.includes('盾反'));
+    expect(fLog).toBeGreaterThanOrEqual(0);
+    expect(gLog).toBeGreaterThanOrEqual(0);
+    // 两个先手技能都应在玩家行动之前执行
+    const pLog = after.log.findIndex(l => l.side === 'player' && l.actorUid === cur.uid);
+    expect(fLog).toBeLessThan(pLog);
+    expect(gLog).toBeLessThan(pLog);
+  });
+
+  it('敌方双先手：两个先手技能都应在日志中体现（不遗漏）', () => {
+    const kiki = makeUnit('kiki', true, 0, false);
+    const b = createBattle([kiki], [{ speciesId: 'fifi_god' }, { speciesId: 'gora' }], 1);
+    const cur = currentPlayerUnit(b)!;
+    const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid));
+    // 统计先手技能日志出现次数
+    const flameShieldCount = after.log.filter(l => l.text.includes('烈焰护盾')).length;
+    const shieldCounterCount = after.log.filter(l => l.text.includes('盾反')).length;
+    expect(flameShieldCount).toBeGreaterThanOrEqual(1);
+    expect(shieldCounterCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('敌方双先手：先手技能日志应先于非先手单位的行动日志', () => {
+    const kiki = makeUnit('kiki', true, 0, false);
+    const b = createBattle([kiki], [{ speciesId: 'fifi_god' }, { speciesId: 'gora' }], 1);
+    const cur = currentPlayerUnit(b)!;
+    const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid));
+    const fLog = after.log.findIndex(l => l.text.includes('烈焰护盾'));
+    const gLog = after.log.findIndex(l => l.text.includes('盾反'));
+    // kiki 是非先手，其行动日志应排在两个先手之后
+    const pLogs = after.log.filter(l => l.side === 'player' && l.actorUid === cur.uid && !l.text.includes('回合'));
+    expect(pLogs.length).toBeGreaterThan(0);
+    const firstPlayerLog = after.log.indexOf(pLogs[0]);
+    expect(fLog).toBeLessThan(firstPlayerLog);
+    expect(gLog).toBeLessThan(firstPlayerLog);
+  });
+});
+
+describe('诅咒属性变更', () => {
+  it('applyCurseToUnit hpDown: maxHp -5', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const origMaxHp = u.maxHp;
+    const cursed = applyCurseToUnit(u, 'hpDown');
+    expect(cursed.curse).toBe('hpDown');
+    expect(cursed.maxHp).toBe(origMaxHp - 5);
+  });
+
+  it('applyCurseToUnit spdDown: spd -2', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const origSpd = u.spd;
+    const cursed = applyCurseToUnit(u, 'spdDown');
+    expect(cursed.curse).toBe('spdDown');
+    expect(cursed.spd).toBe(Math.max(1, origSpd - 2));
+  });
+
+  it('applyCurseToUnit atkDown: 不影响属性', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const cursed = applyCurseToUnit(u, 'atkDown');
+    expect(cursed.curse).toBe('atkDown');
+    expect(cursed.maxHp).toBe(u.maxHp);
+    expect(cursed.spd).toBe(u.spd);
+  });
+
+  it('removeCurseFromUnit hpDown: maxHp +5', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const cursed = applyCurseToUnit(u, 'hpDown');
+    const cured = removeCurseFromUnit(cursed);
+    expect(cured.curse).toBeUndefined();
+    expect(cured.maxHp).toBe(u.maxHp);
+  });
+
+  it('removeCurseFromUnit spdDown: spd +2', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const cursed = applyCurseToUnit(u, 'spdDown');
+    const cured = removeCurseFromUnit(cursed);
+    expect(cured.curse).toBeUndefined();
+    expect(cured.spd).toBe(u.spd);
+  });
+
+  it('removeCurseFromUnit 无诅咒: 原样返回', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const result = removeCurseFromUnit(u);
+    expect(result).toBe(u);
+  });
+
+  it('替换诅咒: hpDown → spdDown 正确转换', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const origMaxHp = u.maxHp;
+    const origSpd = u.spd;
+    const cursed1 = applyCurseToUnit(u, 'hpDown');
+    expect(cursed1.maxHp).toBe(origMaxHp - 5);
+    const swapped = applyCurseToUnit(cursed1, 'spdDown');
+    expect(swapped.curse).toBe('spdDown');
+    expect(swapped.maxHp).toBe(origMaxHp);
+    expect(swapped.spd).toBe(Math.max(1, origSpd - 2));
+  });
+
+  it('替换同类型诅咒: 不重复扣减', () => {
+    const u = makeUnit('kiki', true, 0, false);
+    const cursed1 = applyCurseToUnit(u, 'hpDown');
+    const cursed2 = applyCurseToUnit(cursed1, 'hpDown');
+    expect(cursed2.maxHp).toBe(u.maxHp - 5);
   });
 });

@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks } from './game';
-import { applyCorruptFoodReward, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, rollChest, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -676,7 +676,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
           const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
           const ri = Math.floor(Math.random() * next.roster.length);
-          next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+          next = { ...next, roster: next.roster.map((u, i) => i === ri ? applyCurseToUnit(u, rc) : u) };
         }
       } else if (choice.kind === 'food' && choice.foodId) {
         if (choice.consumeFood) {
@@ -747,7 +747,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (purifyIdx >= 0) {
           next = {
             ...next,
-            roster: next.roster.map((u, i) => i === purifyIdx ? { ...u, curse: undefined } : u),
+            roster: next.roster.map((u, i) => i === purifyIdx ? removeCurseFromUnit(u) : u),
           };
         }
       } else if (choice.kind === 'curse' && next.roster.length > 0) {
@@ -757,7 +757,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const randomCurse = curseKinds[Math.floor(Math.random() * curseKinds.length)];
         next = {
           ...next,
-          roster: next.roster.map((u, i) => i === curseIdx ? { ...u, curse: randomCurse } : u),
+          roster: next.roster.map((u, i) => i === curseIdx ? applyCurseToUnit(u, randomCurse) : u),
         };
       } else if (choice.kind === 'status' && choice.statusKind) {
         // 附加状态：全体
@@ -907,7 +907,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
           const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
           const ri = Math.floor(Math.random() * next.roster.length);
-          next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+          next = { ...next, roster: next.roster.map((u, i) => i === ri ? applyCurseToUnit(u, rc) : u) };
         }
         // 失败 toast
         if (eb.penalty.goldLoss) {
@@ -964,7 +964,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.specialPending.super) {
         const rng = createRng(state.seed * 33 + state.act * 11 + state.roster.length * 7);
         const curses = ['hpDown', 'atkDown', 'spdDown'] as const;
-        evolved = { ...evolved, curse: curses[Math.floor(rng() * 3)] };
+        evolved = applyCurseToUnit(evolved, curses[Math.floor(rng() * 3)]);
       }
       const roster = state.roster.map((u) => (u.uid === action.uid ? evolved! : u));
       const log = state.specialPending.super
@@ -1312,7 +1312,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
             const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
             const ri = Math.floor(Math.random() * next.roster.length);
-            next = { ...next, roster: next.roster.map((u, i) => i === ri ? { ...u, curse: rc } : u) };
+            next = { ...next, roster: next.roster.map((u, i) => i === ri ? applyCurseToUnit(u, rc) : u) };
           }
           // 失败 toast
           if (eb.penalty.goldLoss) {

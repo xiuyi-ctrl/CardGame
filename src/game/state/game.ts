@@ -1717,6 +1717,20 @@ export function applyMods(stats: BaseStats, u: Pick<Unit, 'bonusStats' | 'curse'
   return out;
 }
 
+/** 诅咒类型 */
+export type CurseKind = 'hpDown' | 'atkDown' | 'spdDown';
+
+/** 给单位附加诅咒，通过 recomputeStats 从基准重算属性（避免累积误差） */
+export function applyCurseToUnit(u: Unit, curse: CurseKind): Unit {
+  return recomputeStats({ ...u, curse });
+}
+
+/** 移除单位的诅咒，通过 recomputeStats 从基准重算属性 */
+export function removeCurseFromUnit(u: Unit): Unit {
+  if (!u.curse) return u;
+  return recomputeStats({ ...u, curse: undefined as Unit['curse'] });
+}
+
 /** 以物种基准 + 加成/诅咒重算并回写属性（属性强化、净化后调用） */
 export function recomputeStats(unit: Unit): Unit {
   const stats = applyMods(computeStats(unit.speciesId), unit);
