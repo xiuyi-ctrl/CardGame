@@ -1,4 +1,4 @@
-import type { BattleState, PassiveDef, PassiveKind, SkillDef, StatusEffect, Unit } from '../types';
+import type { BattleState, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
 import { getSkill } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
@@ -882,6 +882,283 @@ function tryEnemySwap(b: BattleState, actor: Unit): BattleState | undefined {
   return nb;
 }
 
+/** 纯函数：基于给定状态选择敌方行动，不产生日志/不扣技能次数/不标记 acted */
+function selectEnemyAction(
+  b: BattleState, actor: Unit, rngVal1: number, rngVal2: number,
+): { skillId?: string; targetUid?: string; kind: 'heal' | 'buff' | 'attack' | 'swap'; fallbackSkillId?: string } | undefined {
+  if (actor.statuses.some((s) => s.kind === 'stun')) return undefined;
+  const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0 && skillCooldownLeft(actor, s.id) <= 0);
+  if (skills.length === 0) return undefined;
+  const candidates: { kind: 'heal' | 'buff' | 'attack' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
+  const hpRatio = actor.hp / actor.maxHp;
+  const allies = alliesOf(b, actor);
+  const enemies = enemiesOf(b, actor);
+  // ─── 1. 治疗 ───
+  const nTypeHeal = b.nodeType ?? 'battle';
+  const healSkills = skills.filter((s) => s.kind === 'heal');
+  if (healSkills.length > 0) {
+    let healThreshold = 0.45;
+    if (nTypeHeal === 'guardian') healThreshold = 0.55;
+    else if (nTypeHeal === 'gauntlet') healThreshold = 0.35;
+    else if (nTypeHeal === 'corrupted') healThreshold = 0.30;
+    for (const hs of healSkills) {
+      if (hs.target === 'allyAll') {
+        const injuredAllies = allies.filter((u) => u.hp / u.maxHp < 0.8);
+        if (injuredAllies.length >= 2) {
+          let healScore = 0;
+          if (hpRatio < healThreshold) healScore += 55;
+          else if (hpRatio < 0.55) healScore += 30;
+          const lowAllies = allies.filter((u) => u.hp / u.maxHp < 0.3);
+          healScore += lowAllies.length * 15;
+          if (nTypeHeal === 'guardian') healScore += 15;
+          candidates.push({ kind: 'heal', skill: hs, score: healScore });
+        }
+        continue;
+      }
+      if (hpRatio < healThreshold) {
+        candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 65 });
+      } else if (hpRatio < 0.55) {
+        candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 35 });
+      }
+      const criticalAlly = allies
+        .filter((u) => u.hp > 0 && u.hp / u.maxHp < 0.25)
+        .sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
+        if (criticalAlly) {
+          candidates.push({ kind: 'heal', skill: hs, targetUid: criticalAlly.uid, score: 60 });
+      }
+    }
+  }
+  // ─── 2. 增益/防御 ───
+  const nTypeBuff = b.nodeType ?? 'battle';
+  const actorPassiveForBuff = getUnitPassive(actor);
+  const hasThorns = actorPassiveForBuff?.kind === 'thorns';
+  const sporeSummonSkill = skills.find((s) => s.id === 'spore_summon');
+  if (sporeSummonSkill) {
+    const deadSpores = b.enemyUnits.filter((u) => (u.speciesId === 'boss_minion_spore_sac' || u.speciesId === 'boss_minion_slug') && u.hp <= 0);
+    const usedCols = new Set(b.enemyUnits.filter((u) => u.hp > 0).map((u) => `${u.row}:${u.column}`));
+    const hasSpace = deadSpores.length > 0 || usedCols.size < 6;
+    if (hasSpace) {
+      if (deadSpores.length > 0 && rngVal1 < 0.6) {
+        candidates.push({ kind: 'buff', skill: sporeSummonSkill, score: 68 });
+      } else if (rngVal1 < 0.4) {
+        candidates.push({ kind: 'buff', skill: sporeSummonSkill, score: 55 });
+      }
+    }
+  }
+  const buffSkills = skills.filter((s) => s.kind === 'buff' && s.target !== 'allyAll');
+  for (const bs of buffSkills) {
+    if (bs.id === 'spore_shield' && !actor.statuses.some((s) => s.kind === 'sporeShield')) {
+      if (hpRatio < 0.5 && rngVal1 < 0.55) {
+        candidates.push({ kind: 'buff', skill: bs, score: 55 });
+      }
+    }
+    if (bs.effects?.some((e) => e.kind === 'atkUp') && !actor.statuses.some((s) => s.kind === 'atkUp')) {
+      let roarChance = 0.25;
+      if (b.round <= 1) {
+        if (nTypeBuff === 'arena' || nTypeBuff === 'guardian') roarChance = 0.7;
+        else if (nTypeBuff === 'gauntlet') roarChance = 0.7;
+        else if (nTypeBuff === 'corrupted') roarChance = 0.7;
+        else roarChance = 0.4;
+      }
+      if (hpRatio < 0.4) roarChance = Math.max(roarChance, 0.6);
+      if (rngVal1 < roarChance) {
+        candidates.push({ kind: 'buff', skill: bs, score: 55 });
+      }
+    }
+    if (bs.priority === 'first' && skillUsesLeft(actor, bs.id) > 0 && skillCooldownLeft(actor, bs.id) <= 0) {
+      if (!actor.statuses.some((s) => s.kind === 'shield' || s.kind === 'shieldCounter' || s.kind === 'atkUp' || s.kind === 'comboBoost')) {
+        let firstChance = b.round <= 1 ? 0.8 : 0.5;
+        if (hpRatio < 0.4) firstChance = Math.max(firstChance, 0.7);
+        if (rngVal1 < firstChance) {
+          candidates.push({ kind: 'buff', skill: bs, score: 70 });
+        }
+      }
+    }
+    if (bs.effects?.some((e) => e.kind === 'shield') && !bs.priority && actor.shield <= 0 && !actor.statuses.some((s) => s.kind === 'shield')) {
+      if (hpRatio < 0.4 && rngVal1 < 0.5) {
+        candidates.push({ kind: 'buff', skill: bs, score: 50 });
+      }
+    }
+    if (bs.effects?.some((e) => e.kind === 'taunt')) {
+      const frontEnemies = enemies.filter((u) => u.row === 'front' && u.hp > 0);
+      const tauntChance = hasThorns ? 0.6 : 0.35;
+      if (frontEnemies.length >= 2 && hpRatio > 0.4 && rngVal1 < tauntChance) {
+        candidates.push({ kind: 'buff', skill: bs, score: hasThorns ? 50 : 40 });
+      }
+    }
+    if (bs.effects?.some((e) => e.kind === 'comboBoost') && !actor.statuses.some((s) => s.kind === 'comboBoost')) {
+      if (hpRatio > 0.5 && rngVal1 < 0.55) {
+        candidates.push({ kind: 'buff', skill: bs, score: 45 });
+      }
+    }
+    if (bs.id === 'toxic_burst' && !actor.statuses.some((s) => s.kind === 'toxicBurstReady')) {
+      let burstChance = 0.15;
+      if (hpRatio < 0.4) burstChance = 0.8;
+      else if (hpRatio < 0.7) burstChance = 0.4;
+      if (rngVal1 < burstChance) {
+        candidates.push({ kind: 'buff', skill: bs, score: hpRatio < 0.4 ? 70 : 45 });
+      }
+    }
+    if (bs.id === 'rock_reforge') {
+      const deadMinions = b.enemyUnits.filter((u) => u.hp <= 0 && u.speciesId.startsWith('boss_minion_'));
+      const aliveMinions = allies.filter((u) => u.speciesId.startsWith('boss_minion_'));
+      if (deadMinions.length > 0) {
+        candidates.push({ kind: 'buff', skill: bs, score: 80 });
+      } else if (aliveMinions.length >= 2 && hpRatio > 0.3 && rngVal1 < 0.9) {
+        candidates.push({ kind: 'buff', skill: bs, score: 65 });
+      }
+    }
+    if (bs.id === 'ghostly_summon') {
+      const aliveMinions = allies.filter((u) => u.speciesId === 'boss_minion_ghost_sailor' || u.speciesId === 'boss_minion_phantom');
+      if (aliveMinions.length === 0) {
+        candidates.push({ kind: 'buff', skill: bs, score: 80 });
+      }
+    }
+    if (bs.id === 'chain_bind') {
+      const allChained = enemies.every((e) => e.statuses.some((s) => s.kind === 'chainLink'));
+      if (!allChained && rngVal1 < 0.8) {
+        candidates.push({ kind: 'buff', skill: bs, score: 65 });
+      }
+    }
+    if (bs.id === 'iron_wall') {
+      if (hpRatio < 0.5 && rngVal1 < 0.5) {
+        candidates.push({ kind: 'buff', skill: bs, score: 50 });
+      }
+    }
+  }
+  // ─── 3. 换位 ───
+  const nTypeSwap = b.nodeType ?? 'battle';
+  if (actor.row === 'front' && (actor.swapCount ?? 0) < 2 && nTypeSwap !== 'guardian' && b.round > 1) {
+    const healthyBack = allies.filter((u) => u.row === 'back' && u.hp > 0 && u.hp / u.maxHp > 0.5);
+    if (healthyBack.length > 0) {
+      if (hpRatio < 0.25 && rngVal1 < 0.65) {
+        candidates.push({ kind: 'swap', score: 55 });
+      } else if (hpRatio < 0.35 && rngVal1 < 0.4) {
+        candidates.push({ kind: 'swap', score: 40 });
+      }
+    }
+    const hasTaunt = actor.statuses.some((s) => s.kind === 'taunt');
+    if (hasTaunt && hpRatio < 0.3 && healthyBack.length > 0 && rngVal1 < 0.5) {
+      candidates.push({ kind: 'swap', score: 50 });
+    }
+  }
+  // ─── 4. 攻击 ───
+  const chainActivateSkill = skills.find((s) => s.id === 'chain_activate');
+  if (chainActivateSkill) {
+    const chainCount = enemies.filter((e) => e.statuses.some((s) => s.kind === 'chainLink')).length;
+    if (chainCount >= 2) {
+      candidates.push({ kind: 'attack', skill: chainActivateSkill, score: 75 });
+    } else if (chainCount === 1) {
+      candidates.push({ kind: 'attack', skill: chainActivateSkill, score: 45 });
+    }
+  }
+  const attackSkills = skills.filter((s) => s.kind === 'attack' && s.id !== 'chain_activate');
+  let targetPool = enemies.filter((u) => u.hp > 0);
+  if (targetPool.length === 0 && candidates.length === 0) return undefined;
+  const taunt = actor.statuses.find((s) => s.kind === 'taunt');
+  if (taunt?.sourceUid) {
+    const src = enemies.find((u) => u.uid === taunt.sourceUid && u.hp > 0);
+    if (src) targetPool = [src];
+  }
+  const actorPassive = getUnitPassive(actor);
+  const hasVenomPower = actorPassive?.kind === 'venomPower';
+  const hasScorchPlus = actorPassive?.kind === 'scorchPlus';
+  if (actorPassive?.kind === 'bloodScent' && targetPool.length > 1) {
+    const lowest = targetPool.reduce((min, t) => t.hp < min.hp ? t : min, targetPool[0]);
+    if (lowest) targetPool = [lowest];
+  }
+  const hasComboBoost = actor.statuses.some((s) => s.kind === 'comboBoost');
+  const currentAct = b.act ?? 1;
+  const nType = b.nodeType ?? 'battle';
+  for (const atk of attackSkills) {
+    const isLimitedHighDmg = atk.uses !== undefined && (atk.damage ?? 0) >= 6;
+    const comboBoostBonus = hasComboBoost && (atk.hits ?? 1) > 1 ? 25 : 0;
+    let limitedBonus = 0;
+    if (isLimitedHighDmg) {
+      if (hpRatio < 0.35) limitedBonus += 40;
+      else if (targetPool.some((t) => t.statuses.some((s) => s.kind === 'poison' || s.kind === 'burn'))) limitedBonus += 30;
+      else if (hpRatio > 0.5) limitedBonus += 15;
+      if (nType === 'guardian' && hpRatio < 0.5) limitedBonus += 20;
+    }
+    const scoredTargets = targetPool.map((t) => {
+      let tScore = 0;
+      const lowHpBonus = currentAct >= 2 ? 12 : 8;
+      if (t.hp / t.maxHp < 0.3) tScore += lowHpBonus;
+      const hasHealSkill = t.skills.some((id) => getSkill(id)?.kind === 'heal');
+      const threatBonus = currentAct >= 2 ? 10 : 6;
+      if (hasHealSkill) tScore += threatBonus;
+      if (t.spd >= 6) tScore += threatBonus;
+      const tp = getUnitPassive(t);
+      if (tp && (tp.kind === 'power' || tp.kind === 'frenzy')) tScore += threatBonus;
+      if (hasVenomPower && t.statuses.some((s) => s.kind === 'poison')) tScore += 15;
+      if (hasScorchPlus && t.statuses.some((s) => s.kind === 'burn')) tScore += 15;
+      const debuffCount = t.statuses.filter((s) => s.kind === 'poison' || s.kind === 'burn' || s.kind === 'atkDown').length;
+      tScore += debuffCount * 3;
+      if (currentAct === 1) {
+        tScore += rngVal1 * 15;
+      } else if (currentAct === 2) {
+        if (t.hp / t.maxHp < 0.3) tScore += 5;
+        if (hasHealSkill || t.spd >= 6) tScore += 8;
+      } else {
+        if (hasHealSkill || t.spd >= 6) tScore += 12;
+        if (debuffCount > 0) tScore += 10;
+      }
+      if (nType === 'arena') {
+        if (t.hp / t.maxHp < 0.3) tScore += 5;
+      } else if (nType === 'gauntlet') {
+        if (t.hp / t.maxHp < 0.3) tScore += 4;
+        if (atk.target === 'all') tScore += 5;
+      } else if (nType === 'corrupted') {
+        tScore += 3;
+      } else if (nType === 'guardian') {
+        if (hasHealSkill) tScore += 10;
+      }
+      tScore += (atk.damage ?? 0) + getDamageBonus(actor, b);
+      if (actorPassive?.kind === 'shadowHunter' && t.hp / t.maxHp < 0.5) {
+        tScore += actorPassive.value;
+      }
+      if (atk.target === 'all' && targetPool.length >= 3) tScore += 3;
+      if (atk.effects?.some((e) => e.kind === 'poison' || e.kind === 'burn')) tScore += 2;
+      if (atk.id === 'soul_echo') {
+        const actorSoul = actor.soul ?? 0;
+        if (actorSoul >= 10) tScore += 25;
+        else if (actorSoul >= 5) tScore += 15;
+        else if (actorSoul >= 3) tScore += 8;
+      }
+      const actorSpd = getEffectiveSpd(actor);
+      if (atk.spdScaling && atk.spdScaling > 0) {
+        const spdBonus = Math.min(25, actorSpd * 4);
+        tScore += spdBonus;
+        if (atk.target === 'all' && targetPool.length >= 2) {
+          tScore += Math.min(10, actorSpd * 2);
+        }
+      }
+      return { target: t, score: tScore };
+    });
+    scoredTargets.sort((a, c) => c.score - a.score);
+    const best = scoredTargets[0];
+    if (best) {
+      candidates.push({ kind: 'attack', skill: atk, targetUid: best.target.uid, score: best.score + limitedBonus + comboBoostBonus + 5 });
+    }
+  }
+  // ─── 5. softmax 选择 ───
+  if (candidates.length === 0) return undefined;
+  const maxScore = Math.max(...candidates.map((c) => c.score));
+  const weights = candidates.map((c) => Math.exp((c.score - maxScore) / SOFTMAX_TEMP));
+  const total = weights.reduce((s, w) => s + w, 0);
+  let roll = rngVal2 * total;
+  let chosen = candidates[candidates.length - 1];
+  for (let i = 0; i < weights.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) { chosen = candidates[i]; break; }
+  }
+  const fallbackAtk = attackSkills.length > 0 ? attackSkills[0] : undefined;
+  if (chosen.kind === 'swap') {
+    return { kind: 'swap', fallbackSkillId: fallbackAtk?.id };
+  }
+  return { kind: chosen.kind, skillId: chosen.skill?.id, targetUid: chosen.targetUid, fallbackSkillId: fallbackAtk?.id };
+}
+
 function enemyAct(b: BattleState, actor: Unit): BattleState {
   let nb = { ...b, enemyAp: b.enemyAp - 1 };
   if (actor.statuses.some((s) => s.kind === 'stun')) {
@@ -892,365 +1169,33 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     if (skills.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
-    const candidates: { kind: 'heal' | 'buff' | 'attack' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
-    const hpRatio = actor.hp / actor.maxHp;
-    const allies = alliesOf(b2, actor);
-    const enemies = enemiesOf(b2, actor);
-
-    // ─── 1. 治疗行动（含特殊模式调整） ───
-    const nTypeHeal = b2.nodeType ?? 'battle';
-    const healSkills = skills.filter((s) => s.kind === 'heal');
-    if (healSkills.length > 0) {
-      // 各模式治疗阈值
-      let healThreshold = 0.45;
-      if (nTypeHeal === 'guardian') healThreshold = 0.55;       // 守卫：保守 55%
-      else if (nTypeHeal === 'gauntlet') healThreshold = 0.35;  // 车轮：激进 35%
-      else if (nTypeHeal === 'corrupted') healThreshold = 0.30; // 被侵蚀：更少治疗 30%
-
-      for (const hs of healSkills) {
-        if (hs.target === 'allyAll') {
-          const injuredAllies = allies.filter((u) => u.hp / u.maxHp < 0.8);
-          if (injuredAllies.length >= 2) {
-            let healScore = 0;
-            if (hpRatio < healThreshold) healScore += 55;
-            else if (hpRatio < 0.55) healScore += 30;
-            const lowAllies = allies.filter((u) => u.hp / u.maxHp < 0.3);
-            healScore += lowAllies.length * 15;
-            if (nTypeHeal === 'guardian') healScore += 15;
-            candidates.push({ kind: 'heal', skill: hs, score: healScore });
-          }
-          continue;
-        }
-        // 自身血量 < 阈值 → 必须治疗
-        if (hpRatio < healThreshold) {
-          candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 65 });
-        } else if (hpRatio < 0.55) {
-          candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 35 });
-        }
-        // 队友血量 < 25% → 治疗队友
-        const criticalAlly = allies
-          .filter((u) => u.hp > 0 && u.hp / u.maxHp < 0.25)
-          .sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
-        if (criticalAlly) {
-          candidates.push({ kind: 'heal', skill: hs, targetUid: criticalAlly.uid, score: 60 });
-        }
+    return useRng(b2, (rngVal2, b3) => {
+      const decision = selectEnemyAction(b3, actor, rngVal, rngVal2);
+      if (!decision) {
+        return markActed(pushLog(b3, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
       }
-    }
-
-    // ─── 2. 增益/防御技能（含特殊模式调整） ───
-    const nTypeBuff = b2.nodeType ?? 'battle';
-    const actorPassiveForBuff = getUnitPassive(actor);
-    const hasThorns = actorPassiveForBuff?.kind === 'thorns';
-    // 孢子召唤（target=allyAll，不在下方循环中）：有空位时概率使用
-    const sporeSummonSkill = skills.find((s) => s.id === 'spore_summon');
-    if (sporeSummonSkill) {
-      const deadSpores = b2.enemyUnits.filter((u) => (u.speciesId === 'boss_minion_spore_sac' || u.speciesId === 'boss_minion_slug') && u.hp <= 0);
-      const usedCols = new Set(b2.enemyUnits.filter((u) => u.hp > 0).map((u) => `${u.row}:${u.column}`));
-      const hasSpace = deadSpores.length > 0 || usedCols.size < 6;
-      if (hasSpace) {
-        if (deadSpores.length > 0 && rngVal < 0.6) {
-          candidates.push({ kind: 'buff', skill: sporeSummonSkill, score: 68 });
-        } else if (rngVal < 0.4) {
-          candidates.push({ kind: 'buff', skill: sporeSummonSkill, score: 55 });
-        }
-      }
-    }
-    const buffSkills = skills.filter((s) => s.kind === 'buff' && s.target !== 'allyAll');
-    for (const bs of buffSkills) {
-      // 孢子防护：未有该状态且血量 < 50% 时使用
-      if (bs.id === 'spore_shield' && !actor.statuses.some((s) => s.kind === 'sporeShield')) {
-        if (hpRatio < 0.5 && rngVal < 0.55) {
-          candidates.push({ kind: 'buff', skill: bs, score: 55 });
-        }
-      }
-      // 战吼：首回合 概率使用，后续回合降低
-      if (bs.effects?.some((e) => e.kind === 'atkUp') && !actor.statuses.some((s) => s.kind === 'atkUp')) {
-        let roarChance = 0.25;
-        if (b2.round <= 1) {
-          // 各模式首回合战吼概率
-          if (nTypeBuff === 'arena' || nTypeBuff === 'guardian') roarChance = 0.7;
-          else if (nTypeBuff === 'gauntlet') roarChance = 0.7;
-          else if (nTypeBuff === 'corrupted') roarChance = 0.7;
-          else roarChance = 0.4;
-        }
-        // 濒死反扑：血量 < 40% → 额外 60% 概率
-        if (hpRatio < 0.4) roarChance = Math.max(roarChance, 0.6);
-        if (rngVal < roarChance) {
-          candidates.push({ kind: 'buff', skill: bs, score: 55 });
-        }
-      }
-      // 先手技能（priority:'first'）：首回合高概率使用，后续回合中概率
-      if (bs.priority === 'first' && skillUsesLeft(actor, bs.id) > 0 && skillCooldownLeft(actor, bs.id) <= 0) {
-        if (!actor.statuses.some((s) => s.kind === 'shield' || s.kind === 'shieldCounter' || s.kind === 'atkUp' || s.kind === 'comboBoost')) {
-          let firstChance = b2.round <= 1 ? 0.8 : 0.5;
-          if (hpRatio < 0.4) firstChance = Math.max(firstChance, 0.7);
-          if (rngVal < firstChance) {
-            candidates.push({ kind: 'buff', skill: bs, score: 70 });
-          }
-        }
-      }
-      // 坚盾：血量 < 40% 时 50%（非先手的纯护盾技能）
-      if (bs.effects?.some((e) => e.kind === 'shield') && !bs.priority && actor.shield <= 0 && !actor.statuses.some((s) => s.kind === 'shield')) {
-        if (hpRatio < 0.4 && rngVal < 0.5) {
-          candidates.push({ kind: 'buff', skill: bs, score: 50 });
-        }
-      }
-      // 嘲讽：前排 ≥2 时使用（反伤型单位优先使用嘲讽）
-      if (bs.effects?.some((e) => e.kind === 'taunt')) {
-        const frontEnemies = enemies.filter((u) => u.row === 'front' && u.hp > 0);
-        const tauntChance = hasThorns ? 0.6 : 0.35;
-        if (frontEnemies.length >= 2 && hpRatio > 0.4 && rngVal < tauntChance) {
-          candidates.push({ kind: 'buff', skill: bs, score: hasThorns ? 50 : 40 });
-        }
-      }
-      // 波光环：连击段数+2，血量>50%时优先使用
-      if (bs.effects?.some((e) => e.kind === 'comboBoost') && !actor.statuses.some((s) => s.kind === 'comboBoost')) {
-        if (hpRatio > 0.5 && rngVal < 0.55) {
-          candidates.push({ kind: 'buff', skill: bs, score: 45 });
-        }
-      }
-      // 毒性爆发：蓄力技能，血量越低越倾向使用（死亡时触发全体爆发）
-      if (bs.id === 'toxic_burst' && !actor.statuses.some((s) => s.kind === 'toxicBurstReady')) {
-        // 血量 < 40% 高概率使用，< 70% 中概率，否则低概率
-        let burstChance = 0.15;
-        if (hpRatio < 0.4) burstChance = 0.8;
-        else if (hpRatio < 0.7) burstChance = 0.4;
-        if (rngVal < burstChance) {
-          candidates.push({ kind: 'buff', skill: bs, score: hpRatio < 0.4 ? 70 : 45 });
-        }
-      }
-      // 碎岩重组：有次数且未冷却时（line 813 已过滤），小怪在场则高概率使用（触发自爆链加速岩壳崩解）
-      if (bs.id === 'rock_reforge') {
-        // 死亡小怪：从 enemyUnits 直接查（alliesOf 过滤了 hp <= 0）
-        const deadMinions = b2.enemyUnits.filter((u) => u.hp <= 0 && u.speciesId.startsWith('boss_minion_'));
-        const aliveMinions = allies.filter((u) => u.speciesId.startsWith('boss_minion_'));
-        if (deadMinions.length > 0) {
-          // 小怪已阵亡，高优先复活（恢复核心机制），无条件进候选
-          candidates.push({ kind: 'buff', skill: bs, score: 80 });
-        } else if (aliveMinions.length >= 2 && hpRatio > 0.3 && rngVal < 0.9) {
-          // 小怪健全，主动重组触发自爆链加速岩壳崩解（hpRatio ≤ 0.3 时避免自伤致死）
-          candidates.push({ kind: 'buff', skill: bs, score: 65 });
-        }
-      }
-      // 幽灵召唤：所有召唤物死亡时必用（score 80）
-      if (bs.id === 'ghostly_summon') {
-        const aliveMinions = allies.filter((u) => u.speciesId === 'boss_minion_ghost_sailor' || u.speciesId === 'boss_minion_phantom');
-        if (aliveMinions.length === 0) {
-          // 所有召唤物死亡，必用
-          candidates.push({ kind: 'buff', skill: bs, score: 80 });
-        }
-      }
-      // 锁链束缚：所有敌人已有锁链时跳过
-      if (bs.id === 'chain_bind') {
-        const allChained = enemies.every((e) => e.statuses.some((s) => s.kind === 'chainLink'));
-        if (!allChained && rngVal < 0.8) {
-          candidates.push({ kind: 'buff', skill: bs, score: 65 });
-        }
-      }
-      // 铸甲：全体友方护盾
-      if (bs.id === 'iron_wall') {
-        if (hpRatio < 0.5 && rngVal < 0.5) {
-          candidates.push({ kind: 'buff', skill: bs, score: 50 });
-        }
-      }
-    }
-
-    // ─── 3. 换位（限次 2 次，分层阈值；守卫/首领禁用；首回合禁用） ───
-    const nTypeSwap = b2.nodeType ?? 'battle';
-    if (actor.row === 'front' && (actor.swapCount ?? 0) < 2 && nTypeSwap !== 'guardian' && b2.round > 1) {
-      const healthyBack = allies.filter((u) => u.row === 'back' && u.hp > 0 && u.hp / u.maxHp > 0.5);
-      if (healthyBack.length > 0) {
-        if (hpRatio < 0.25 && rngVal < 0.65) {
-          candidates.push({ kind: 'swap', score: 55 });
-        } else if (hpRatio < 0.35 && rngVal < 0.4) {
-          candidates.push({ kind: 'swap', score: 40 });
-        }
-      }
-      // 嘲讽状态 + 血量 < 30% → 50% 概率换位
-      const hasTaunt = actor.statuses.some((s) => s.kind === 'taunt');
-      if (hasTaunt && hpRatio < 0.3 && healthyBack.length > 0 && rngVal < 0.5) {
-        candidates.push({ kind: 'swap', score: 50 });
-      }
-    }
-
-    // ─── 4. 攻击行动 ───
-    // 锁链引爆：有2+锁链敌人时使用
-    const chainActivateSkill = skills.find((s) => s.id === 'chain_activate');
-    if (chainActivateSkill) {
-      const chainCount = enemies.filter((e) => e.statuses.some((s) => s.kind === 'chainLink')).length;
-      if (chainCount >= 2) {
-        candidates.push({ kind: 'attack', skill: chainActivateSkill, score: 75 });
-      } else if (chainCount === 1) {
-        candidates.push({ kind: 'attack', skill: chainActivateSkill, score: 45 });
-      }
-    }
-    const attackSkills = skills.filter((s) => s.kind === 'attack' && s.id !== 'chain_activate');
-    let targetPool = enemies.filter((u) => u.hp > 0);
-    if (targetPool.length === 0) {
-      return markActed(pushLog(b2, `${actor.name} 无目标可攻击`, sideOf(actor)), actor.uid);
-    }
-    // 嘲讽强制锁定
-    const taunt = actor.statuses.find((s) => s.kind === 'taunt');
-    if (taunt?.sourceUid) {
-      const src = enemies.find((u) => u.uid === taunt.sourceUid && u.hp > 0);
-      if (src) targetPool = [src];
-    }
-    // 自身被动信息（状态配合用）
-    const actorPassive = getUnitPassive(actor);
-    const hasVenomPower = actorPassive?.kind === 'venomPower';
-    const hasScorchPlus = actorPassive?.kind === 'scorchPlus';
-    // 嗜血嗅觉：攻击目标永远为血量最低的敌人
-    if (actorPassive?.kind === 'bloodScent' && targetPool.length > 1) {
-      const lowest = targetPool.reduce((min, t) => t.hp < min.hp ? t : min, targetPool[0]);
-      if (lowest) targetPool = [lowest];
-    }
-    // 波光环：拥有 comboBoost 时大幅倾向连击技能
-    const hasComboBoost = actor.statuses.some((s) => s.kind === 'comboBoost');
-    // 幕次 + 特殊模式
-    const currentAct = b2.act ?? 1;
-    const nType = b2.nodeType ?? 'battle';
-
-    for (const atk of attackSkills) {
-      const isLimitedHighDmg = atk.uses !== undefined && (atk.damage ?? 0) >= 6;
-      // 波光环：拥有 comboBoost 时大幅倾向连击技能（hits>1）
-      const comboBoostBonus = hasComboBoost && (atk.hits ?? 1) > 1 ? 25 : 0;
-      // 限次高伤技能额外加分条件
-      let limitedBonus = 0;
-      if (isLimitedHighDmg) {
-        // 濒死反扑：血量 < 35% → 90% 倾向
-        if (hpRatio < 0.35) limitedBonus += 40;
-        // 目标已中毒/灼烧（配合被动增伤） → 80% 倾向
-        else if (targetPool.some((t) => t.statuses.some((s) => s.kind === 'poison' || s.kind === 'burn'))) limitedBonus += 30;
-        // 高威胁目标血量 > 50% 且自身血量 > 50% → 60% 倾向
-        else if (hpRatio > 0.5) limitedBonus += 15;
-        // 守卫模式：血量 < 50% 后倾向使用（狂暴模式）
-        if (nType === 'guardian' && hpRatio < 0.5) limitedBonus += 20;
-      }
-
-      const scoredTargets = targetPool.map((t) => {
-        let tScore = 0;
-        // ── 残血收割（幕次加权） ──
-        const lowHpBonus = currentAct >= 2 ? 12 : 8;
-        if (t.hp / t.maxHp < 0.3) tScore += lowHpBonus;
-        // ── 核心威胁（幕次加权） ──
-        const hasHealSkill = t.skills.some((id) => getSkill(id)?.kind === 'heal');
-        const threatBonus = currentAct >= 2 ? 10 : 6;
-        if (hasHealSkill) tScore += threatBonus;
-        if (t.spd >= 6) tScore += threatBonus;
-        const tp = getUnitPassive(t);
-        if (tp && (tp.kind === 'power' || tp.kind === 'frenzy')) tScore += threatBonus;
-        // ── 状态配合 ──
-        if (hasVenomPower && t.statuses.some((s) => s.kind === 'poison')) tScore += 15;
-        if (hasScorchPlus && t.statuses.some((s) => s.kind === 'burn')) tScore += 15;
-        const debuffCount = t.statuses.filter((s) => s.kind === 'poison' || s.kind === 'burn' || s.kind === 'atkDown').length;
-        tScore += debuffCount * 3;
-        // ── 幕次权重调整 ──
-        if (currentAct === 1) {
-          // 幕1：随机扰动 60%
-          tScore += rngVal * 15;
-        } else if (currentAct === 2) {
-          // 幕2：残血 50% + 核心威胁 30%
-          if (t.hp / t.maxHp < 0.3) tScore += 5;
-          if (hasHealSkill || t.spd >= 6) tScore += 8;
-        } else {
-          // 幕3：核心威胁 40% + 状态配合 35%
-          if (hasHealSkill || t.spd >= 6) tScore += 12;
-          if (debuffCount > 0) tScore += 10;
-        }
-        // ── 特殊模式调整 ──
-        if (nType === 'arena') {
-          // 斗兽场：优先集火单体高伤，血量权重 +5
-          if (t.hp / t.maxHp < 0.3) tScore += 5;
-        } else if (nType === 'gauntlet') {
-          // 车轮战：优先击杀减少敌方数量，残血额外 +4
-          if (t.hp / t.maxHp < 0.3) tScore += 4;
-          if (atk.target === 'all') tScore += 5;
-        } else if (nType === 'corrupted') {
-          // 被侵蚀：攻击倾向 +15%（所有攻击目标额外加分）
-          tScore += 3;
-        } else if (nType === 'guardian') {
-          // 守卫：治疗者威胁最高，优先集火
-          if (hasHealSkill) tScore += 10;
-        }
-        // 技能伤害
-        tScore += (atk.damage ?? 0) + getDamageBonus(actor, b2);
-        // 暗影追猎：对生命值低于50%的目标伤害+3
-        if (actorPassive?.kind === 'shadowHunter' && t.hp / t.maxHp < 0.5) {
-          tScore += actorPassive.value;
-        }
-        if (atk.target === 'all' && targetPool.length >= 3) tScore += 3;
-        // 带状态效果的技能加分
-        if (atk.effects?.some((e) => e.kind === 'poison' || e.kind === 'burn')) tScore += 2;
-        // ── 灵魂回响倾向：灵魂越多越倾向使用 ──
-        if (atk.id === 'soul_echo') {
-          const actorSoul = actor.soul ?? 0;
-          if (actorSoul >= 10) tScore += 25;
-          else if (actorSoul >= 5) tScore += 15;
-          else if (actorSoul >= 3) tScore += 8;
-        }
-        // ── 速度加成技能倾向 ──
-        const actorSpd = getEffectiveSpd(actor);
-        if (atk.spdScaling && atk.spdScaling > 0) {
-          // 速度越高，使用速度加成技能的倾向越大
-          const spdBonus = Math.min(25, actorSpd * 4);
-          tScore += spdBonus;
-          // 全体技能额外加分（速度高时清场效率高）
-          if (atk.target === 'all' && targetPool.length >= 2) {
-            tScore += Math.min(10, actorSpd * 2);
-          }
-        }
-        return { target: t, score: tScore };
-      });
-      scoredTargets.sort((a, c) => c.score - a.score);
-      const best = scoredTargets[0];
-      if (best) {
-        candidates.push({ kind: 'attack', skill: atk, targetUid: best.target.uid, score: best.score + limitedBonus + comboBoostBonus + 5 });
-      }
-    }
-
-    // ─── 5. 选择行动（softmax 概率加权：高分=更高概率，低分仍可能被抽到） ───
-    if (candidates.length === 0) {
-      return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
-    }
-    return useRng(b2, (v, b3) => {
-      const maxScore = Math.max(...candidates.map((c) => c.score));
-      const weights = candidates.map((c) => Math.exp((c.score - maxScore) / SOFTMAX_TEMP));
-      const total = weights.reduce((s, w) => s + w, 0);
-      let roll = v * total;
-      let chosen = candidates[candidates.length - 1];
-      for (let i = 0; i < weights.length; i++) {
-        roll -= weights[i];
-        if (roll <= 0) { chosen = candidates[i]; break; }
-      }
-
-      if (chosen.kind === 'heal' && chosen.skill) {
-        const target = chosen.targetUid
-          ? allies.find((u) => u.uid === chosen.targetUid)
+      if (decision.kind === 'heal' && decision.skillId) {
+        const allies = alliesOf(b3, actor);
+        const target = decision.targetUid
+          ? allies.find((u) => u.uid === decision.targetUid)
           : allies.sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
-        return useSkillInner(b3, actor, chosen.skill, target?.uid);
+        return useSkillInner(b3, actor, getSkill(decision.skillId), target?.uid);
       }
-      if (chosen.kind === 'buff' && chosen.skill) {
-        return useSkillInner(b3, actor, chosen.skill, actor.uid);
+      if (decision.kind === 'buff' && decision.skillId) {
+        return useSkillInner(b3, actor, getSkill(decision.skillId), actor.uid);
       }
-      if (chosen.kind === 'swap') {
+      if (decision.kind === 'swap') {
         const swapped = tryEnemySwap(b3, actor);
         if (swapped) return swapped;
-        if (attackSkills.length > 0) {
-          const fallback = attackSkills[Math.floor(v * attackSkills.length)];
-          return useSkillInner(b3, actor, fallback, undefined);
+        if (decision.fallbackSkillId) {
+          return useSkillInner(b3, actor, getSkill(decision.fallbackSkillId), undefined);
         }
         return markActed(pushLog(b3, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
       }
-      if (chosen.kind === 'attack' && chosen.skill) {
-        return useSkillInner(b3, actor, chosen.skill, chosen.targetUid);
+      if (decision.kind === 'attack' && decision.skillId) {
+        return useSkillInner(b3, actor, getSkill(decision.skillId), decision.targetUid);
       }
-      // 兜底：选择可用技能
-      const fallbackPool = skills;
-      if (fallbackPool.length === 0) {
-        return markActed(pushLog(b3, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
-      }
-      const fb = fallbackPool[Math.floor(v * fallbackPool.length)];
-      return useSkillInner(b3, actor, fb, undefined);
+      return markActed(pushLog(b3, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     });
   });
 }
@@ -2200,20 +2145,24 @@ export function playerEndTurn(b: BattleState): BattleState {
   // 车轮战：场上一方全灭待换人——先等替补动画播完（GAUNTLET_SWAP）再结算/开新回合，避免在空场上重复结算
   if (b.pendingSwap?.player || b.pendingSwap?.enemy) return b;
   let nb: BattleState = { ...b, playerAp: 0 };
-  // 预选敌方先手技能：若有可用的先手技能，提前写入 orders 使 computeTurnOrder 能检测到
+  // 预选敌方行动：基于回合开始时的快照状态，一次性预选所有可行动敌人的行动
+  const snapshot = nb;
   for (const eu of nb.enemyUnits) {
     if (eu.hp <= 0 || eu.acted) continue;
-    const firstSkill = eu.skills
-      .map(getSkill)
-      .find((s) => s.priority === 'first' && skillUsesLeft(eu, s.id) > 0 && skillCooldownLeft(eu, s.id) <= 0);
-    if (firstSkill) {
-      nb = { ...nb, orders: { ...(nb.orders ?? {}), [eu.uid]: { skillId: firstSkill.id } } };
+    if (eu.statuses.some((s) => s.kind === 'stun')) continue;
+    const rngVal1 = createRng((snapshot.seed + snapshot.rngCount * 7919) >>> 0)();
+    const rngVal2 = createRng((snapshot.seed + (snapshot.rngCount + 1) * 7919) >>> 0)();
+    const decision = selectEnemyAction(snapshot, eu, rngVal1, rngVal2);
+    if (decision && decision.skillId && decision.kind !== 'swap') {
+      const order: PlayerOrder = { skillId: decision.skillId, targetUid: decision.targetUid, kind: decision.kind, fallbackSkillId: decision.fallbackSkillId };
+      nb = { ...nb, orders: { ...(nb.orders ?? {}), [eu.uid]: order } };
+      nb = { ...nb, rngCount: nb.rngCount + 2 };
     }
   }
-  // 预选完成后重新计算回合顺序：orders 已填充先手指令，computeTurnOrder 会将 priority:'first' 的单位排到最前
+  // 预选完成后重新计算回合顺序：orders 已填充所有敌方指令，computeTurnOrder 会据此排序
   nb = { ...nb, turnOrder: computeTurnOrder(nb) };
   // 回合结算：所有存活单位（敌我混排）按速度统一行动——
-  // 我方执行已下达的指令，敌方由 AI 自动行动；未下指令的我方单位本回合不出手。
+  // 我方执行已下达的指令，敌方执行预选指令；未下指令的我方单位本回合不出手。
   // 使用索引循环以支持「暗影追猎」击杀后再行动（不标记 acted 的单位需重新处理）
   let turnIdx = 0;
   while (turnIdx < (nb.turnOrder ?? []).length) {
@@ -2237,10 +2186,26 @@ export function playerEndTurn(b: BattleState): BattleState {
       // 车轮战：上一只阵亡后刚切入场的敌方替补本回合不出手，等下回合（startRound 重置 acted）再行动；
       // 眩晕单位仍走 enemyAct 正常打出「被眩晕」日志（startRound 也把它们标记为 acted）
       if (unit.acted && !unit.statuses.some((s) => s.kind === 'stun')) { turnIdx++; continue; }
-      // 先手技能：若敌方已被预选先手指令，直接执行而非走 AI
       const eOrder = nb.orders?.[uid];
-      if (eOrder && getSkill(eOrder.skillId)?.priority === 'first') {
-        nb = useSkillInner(nb, unit, getSkill(eOrder.skillId), eOrder.targetUid);
+      if (eOrder?.skillId) {
+        // 使用预选指令执行敌方行动
+        const skill = getSkill(eOrder.skillId);
+        if (skill) {
+          if (eOrder.kind === 'swap') {
+            const swapped = tryEnemySwap(nb, unit);
+            if (swapped) {
+              nb = swapped;
+            } else if (eOrder.fallbackSkillId) {
+              nb = useSkillInner(nb, unit, getSkill(eOrder.fallbackSkillId), undefined);
+            } else {
+              nb = markActed(pushLog(nb, `${unit.name} 换位失败`, sideOf(unit)), uid);
+            }
+          } else {
+            nb = useSkillInner(nb, unit, skill, eOrder.targetUid);
+          }
+        } else {
+          nb = enemyAct(nb, unit);
+        }
       } else {
         nb = enemyAct(nb, unit);
       }

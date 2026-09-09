@@ -230,6 +230,10 @@ export interface LogEntry {
 export interface PlayerOrder {
   skillId: string;
   targetUid?: string;
+  /** 敌方预选行动类型（heal/buff/attack/swap），换位时执行逻辑不同于普通技能 */
+  kind?: 'heal' | 'buff' | 'attack' | 'swap';
+  /** 敌方换位失败时的备用攻击技能 */
+  fallbackSkillId?: string;
 }
 
 export interface BattleState {
