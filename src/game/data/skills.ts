@@ -15,7 +15,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   ember: {
     id: 'ember', name: '火花', desc: '攻击单个敌人，附加灼烧2层',
-    target: 'single', kind: 'attack', damage: 6,
+    target: 'single', kind: 'attack', damage: 6, hideEffects: true,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   aqua_shot: {
