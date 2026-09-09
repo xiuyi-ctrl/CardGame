@@ -14,7 +14,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 7,
   },
   ember: {
-    id: 'ember', name: '火花', desc: '攻击单个敌人，附加灼烧',
+    id: 'ember', name: '火花', desc: '攻击单个敌人，附加灼烧2层',
     target: 'single', kind: 'attack', damage: 6,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
