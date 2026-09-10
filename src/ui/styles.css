@@ -2265,8 +2265,8 @@ button.primary {
 .achievement-name { font-weight: bold; min-width: 90px; }
 .achievement-desc { color: var(--text-dim); font-size: 14px; white-space: nowrap; }
 .achievement-item-row { display: grid; grid-template-columns: 30px 90px 1fr 220px; align-items: center; gap: 10px; }
-.achievement-relic-row { display: flex; align-items: center; gap: 10px; width: 100%; }
 .achievement-unlock { color: var(--gold); font-size: 13px; white-space: nowrap; text-align: center; }
+.achievement-grade-header { display: flex; align-items: center; gap: 8px; }
 .achievement-header { position: fixed; top: 0; left: 0; right: 0; text-align: center; padding: 20px 0 8px; z-index: 15; }
 .achievement-title { font-size: 25px; }
 .achievement-tabs { display: flex; align-items: center; justify-content: center; width: 100%; position: relative; margin-bottom: 12px; margin-top: 60px; }

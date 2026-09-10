@@ -2463,12 +2463,10 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
           {allRelics.map((r) => {
             const unlocked = unlocks.relics.includes(r.id);
             return (
-              <div key={r.id} className={`achievement-item ${unlocked ? 'unlocked' : 'locked'}`}>
-                <div className="achievement-relic-row">
-                  <span className="achievement-icon">{unlocked ? r.emoji : '🔒'}</span>
-                  <span className="achievement-name">{r.name}</span>
-                  <span className="achievement-desc">{r.desc}</span>
-                </div>
+              <div key={r.id} className={`achievement-item achievement-item-row ${unlocked ? 'unlocked' : 'locked'}`}>
+                <span className="achievement-icon">{unlocked ? r.emoji : '🔒'}</span>
+                <span className="achievement-name">{r.name}</span>
+                <span className="achievement-desc">{r.desc}</span>
                 <span className="achievement-unlock">{r.unlockCondition}</span>
               </div>
             );
@@ -2483,8 +2481,10 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
             const reached = bestRank >= rank;
             return (
               <div key={g} className={`achievement-item ${reached ? 'unlocked' : 'locked'}`}>
-                <span className="achievement-icon">{reached ? '⭐' : '☆'}</span>
-                <span className="achievement-name">评级 {g}</span>
+                <div className="achievement-grade-header">
+                  <span className="achievement-icon">{reached ? '⭐' : '☆'}</span>
+                  <span className="achievement-name">评级 {g}</span>
+                </div>
                 <span className="achievement-desc">
                   {g === 'D' && '完成任意通关'}
                   {g === 'C' && 'B 级通关解锁困难难度'}
