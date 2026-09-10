@@ -2418,8 +2418,8 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
 
   const allDifficulties: { id: Difficulty; label: string; desc: string; unlockCondition: string }[] = [
     { id: 'normal', label: '普通', desc: '标准难度，无额外修正', unlockCondition: '默认解锁' },
-    { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%', unlockCondition: '普通难度 A 级通关' },
-    { id: 'nightmare', label: '地狱', desc: '敌方 HP+50%、SPD+2，战后回血 20%，商品加价 40%', unlockCondition: '困难难度 A 级通关' },
+    { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%', unlockCondition: '普通难度 A 级及以上通关' },
+    { id: 'nightmare', label: '地狱', desc: '敌方 HP+50%、SPD+2，战后回血 20%，商品加价 40%', unlockCondition: '困难难度 A 级及以上通关' },
   ];
   const relicCondMap: Record<string, string> = {
     traveler_charm: 'B 级通关',
