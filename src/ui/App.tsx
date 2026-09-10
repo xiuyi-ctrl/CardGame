@@ -79,6 +79,21 @@ export default function App() {
 }
 
 function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const handleSkip = () => {
+    const isFirst = state.currentNodeId === '';
+    const targetRow = isFirst ? state.currentRow : state.currentRow + 1;
+    const currentCol = isFirst ? null : (state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.col ?? null);
+    const nextRow = state.map.layers[targetRow] ?? [];
+    const visitedInRow = (state.visitedNodeIds ?? []).filter((id) => nextRow.some((n) => n.id === id));
+    const lockedId = visitedInRow.length > 0 ? visitedInRow[0] : null;
+    const skipTypes = new Set(['battle', 'elite', 'arena', 'gauntlet', 'corrupted', 'boss']);
+    const target = nextRow.find((n) => {
+      if (lockedId && n.id !== lockedId) return false;
+      if (!skipTypes.has(n.type)) return false;
+      return canStepTo(state.currentRow, currentCol, n, state.map);
+    });
+    if (target) dispatch({ type: 'USE_SKIP', nodeId: target.id, free: true });
+  };
   return (
     <div className="hud">
       <span className="act">第 {state.act} 层</span>
@@ -86,6 +101,11 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
         <span className="chip">👥 {state.field.length}/{FIELD_MAX}</span>
         <span className="chip">💰 {state.gold}</span>
       </span>
+      {state.screen === 'map' && (
+        <button className="home-btn" onClick={handleSkip}>
+          ⏩ 跳关
+        </button>
+      )}
       {state.screen === 'backpack' ? (
         <button className="home-btn" onClick={() => dispatch({ type: 'CLOSE_BACKPACK' })}>
           🎒 关闭背包

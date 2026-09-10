@@ -41,7 +41,7 @@ export type GameAction =
   | { type: 'FUSE'; primaryUid: string }
   | { type: 'PICK_CUSTOM'; presetId: string }
   | { type: 'USE_PURIFY'; uid: string }
-  | { type: 'USE_SKIP'; nodeId: string }
+  | { type: 'USE_SKIP'; nodeId: string; free?: boolean }
   | { type: 'USE_BATTLE_ITEM'; itemId: string; targetUid: string }
   | { type: 'USE_SCOUT'; nodeId: string }
   | { type: 'OPEN_SCOUT' }
@@ -1094,7 +1094,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'USE_SKIP': {
       const inv = state.inventory.skip ?? 0;
-      if (inv <= 0 || state.screen !== 'map') return state;
+      if (state.screen !== 'map') return state;
+      if (!action.free && inv <= 0) return state;
       const targetRow = state.currentNodeId === '' ? state.currentRow : state.currentRow + 1;
       const node = state.map.layers[targetRow]?.find((n) => n.id === action.nodeId);
       if (!node) return state;
@@ -1105,15 +1106,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const cur = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
         if (!canStepTo(state.currentRow, cur?.col, node, state.map)) return state;
       }
-      // 可跳过战斗/精英/斗兽场/车轮战/被侵蚀节点，首领与守卫不可跳过，钥匙门/双生宝箱不是战斗
-      if (node.type === 'boss' || node.type === 'guardian') return state;
-      if (node.type !== 'battle' && node.type !== 'elite' && node.type !== 'arena' && node.type !== 'gauntlet' && node.type !== 'corrupted')
-        return state;
+      // 可跳过战斗/精英/斗兽场/车轮战/被侵蚀节点，守卫不可跳过，首领仅 free 跳关可跳
+      if (node.type === 'guardian' || (!action.free && node.type === 'boss')) return state;
+      const skippable = new Set(['battle', 'elite', 'arena', 'gauntlet', 'corrupted']);
+      if (action.free) skippable.add('boss');
+      if (!skippable.has(node.type)) return state;
       const base: GameState = {
         ...state,
         currentRow: targetRow,
         currentNodeId: node.id,
-        inventory: { ...state.inventory, skip: inv - 1 },
+        inventory: { ...state.inventory, skip: action.free ? inv : inv - 1 },
       };
       const challenge = node.type === 'arena' || node.type === 'gauntlet';
       const corrupt = node.type === 'corrupted';
