@@ -2149,9 +2149,12 @@ interface RatingDimension {
   grade: string;
 }
 
-function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: number): {
+function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: number, act: number): {
   score: number; grade: string; label: string; dimensions: RatingDimension[];
 } {
+  // 通关进度系数：1幕→0.65(最高B)，2幕→0.82(最高A)，3幕→1.0(可达S)
+  const actMultiplier = [0.65, 0.82, 1.0][Math.min(3, Math.max(1, act)) - 1];
+
   // 征服者 (30%)：总胜率
   const totalBattles = stats.battlesWon + stats.battlesLost;
   const winRate = totalBattles > 0 ? stats.battlesWon / totalBattles : 0.5;
@@ -2174,16 +2177,16 @@ function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: nu
   const dimGrade = (s: number) => s >= 90 ? 'S' : s >= 75 ? 'A' : s >= 55 ? 'B' : s >= 40 ? 'C' : 'D';
 
   const dimensions: RatingDimension[] = [
-    { key: 'conqueror', name: '征服者', weight: 30, score: conqueror, grade: dimGrade(conqueror) },
-    { key: 'tamer', name: '驯兽师', weight: 25, score: tamer, grade: dimGrade(tamer) },
-    { key: 'economy', name: '经济大师', weight: 20, score: economy, grade: dimGrade(economy) },
-    { key: 'efficiency', name: '战斗效率', weight: 15, score: efficiency, grade: dimGrade(efficiency) },
-    { key: 'completeness', name: '队伍完整性', weight: 10, score: completeness, grade: dimGrade(completeness) },
+    { key: 'conqueror', name: '征服者', weight: 30, score: Math.round(conqueror * actMultiplier), grade: dimGrade(Math.round(conqueror * actMultiplier)) },
+    { key: 'tamer', name: '驯兽师', weight: 25, score: Math.round(tamer * actMultiplier), grade: dimGrade(Math.round(tamer * actMultiplier)) },
+    { key: 'economy', name: '经济大师', weight: 20, score: Math.round(economy * actMultiplier), grade: dimGrade(Math.round(economy * actMultiplier)) },
+    { key: 'efficiency', name: '战斗效率', weight: 15, score: Math.round(efficiency * actMultiplier), grade: dimGrade(Math.round(efficiency * actMultiplier)) },
+    { key: 'completeness', name: '队伍完整性', weight: 10, score: Math.round(completeness * actMultiplier), grade: dimGrade(Math.round(completeness * actMultiplier)) },
   ];
 
   const score = Math.round(
-    conqueror * 0.3 + tamer * 0.25 + economy * 0.2 + efficiency * 0.15 + completeness * 0.1,
-  );
+    conqueror * 0.3 + tamer * 0.25 + economy * 0.2 + efficiency * 0.15 + completeness * 0.1
+  ) * actMultiplier;
 
   if (score >= 90) return { score, grade: 'S', label: '传奇远征者', dimensions };
   if (score >= 75) return { score, grade: 'A', label: '精锐指挥官', dimensions };
@@ -2288,7 +2291,7 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const actName = actNames[state.act] ?? `第${state.act}幕`;
   const nextName = actNames[state.act + 1] ?? `第${state.act + 1}幕`;
   const theme = ACT_THEMES[state.act] ?? ACT_THEMES[1];
-  const rating = stats ? computeRating(stats, state.roster.length) : null;
+  const rating = stats ? computeRating(stats, state.roster.length, state.act) : null;
   const highlights = snap ? getHighlights(stats!, snap, state.roster) : [];
   const expeditionLog = snap ? getExpeditionLog(stats!, snap, state.roster, state.act) : '';
   return (
@@ -2351,7 +2354,7 @@ function RatingDisplay({ rating, color }: { rating: NonNullable<ReturnType<typeo
 }
 
 function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const rating = state.runStats ? computeRating(state.runStats, state.roster.length) : null;
+  const rating = state.runStats ? computeRating(state.runStats, state.roster.length, state.act) : null;
   return (
     <div className="center-col">
       {rating && <RatingDisplay rating={rating} color="#e05555" />}
@@ -2378,7 +2381,7 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
 }
 
 function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const rating = state.runStats ? computeRating(state.runStats, state.roster.length) : null;
+  const rating = state.runStats ? computeRating(state.runStats, state.roster.length, state.act) : null;
   const [unlocked, setUnlocked] = useState<string[]>([]);
 
   useEffect(() => {
