@@ -123,12 +123,13 @@ export function detectUnlocks(
   currentUnlocks: Unlocks,
   grade: string,
   roster: { speciesId: string; passive?: string }[],
+  difficulty?: string,
 ): Unlocks {
   const next = { ...currentUnlocks, difficulties: [...currentUnlocks.difficulties], relics: [...currentUnlocks.relics] };
-  if ((grade === 'A' || grade === 'S') && !next.difficulties.includes('hard')) next.difficulties.push('hard');
-  if (grade === 'S' && !next.difficulties.includes('nightmare')) next.difficulties.push('nightmare');
   const gradeRank: Record<string, number> = { S: 4, A: 3, B: 2, C: 1, D: 0 };
   const rank = gradeRank[grade] ?? 0;
+  if (difficulty === 'normal' && rank >= 3 && !next.difficulties.includes('hard')) next.difficulties.push('hard');
+  if (difficulty === 'hard' && rank >= 3 && !next.difficulties.includes('nightmare')) next.difficulties.push('nightmare');
   if (rank >= 2 && !next.relics.includes('traveler_charm')) next.relics.push('traveler_charm');
   if (rank >= 3 && !next.relics.includes('elite_badge')) next.relics.push('elite_badge');
   if (rank >= 4 && !next.relics.includes('legend_seal')) next.relics.push('legend_seal');

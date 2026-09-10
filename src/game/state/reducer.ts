@@ -24,7 +24,7 @@ const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrup
 
 export type GameAction =
   | { type: 'START_RUN'; starterId: string; companionId: string; seed: number; difficulty?: Difficulty; relic?: string }
-  | { type: 'STARTER'; saveSlot?: number }
+  | { type: 'STARTER'; saveSlot?: number; unlocks?: Unlocks }
   | { type: 'LOAD_GAME'; state: GameState }
   | { type: 'DELETE_SAVE'; slot: number }
   | { type: 'MOVE'; nodeId: string }
@@ -444,7 +444,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'STARTER':
-      return { ...createInitialState(), screen: 'difficulty-select', saveSlot: action.saveSlot };
+      return { ...createInitialState(), screen: 'difficulty-select', saveSlot: action.saveSlot, unlocks: action.unlocks ?? { ...DEFAULT_UNLOCKS } };
 
     case 'LOAD_GAME':
       if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title' };

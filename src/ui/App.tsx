@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } fro
 import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
-import type { GameState, Difficulty, Unlocks } from '../game/state/game';
+import type { GameState, Difficulty } from '../game/state/game';
 import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
@@ -16,7 +16,7 @@ import { UnitCard, SkillTag, DragScrollRow } from './components';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
-import { persistSave, quitGame, detectUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
+import { persistSave, persistUnlocks, loadUnlocks, quitGame, detectUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
@@ -540,16 +540,15 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   const [selectedSlot, setSelectedSlot] = useState<number | undefined>(() => {
     try { return Number(localStorage.getItem('petCardSaveSelected')) || undefined; } catch { return undefined; }
   });
-  const [selectedUnlocks, setSelectedUnlocks] = useState<Unlocks | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [overwriteTarget, setOverwriteTarget] = useState<number | null>(null);
   const [dbgAct, setDbgAct] = useState(1);
   const [dbgRow, setDbgRow] = useState(5);
   const [dbgType, setDbgType] = useState<MapNode['type'] | 'all'>('all');
   const [dbgSeed, setDbgSeed] = useState(42);
 
-  function selectSlot(slot: number | undefined, unlocks?: Unlocks) {
+  function selectSlot(slot: number | undefined) {
     setSelectedSlot(slot);
-    setSelectedUnlocks(unlocks);
     try {
       if (slot) localStorage.setItem('petCardSaveSelected', String(slot));
       else localStorage.removeItem('petCardSaveSelected');
@@ -569,12 +568,22 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
 
   useEffect(() => {
     if (currentSaveSlot) {
-      const target = slots.find((s) => s.slot === currentSaveSlot);
-      selectSlot(currentSaveSlot, target?.state?.unlocks);
+      selectSlot(currentSaveSlot);
     }
   }, [currentSaveSlot, slots]);
 
   function onNewGame() {
+    if (selectedSlot) {
+      const target = slots.find((s) => s.slot === selectedSlot);
+      if (target?.state) {
+        setOverwriteTarget(selectedSlot);
+        return;
+      }
+      clearDeletedSlot(selectedSlot);
+      selectSlot(selectedSlot);
+      dispatch({ type: 'STARTER', saveSlot: selectedSlot });
+      return;
+    }
     const empty = slots.find((s) => !s.state);
     if (empty) {
       clearDeletedSlot(empty.slot);
@@ -583,6 +592,24 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     } else {
       alert('存档已满，请在「存档管理」中删除一个存档');
     }
+  }
+
+  function confirmOverwrite() {
+    if (overwriteTarget === null) return;
+    const slotNum = overwriteTarget;
+    const slotUnlocks = slots.find((s) => s.slot === slotNum)?.state?.unlocks;
+    setOverwriteTarget(null);
+    if (slotUnlocks) persistUnlocks(slotUnlocks);
+    void deleteSave(slotNum).then(() => {
+      setSlots((prev) => {
+        const next = prev.map((s) => s.slot === slotNum ? { ...s, state: null } : s);
+        setHasSave(next.some((x) => x.state !== null));
+        return next;
+      });
+      clearDeletedSlot(slotNum);
+      selectSlot(slotNum);
+      dispatch({ type: 'STARTER', saveSlot: slotNum, unlocks: slotUnlocks });
+    });
   }
 
   function onContinue() {
@@ -594,8 +621,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   }
 
   function onSlotClick(slot: SaveSlotInfo) {
-    if (!slot.state) return;
-    selectSlot(slot.slot, slot.state.unlocks);
+    selectSlot(slot.slot);
     dispatch({ type: 'SHOW_TOAST', msg: `已切换到存档 ${slot.slot}`, kind: 'success' });
   }
 
@@ -675,7 +701,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
           📖 生物图鉴
         </button>
         <button className="big-btn" onClick={() => {
-          const unlocks = selectedUnlocks ?? { ...DEFAULT_UNLOCKS };
+          const unlocks = slots.find((s) => s.slot === selectedSlot)?.state?.unlocks ?? loadUnlocks();
           dispatch({ type: 'ACHIEVEMENTS', unlocks });
         }}>
           🏆 成就
@@ -700,7 +726,6 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                     key={s.slot}
                     className={`save-slot ${info.cls}${isActive ? ' active' : ''}`}
                     onClick={() => onSlotClick(s)}
-                    style={!s.state ? { pointerEvents: 'none' } : undefined}
                   >
                     <div className="save-slot-num">存档 {s.slot}{isActive ? '（当前）' : ''}</div>
                     <div className="save-slot-text">{info.text}</div>
@@ -729,6 +754,23 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
             <div className="panel-row" style={{ justifyContent: 'center' }}>
               <button className="primary" onClick={confirmDelete}>确定删除</button>
               <button onClick={() => setDeleteTarget(null)}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {overwriteTarget !== null && (
+        <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setOverwriteTarget(null)}>
+          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">⚠️ 覆盖存档</div>
+            <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
+              存档 <b style={{ color: 'var(--gold)' }}>{overwriteTarget}</b> 已有游戏，确定覆盖？
+            </p>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
+              旧存档将被删除，此操作不可撤销。
+            </p>
+            <div className="panel-row" style={{ justifyContent: 'center' }}>
+              <button className="primary" onClick={confirmOverwrite}>确定覆盖</button>
+              <button onClick={() => setOverwriteTarget(null)}>取消</button>
             </div>
           </div>
         </div>
@@ -2323,7 +2365,7 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
     if (!rating) return;
     const currentUnlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
     const rosterInfo = state.roster.map((u) => ({ speciesId: u.speciesId, passive: u.passive }));
-    const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo);
+    const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo, state.difficulty);
     const newItems: string[] = [];
     for (const d of nextUnlocks.difficulties) {
       if (!currentUnlocks.difficulties.includes(d)) newItems.push(`难度：${DIFFICULTY_CONFIG[d as Difficulty].label}`);
@@ -2369,68 +2411,92 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
 
 function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const unlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
-  const allDifficulties: { id: Difficulty; label: string; desc: string }[] = [
-    { id: 'normal', label: '普通', desc: '标准难度，无额外修正' },
-    { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%' },
-    { id: 'nightmare', label: '地狱', desc: '敌方 HP+50%、SPD+2，战后回血 20%，商品加价 40%' },
+  const [tab, setTab] = useState<'difficulties' | 'relics' | 'grades'>('difficulties');
+  const tabs = ['difficulties', 'relics', 'grades'] as const;
+  const tabLabels: Record<string, string> = { difficulties: '难度', relics: '遗物', grades: '评级里程碑' };
+  const tabIdx = tabs.indexOf(tab);
+
+  const allDifficulties: { id: Difficulty; label: string; desc: string; unlockCondition: string }[] = [
+    { id: 'normal', label: '普通', desc: '标准难度，无额外修正', unlockCondition: '默认解锁' },
+    { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%', unlockCondition: '普通难度 A 级通关' },
+    { id: 'nightmare', label: '地狱', desc: '敌方 HP+50%、SPD+2，战后回血 20%，商品加价 40%', unlockCondition: '困难难度 A 级通关' },
   ];
-  const allRelics = RELIC_ORDER.map((id) => ({ id, ...RELIC_DEFS[id] }));
+  const relicCondMap: Record<string, string> = {
+    traveler_charm: 'B 级通关',
+    elite_badge: 'A 级通关',
+    legend_seal: 'S 级通关',
+    flame_medal: 'S 级通关 + 3 只灼烧系宠物',
+    nature_medal: 'S 级通关 + 3 只坦克系宠物',
+    shadow_medal: 'S 级通关 + 3 只毒系宠物',
+  };
+  const allRelics = RELIC_ORDER.map((id) => ({ id, ...RELIC_DEFS[id], unlockCondition: relicCondMap[id] ?? '未知' }));
   const grades = ['S', 'A', 'B', 'C', 'D'];
 
   return (
     <div className="center-col">
-      <div className="section-title">🏆 成就</div>
-      <div className="section-sub">最高评级：{unlocks.bestGrade ?? '无'}</div>
-      {/* 难度解锁 */}
-      <div className="achievement-group">
-        <div className="achievement-group-title">难度</div>
-        {allDifficulties.map((d) => {
-          const unlocked = unlocks.difficulties.includes(d.id);
-          return (
-            <div key={d.id} className={`achievement-item ${unlocked ? 'unlocked' : 'locked'}`}>
-              <span className="achievement-icon">{unlocked ? '🔓' : '🔒'}</span>
-              <span className="achievement-name">{d.label}</span>
-              <span className="achievement-desc">{unlocked ? d.desc : '未解锁'}</span>
-            </div>
-          );
-        })}
+      <div className="achievement-header">
+        <div className="section-title achievement-title">🏆 成就</div>
+        <div className="section-sub">最高评级：{unlocks.bestGrade ?? '无'}</div>
       </div>
-      {/* 遗物解锁 */}
-      <div className="achievement-group">
-        <div className="achievement-group-title">遗物</div>
-        {allRelics.map((r) => {
-          const unlocked = unlocks.relics.includes(r.id);
-          return (
-            <div key={r.id} className={`achievement-item ${unlocked ? 'unlocked' : 'locked'}`}>
-              <span className="achievement-icon">{unlocked ? r.emoji : '🔒'}</span>
-              <span className="achievement-name">{r.name}</span>
-              <span className="achievement-desc">{unlocked ? r.desc : '未解锁'}</span>
-            </div>
-          );
-        })}
+      <div className="achievement-tabs">
+        <button className="achievement-tab-btn left" onClick={() => setTab(tabs[(tabIdx + tabs.length - 1) % tabs.length])}>←</button>
+        <span className="achievement-tab-label">{tabLabels[tab]}</span>
+        <button className="achievement-tab-btn right" onClick={() => setTab(tabs[(tabIdx + 1) % tabs.length])}>→</button>
       </div>
-      {/* 评级里程碑 */}
-      <div className="achievement-group">
-        <div className="achievement-group-title">评级里程碑</div>
-        {grades.map((g) => {
-          const rank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[g] ?? 0;
-          const bestRank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[unlocks.bestGrade ?? 'D'] ?? 0;
-          const reached = bestRank >= rank;
-          return (
-            <div key={g} className={`achievement-item ${reached ? 'unlocked' : 'locked'}`}>
-              <span className="achievement-icon">{reached ? '⭐' : '☆'}</span>
-              <span className="achievement-name">评级 {g}</span>
-              <span className="achievement-desc">
-                {g === 'D' && '完成任意通关'}
-                {g === 'C' && 'B 级通关解锁困难难度'}
-                {g === 'B' && 'A 级通关解锁旅行者护符'}
-                {g === 'A' && 'S 级通关解锁精英勋章 + 地狱难度'}
-                {g === 'S' && 'S 级通关解锁传说印章 + 勋章检测'}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {tab === 'difficulties' && (
+        <div className="achievement-group">
+          {allDifficulties.map((d) => {
+            const unlocked = unlocks.difficulties.includes(d.id);
+            return (
+              <div key={d.id} className={`achievement-item achievement-item-row ${unlocked ? 'unlocked' : 'locked'}`}>
+                <span className="achievement-icon">{unlocked ? '🔓' : '🔒'}</span>
+                <span className="achievement-name">{d.label}</span>
+                <span className="achievement-desc">{d.desc}</span>
+                <span className="achievement-unlock">{d.unlockCondition}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {tab === 'relics' && (
+        <div className="achievement-group">
+          {allRelics.map((r) => {
+            const unlocked = unlocks.relics.includes(r.id);
+            return (
+              <div key={r.id} className={`achievement-item ${unlocked ? 'unlocked' : 'locked'}`}>
+                <div className="achievement-relic-row">
+                  <span className="achievement-icon">{unlocked ? r.emoji : '🔒'}</span>
+                  <span className="achievement-name">{r.name}</span>
+                  <span className="achievement-desc">{r.desc}</span>
+                </div>
+                <span className="achievement-unlock">{r.unlockCondition}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {tab === 'grades' && (
+        <div className="achievement-group">
+          {grades.map((g) => {
+            const rank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[g] ?? 0;
+            const bestRank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[unlocks.bestGrade ?? 'D'] ?? 0;
+            const reached = bestRank >= rank;
+            return (
+              <div key={g} className={`achievement-item ${reached ? 'unlocked' : 'locked'}`}>
+                <span className="achievement-icon">{reached ? '⭐' : '☆'}</span>
+                <span className="achievement-name">评级 {g}</span>
+                <span className="achievement-desc">
+                  {g === 'D' && '完成任意通关'}
+                  {g === 'C' && 'B 级通关解锁困难难度'}
+                  {g === 'B' && 'A 级通关解锁旅行者护符'}
+                  {g === 'A' && 'S 级通关解锁精英勋章 + 地狱难度'}
+                  {g === 'S' && 'S 级通关解锁传说印章 + 勋章检测'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })} style={{ marginTop: 12 }}>
         返回标题
       </button>
