@@ -564,7 +564,23 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   const [showDebug, setShowDebug] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
   const [showSaveMgmt, setShowSaveMgmt] = useState(false);
-  const [slots, setSlots] = useState<SaveSlotInfo[]>([]);
+  const [slots, setSlots] = useState<SaveSlotInfo[]>(() => {
+    const result: SaveSlotInfo[] = [];
+    for (let i = 1; i <= 6; i++) {
+      try {
+        const json = localStorage.getItem(`petCardSave_${i}`);
+        if (json) {
+          const parsed = JSON.parse(json) as GameState;
+          result.push({ slot: i, state: parsed });
+        } else {
+          result.push({ slot: i, state: null });
+        }
+      } catch {
+        result.push({ slot: i, state: null });
+      }
+    }
+    return result;
+  });
   const [selectedSlot, setSelectedSlot] = useState<number | undefined>(() => {
     try { return Number(localStorage.getItem('petCardSaveSelected')) || undefined; } catch { return undefined; }
   });
