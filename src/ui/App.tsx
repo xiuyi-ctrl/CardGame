@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
@@ -552,7 +553,14 @@ function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dis
 }
 
 function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameAction>; currentSaveSlot?: number }) {
-  const [hasSave, setHasSave] = useState<boolean | null>(null);
+  const [hasSave, setHasSave] = useState<boolean>(() => {
+    try {
+      for (let i = 1; i <= 6; i++) {
+        if (localStorage.getItem(`petCardSave_${i}`)) return true;
+      }
+    } catch {}
+    return false;
+  });
   const [showDebug, setShowDebug] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
   const [showSaveMgmt, setShowSaveMgmt] = useState(false);
@@ -2185,8 +2193,8 @@ function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: nu
   ];
 
   const score = Math.round(
-    conqueror * 0.3 + tamer * 0.25 + economy * 0.2 + efficiency * 0.15 + completeness * 0.1
-  ) * actMultiplier;
+    (conqueror * 0.3 + tamer * 0.25 + economy * 0.2 + efficiency * 0.15 + completeness * 0.1) * actMultiplier
+  );
 
   if (score >= 90) return { score, grade: 'S', label: '传奇远征者', dimensions };
   if (score >= 75) return { score, grade: 'A', label: '精锐指挥官', dimensions };
@@ -2460,10 +2468,15 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
         <div className="section-sub">最高评级：{unlocks.bestGrade ?? '无'}</div>
       </div>
       <div className="achievement-tabs">
-        <button className="achievement-tab-btn left" onClick={() => setTab(tabs[(tabIdx + tabs.length - 1) % tabs.length])}>←</button>
         <span className="achievement-tab-label">{tabLabels[tab]}</span>
-        <button className="achievement-tab-btn right" onClick={() => setTab(tabs[(tabIdx + 1) % tabs.length])}>→</button>
       </div>
+      {createPortal(
+        <>
+          <button className="achievement-tab-btn left" onClick={() => setTab(tabs[(tabIdx + tabs.length - 1) % tabs.length])}>←</button>
+          <button className="achievement-tab-btn right" onClick={() => setTab(tabs[(tabIdx + 1) % tabs.length])}>→</button>
+        </>,
+        document.body
+      )}
       {tab === 'difficulties' && (
         <div className="achievement-group">
           {allDifficulties.map((d) => {
