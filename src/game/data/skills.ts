@@ -243,7 +243,7 @@ export const SKILLS: Record<string, SkillDef> = {
     kind: 'attack', damage: 5, hits: 1, target: 'single',
   },
   wind_feather: {
-    id: 'wind_feather', name: '风羽', desc: '提升自身 2 点速度（持续 2 回合）',
+    id: 'wind_feather', name: '风羽', desc: '提升自身 2 点速度，持续2回合',
     kind: 'buff', target: 'self',
     effects: [{ kind: 'windSpd', value: 2, turns: 2 }],
     hideEffects: true,

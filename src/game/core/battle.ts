@@ -1705,7 +1705,7 @@ function resolveAttack(
       if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
         t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
         nb = replaceUnit(nb, t2);
-        nb = pushLog(nb, `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`, sideOf(t2), t2.uid, t2.uid);
+        nb = pushLog(nb, `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`, sideOf(t2), t2.uid, t2.uid, ['rageThorn']);
       }
       // 腐化囊体：被攻击时50%概率使攻击者中毒2层
       if (t2.hp > 0) {

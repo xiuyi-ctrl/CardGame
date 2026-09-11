@@ -461,14 +461,27 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     const prev = prevStatusRef.current;
     if (!battle || !prev) return {};
     const prevKinds = new Map<string, Set<string>>();
+    const prevStackValues = new Map<string, Map<string, number>>();
     for (const u of [...prev.playerUnits, ...prev.enemyUnits]) {
       prevKinds.set(u.uid, new Set(u.statuses.map((s) => s.kind)));
+      const sv = new Map<string, number>();
+      for (const s of u.statuses) sv.set(s.kind, s.value);
+      prevStackValues.set(u.uid, sv);
     }
     const result: Record<string, string[]> = {};
+    const STACKING = ['burn', 'poison', 'rageThorn'];
     for (const u of [...battle.playerUnits, ...battle.enemyUnits]) {
       const pk = prevKinds.get(u.uid);
       if (!pk) continue;
       const added = u.statuses.filter((s) => !pk.has(s.kind)).map((s) => s.kind);
+      // 叠加型状态 value 增加也视为"新增"，以便动画隐藏后逐步揭示
+      const psv = prevStackValues.get(u.uid);
+      for (const s of u.statuses) {
+        if (STACKING.includes(s.kind) && pk.has(s.kind) && psv) {
+          const prevVal = psv.get(s.kind) ?? 0;
+          if (s.value > prevVal && !added.includes(s.kind)) added.push(s.kind);
+        }
+      }
       if (added.length > 0) result[u.uid] = added;
     }
     return result;
@@ -508,6 +521,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     }
     const prevBattleBefore = prevBattle.current;
     prevBattle.current = battle;
+    prevStatusRef.current = battle;
     // 首次遇到该战斗（含从存档/继续游戏恢复的中途战斗）：只初始化基线、不重播既有日志。
     // 否则会把整场战斗的日志全部当作新事件重播，动画长时间停在「战斗结算中」。
     if (prevBattleBefore === null) {

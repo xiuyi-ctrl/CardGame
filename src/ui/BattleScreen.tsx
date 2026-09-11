@@ -87,8 +87,12 @@ export function BattleScreen({ state, dispatch }: Props) {
     const sm = statusMap ? statusMap[u.uid] : undefined;
     if (sm) {
       const smMap = new Map(sm.map((s) => [s.kind, s]));
-      // 合并而非替换：sm 中有的更新 value/turns（如灼烧层数变化），sm 中没有的保留原样（新增状态如水幕）
-      const merged = next.statuses.map((s) => smMap.get(s.kind) ?? s);
+      // 动画期间：叠加型状态（灼烧/中毒/怒棘）完全由 statusMap 快照控制，
+      // 排除不在 smMap 中的叠加型状态，防止从真实 unit 泄露最终层数
+      const STACKING_ANIM = new Set(['burn', 'poison', 'rageThorn']);
+      const merged = next.statuses
+        .filter((s) => !STACKING_ANIM.has(s.kind) || smMap.has(s.kind))
+        .map((s) => smMap.get(s.kind) ?? s);
       for (const s of sm) {
         if (!merged.some((ms) => ms.kind === s.kind)) merged.push(s);
       }
