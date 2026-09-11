@@ -601,14 +601,14 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       }
       clearDeletedSlot(selectedSlot);
       selectSlot(selectedSlot);
-      dispatch({ type: 'STARTER', saveSlot: selectedSlot });
+      dispatch({ type: 'STARTER', saveSlot: selectedSlot, unlocks: loadUnlocks() });
       return;
     }
     const empty = slots.find((s) => !s.state);
     if (empty) {
       clearDeletedSlot(empty.slot);
       selectSlot(empty.slot);
-      dispatch({ type: 'STARTER', saveSlot: empty.slot });
+      dispatch({ type: 'STARTER', saveSlot: empty.slot, unlocks: loadUnlocks() });
     } else {
       alert('存档已满，请在「存档管理」中删除一个存档');
     }
@@ -2370,9 +2370,6 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
           ))}
         </div>
       )}
-      <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
-        再来一次
-      </button>
       <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
         返回首页
       </button>
@@ -2398,9 +2395,10 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
     }
     if (nextUnlocks.bestGrade !== currentUnlocks.bestGrade) newItems.push(`最高评级：${nextUnlocks.bestGrade}`);
     setUnlocked(newItems);
-    // 保存 unlocks 到当前存档槽
+    // 保存 unlocks 到当前存档槽和全局 localStorage
     const updatedState = { ...state, unlocks: nextUnlocks };
     void persistSave(updatedState);
+    persistUnlocks(nextUnlocks);
   }, [rating]);
 
   return (

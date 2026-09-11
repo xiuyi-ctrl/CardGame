@@ -143,7 +143,7 @@ export function newSeed(): number {
   return Math.floor(Math.random() * 1000000000);
 }
 
-function freshRun(starterId: string, companionId: string, seed: number, difficulty?: Difficulty, relicId?: string, saveSlot?: number): GameState {
+function freshRun(starterId: string, companionId: string, seed: number, difficulty?: Difficulty, relicId?: string, saveSlot?: number, unlocks?: Unlocks): GameState {
   const starter = makeUnit(starterId, true, 0, false);
   const starter2 = makeUnit(starterId, true, 1, false);
   const companion = makeUnit(companionId, true, 2, false);
@@ -189,7 +189,7 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
     visitedNodeIds: [],
     runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
     difficulty: difficulty ?? 'normal',
-    unlocks: { ...DEFAULT_UNLOCKS },
+    unlocks: unlocks ?? { ...DEFAULT_UNLOCKS },
     relics,
     saveSlot,
   };
@@ -440,14 +440,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_RUN': {
       const diff = action.difficulty ?? state.difficulty ?? 'normal';
       const rel = action.relic ?? state.relics?.[0];
-      return freshRun(action.starterId, action.companionId, action.seed, diff, rel, state.saveSlot);
+      return freshRun(action.starterId, action.companionId, action.seed, diff, rel, state.saveSlot, state.unlocks);
     }
 
     case 'STARTER':
       return { ...createInitialState(), screen: 'difficulty-select', saveSlot: action.saveSlot, unlocks: action.unlocks ?? { ...DEFAULT_UNLOCKS } };
 
     case 'LOAD_GAME':
-      if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title' };
+      if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
       {
   const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
         const saved = action.state.runStats;
@@ -1258,7 +1258,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!state.battle) return state;
       // 自定义测试：胜负确认后直接回首页，不进入正常结算流程
       if (state.testRun) {
-        return { ...createInitialState(), screen: 'title' };
+        return { ...createInitialState(), screen: 'title', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
       }
       // 事件战斗：胜负确认后返回地图
       if (state.eventBattle) {
@@ -1680,7 +1680,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'RETRY':
-      return { ...createInitialState(), screen: 'starter' };
+      return { ...createInitialState(), screen: 'starter', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
 
     case 'CLEAR_TOAST':
       return { ...state, toast: undefined };
@@ -1701,7 +1701,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, difficulty: action.difficulty, relics: action.relic ? [action.relic] : [], screen: 'starter' };
 
     case 'TITLE':
-      return { ...createInitialState(), screen: 'title' };
+      return { ...createInitialState(), screen: 'title', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
 
     default:
       return state;
