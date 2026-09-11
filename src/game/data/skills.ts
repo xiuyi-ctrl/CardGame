@@ -41,10 +41,9 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'ally', kind: 'heal', heal: 8, uses: 2,
   },
   roar: {
-    id: 'roar', name: '战吼', desc: '提升自身伤害+2，持续2回合',
+    id: 'roar', name: '战吼', desc: '提升自身伤害，持续2回合', hideEffects: true,
     target: 'self', kind: 'buff', uses: 2,
     effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
-    hideEffects: true,
   },
   double_hit: {
     id: 'double_hit', name: '连击', desc: '连续两次攻击单个敌人',
@@ -73,7 +72,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 8,
   },
   shockwave: {
-    id: 'shockwave', name: '冲击波', desc: '贯穿攻击前排敌人并波及对应位置后排',
+    id: 'shockwave', name: '冲击波', desc: '贯穿攻击一列敌人',
     target: 'single', kind: 'attack', damage: 4, reach: 'pierce',
   },
   snipe: {
@@ -96,13 +95,13 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'shield', value: 5, turns: 0 }],
   },
   weaken: {
-    id: 'weaken', name: '弱化', desc: '随机降低目标攻击或速度（2层，持续2回合）',
+    id: 'weaken', name: '弱化', desc: '随机降低目标攻击2层或速度2层，持续2回合',
     target: 'single', kind: 'attack', damage: 0,
     effects: [{ kind: 'atkDown', value: 2, turns: 2 }],
     hideEffects: true,
   },
   provoke: {
-    id: 'provoke', name: '挑衅', desc: '攻击目标并使其2回合内只能攻击自己',
+    id: 'provoke', name: '挑衅', desc: '攻击并嘲讽目标，持续2回合', hideEffects: true,
     target: 'single', kind: 'attack', damage: 3, uses: 5,
     effects: [{ kind: 'taunt', value: 1, turns: 2 }],
   },
@@ -123,7 +122,7 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   fire_shock: {
-    id: 'fire_shock', name: '火光冲击', desc: '贯穿攻击单个敌人，附加灼烧1层',
+    id: 'fire_shock', name: '火光冲击', desc: '贯穿攻击一列敌人，附加灼烧1层',
     target: 'single', kind: 'attack', damage: 4, reach: 'pierce',
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
     hideEffects: true,
@@ -138,9 +137,10 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 7, reach: 'back',
   },
   thorn_skill: {
-    id: 'thorn_skill', name: '荆棘', desc: '攻击单个敌人，使其下次攻击时自身受到反伤（触发后消失）',
+    id: 'thorn_skill', name: '荆棘', desc: '攻击单个敌人，使其下次攻击时自身受到荆棘反伤4（触发后消失），持续1回合',
     kind: 'attack', damage: 3, hits: 1, target: 'single',
     effects: [{ kind: 'thorns', value: 4, turns: 1 }],
+    hideEffects: true,
   },
 
   // —— Boss 专属技能 ——
