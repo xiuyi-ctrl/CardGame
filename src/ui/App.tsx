@@ -586,6 +586,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   });
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [overwriteTarget, setOverwriteTarget] = useState<number | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [dbgAct, setDbgAct] = useState(1);
   const [dbgRow, setDbgRow] = useState(5);
   const [dbgType, setDbgType] = useState<MapNode['type'] | 'all'>('all');
@@ -597,6 +598,16 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       if (slot) localStorage.setItem('petCardSaveSelected', String(slot));
       else localStorage.removeItem('petCardSaveSelected');
     } catch { /* ignore */ }
+  }
+
+  function openSaveMgmt() {
+    setShowSaveMgmt(true);
+    setSlotsLoading(true);
+    void listSaves().then((s) => {
+      setSlots(s);
+      setHasSave(s.some((x) => x.state !== null));
+      setSlotsLoading(false);
+    });
   }
 
   useEffect(() => {
@@ -738,7 +749,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         <button className="big-btn" onClick={onContinue} disabled={!selectedSlot || !slots.find((s) => s.slot === selectedSlot && s.state)}>
           {hasSave === null ? '检查存档…' : selectedSlot ? '继续游戏' : '请先选择存档'}
         </button>
-        <button className="big-btn" onClick={() => setShowSaveMgmt(true)}>
+        <button className="big-btn" onClick={openSaveMgmt}>
           💾 存档管理
         </button>
         <button className="big-btn" onClick={() => setShowCodex(true)}>
@@ -761,26 +772,30 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         <div className="save-mgmt-overlay" onClick={() => setShowSaveMgmt(false)}>
           <div className="save-mgmt-panel" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">存档管理</div>
-            <div className="save-grid">
-              {slots.map((s) => {
-                const info = slotSummary(s);
-                const isActive = s.slot === selectedSlot;
-                return (
-                  <div
-                    key={s.slot}
-                    className={`save-slot ${info.cls}${isActive ? ' active' : ''}`}
-                    onClick={() => onSlotClick(s)}
-                  >
-                    <div className="save-slot-num">存档 {s.slot}{isActive ? '（当前）' : ''}</div>
-                    <div className="save-slot-text">{info.text}</div>
-                    {info.sub && <div className="save-slot-sub">{info.sub}</div>}
-                    {s.state && (
-                      <button className="save-slot-del" onClick={(e) => onDeleteSlot(s.slot, e)} title="删除存档">✕</button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            {slotsLoading ? (
+              <div style={{ padding: 20, color: 'var(--muted)', textAlign: 'center' }}>⏳ 存档加载中…</div>
+            ) : (
+              <div className="save-grid">
+                {slots.map((s) => {
+                  const info = slotSummary(s);
+                  const isActive = s.slot === selectedSlot;
+                  return (
+                    <div
+                      key={s.slot}
+                      className={`save-slot ${info.cls}${isActive ? ' active' : ''}`}
+                      onClick={() => onSlotClick(s)}
+                    >
+                      <div className="save-slot-num">存档 {s.slot}{isActive ? '（当前）' : ''}</div>
+                      <div className="save-slot-text">{info.text}</div>
+                      {info.sub && <div className="save-slot-sub">{info.sub}</div>}
+                      {s.state && (
+                        <button className="save-slot-del" onClick={(e) => onDeleteSlot(s.slot, e)} title="删除存档">✕</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <button className="big-btn" style={{ marginTop: 16 }} onClick={() => setShowSaveMgmt(false)}>关闭</button>
           </div>
         </div>
