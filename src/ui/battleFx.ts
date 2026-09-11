@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BattleState, LogEntry, StatusEffect } from '../game/types';
 import { SKILLS } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
@@ -387,12 +387,16 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const [revealedKinds, setRevealedKinds] = useState<Record<string, string[]>>({});
   const [endingStatuses, setEndingStatuses] = useState<Record<string, string[]>>({});
   const [animating, setAnimating] = useState(false);
+  const [animSpeed, setAnimSpeed] = useState<1 | 2 | 4>(1);
   const [revealedLogLen, setRevealedLogLen] = useState(0);
   const [revealedSummons, setRevealedSummons] = useState<Set<string>>(new Set());
   const prevLen = useRef(0);
   const prevBattle = useRef<BattleState | null | undefined>(null);
   const prevStatusRef = useRef<BattleState | null | undefined>(null);
   const timers = useRef<number[]>([]);
+  const animSpeedRef = useRef<1 | 2 | 4>(1);
+  // animSpeed 变化时同步到 ref，供 useEffect 内读取
+  useEffect(() => { animSpeedRef.current = animSpeed; }, [animSpeed]);
 
   // 渲染期同步派生：日志里还有尚未播放的动画事件（prevLen 在 effect 中才推进）。
   // 用于结算帧兜底——phase 已变 won/lost 但动画 effect 尚未运行（animating 仍为 false）的那一帧，
@@ -663,11 +667,11 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               });
               setPops((p) => p.filter((x) => x.id !== popId));
             },
-            CLEAR_MS,
+            CLEAR_MS / animSpeedRef.current,
           );
           timers.current.push(clear);
         },
-        i * STEP_MS,
+        i * (STEP_MS / animSpeedRef.current),
       );
       timers.current.push(t);
     });
@@ -686,12 +690,30 @@ export function useBattleFx(battle: BattleState | null | undefined) {
         setEndingStatuses({});
         setRevealedLogLen(battle.log.length);
       },
-      events.length * STEP_MS + CLEAR_MS,
+      events.length * (STEP_MS / animSpeedRef.current) + CLEAR_MS / animSpeedRef.current,
     );
     timers.current.push(done);
   }, [battle?.log.length]);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons };
+  /** 跳过当前批次所有动画：清除所有定时器，立即揭示全部日志和状态，恢复真实血量显示 */
+  const skipAnim = useCallback(() => {
+    if (!animating || !battle) return;
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = [];
+    setAnimating(false);
+    setFx({});
+    setPops([]);
+    setHpMap(null);
+    setSpdMap(null);
+    setPassiveSpdMap(null);
+    setRockShellHitsMap(null);
+    setStatusMap(null);
+    setRevealedKinds(allRevealed(newStatuses));
+    setEndingStatuses({});
+    setRevealedLogLen(battle.log.length);
+  }, [animating, battle, newStatuses]);
+
+  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed, skipAnim };
 }

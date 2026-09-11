@@ -62,7 +62,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
 
 export function BattleScreen({ state, dispatch }: Props) {
   const battle = state.battle;
-  const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons } = useBattleFx(battle);
+  const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed, skipAnim } = useBattleFx(battle);
   if (!battle) return null;
   const b = battle;
 
@@ -659,6 +659,24 @@ export function BattleScreen({ state, dispatch }: Props) {
         </div>
         <div className="end-panel">
           <span className="end-ap">⚡ 行动点 {battle.playerAp}/{battle.playerApMax}</span>
+          <div className="anim-controls">
+            {animating && (
+              <button
+                className="anim-skip-btn"
+                onClick={skipAnim}
+                title="跳过当前动画"
+              >
+                ⏭️ 跳过
+              </button>
+            )}
+            <button
+              className="anim-speed-btn"
+              onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
+              title="切换动画速度"
+            >
+              ⏩ {animSpeed}x
+            </button>
+          </div>
           <button
             className="primary end-turn-btn"
             onClick={() => dispatch({ type: 'END_TURN' })}

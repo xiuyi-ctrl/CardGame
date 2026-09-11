@@ -1409,6 +1409,45 @@ button.primary {
   min-width: 96px;
 }
 
+/* 动画控制按钮组 */
+.action-panel .anim-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.action-panel .anim-speed-btn,
+.action-panel .anim-skip-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.action-panel .anim-speed-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.action-panel .anim-skip-btn {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.action-panel .anim-skip-btn:hover {
+  background: #ff6b6b;
+  color: #fff;
+  border-color: #ff6b6b;
+}
+
 .action-panel .panel-btns::-webkit-scrollbar {
   display: none;
 }
