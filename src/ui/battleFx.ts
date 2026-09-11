@@ -124,6 +124,7 @@ const RE_HEAL = /^(.+?) 使用「(.+?)」(?:，治愈|恢复) (?:(.+?) )?(\d+) �
 const RE_PASSIVE_HEAL = /^(.+?) 的「(.+?)」(?:恢复|治愈) (\d+) 点生命$/;
 const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
+const RE_THORN_DEBUFF = /^(.+?) 的「荆棘」反噬，受到 (\d+) 点伤害$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
@@ -311,6 +312,17 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       actorUid: entry.actorUid ?? findUid(b, side, m[1]),
       targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
       value: Number(m[4]),
+      hp: entry.hp,
+      statuses: entry.statuses,
+      shields: entry.shields,
+    };
+  }
+  if ((m = text.match(RE_THORN_DEBUFF))) {
+    return {
+      kind: 'thorn',
+      actorUid: undefined,
+      targetUid: entry.targetUid ?? findUid(b, side, m[1]),
+      value: Number(m[2]),
       hp: entry.hp,
       statuses: entry.statuses,
       shields: entry.shields,
@@ -602,6 +614,12 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           let capturedTargetSeq = 0;
           if (ev.kind === 'attack') {
             if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down', seq: capturedActorSeq } })); }
+            if (targetUid) {
+              ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
+              setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
+            }
+          } else if (ev.kind === 'thorn') {
+            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
             if (targetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
