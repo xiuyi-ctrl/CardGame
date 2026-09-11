@@ -1703,7 +1703,7 @@ function resolveAttack(
           const hurt = applyCounterDmg(attacker, scVal);
           const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
           nb = replaceUnit(nb, debuffed);
-          nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低其伤害`, sideOf(t2), t2.uid, attacker.uid);
+          nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低目标攻击2层`, sideOf(t2), t2.uid, attacker.uid, ['atkDown']);
         }
         t2 = { ...t2, shield: 0, statuses: t2.statuses.filter((s) => s.kind !== 'shield' && s.kind !== 'shieldCounter') };
         nb = replaceUnit(nb, t2);

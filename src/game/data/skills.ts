@@ -128,7 +128,7 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   shield_counter: {
-    id: 'shield_counter', name: '盾反', desc: '先手：为自身附加3层护盾，受攻击时反击敌人并降低其伤害（仅当前回合有效，使用后冷却1回合）',
+    id: 'shield_counter', name: '盾反', desc: '先手：为自身附加3层护盾，受攻击时反击敌人2并降低目标攻击2层，持续1回合（仅当前回合有效，使用后冷却1回合）', hideEffects: true,
     target: 'self', kind: 'buff', priority: 'first', uses: 5, cooldown: 1,
     effects: [{ kind: 'shield', value: 3, turns: 1 }, { kind: 'shieldCounter', value: 2, turns: 1 }],
   },

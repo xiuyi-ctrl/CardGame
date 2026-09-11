@@ -74,7 +74,7 @@ export function computeRevealAt(
     // 1) 精确匹配：该 kind 由某次攻击/爆发/治疗/buff 附加，随那次动画揭示
     for (let k = 0; k < kinds.length; k++) {
       const i = events.findIndex(
-        (ev) => ev.targetUid === uid && (ev.kind === 'attack' || ev.kind === 'heal' || ev.kind === 'buff') && (ev.addsStatus ?? []).includes(kinds[k]),
+        (ev) => ev.targetUid === uid && (ev.kind === 'attack' || ev.kind === 'heal' || ev.kind === 'buff' || ev.kind === 'thorn') && (ev.addsStatus ?? []).includes(kinds[k]),
       );
       if (i >= 0) {
         add(i, uid, [kinds[k]]);
@@ -125,6 +125,7 @@ const RE_PASSIVE_HEAL = /^(.+?) 的「(.+?)」(?:恢复|治愈) (\d+) 点生命$
 const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_THORN_DEBUFF = /^(.+?) 的「荆棘」反噬，受到 (\d+) 点伤害$/;
+const RE_COUNTER = /^(.+?) 的「(.+?)」反击 (.+?) (\d+) 点并降低目标攻击\d+层$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
@@ -323,6 +324,18 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       actorUid: undefined,
       targetUid: entry.targetUid ?? findUid(b, side, m[1]),
       value: Number(m[2]),
+      hp: entry.hp,
+      statuses: entry.statuses,
+      shields: entry.shields,
+    };
+  }
+  if ((m = text.match(RE_COUNTER))) {
+    return {
+      kind: 'thorn',
+      actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
+      value: Number(m[4]),
+      addsStatus: entry.addsStatus,
       hp: entry.hp,
       statuses: entry.statuses,
       shields: entry.shields,
