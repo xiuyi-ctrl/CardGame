@@ -885,11 +885,11 @@ function tryEnemySwap(b: BattleState, actor: Unit): BattleState | undefined {
 /** 纯函数：基于给定状态选择敌方行动，不产生日志/不扣技能次数/不标记 acted */
 function selectEnemyAction(
   b: BattleState, actor: Unit, rngVal1: number, rngVal2: number,
-): { skillId?: string; targetUid?: string; kind: 'heal' | 'buff' | 'attack' | 'swap'; fallbackSkillId?: string } | undefined {
+): { skillId?: string; targetUid?: string; kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; fallbackSkillId?: string } | undefined {
   if (actor.statuses.some((s) => s.kind === 'stun')) return undefined;
   const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0 && skillCooldownLeft(actor, s.id) <= 0);
   if (skills.length === 0) return undefined;
-  const candidates: { kind: 'heal' | 'buff' | 'attack' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
+  const candidates: { kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
   const hpRatio = actor.hp / actor.maxHp;
   const allies = alliesOf(b, actor);
   const enemies = enemiesOf(b, actor);
@@ -1053,6 +1053,7 @@ function selectEnemyAction(
     }
   }
   const attackSkills = skills.filter((s) => s.kind === 'attack' && s.id !== 'chain_activate');
+  const statusSkills = skills.filter((s) => s.kind === 'status');
   let targetPool = enemies.filter((u) => u.hp > 0);
   if (targetPool.length === 0 && candidates.length === 0) return undefined;
   const taunt = actor.statuses.find((s) => s.kind === 'taunt');
@@ -1141,6 +1142,30 @@ function selectEnemyAction(
       candidates.push({ kind: 'attack', skill: atk, targetUid: best.target.uid, score: best.score + limitedBonus + comboBoostBonus + 5 });
     }
   }
+  // ─── 4b. 状态技能评分（弱化/毒雾等 debuff 技能） ───
+  for (const st of statusSkills) {
+    if (st.target === 'all') {
+      // 全体 debuff：对多个目标施加状态，价值随目标数提升
+      const aliveEnemies = targetPool.length;
+      if (aliveEnemies >= 2 && skillUsesLeft(actor, st.id) > 0 && skillCooldownLeft(actor, st.id) <= 0) {
+        candidates.push({ kind: 'status', skill: st, score: 40 + aliveEnemies * 5 });
+      }
+    } else {
+      // 单体 debuff：优先对高血量/无 debuff 目标使用
+      const scoredTargets = targetPool.map((t) => {
+        let tScore = 20;
+        if (t.hp / t.maxHp > 0.6) tScore += 10;
+        if (!t.statuses.some((s) => s.kind === 'poison' || s.kind === 'burn' || s.kind === 'atkDown' || s.kind === 'spdDown')) tScore += 8;
+        if (currentAct >= 2) tScore += 5;
+        return { target: t, score: tScore };
+      });
+      scoredTargets.sort((a, c) => c.score - a.score);
+      const best = scoredTargets[0];
+      if (best && skillUsesLeft(actor, st.id) > 0 && skillCooldownLeft(actor, st.id) <= 0) {
+        candidates.push({ kind: 'status', skill: st, targetUid: best.target.uid, score: best.score + 5 });
+      }
+    }
+  }
   // ─── 5. 连续重复惩罚：上回合使用过的技能降低分数 ───
   const lastId = actor.lastSkillId;
   if (lastId) {
@@ -1148,6 +1173,7 @@ function selectEnemyAction(
       if (c.skill && c.skill.id === lastId) {
         if (c.kind === 'attack') c.score -= 15;
         else if (c.kind === 'buff') c.score -= 10;
+        else if (c.kind === 'status') c.score -= 10;
         // heal 和 swap 不惩罚（治疗是刚需，换位有次数限制）
       }
     }
@@ -1194,6 +1220,9 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
       }
       if (decision.kind === 'buff' && decision.skillId) {
         return useSkillInner(b3, actor, getSkill(decision.skillId), actor.uid);
+      }
+      if (decision.kind === 'status' && decision.skillId) {
+        return useSkillInner(b3, actor, getSkill(decision.skillId), decision.targetUid);
       }
       if (decision.kind === 'swap') {
         const swapped = tryEnemySwap(b3, actor);
@@ -1520,7 +1549,21 @@ function resolveAttack(
     }
     nb = replaceUnit(nb, t2);
     const hitAdds = skillEffectKinds.length > 0 ? skillEffectKinds : undefined;
-    nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${target.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, target.uid, hitAdds);
+    if (seg === 0 && skill.effects && skill.effects.length > 0 && skill.target === 'all') {
+      // 零伤全体 debuff：由 useSkillInner 统一推送合并日志，此处跳过
+    } else if (seg === 0 && skill.effects && skill.effects.length > 0) {
+      const effectDesc = skill.effects.map((e) => {
+        if (e.kind === 'poison') return `中毒 ${e.value} 层`;
+        if (e.kind === 'burn') return `灼烧 ${e.value} 层`;
+        if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
+        if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
+        if (e.kind === 'stun') return '眩晕';
+        return e.kind;
+      }).join('，');
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${target.name} ${effectDesc}`, sideOf(actor), actor.uid, target.uid, hitAdds);
+    } else {
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${target.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, target.uid, hitAdds);
+    }
     lastHitLog = nb.log.length - 1;
     if (ap?.kind === 'drain') {
       const healedActor = actorFromId(nb, actor.uid);
@@ -2009,6 +2052,47 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
       }
     }
+  } else if (skill.kind === 'status') {
+    // 状态技能：对目标施加 debuff，不触发攻击被动（蛇狩、荆棘、吸血等）
+    const addsKinds = (skill.effects ?? []).map((e) => e.kind);
+    let weakenAppliedKind: 'atkDown' | 'spdDown' | undefined;
+    for (const t of targets) {
+      let affected = t;
+      for (const e of skill.effects ?? []) {
+        if (skill.id === 'weaken') {
+          const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
+          weakenAppliedKind = rngKind;
+          affected = applyStatusTo(affected, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
+          nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+        } else {
+          affected = applyStatusTo(affected, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
+        }
+      }
+      nb = replaceUnit(nb, affected);
+    }
+    // 推送日志
+    const effectDesc = (skill.effects ?? []).map((e) => {
+      if (skill.id === 'weaken') {
+        const label = weakenAppliedKind === 'spdDown' ? '降低速度' : '降低攻击';
+        return `${label} ${e.value} 层`;
+      }
+      if (e.kind === 'poison') return `中毒 ${e.value} 层`;
+      if (e.kind === 'burn') return `灼烧 ${e.value} 层`;
+      if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
+      if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
+      if (e.kind === 'stun') return '眩晕';
+      return e.kind;
+    }).join('，');
+    const hitAdds = addsKinds.filter((k) => ['burn', 'poison', 'atkDown', 'spdDown', 'stun'].includes(k));
+    if (skill.target === 'all') {
+      const allTargetUids = targets.filter((t) => { const u = actorFromId(nb, t.uid); return u && u.hp > 0; }).map((t) => t.uid);
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${effectDesc}`, sideOf(actor), actor.uid, undefined, hitAdds.length > 0 ? hitAdds : undefined, allTargetUids);
+    } else {
+      const firstTarget = targets[0];
+      if (firstTarget) {
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${firstTarget.name} ${effectDesc}`, sideOf(actor), actor.uid, firstTarget.uid, hitAdds.length > 0 ? hitAdds : undefined);
+      }
+    }
   } else {
     const perTarget = new Map<string, number>();
     let waterWaveHits = 0;
@@ -2022,6 +2106,20 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       nb = result.battle;
       if (result.didPoison) nb = applyCorruptSpread(nb, t.uid);
       if (skill.id === 'water_wave') waterWaveHits += 1;
+    }
+    // 零伤全体 debuff：推送一条合并日志，所有目标通过 burstTargets 同时触发 buff 图标
+    if (skill.damage === 0 && skill.effects?.length && skill.target === 'all') {
+      const effectDesc = skill.effects.map((e) => {
+        if (e.kind === 'poison') return `中毒 ${e.value} 层`;
+        if (e.kind === 'burn') return `灼烧 ${e.value} 层`;
+        if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
+        if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
+        if (e.kind === 'stun') return '眩晕';
+        return e.kind;
+      }).join('，');
+      const hitAdds = (skill.effects ?? []).filter((e) => ['burn', 'poison', 'atkDown', 'stun', 'thorns', 'shadowMark'].includes(e.kind)).map((e) => e.kind);
+      const allTargetUids = targets.filter((t) => { const u = actorFromId(nb, t.uid); return u && u.hp > 0; }).map((t) => t.uid);
+      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${effectDesc}`, sideOf(actor), actor.uid, undefined, hitAdds.length > 0 ? hitAdds : undefined, allTargetUids);
     }
     // 风灵闪：若自身速度高于目标，额外攻击一次（对每个目标独立判定，与主攻击完全一致）
     if (skill.id === 'wind_flash') {

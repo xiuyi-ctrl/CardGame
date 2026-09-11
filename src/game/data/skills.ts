@@ -96,7 +96,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   weaken: {
     id: 'weaken', name: '弱化', desc: '随机降低目标攻击2层或速度2层，持续2回合',
-    target: 'single', kind: 'attack', damage: 0,
+    target: 'single', kind: 'status',
     effects: [{ kind: 'atkDown', value: 2, turns: 2 }],
     hideEffects: true,
   },
@@ -226,7 +226,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   poison_mist: {
     id: 'poison_mist', name: '毒雾', desc: '使所有敌人中毒 5 层',
-    kind: 'attack', damage: 0, hits: 1, target: 'all',
+    kind: 'status', target: 'all',
     effects: [{ kind: 'poison', value: 5, turns: 3 }],
     uses: 2,
     hideEffects: true,

@@ -27,6 +27,8 @@ interface FxEvent {
   addsStatus?: string[];
   /** 范围伤害（岩壳碎片自爆/岩壳崩解）：波及的所有目标 uid，一次性同时挂飘字 */
   burstTargets?: string[];
+  /** debuff 技能同时影响的所有目标 uid（全体中毒等），随施法者动画同时出现 buff 图标 */
+  debuffTargets?: string[];
   /** 该事件需要揭示状态的目标 uid 列表（如锁链束缚：施法者抖动，两个被链接敌人显示 buff 图标） */
   revealUids?: string[];
 }
@@ -39,6 +41,7 @@ export interface PopItem {
   heal: boolean;
   buff?: boolean;
   shield?: boolean;
+  debuff?: boolean;
 }
 
 /** 揭示目标：事件 i 播放时揭示 uid 上的指定状态 kind */
@@ -74,7 +77,7 @@ export function computeRevealAt(
     // 1) 精确匹配：该 kind 由某次攻击/爆发/治疗/buff 附加，随那次动画揭示
     for (let k = 0; k < kinds.length; k++) {
       const i = events.findIndex(
-        (ev) => ev.targetUid === uid && (ev.kind === 'attack' || ev.kind === 'heal' || ev.kind === 'buff' || ev.kind === 'thorn') && (ev.addsStatus ?? []).includes(kinds[k]),
+        (ev) => (ev.targetUid === uid || (ev.revealUids ?? []).includes(uid)) && (ev.kind === 'attack' || ev.kind === 'heal' || ev.kind === 'buff' || ev.kind === 'thorn') && (ev.addsStatus ?? []).includes(kinds[k]),
       );
       if (i >= 0) {
         add(i, uid, [kinds[k]]);
@@ -126,6 +129,7 @@ const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_THORN_DEBUFF = /^(.+?) 的「荆棘」反噬，受到 (\d+) 点伤害$/;
 const RE_COUNTER = /^(.+?) 的「(.+?)」反击 (.+?) (\d+) 点并降低目标攻击\d+层$/;
+const RE_DEBUFF = /^(.+?) 使用「(.+?)」，(?:([^ ，]+) )?(中毒|灼烧|降低攻击|降低速度|眩晕)(?: \d+ 层)?$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
@@ -245,7 +249,8 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const opposite: 'player' | 'enemy' = side === 'player' ? 'enemy' : 'player';
 
   // 范围伤害（岩壳碎片自爆 / 岩壳崩解 / 毒性爆发）：由 burstTargets 标识，一次性给全体波及单位挂飘字，无抖动
-  if (entry.burstTargets && entry.burstTargets.length > 0) {
+  // 注意：状态技能日志也带 burstTargets（多目标），但不含"造成"，需排除以免被误判为 burst
+  if (entry.burstTargets && entry.burstTargets.length > 0 && /造成/.test(text)) {
     const dm = text.match(/造成 ?(\d+) ?点(?:真实)?伤害/);
     return {
       kind: 'burst',
@@ -336,6 +341,23 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
       value: Number(m[4]),
       addsStatus: entry.addsStatus,
+      hp: entry.hp,
+      statuses: entry.statuses,
+      shields: entry.shields,
+    };
+  }
+  if ((m = text.match(RE_DEBUFF))) {
+    const debuffKind = m[4] === '中毒' ? 'poison' : m[4] === '灼烧' ? 'burn' : m[4] === '降低攻击' ? 'atkDown' : m[4] === '降低速度' ? 'spdDown' : 'stun';
+    const isMultiTarget = !m[3] && entry.burstTargets && entry.burstTargets.length > 0;
+    return {
+      kind: 'buff',
+      actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: isMultiTarget ? undefined : (entry.targetUid ?? findUid(b, opposite, m[3])),
+      value: 0,
+      skillName: m[2],
+      addsStatus: entry.addsStatus ?? [debuffKind],
+      debuffTargets: isMultiTarget ? entry.burstTargets : undefined,
+      revealUids: isMultiTarget ? entry.burstTargets : undefined,
       hp: entry.hp,
       statuses: entry.statuses,
       shields: entry.shields,
@@ -625,6 +647,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           // 避免多次 ++fxSeq 后统一捕获导致 actorSeq/targetSeq 与实际 seq 不匹配
           let capturedActorSeq = 0;
           let capturedTargetSeq = 0;
+          let debuffTargetSeqs: Record<string, number> | null = null;
           if (ev.kind === 'attack') {
             if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down', seq: capturedActorSeq } })); }
             if (targetUid) {
@@ -645,14 +668,34 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               setPops((p) => [...p, { id: popId, uid: targetUid, text: `+${ev.value}`, heal: true }]);
             }
           } else if (ev.kind === 'buff') {
-            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
+            // 区分 debuff 和普通 buff：debuff 用抖动动画，buff 用发光动画
+            const isDebuffEvt = (ev.debuffTargets && ev.debuffTargets.length > 0) || (ev.addsStatus && ev.addsStatus.some((k) => ['poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k)));
+            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: isDebuffEvt ? 'fx-status-cast' : 'fx-cast', seq: capturedActorSeq } })); }
             const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
             const isShield = sk?.effects?.[0]?.kind === 'shield';
             const buffCls = isShield ? 'fx-shield' : 'fx-buff';
-            if (targetUid && !ev.noPop) {
-              ++fxSeq; capturedTargetSeq = fxSeq;
-              setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
+            const debuffLabel = (kind?: string) => kind === 'poison' ? '中毒↓' : kind === 'burn' ? '灼烧↓' : kind === 'atkDown' ? '弱化↓' : kind === 'spdDown' ? '迟缓↓' : kind === 'stun' ? '眩晕↓' : '▼ debuff';
+            if (ev.debuffTargets && ev.debuffTargets.length > 0) {
+              // 全体 debuff：所有目标同时显示 debuff 图标 + debuff 飘字；每个目标独立 seq 以便 clear 精确匹配
+              debuffTargetSeqs = {};
+              const dLabel = debuffLabel(ev.addsStatus?.[0]);
+              for (const uid of ev.debuffTargets) {
+                ++fxSeq; debuffTargetSeqs[uid] = fxSeq;
+                setFx((p) => ({ ...p, [uid]: { cls: 'fx-debuff', seq: fxSeq } }));
+                setPops((p) => [...p, { id: popId, uid, text: dLabel, heal: false, debuff: true }]);
+              }
+            } else if (targetUid && !ev.noPop) {
+              // 区分 debuff（RE_DEBUFF 解析）和普通 buff（RE_BUFF 解析）
+              const isDebuffEvent = ev.addsStatus && ev.addsStatus.some((k) => ['poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k));
+              if (isDebuffEvent) {
+                ++fxSeq; capturedTargetSeq = fxSeq;
+                setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-debuff', seq: capturedTargetSeq } }));
+                setPops((p) => [...p, { id: popId, uid: targetUid, text: debuffLabel(ev.addsStatus?.[0]), heal: false, debuff: true }]);
+              } else {
+                ++fxSeq; capturedTargetSeq = fxSeq;
+                setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
+                setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
+              }
             }
             if (ev.secondTargetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq;
@@ -693,7 +736,11 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               setFx((p) => {
                 const next = { ...p };
                 if (actorUid && next[actorUid]?.seq === capturedActorSeq) delete next[actorUid];
-                if (targetUid && next[targetUid]?.seq === capturedTargetSeq) delete next[targetUid];
+                if (debuffTargetSeqs && Object.keys(debuffTargetSeqs).length > 0) {
+                  for (const uid of Object.keys(debuffTargetSeqs)) {
+                    if (next[uid]?.seq === debuffTargetSeqs[uid]) delete next[uid];
+                  }
+                } else if (targetUid && next[targetUid]?.seq === capturedTargetSeq) delete next[targetUid];
                 return next;
               });
               setPops((p) => p.filter((x) => x.id !== popId));

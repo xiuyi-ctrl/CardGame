@@ -30,7 +30,7 @@ export interface SkillDef {
   damage?: number;
   /** 治疗技能固定回复值（整数） */
   heal?: number;
-  kind: 'attack' | 'heal' | 'buff';
+  kind: 'attack' | 'heal' | 'buff' | 'status';
   hits?: number;
   effects?: StatusEffect[];
   /** 每场战斗可使用次数上限（回血/强化等强技能限定，缺省无限制） */
@@ -232,8 +232,8 @@ export interface LogEntry {
 export interface PlayerOrder {
   skillId: string;
   targetUid?: string;
-  /** 敌方预选行动类型（heal/buff/attack/swap），换位时执行逻辑不同于普通技能 */
-  kind?: 'heal' | 'buff' | 'attack' | 'swap';
+  /** 敌方预选行动类型（heal/buff/attack/status/swap），换位时执行逻辑不同于普通技能 */
+  kind?: 'heal' | 'buff' | 'attack' | 'status' | 'swap';
   /** 敌方换位失败时的备用攻击技能 */
   fallbackSkillId?: string;
 }
