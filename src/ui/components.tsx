@@ -348,11 +348,13 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
         </div>
       )}
       <HpBar hp={unit.hp} maxHp={unit.maxHp} />
-      <div className="card-sub">
-        {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
-        <StatusIcons unit={unit} />
-        <PassiveBadge unit={unit} stacksOverride={stacksOverride} rockShellHitsOverride={rockShellHitsOverride} thornsHitCountOverride={thornsHitCountOverride} />
-        <CurseBadge unit={unit} />
+      <div className="card-bottom">
+        <div className="card-sub">
+          {!topStats && <span>{unit.hp}/{unit.maxHp}</span>}
+          <StatusIcons unit={unit} />
+          <PassiveBadge unit={unit} stacksOverride={stacksOverride} rockShellHitsOverride={rockShellHitsOverride} thornsHitCountOverride={thornsHitCountOverride} />
+          <CurseBadge unit={unit} />
+        </div>
         <BattleBuffIcons unit={unit} />
       </div>
       {showSkills && !small && (

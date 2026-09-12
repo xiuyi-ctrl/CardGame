@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Dispatch, WheelEvent as ReactWheelEvent } from 'react';
+import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
@@ -72,6 +72,8 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [pendingBattleItem, setPendingBattleItem] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [inspectEnemy, setInspectEnemy] = useState<string | null>(null);
+  const [foodOverlayOpen, setFoodOverlayOpen] = useState(false);
+  const [itemOverlayOpen, setItemOverlayOpen] = useState(false);
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
@@ -122,6 +124,8 @@ export function BattleScreen({ state, dispatch }: Props) {
     setPendingTame(null);
     setPendingBattleItem(null);
     setInspectEnemy(null);
+    setFoodOverlayOpen(false);
+    setItemOverlayOpen(false);
   }, [battle?.round, battle?.rngCount, battle?.phase]);
 
   // 车轮战：场上只有一只上场宠物，默认选中它，技能栏直接展示其技能（含替补轮换后自动重选）
@@ -324,15 +328,6 @@ export function BattleScreen({ state, dispatch }: Props) {
     setPendingBattleItem(itemId);
   }
 
-  /** 网格超出 3 行时，悬停滚动（滚轮纵向滚动，隐藏滚动条） */
-  function onPanelBtnsWheel(e: ReactWheelEvent<HTMLDivElement>) {
-    const el = e.currentTarget;
-    if (el.scrollHeight > el.clientHeight) {
-      el.scrollTop += e.deltaY;
-      e.preventDefault();
-    }
-  }
-
   function tameTip(u: Unit): string {
     if (!u.tameable) return '不可捕捉';
     if (u.hp / u.maxHp > TAME_THRESHOLD) return `需血量 ≤ ${Math.round(TAME_THRESHOLD * 100)}%`;
@@ -444,6 +439,20 @@ export function BattleScreen({ state, dispatch }: Props) {
           💰 {state.gold} · 食物 {foods.reduce((s, f) => s + (state.inventory[f.id] ?? 0), 0)}
         </span>
         <button
+          className={`hud-action-btn ${foodOverlayOpen ? 'active' : ''}`}
+          onClick={() => { setFoodOverlayOpen((v) => !v); setItemOverlayOpen(false); }}
+          disabled={!canAct}
+        >
+          🍖 捕获
+        </button>
+        <button
+          className={`hud-action-btn ${itemOverlayOpen ? 'active' : ''}`}
+          onClick={() => { setItemOverlayOpen((v) => !v); setFoodOverlayOpen(false); }}
+          disabled={!canAct}
+        >
+          🧪 道具
+        </button>
+        <button
           className="home-btn"
           onClick={() => {
             void persistSave(state);
@@ -483,214 +492,174 @@ export function BattleScreen({ state, dispatch }: Props) {
           })()}
         </div>
 
-        <div className="log-panel">
-          <div className="log-title">⚔️ 战斗记录</div>
-          <div className="log-box">
-            {logItems.map((l, i) => (
-              <div key={i} className={`log-line ${l.side} ${i === logItems.length - 1 ? 'recent' : ''}`}>
-                {l.text}
-              </div>
-            ))}
+        <div className="battle-sidebar">
+          <div className="log-panel">
+            <div className="log-title">⚔️ 战斗记录</div>
+            <div className="log-box">
+              {logItems.map((l, i) => (
+                <div key={i} className={`log-line ${l.side} ${i === logItems.length - 1 ? 'recent' : ''}`}>
+                  {l.text}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div className="hint-bar">
-        <span className={`pending-hint ${pendingSkill || pendingTame || pendingBattleItem || swapFrom || selected || !canAct ? '' : 'idle'}`}>
-          {hint}
-        </span>
-      </div>
-
-      <div className="action-panel">
-        <div className="capture-panel">
-          <span className="panel-label">🍖 捕获</span>
-          <div className="panel-btns" onWheel={onPanelBtnsWheel}>
-            {foods.length === 0 && <span className="card-sub">没有食物</span>}
-            {foods.map((f) => {
-              const count = state.inventory[f.id] ?? 0;
-              const isPending = pendingTame === f.id;
-              return (
+          <div className="skill-drawer">
+            {selected && selected.hp > 0 ? (
+              <>
+                <span className="who">
+                  <PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}
+                  {(() => {
+                    const p = selected.passive && getPassive(selected.passive);
+                    return p ? (
+                      <span className="who-passive" title={`被动「${p.name}」：${p.desc}`}>
+                        💠{p.name}
+                      </span>
+                    ) : null;
+                  })()}
+                  {selectedOrder ? (
+                    <span className="order-badge">⚡ 已选择</span>
+                  ) : selected.acted ? (
+                    <span className="order-badge">已行动</span>
+                  ) : null}
+                </span>
+                {selectedSkills.map((s) => {
+                  const left = skillUsesLeft(selected, s.id);
+                  const cd = skillCooldownLeft(selected, s.id);
+                  const limited = Number.isFinite(left);
+                  const exhausted = limited && left <= 0;
+                  const onCooldown = cd > 0;
+                  const isCurrent = selectedOrder?.skillId === s.id;
+                  const cannotOrder = selected.acted && !selectedOrder;
+                  return (
+                    <button
+                      key={s.id}
+                      className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
+                      onClick={() => onSkillClick(s)}
+                      disabled={!canAct || exhausted || onCooldown || cannotOrder}
+                      title={`${s.desc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}`}
+                    >
+                      <span className="skill-btn-head">{s.name} {skillBrief(s)}</span>
+                      <span className="skill-desc">{s.desc}</span>
+                    </button>
+                  );
+                })}
                 <button
-                  key={f.id}
-                  onClick={() => onFoodClick(f.id)}
-                  className={isPending ? 'primary' : ''}
-                  disabled={count <= 0 || battle.phase !== 'acting' || !aliveEnemies.some((u) => isTameable(u))}
-                  title={`${f.desc}（拥有 ${count} 个，喂食不消耗行动点）`}
+                  className="skill-btn"
+                  onClick={() => {
+                    setPendingSkill(null);
+                    setPendingTame(null);
+                    setPendingBattleItem(null);
+                    setInspectEnemy(null);
+                    setSwapFrom(selected.uid);
+                  }}
+                  disabled={alivePlayers.length < 2 || selected.acted || animating}
+                  title="与另一只己方宠物交换位置（1 行动点）"
                 >
-                  {f.emoji} {f.name}×{count}
+                  <span>↔ 换位</span>
                 </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="items-panel">
-          <span className="panel-label">🧪 道具</span>
-          <div className="panel-btns" onWheel={onPanelBtnsWheel}>
-            {battleItems.length === 0 ? (
-              <span className="card-sub">没有战斗道具</span>
-            ) : (
-              battleItems.map((it) => {
-                const count = state.inventory[it.id] ?? 0;
-                const isPending = pendingBattleItem === it.id;
-                return (
+                <button
+                  className={`skill-btn ${selectedOrder?.skillId === REST_SKILL_ID ? 'skill-btn-current' : ''}`}
+                  onClick={() => {
+                    setPendingSkill(null);
+                    setSwapFrom(null);
+                    setPendingTame(null);
+                    setPendingBattleItem(null);
+                    setInspectEnemy(null);
+                    dispatch({ type: 'PLAYER_REST', actorUid: selected.uid });
+                  }}
+                  disabled={
+                    !canAct ||
+                    (selected.acted && !selectedOrder) ||
+                    (selectedOrder !== undefined && selectedOrder.skillId !== 'rest')
+                  }
+                >
+                  <span>😴 休息</span>
+                  <span className="skill-desc">
+                    {selectedOrder?.skillId === 'rest' ? '已选择' : '0 AP'}
+                  </span>
+                </button>
+                <div className="hint-text">{hint}</div>
+                <div className="end-row">
+                  <span className="end-ap">⚡ {battle.playerAp}/{battle.playerApMax}</span>
+                  <div className="anim-controls">
+                    {animating && (
+                      <button className="anim-skip-btn" onClick={skipAnim}>⏭️</button>
+                    )}
+                    <button
+                      className="anim-speed-btn"
+                      onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
+                    >
+                      ⏩ {animSpeed}x
+                    </button>
+                  </div>
                   <button
-                    key={it.id}
-                    onClick={() => onBattleItemClick(it.id)}
-                    className={isPending ? 'primary' : ''}
+                    className="end-turn-btn"
+                    onClick={() => dispatch({ type: 'END_TURN' })}
                     disabled={!canAct}
-                    title={`${it.desc}（拥有 ${count} 个，使用不消耗行动点）`}
                   >
-                    {it.emoji} {it.name}×{count}
+                    结束回合
                   </button>
-                );
-              })
+                </div>
+              </>
+            ) : (
+              <div className="empty-hint">
+                {battle.phase === 'won' ? '战斗胜利！' : battle.phase === 'lost' ? '全队阵亡…' : animating ? '结算中…' : canAct ? '点击己方宠物查看技能' : '敌方行动中…'}
+              </div>
             )}
           </div>
         </div>
-        <div className="skill-column">
-          {selected && selected.hp > 0 ? (
-            <>
-              <span className="who">
-                <PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}
-                {(() => {
-                  const p = selected.passive && getPassive(selected.passive);
-                  return p ? (
-                    <span className="who-passive" title={`被动「${p.name}」：${p.desc}`}>
-                      💠{p.name}：{p.desc}
-                    </span>
-                  ) : null;
-                })()}
-                {selectedOrder ? (
-                  <span className="order-badge" title="该宠物已选择指令，可再次点击技能或休息修改/取消">
-                    ⚡ 已选择
-                  </span>
-                ) : selected.acted ? (
-                  <span className="order-badge">已行动</span>
-                ) : null}
-              </span>
-              {selectedSkills.map((s) => {
-                const left = skillUsesLeft(selected, s.id);
-                const cd = skillCooldownLeft(selected, s.id);
-                const limited = Number.isFinite(left);
-                const exhausted = limited && left <= 0;
-                const onCooldown = cd > 0;
-                const isCurrent = selectedOrder?.skillId === s.id;
-                const cannotOrder = selected.acted && !selectedOrder;
+      </div>
+
+      {foodOverlayOpen && (
+        <div className="battle-overlay-mask" onClick={() => setFoodOverlayOpen(false)}>
+          <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="battle-overlay-title">🍖 捕获食物</div>
+            <div className="battle-overlay-grid">
+              {foods.length === 0 ? (
+                <div className="overlay-empty">没有食物</div>
+              ) : foods.map((f) => {
+                const count = state.inventory[f.id] ?? 0;
                 return (
                   <button
-                    key={s.id}
-                    className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
-                    onClick={() => onSkillClick(s)}
-                    disabled={exhausted || onCooldown || cannotOrder || animating}
-                    title={`${s.desc}${limited ? `，本场剩余 ${Math.max(0, left)} 次` : ''}${onCooldown ? `，冷却中（${cd} 回合）` : ''}`}
+                    key={f.id}
+                    onClick={() => { onFoodClick(f.id); setFoodOverlayOpen(false); }}
+                    disabled={count <= 0 || battle.phase !== 'acting' || !aliveEnemies.some((u) => isTameable(u))}
                   >
-                    {onCooldown && (
-                      <span className="skill-cooldown-overlay">冷却 {cd} 回合</span>
-                    )}
-                    <span className="skill-btn-main">
-                      {s.name}
-                      <span className="skill-num">{skillBrief(s)}</span>
-                    </span>
-                    <span className="skill-desc">
-                      {s.desc}
-                      {!onCooldown && limited && (
-                        <span className="skill-uses">{exhausted ? '（已用完）' : `（剩 ${Math.max(0, left)} 次）`}</span>
-                      )}
-                    </span>
+                    <span>{f.emoji} {f.name}</span>
+                    <span>×{count}</span>
                   </button>
                 );
               })}
-              <button
-                className="skill-btn swap-btn"
-                onClick={() => {
-                  setPendingSkill(null);
-                  setPendingTame(null);
-                  setPendingBattleItem(null);
-                  setInspectEnemy(null);
-                  setSwapFrom(selected.uid);
-                }}
-                disabled={alivePlayers.length < 2 || selected.acted || animating}
-                title="与另一只己方宠物交换前后/左右位置（消耗 1 行动点）"
-              >
-                <span className="skill-btn-main">↔ 换位</span>
-                <span className="skill-desc">交换位置（1 行动点）</span>
-              </button>
-              <button
-                className={`skill-btn rest-btn ${selectedOrder?.skillId === 'rest' ? 'skill-btn-current' : ''}`}
-                onClick={() => {
-                  setPendingSkill(null);
-                  setSwapFrom(null);
-                  setPendingTame(null);
-                  setPendingBattleItem(null);
-                  setInspectEnemy(null);
-                  dispatch({ type: 'PLAYER_REST', actorUid: selected.uid });
-                }}
-                disabled={
-                  !canAct ||
-                  (selected.acted && !selectedOrder) ||
-                  (selectedOrder !== undefined && selectedOrder.skillId !== 'rest')
-                }
-                title={
-                  selectedOrder?.skillId === 'rest'
-                    ? '已选择休息：本回合不行动（0 行动点），再次点击取消'
-                    : '本回合不行动（0 行动点）；点击后提示「已选择」，可再次点击取消或改点技能'
-                }
-              >
-                <span className="skill-btn-main">😴 休息</span>
-                <span className="skill-desc">
-                  {selectedOrder?.skillId === 'rest' ? '已选择，点击取消' : '跳过本回合（0 行动点）'}
-                </span>
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="who">{selected ? <><PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}</> : '—'}</span>
-              <span className="card-sub">
-                {battle.phase === 'won'
-                  ? isChallenge
-                    ? '挑战胜利！'
-                    : '战斗胜利！'
-                  : battle.phase === 'lost'
-                    ? isChallenge
-                      ? '挑战失败…'
-                      : '全队阵亡…'
-                    : canAct
-                      ? '先点击一只己方宠物'
-                      : '敌方行动中…'}
-              </span>
-            </>
-          )}
-        </div>
-        <div className="end-panel">
-          <span className="end-ap">⚡ 行动点 {battle.playerAp}/{battle.playerApMax}</span>
-          <div className="anim-controls">
-            {animating && (
-              <button
-                className="anim-skip-btn"
-                onClick={skipAnim}
-                title="跳过当前动画"
-              >
-                ⏭️ 跳过
-              </button>
-            )}
-            <button
-              className="anim-speed-btn"
-              onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
-              title="切换动画速度"
-            >
-              ⏩ {animSpeed}x
-            </button>
+            </div>
           </div>
-          <button
-            className="primary end-turn-btn"
-            onClick={() => dispatch({ type: 'END_TURN' })}
-            disabled={!canAct}
-            title="结束指令阶段，已选择的技能与敌方行动按速度统一结算"
-          >
-            结束回合
-          </button>
         </div>
-      </div>
+      )}
+
+      {itemOverlayOpen && (
+        <div className="battle-overlay-mask" onClick={() => setItemOverlayOpen(false)}>
+          <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="battle-overlay-title">🧪 战斗道具</div>
+            <div className="battle-overlay-grid">
+              {battleItems.length === 0 ? (
+                <div className="overlay-empty">没有战斗道具</div>
+              ) : battleItems.map((it) => {
+                const count = state.inventory[it.id] ?? 0;
+                return (
+                  <button
+                    key={it.id}
+                    onClick={() => { onBattleItemClick(it.id); setItemOverlayOpen(false); }}
+                    disabled={!canAct}
+                  >
+                    <span>{it.emoji} {it.name}</span>
+                    <span>×{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {battle.phase === 'won' && !animating && !logPending && (
         <div className="overlay">

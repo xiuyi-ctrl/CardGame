@@ -11,7 +11,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.75 }, rank: 1,
   },
   lulu: {
-    id: 'lulu', name: '泡泡', emoji: '🐸',
+    id: 'lulu', name: '泡泡', emoji: '🐸', image: '/03.png',
     baseHp: 14, baseSpd: 1,
     skills: ['aqua_shot', 'water_bath'],
     desc: '开局御三家之一，血量最高的坦克型，靠持续回复磨血。',
@@ -20,7 +20,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.75 }, rank: 1,
   },
   fifi: {
-    id: 'fifi', name: '灼灼', emoji: '🔥',
+    id: 'fifi', name: '灼灼', emoji: '🔥', image: '/02.png',
     baseHp: 7, baseSpd: 5,
     skills: ['ember', 'double_hit'],
     desc: '开局御三家之一，全游戏速度最快的先手刺客，但极其脆弱。',
