@@ -162,8 +162,15 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   chainLink: { icon: '🔗', label: '锁链连接' },
 };
 
+/** 内联宠物图标：有 image 时显示小图，否则显示 emoji */
+export function PetIcon({ image, emoji, name, className = '' }: { image?: string; emoji: string; name: string; className?: string }) {
+  return image
+    ? <img src={image} className={`pet-icon-inline ${className}`} alt={name} />
+    : <>{emoji}</>;
+}
+
 export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
-  const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+  const pct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 0;
   const cls = pct <= 25 ? 'low' : pct <= 60 ? 'mid' : '';
   return (
     <div className="hp-bar">
@@ -213,8 +220,8 @@ export function StatusIcons({ unit }: { unit: Unit }) {
 }
 
 const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
-  atkUp: { icon: '⚔️', label: '伤害 +1' },
-  spdUp: { icon: '💨', label: '速度 +1' },
+  atkUp: { icon: '⚔️', label: '伤害 +2' },
+  spdUp: { icon: '💨', label: '速度 +2' },
   atkDown: { icon: '🪄', label: '伤害 -2' },
   spdDown: { icon: '🕸️', label: '速度 -2' },
   skillSpd: { icon: '💨', label: '技能速度加成' },
@@ -300,7 +307,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
-  const buffSpd = (unit.battleBuffs?.spdUp ? 1 : 0) - (unit.battleBuffs?.spdDown ? 1 : 0);
+  const buffSpd = (unit.battleBuffs?.spdUp ? 2 : 0) - (unit.battleBuffs?.spdDown ? 2 : 0);
   const skillSpd = unit.battleBuffs?.skillSpd ?? 0;
   const spdDownStatus = unit.statuses.find((s) => s.kind === 'spdDown');
   const statusSpd = spdDownStatus ? -spdDownStatus.value : 0;
@@ -316,7 +323,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
       onClick={onClick}
     >
       <div className={`card-top ${topStats ? 'card-top-stats' : ''}`}>
-        <span className="emoji">{unit.emoji}</span>
+        <span className="emoji">{unit.image ? <img src={unit.image} className="pet-image" alt={unit.name} /> : unit.emoji}</span>
         {topStats && (
           <div className="card-stats">
             <div className="card-stat" style={spdColor ? { color: spdColor } : undefined}>
@@ -503,7 +510,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
   return (
     <div className="buff-detail-panel">
       <div className="buff-detail-title">
-        {unit.emoji} {unit.name}
+        <PetIcon image={unit.image} emoji={unit.emoji} name={unit.name} /> {unit.name}
       </div>
       {hasPassive && (
         <div className="buff-section">

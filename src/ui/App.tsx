@@ -13,7 +13,7 @@ import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
-import { UnitCard, SkillTag, DragScrollRow } from './components';
+import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
@@ -937,7 +937,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
                   className={`codex-item ${m.id === selectedId ? 'selected' : ''}`}
                   onClick={() => setSelectedId(m.id)}
                 >
-                  <span className="codex-item-emoji">{m.emoji}</span>
+                  <span className="codex-item-emoji">{m.image ? <img src={m.image} className="pet-image" alt={m.name} /> : m.emoji}</span>
                   <span className="codex-item-name">{m.name}</span>
                 </div>
               ))}
@@ -946,7 +946,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
         </div>
         <div className="codex-detail">
           <div className="codex-detail-head">
-            <span className="codex-detail-emoji">{sp.emoji}</span>
+            <span className="codex-detail-emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
             <div>
               <div className="codex-detail-name">
                 {sp.name}
@@ -1038,7 +1038,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
                     className="codex-link"
                     onClick={() => setSelectedId(next)}
                   >
-                    {getMonster(next).emoji} {getMonster(next).name}
+                    <PetIcon image={getMonster(next).image} emoji={getMonster(next).emoji} name={getMonster(next).name} /> {getMonster(next).name}
                   </span>
                 </>
               ) : (
@@ -1166,7 +1166,7 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
             return (
               <div key={id} className="unit-card clickable" onClick={() => startRun(firstPick, id)}>
                 <div className="card-top">
-                  <span className="emoji">{sp.emoji}</span>
+                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
                 </div>
                 <div className="card-name">{sp.name}</div>
                 <div className="card-sub">
@@ -1197,11 +1197,11 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
           return (
             <div key={id} className="unit-card clickable" onClick={() => setFirstPick(id)}>
               <div className="card-top">
-                <span className="emoji">{sp.emoji}</span>
-              </div>
-              <div className="card-name">{sp.name} ×2</div>
-              <div className="card-sub">
-                生命 {stats.maxHp} · 速度 {stats.spd}
+                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
+                </div>
+                <div className="card-name">{sp.name}</div>
+                <div className="card-sub">
+                  生命 {stats.maxHp} · 速度 {stats.spd}
               </div>
               <div className="skill-list">
                 {sp.skills.map((s) => (
@@ -1562,7 +1562,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
           <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
           {state.field.map((uid) => {
             const u = state.roster.find((x) => x.uid === uid);
-            return u ? <span className="chip" key={uid}>{u.emoji} {u.name}</span> : null;
+            return u ? <span className="chip" key={uid}><PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}</span> : null;
           })}
         </div>
       )}
@@ -2049,7 +2049,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
       {hatch && hatchMonster && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'EVENT_HATCH_CANCEL' })}>
           <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>{hatchMonster.emoji}</div>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{hatchMonster.image ? <img src={hatchMonster.image} className="pet-image" style={{ width: 48, height: 48 }} alt={hatchMonster.name} /> : hatchMonster.emoji}</div>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>孵化出了 {hatchMonster.name}！</div>
             <div className="card-sub" style={{ marginBottom: 4, justifyContent: 'center' }}>
               ❤️ {hatchMonster.baseHp} &nbsp; ⚡ {hatchMonster.baseSpd}
@@ -2131,7 +2131,7 @@ function CustomScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                 onClick={() => dispatch({ type: 'PICK_CUSTOM', presetId: id })}
               >
                 <div className="card-top">
-                  <span className="emoji">{sp.emoji}</span>
+                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
                 </div>
                 <div className="card-name">{sp.name}</div>
                 <div className="card-sub">
@@ -2164,7 +2164,7 @@ function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
       <HUD state={state} dispatch={dispatch} />
       <div className="center-col">
         <div className="section-title">
-          📈 属性强化：{u.emoji} {u.name}
+          📈 属性强化：<PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}
         </div>
         <div className="reward-cards">
           {options.map((o) => (
@@ -2355,7 +2355,7 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
       )}
       <div className="team-snapshot">
         {state.roster.slice(0, 5).map((u) => (
-          <span key={u.uid} className="team-snapshot-pet">{u.emoji} {u.name}</span>
+          <span key={u.uid} className="team-snapshot-pet"><PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}</span>
         ))}
         {state.roster.length > 5 && <span className="team-snapshot-pet">+{state.roster.length - 5}</span>}
       </div>
@@ -2405,7 +2405,7 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
       {state.roster.length > 0 && (
         <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
           {state.roster.map((u) => (
-            <span className="chip" key={u.uid}>{u.emoji} {u.name}</span>
+            <span className="chip" key={u.uid}><PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}</span>
           ))}
         </div>
       )}

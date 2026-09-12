@@ -84,6 +84,7 @@ export function makeUnit(
     speciesId,
     name: s.name,
     emoji: s.emoji,
+    image: s.image,
     maxHp: s.baseHp + hpBonus,
     hp: s.baseHp + hpBonus,
     spd: s.baseSpd + spdBonus,
@@ -840,7 +841,7 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
         ...next[idx],
         value: Math.max(next[idx].value, effect.value),
         turns: Math.max(next[idx].turns, effect.turns),
-        ...(effect.kind === 'taunt' ? { sourceUid: effect.sourceUid } : {}),
+        ...(effect.kind === 'taunt' || effect.kind === 'chainLink' ? { sourceUid: effect.sourceUid } : {}),
       };
     }
     return { ...unit, statuses: next };
@@ -2280,6 +2281,8 @@ export function playerEndTurn(b: BattleState): BattleState {
   // 我方执行已下达的指令，敌方执行预选指令；未下指令的我方单位本回合不出手。
   // 使用索引循环以支持「暗影追猎」击杀后再行动（不标记 acted 的单位需重新处理）
   let turnIdx = 0;
+  const extraActionCount: Record<string, number> = {};
+  const MAX_EXTRA_ACTIONS = 5;
   while (turnIdx < (nb.turnOrder ?? []).length) {
     const uid = (nb.turnOrder ?? [])[turnIdx];
     if (nb.phase !== 'acting') break;
@@ -2325,9 +2328,14 @@ export function playerEndTurn(b: BattleState): BattleState {
         nb = enemyAct(nb, unit);
       }
       // 暗影追猎：useSkillInner 返回后若该单位仍「未行动」（跳过了 markActed），说明触发了额外行动，
-      // 不递增 turnIdx，立即重处理该单位（再执行一轮 AI）
+      // 不递增 turnIdx，立即重处理该单位（再执行一轮 AI），但限制连续额外行动次数防止无限循环
       const reUnit = actorFromId(nb, uid);
       if (reUnit && reUnit.hp > 0 && !reUnit.acted) {
+        extraActionCount[uid] = (extraActionCount[uid] ?? 0) + 1;
+        if (extraActionCount[uid] >= MAX_EXTRA_ACTIONS) {
+          nb = markActed(nb, uid);
+          turnIdx++;
+        }
         nb = checkEnd(nb);
         if (nb.phase !== 'acting') break;
         continue;

@@ -1795,7 +1795,7 @@ export function makeCustomUnit(presetId: string, rng: () => number): Unit {
 // ---------- 奖励 ----------
 
 export function generateRewards(state: GameState): RewardChoice[] {
-  const rng = createRng(state.seed + state.act * 7 + state.currentRow * 31);
+  const rng = createRng(state.seed + state.act * 7 + state.currentRow * 31 + (hashStr(state.currentNodeId) % 997));
   const options: RewardChoice[] = [
     {
       id: 'r-food',

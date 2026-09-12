@@ -2,7 +2,7 @@ import type { MonsterSpecies } from '../types';
 
 export const MONSTERS: Record<string, MonsterSpecies> = {
   momo: {
-    id: 'momo', name: '迅迅', emoji: '🐭',
+    id: 'momo', name: '迅迅', emoji: '🐭', image: '/01.png',
     baseHp: 10, baseSpd: 3,
     skills: ['punch', 'leaf_needle'],
     desc: '开局御三家之一，均衡型选手，速度与生存兼备。',

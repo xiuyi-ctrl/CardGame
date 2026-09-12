@@ -178,7 +178,7 @@ function shieldsOfUnits(b: BattleState): Record<string, number> {
 function spdOfUnits(b: BattleState): Record<string, number> {
   const out: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) {
-    const buffSpd = (u.battleBuffs?.spdUp ? 1 : 0) - (u.battleBuffs?.spdDown ? 1 : 0);
+    const buffSpd = (u.battleBuffs?.spdUp ? 2 : 0) - (u.battleBuffs?.spdDown ? 2 : 0);
     const skillSpd = u.battleBuffs?.skillSpd ?? 0;
     const spdDownSt = u.statuses.find((s) => s.kind === 'spdDown');
     const statusSpd = spdDownSt ? -spdDownSt.value : 0;

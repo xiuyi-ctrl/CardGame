@@ -15,7 +15,7 @@ import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
-import { UnitCard, skillBrief, SkillTag, BuffDetailPanel } from './components';
+import { UnitCard, skillBrief, SkillTag, BuffDetailPanel, PetIcon } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 
@@ -43,7 +43,7 @@ function EnemySkillPanel({ unit }: { unit: Unit }) {
   return (
     <div className="enemy-skill-panel">
       <div className="enemy-skill-panel-title">
-        {unit.emoji} {unit.name}
+        <PetIcon image={unit.image} emoji={unit.emoji} name={unit.name} /> {unit.name}
       </div>
       {passive && (
         <div className="skill-line">
@@ -419,7 +419,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           : swapFrom
             ? '↔ 请选择要交换位置的己方宠物'
             : selected
-              ? `⚔️ ${selected.emoji} ${selected.name}：选择技能或换位`
+              ? <><PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}：选择技能或换位</>
               : animating
                 ? '战斗结算中…'
                 : canAct
@@ -551,7 +551,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           {selected && selected.hp > 0 ? (
             <>
               <span className="who">
-                {selected.emoji} {selected.name}
+                <PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}
                 {(() => {
                   const p = selected.passive && getPassive(selected.passive);
                   return p ? (
@@ -644,7 +644,7 @@ export function BattleScreen({ state, dispatch }: Props) {
             </>
           ) : (
             <>
-              <span className="who">{selected ? `${selected.emoji} ${selected.name}` : '—'}</span>
+              <span className="who">{selected ? <><PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}</> : '—'}</span>
               <span className="card-sub">
                 {battle.phase === 'won'
                   ? isChallenge

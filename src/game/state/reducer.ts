@@ -119,7 +119,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -715,12 +715,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         next = {
           ...next,
           roster: next.roster.filter((_, i) => i !== sacrificeIdx).map((u) => {
+            const bonus = { ...u.bonusStats };
             if (choice.boostStat === 'hp') {
-              return { ...u, maxHp: u.maxHp + (choice.amount ?? 0), hp: u.hp + (choice.amount ?? 0) };
+              bonus.hp = (bonus.hp ?? 0) + (choice.amount ?? 0);
             } else if (choice.boostStat === 'spd') {
-              return { ...u, spd: u.spd + (choice.amount ?? 0) };
+              bonus.spd = (bonus.spd ?? 0) + (choice.amount ?? 0);
             }
-            return u;
+            return recomputeStats({ ...u, bonusStats: bonus });
           }),
         };
       } else if (choice.kind === 'boost' && next.roster.length > 0) {
@@ -731,12 +732,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ...next,
           roster: next.roster.map((u, i) => {
             if (i !== boostIdx) return u;
+            const bonus = { ...u.bonusStats };
             if (choice.boostStat === 'hp') {
-              return { ...u, maxHp: u.maxHp + (choice.amount ?? 0), hp: u.hp + (choice.amount ?? 0) };
+              bonus.hp = (bonus.hp ?? 0) + (choice.amount ?? 0);
             } else if (choice.boostStat === 'spd') {
-              return { ...u, spd: u.spd + (choice.amount ?? 0) };
+              bonus.spd = (bonus.spd ?? 0) + (choice.amount ?? 0);
             }
-            return u;
+            return recomputeStats({ ...u, bonusStats: bonus });
           }),
         };
         const statCn = choice.boostStat === 'hp' ? '生命' : '速度';

@@ -541,6 +541,20 @@ button.primary {
   line-height: 1;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
+.pet-image {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+.pet-icon-inline {
+  width: 0.85em;
+  height: 0.85em;
+  object-fit: contain;
+  border-radius: 3px;
+  vertical-align: -0.1em;
+}
 
 .card-name {
   font-weight: 700;
@@ -1053,9 +1067,17 @@ button.primary {
 .formation-board .emoji {
   font-size: 28px;
 }
+.battle-field .pet-image {
+  width: 28px;
+  height: 28px;
+}
 
 .formation-board .emoji {
   font-size: 42px;
+}
+.formation-board .pet-image {
+  width: 42px;
+  height: 42px;
 }
 
 .battle-field .card-name,
@@ -2474,6 +2496,10 @@ button.primary {
   width: 26px;
   text-align: center;
 }
+.codex-item-emoji .pet-image {
+  width: 24px;
+  height: 24px;
+}
 
 .codex-item-name {
   font-weight: 600;
@@ -2503,6 +2529,11 @@ button.primary {
   font-size: 56px;
   line-height: 1;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+.codex-detail-emoji .pet-image {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
 }
 
 .codex-detail-name {

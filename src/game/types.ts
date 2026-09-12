@@ -104,6 +104,8 @@ export interface MonsterSpecies {
   id: string;
   name: string;
   emoji: string;
+  /** 自定义图片路径（优先于 emoji 显示），放在 public/ 下，如 '/01.png' */
+  image?: string;
   baseHp: number;
   baseSpd: number;
   skills: string[];
@@ -143,6 +145,8 @@ export interface Unit {
   speciesId: string;
   name: string;
   emoji: string;
+  /** 自定义图片路径（优先于 emoji 显示） */
+  image?: string;
   maxHp: number;
   hp: number;
   spd: number;
