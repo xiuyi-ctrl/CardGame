@@ -1349,6 +1349,11 @@ button.primary {
   color: var(--gold);
   text-align: center;
   letter-spacing: 2px;
+  cursor: pointer;
+  user-select: none;
+}
+.log-title:hover {
+  color: var(--text);
 }
 
 .log-box {
@@ -1362,7 +1367,9 @@ button.primary {
   font-size: 12px;
   color: var(--text-dim);
   line-height: 1.6;
+  scrollbar-width: none;
 }
+.log-box::-webkit-scrollbar { display: none; }
 
 .log-line.player {
   color: #6fd8a8;
@@ -1380,6 +1387,15 @@ button.primary {
   color: var(--text);
   font-weight: 600;
 }
+
+/* 日志高亮片段 */
+.log-hl { font-weight: 600; }
+.log-hl-damage { color: #ff6b6b; font-weight: 700; }
+.log-hl-heal   { color: #6fd8a8; font-weight: 700; }
+.log-hl-skill  { color: #e8c26a; }
+.log-hl-status { color: #b08dff; }
+.log-hl-passive { color: #b08dff; }
+.log-hl-item   { color: #e8c26a; }
 
 /* 技能抽屉面板（右侧） */
 .skill-drawer {

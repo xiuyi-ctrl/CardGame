@@ -210,6 +210,16 @@ export interface Unit {
   altPassive?: string;
 }
 
+/** 日志高亮片段类型 */
+export type LogSpanKind = 'actor' | 'target' | 'damage' | 'heal' | 'skill' | 'status' | 'passive' | 'item';
+
+/** 日志中需要高亮的文本片段 */
+export interface LogSpan {
+  kind: LogSpanKind;
+  from: number;
+  to: number;
+}
+
 export interface LogEntry {
   text: string;
   /** 消息归属：player=我方行动、enemy=敌方行动、info=通用/系统 */
@@ -230,6 +240,8 @@ export interface LogEntry {
   addsStatus?: string[];
   /** 范围伤害日志（岩壳碎片自爆/岩壳崩解）：本条日志波及的所有目标 uid，供动画一次性同时挂飘字 */
   burstTargets?: string[];
+  /** 日志高亮片段，UI 渲染时按 kind 套用不同颜色 */
+  spans?: LogSpan[];
 }
 
 /** 玩家给某只宠物下达的指令（指令阶段记录，结束回合后按速度统一结算）。`skillId === 'rest'` 表示「休息」（本回合不行动，不消耗 AP，可再次点击取消） */

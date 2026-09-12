@@ -14,12 +14,28 @@ import {
 import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
-import type { SkillDef, StatusEffect, Unit } from '../game/types';
+import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
 import { UnitCard, skillBrief, SkillTag, BuffDetailPanel, PetIcon } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
+
+function renderLogText(text: string, spans?: LogSpan[]) {
+  if (!spans || spans.length === 0) return text;
+  const sorted = [...spans].sort((a, b) => a.from - b.from);
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const s of sorted) {
+    if (s.from > cursor) parts.push(text.slice(cursor, s.from));
+    const content = text.slice(s.from, s.to);
+    const wrapped = (s.kind === 'actor' || s.kind === 'target') ? `【${content}】` : content;
+    parts.push(<span key={cursor} className={`log-hl log-hl-${s.kind}`}>{wrapped}</span>);
+    cursor = s.to;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return parts;
+}
 
 interface Props {
   state: GameState;
@@ -74,6 +90,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [inspectEnemy, setInspectEnemy] = useState<string | null>(null);
   const [foodOverlayOpen, setFoodOverlayOpen] = useState(false);
   const [itemOverlayOpen, setItemOverlayOpen] = useState(false);
+  const [logExpanded, setLogExpanded] = useState(false);
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
@@ -337,7 +354,9 @@ export function BattleScreen({ state, dispatch }: Props) {
   }
 
   // 战斗记录只显示已揭示的条目（随攻击动画逐条出现），最多 6 条
-  const logItems = battle.log.slice(Math.max(0, revealedLogLen - 6), revealedLogLen);
+  const logItems = logExpanded
+    ? battle.log.slice(0, revealedLogLen)
+    : battle.log.slice(Math.max(0, revealedLogLen - 6), revealedLogLen);
 
   const popOverlay = (uid: string) =>
     pops
@@ -497,11 +516,13 @@ export function BattleScreen({ state, dispatch }: Props) {
 
         <div className="battle-sidebar">
           <div className="log-panel">
-            <div className="log-title">⚔️ 战斗记录</div>
+            <div className="log-title" onClick={() => setLogExpanded((v) => !v)} style={{ cursor: 'pointer' }}>
+              ⚔️ 战斗记录 {logExpanded ? '▼' : '▲'}
+            </div>
             <div className="log-box">
               {logItems.map((l, i) => (
                 <div key={i} className={`log-line ${l.side} ${i === logItems.length - 1 ? 'recent' : ''}`}>
-                  {l.text}
+                  {renderLogText(l.text, l.spans)}
                 </div>
               ))}
             </div>

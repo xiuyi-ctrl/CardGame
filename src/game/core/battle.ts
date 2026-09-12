@@ -1,4 +1,4 @@
-import type { BattleState, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
+import type { BattleState, LogSpan, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
 import { getSkill } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
@@ -547,7 +547,10 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
     };
     nb = replaceUnit(nb, unit);
     if (dmg > 0) {
-      nb = pushLog(nb, `${unit.name} 受到${s.kind === 'burn' ? '灼烧' : '中毒'} ${dmg} 点伤害`, sideOf(unit), undefined, unit.uid);
+      const dotName = s.kind === 'burn' ? '灼烧' : '中毒';
+      const msgDot = `${unit.name} 受到${dotName} ${dmg} 点伤害`;
+      nb = pushLog(nb, msgDot, sideOf(unit), undefined, unit.uid, undefined, undefined,
+        spans(msgDot, [['target', unit.name], ['status', `${dotName} ${dmg} 点伤害`]]));
     }
   }
   return { unit, battle: nb };
@@ -572,6 +575,7 @@ export function pushLog(
   targetUid?: string,
   addsStatus?: string[],
   burstTargets?: string[],
+  spans?: LogSpan[],
 ): BattleState {
   // 附加当下全体血量快照，供 UI 按动画事件逐步展示血量；log 不截断（由 UI 只展示尾部）
   const hp: Record<string, number> = {};
@@ -582,11 +586,25 @@ export function pushLog(
   // 附加当下全员护盾快照，供 UI 按动画事件逐步更新护盾显示
   const shields: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) shields[u.uid] = u.shield;
-  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus, burstTargets }] };
+  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus, burstTargets, spans }] };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
   return u.isPlayer ? 'player' : 'enemy';
+}
+
+/** 辅助函数：从消息文本中按顺序匹配 token，返回 LogSpan[] */
+function spans(msg: string, tokens: [LogSpan['kind'], string][]): LogSpan[] {
+  const result: LogSpan[] = [];
+  let searchFrom = 0;
+  for (const [kind, text] of tokens) {
+    const idx = msg.indexOf(text, searchFrom);
+    if (idx >= 0) {
+      result.push({ kind, from: idx, to: idx + text.length });
+      searchFrom = idx + text.length;
+    }
+  }
+  return result;
 }
 
 function actorFromId(b: BattleState, uid: string): Unit | undefined {
@@ -1561,9 +1579,13 @@ function resolveAttack(
         if (e.kind === 'stun') return '眩晕';
         return e.kind;
       }).join('，');
-      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${target.name} ${effectDesc}`, sideOf(actor), actor.uid, target.uid, hitAdds);
+      const msg0 = `${actor.name} 使用「${skill.name}」，${target.name} ${effectDesc}`;
+      nb = pushLog(nb, msg0, sideOf(actor), actor.uid, target.uid, hitAdds, undefined,
+        spans(msg0, [['actor', actor.name], ['skill', skill.name], ['target', target.name]]));
     } else {
-      nb = pushLog(nb, `${actor.name} 使用「${skill.name}」攻击 ${target.name}，造成 ${seg} 伤害`, sideOf(actor), actor.uid, target.uid, hitAdds);
+      const msg1 = `${actor.name} 使用「${skill.name}」攻击 ${target.name}，造成 ${seg} 伤害`;
+      nb = pushLog(nb, msg1, sideOf(actor), actor.uid, target.uid, hitAdds, undefined,
+        spans(msg1, [['actor', actor.name], ['skill', skill.name], ['target', target.name], ['damage', String(seg)]]));
     }
     lastHitLog = nb.log.length - 1;
     if (ap?.kind === 'drain') {
@@ -1572,7 +1594,9 @@ function resolveAttack(
         const maxHp = getEffectiveMaxHp(healedActor);
         const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
         nb = replaceUnit(nb, healed);
-        nb = pushLog(nb, `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`, sideOf(healedActor), healedActor.uid, healedActor.uid);
+        const msgDrain = `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`;
+        nb = pushLog(nb, msgDrain, sideOf(healedActor), healedActor.uid, healedActor.uid, undefined, undefined,
+          spans(msgDrain, [['actor', healedActor.name], ['passive', ap.name], ['heal', String(ap.value)]]));
       }
     }
     // 灵魂汲取：攻击命中时，攻击者灵魂 +1（上限 20）
@@ -1586,9 +1610,9 @@ function resolveAttack(
             const newSoul = curSoul + 1;
             nb = replaceUnit(nb, { ...freshActor, soul: newSoul });
             // 阶梯触发日志
-            if (newSoul === 5) nb = pushLog(nb, `${freshActor.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`, sideOf(freshActor), freshActor.uid, freshActor.uid);
-            else if (newSoul === 10) nb = pushLog(nb, `${freshActor.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`, sideOf(freshActor), freshActor.uid, freshActor.uid);
-            else if (newSoul === 20) nb = pushLog(nb, `${freshActor.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`, sideOf(freshActor), freshActor.uid, freshActor.uid);
+            if (newSoul === 5) { const m = `${freshActor.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
+            else if (newSoul === 10) { const m = `${freshActor.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
+            else if (newSoul === 20) { const m = `${freshActor.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
           }
         }
       }
@@ -1602,7 +1626,9 @@ function resolveAttack(
       if (roll < chance) {
         t2 = applyStatusTo(t2, { kind: 'atkDown', value: ap.value, turns: 2 }, nb.round);
         nb = replaceUnit(nb, t2);
-        nb = pushLog(nb, `${actor.name} 的「${ap.name}」使 ${t2.name} 伤害 -1`, sideOf(actor), actor.uid, t2.uid, ['atkDown']);
+        const msgEnt = `${actor.name} 的「${ap.name}」使 ${t2.name} 伤害 -1`;
+        nb = pushLog(nb, msgEnt, sideOf(actor), actor.uid, t2.uid, ['atkDown'], undefined,
+          spans(msgEnt, [['actor', actor.name], ['passive', ap.name], ['target', t2.name], ['status', '伤害 -1']]));
       }
     }
     // 烈焰环绕：被攻击时 30% 概率使攻击者灼烧 1 层，熔火领主在场时 100%
@@ -1616,7 +1642,10 @@ function resolveAttack(
             nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
             const burned = applyStatusTo(attacker, { kind: 'burn', value: tp.value, turns: 2 }, nb.round);
             nb = replaceUnit(nb, burned);
-            nb = pushLog(nb, `${t2.name} 的「烈焰环绕」触发！${burned.name} 被灼烧 ${tp.value} 层`, sideOf(t2), t2.uid, attacker.uid, ['burn']);
+            const msgFA = `${t2.name} 的「烈焰环绕」触发！${burned.name} 被灼烧 ${tp.value} 层`;
+            const burnDesc = `灼烧 ${tp.value} 层`;
+            nb = pushLog(nb, msgFA, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
+              spans(msgFA, [['passive', '烈焰环绕'], ['target', burned.name], ['status', burnDesc]]));
           } else {
             nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
           }
@@ -1630,7 +1659,9 @@ function resolveAttack(
           if (attacker && attacker.hp > 0) {
             const hurt = applyCounterDmg(attacker, tp.value);
             nb = replaceUnit(nb, hurt);
-            nb = pushLog(nb, `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`, sideOf(t2), t2.uid, attacker.uid);
+            const msgTh = `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`;
+            nb = pushLog(nb, msgTh, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
+              spans(msgTh, [['passive', tp.name], ['target', attacker.name], ['damage', String(tp.value)]]));
           }
         }
         if (tp?.kind === 'thornRoyal') {
@@ -1645,12 +1676,16 @@ function resolveAttack(
             const newAttacker = applyCounterDmg(attacker, thornDmg);
             nb = replaceUnit(nb, newAttacker);
             nb = replaceUnit(nb, t2);
-            nb = pushLog(nb, `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`, sideOf(t2), t2.uid, attacker.uid);
+            const msgTR = `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`;
+            nb = pushLog(nb, msgTR, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
+              spans(msgTR, [['passive', '荆棘之躯'], ['target', attacker.name], ['damage', String(thornDmg)]]));
             if (isBurst) {
               const freshT2 = actorFromId(nb, t2.uid) ?? t2;
               t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
               nb = replaceUnit(nb, t2);
-              nb = pushLog(nb, `${t2.name} 的「荆棘之躯」恢复 2 点生命`, sideOf(t2), t2.uid, t2.uid);
+              const msgTRh = `${t2.name} 的「荆棘之躯」恢复 2 点生命`;
+              nb = pushLog(nb, msgTRh, sideOf(t2), t2.uid, t2.uid, undefined, undefined,
+                spans(msgTRh, [['passive', '荆棘之躯'], ['heal', '2']]));
             }
           }
         }
@@ -1660,7 +1695,9 @@ function resolveAttack(
           if (attacker && attacker.hp > 0) {
             let burned = applyStatusTo(attacker, { kind: 'burn', value: 1, turns: 2 }, nb.round);
             nb = replaceUnit(nb, burned);
-            nb = pushLog(nb, `${t2.name} 的「熔岩护体」触发！${burned.name} 被灼烧 1 层`, sideOf(t2), t2.uid, attacker.uid, ['burn']);
+            const msgMA = `${t2.name} 的「熔岩护体」触发！${burned.name} 被灼烧 1 层`;
+            nb = pushLog(nb, msgMA, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
+              spans(msgMA, [['passive', '熔岩护体'], ['target', burned.name], ['status', '灼烧 1 层']]));
           }
         }
         // 岩壳崩解：每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益
@@ -1700,13 +1737,17 @@ function resolveAttack(
         if (stacks < cap) {
           t2 = { ...t2, spd: t2.spd + 1, passiveSpdStacks: stacks + 1 };
           nb = replaceUnit(nb, t2);
-          nb = pushLog(nb, `${t2.name} 的「${tp.name}」速度 +1`, sideOf(t2), t2.uid, t2.uid);
+          const msgSpd = `${t2.name} 的「${tp.name}」速度 +1`;
+          nb = pushLog(nb, msgSpd, sideOf(t2), t2.uid, t2.uid, undefined, undefined,
+            spans(msgSpd, [['passive', tp.name]]));
         }
       }
       if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
         t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
         nb = replaceUnit(nb, t2);
-        nb = pushLog(nb, `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`, sideOf(t2), t2.uid, t2.uid, ['rageThorn']);
+        const msgRT = `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`;
+        nb = pushLog(nb, msgRT, sideOf(t2), t2.uid, t2.uid, ['rageThorn'], undefined,
+          spans(msgRT, [['passive', '复仇棘甲']]));
       }
       // 腐化囊体：被攻击时50%概率使攻击者中毒2层
       if (t2.hp > 0) {
@@ -1719,7 +1760,9 @@ function resolveAttack(
             if (attacker2 && attacker2.hp > 0) {
               const poisoned = applyStatusTo(attacker2, { kind: 'poison', value: tp2.value, turns: 2 }, nb.round);
               nb = replaceUnit(nb, poisoned);
-              nb = pushLog(nb, `${t2.name} 的「腐化囊体」使 ${attacker2.name} 中毒 ${tp2.value} 层`, sideOf(t2), t2.uid, attacker2.uid);
+              const msgCS = `${t2.name} 的「腐化囊体」使 ${attacker2.name} 中毒 ${tp2.value} 层`;
+              nb = pushLog(nb, msgCS, sideOf(t2), t2.uid, attacker2.uid, undefined, undefined,
+                spans(msgCS, [['passive', '腐化囊体'], ['target', attacker2.name], ['status', `中毒 ${tp2.value} 层`]]));
               didPoison = true;
             }
           }
@@ -1733,7 +1776,9 @@ function resolveAttack(
           if (attacker3 && attacker3.hp > 0) {
             const slowed = applyStatusTo(attacker3, { kind: 'spdDown', value: tp2.value, turns: 2 }, nb.round);
             nb = replaceUnit(nb, slowed);
-            nb = pushLog(nb, `${t2.name} 的「粘滞躯体」使 ${attacker3.name} 速度 -${tp2.value}`, sideOf(t2), t2.uid, attacker3.uid);
+            const msgSB = `${t2.name} 的「粘滞躯体」使 ${attacker3.name} 速度 -${tp2.value}`;
+            nb = pushLog(nb, msgSB, sideOf(t2), t2.uid, attacker3.uid, undefined, undefined,
+              spans(msgSB, [['passive', '粘滞躯体'], ['target', attacker3.name], ['status', `速度 -${tp2.value}`]]));
           }
         }
       }
@@ -1747,7 +1792,9 @@ function resolveAttack(
           const hurt = applyCounterDmg(attacker, scVal);
           const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
           nb = replaceUnit(nb, debuffed);
-          nb = pushLog(nb, `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低目标攻击2层`, sideOf(t2), t2.uid, attacker.uid, ['atkDown']);
+          const msgSC = `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低目标攻击2层`;
+          nb = pushLog(nb, msgSC, sideOf(t2), t2.uid, attacker.uid, ['atkDown'], undefined,
+            spans(msgSC, [['passive', '盾反'], ['target', attacker.name], ['damage', String(scVal)]]));
         }
         t2 = { ...t2, shield: 0, statuses: t2.statuses.filter((s) => s.kind !== 'shield' && s.kind !== 'shieldCounter') };
         nb = replaceUnit(nb, t2);
@@ -1761,7 +1808,10 @@ function resolveAttack(
         if (attacker && attacker.hp > 0) {
           const burned = applyStatusTo(attacker, { kind: 'burn', value: fsVal, turns: 2 }, nb.round);
           nb = replaceUnit(nb, burned);
-          nb = pushLog(nb, `${t2.name} 的「烈焰护盾」灼烧 ${attacker.name} ${fsVal} 层`, sideOf(t2), t2.uid, attacker.uid);
+          const msgFS = `${t2.name} 的「烈焰护盾」灼烧 ${attacker.name} ${fsVal} 层`;
+          const burnFS = `灼烧 ${fsVal} 层`;
+          nb = pushLog(nb, msgFS, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
+            spans(msgFS, [['passive', '烈焰护盾'], ['target', attacker.name], ['status', burnFS]]));
         }
       }
     }
@@ -1772,7 +1822,9 @@ function resolveAttack(
   nb = replaceUnit(nb, t2);
   // 小怪死亡日志
   if (t2.hp <= 0 && t2.speciesId.startsWith('boss_minion_')) {
-    nb = pushLog(nb, `${t2.name} 被击倒了`, sideOf(t2), t2.uid, t2.uid);
+    const msgDead = `${t2.name} 被击倒了`;
+    nb = pushLog(nb, msgDead, sideOf(t2), t2.uid, t2.uid, undefined, undefined,
+      spans(msgDead, [['target', t2.name]]));
     nb = applyRockShardDeath(nb, t2);
     nb = applyToxicBurstDeath(nb, t2);
     nb = applyEmberDeath(nb, t2);
@@ -1855,7 +1907,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
       }
       r = replaceUnit(r, healed);
-      r = pushLog(r, `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`, sideOf(actor), actor.uid, t.uid, addsKinds);
+      const msgHeal = `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`;
+      r = pushLog(r, msgHeal, sideOf(actor), actor.uid, t.uid, addsKinds, undefined,
+        spans(msgHeal, [['actor', actor.name], ['skill', skill.name], ['target', t.name], ['heal', String(amt)]]));
     }
     nb = r;
   } else if (skill.kind === 'buff') {
@@ -1874,7 +1928,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           }
         }
         nb = replaceUnit(nb, buffed);
-        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`, sideOf(actor), actor.uid, t.uid);
+        const msgBuff = `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`;
+        nb = pushLog(nb, msgBuff, sideOf(actor), actor.uid, t.uid, undefined, undefined,
+          spans(msgBuff, [['actor', actor.name], ['skill', skill.name]]));
       }
     } else {
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor), actor.uid, actor.uid);
@@ -2170,7 +2226,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (burnedActor && burnedActor.hp > 0) {
         const newHp = Math.max(1, burnedActor.hp - 5);
         nb = replaceUnit(nb, { ...burnedActor, hp: newHp });
-        nb = pushLog(nb, `${burnedActor.name} 的「焚身爆」反噬，损失 5 点生命`, sideOf(burnedActor), burnedActor.uid, burnedActor.uid);
+        const msgBB = `${burnedActor.name} 的「焚身爆」反噬，损失 5 点生命`;
+        nb = pushLog(nb, msgBB, sideOf(burnedActor), burnedActor.uid, burnedActor.uid, undefined, undefined,
+          spans(msgBB, [['actor', burnedActor.name], ['passive', '焚身爆'], ['damage', '5']]));
       }
     }
     // 暗影追随：暗影之王击杀时，暗影仆从永久伤害 +1（须在暗影追猎 return 前执行）
@@ -2495,13 +2553,18 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
         after,
         enemy.hp === 1 ? `${enemy.name} 已是强弩之末，被成功驯服！已加入队伍预备役` : `${enemy.name} 被成功驯服！已加入队伍预备役`,
         'enemy',
+        undefined, undefined, undefined, undefined,
+        spans(enemy.hp === 1 ? `${enemy.name} 已是强弩之末，被成功驯服！已加入队伍预备役` : `${enemy.name} 被成功驯服！已加入队伍预备役`,
+          [['target', enemy.name], ['item', '驯服']]),
       );
     } else {
       after = {
         ...nb2,
         enemyUnits: nb2.enemyUnits.map((u) => (u.uid === enemy.uid ? { ...u, tameFails: (u.tameFails ?? 0) + 1 } : u)),
       };
-      after = pushLog(after, `喂食${food.name}失败，${enemy.name} 抵抗了驯服（下次捕捉概率提高）`, 'enemy');
+      const msgFail = `喂食${food.name}失败，${enemy.name} 抵抗了驯服（下次捕捉概率提高）`;
+      after = pushLog(after, msgFail, 'enemy', undefined, undefined, undefined, undefined,
+        spans(msgFail, [['item', food.name], ['target', enemy.name]]));
     }
     return after;
   });
