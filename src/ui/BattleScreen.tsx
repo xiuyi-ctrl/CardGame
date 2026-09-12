@@ -465,31 +465,34 @@ export function BattleScreen({ state, dispatch }: Props) {
 
       <div className="battle-main">
         <div className="battle-field">
-          <div className="formation-row row-front">
-            {enemyBack.map((u, i) => enemySlot(u, `eb${i}`, true))}
+          <div className="enemy-area">
+            <div className="formation-row row-front">
+              {enemyBack.map((u, i) => enemySlot(u, `eb${i}`, true))}
+            </div>
+            <div className="formation-row row-back">
+              {enemyFront.map((u, i) => enemySlot(u, `ef${i}`, false))}
+            </div>
             {inspectEnemy && (() => {
-              const eu = battle.enemyUnits.find((x) => x.uid === inspectEnemy);
-              return eu && eu.row === 'back' ? <EnemySkillPanel key="insp1" unit={eu} /> : null;
-            })()}
-          </div>
-          <div className="formation-row row-back">
-            {enemyFront.map((u, i) => enemySlot(u, `ef${i}`, false))}
-            {inspectEnemy && (() => {
-              const eu = battle.enemyUnits.find((x) => x.uid === inspectEnemy);
-              return eu && eu.row === 'front' ? <EnemySkillPanel key="insp2" unit={eu} /> : null;
+              const eu = b.enemyUnits.find((x) => x.uid === inspectEnemy);
+              return eu && eu.hp > 0 ? (
+                <>
+                  <div className="enemy-left-panels">
+                    <EnemySkillPanel unit={eu} />
+                  </div>
+                  <BuffDetailPanel unit={shownUnit(eu)} stacksOverride={passiveSpdMap?.[eu.uid]} rockShellHitsOverride={rockShellHitsMap?.[eu.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[eu.uid]} />
+                </>
+              ) : null;
             })()}
           </div>
           <div className="battle-divider" />
-          <div className="formation-row row-front">{playerFront.map((u, i) => playerSlot(u, `pf${i}`, true))}</div>
-          <div className="formation-row row-back">{playerBack.map((u, i) => playerSlot(u, `pb${i}`, false))}</div>
-          {selectedUid && (() => {
-            const su = b.playerUnits.find((x) => x.uid === selectedUid);
-            return su && su.hp > 0 ? <BuffDetailPanel unit={shownUnit(su)} stacksOverride={passiveSpdMap?.[su.uid]} rockShellHitsOverride={rockShellHitsMap?.[su.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[su.uid]} /> : null;
-          })()}
-          {inspectEnemy && (() => {
-            const eu = b.enemyUnits.find((x) => x.uid === inspectEnemy);
-            return eu && eu.hp > 0 ? <BuffDetailPanel unit={shownUnit(eu)} stacksOverride={passiveSpdMap?.[eu.uid]} rockShellHitsOverride={rockShellHitsMap?.[eu.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[eu.uid]} /> : null;
-          })()}
+          <div className="player-area">
+            <div className="formation-row row-front">{playerFront.map((u, i) => playerSlot(u, `pf${i}`, true))}</div>
+            <div className="formation-row row-back">{playerBack.map((u, i) => playerSlot(u, `pb${i}`, false))}</div>
+            {selectedUid && (() => {
+              const su = b.playerUnits.find((x) => x.uid === selectedUid);
+              return su && su.hp > 0 ? <BuffDetailPanel unit={shownUnit(su)} stacksOverride={passiveSpdMap?.[su.uid]} rockShellHitsOverride={rockShellHitsMap?.[su.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[su.uid]} /> : null;
+            })()}
+          </div>
         </div>
 
         <div className="battle-sidebar">
@@ -507,99 +510,106 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="skill-drawer">
             {selected && selected.hp > 0 ? (
               <>
-                <span className="who">
-                  <PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}
-                  {(() => {
-                    const p = selected.passive && getPassive(selected.passive);
-                    return p ? (
-                      <span className="who-passive" title={`被动「${p.name}」：${p.desc}`}>
-                        💠{p.name}
-                      </span>
-                    ) : null;
-                  })()}
-                  {selectedOrder ? (
-                    <span className="order-badge">⚡ 已选择</span>
-                  ) : selected.acted ? (
-                    <span className="order-badge">已行动</span>
-                  ) : null}
-                </span>
-                {selectedSkills.map((s) => {
-                  const left = skillUsesLeft(selected, s.id);
-                  const cd = skillCooldownLeft(selected, s.id);
-                  const limited = Number.isFinite(left);
-                  const exhausted = limited && left <= 0;
-                  const onCooldown = cd > 0;
-                  const isCurrent = selectedOrder?.skillId === s.id;
-                  const cannotOrder = selected.acted && !selectedOrder;
-                  return (
-                    <button
-                      key={s.id}
-                      className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
-                      onClick={() => onSkillClick(s)}
-                      disabled={!canAct || exhausted || onCooldown || cannotOrder}
-                      title={`${s.desc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}`}
-                    >
-                      <span className="skill-btn-head">{s.name} {skillBrief(s)}</span>
-                      <span className="skill-desc">{s.desc}</span>
-                    </button>
-                  );
-                })}
-                <button
-                  className="skill-btn"
-                  onClick={() => {
-                    setPendingSkill(null);
-                    setPendingTame(null);
-                    setPendingBattleItem(null);
-                    setInspectEnemy(null);
-                    setSwapFrom(selected.uid);
-                  }}
-                  disabled={alivePlayers.length < 2 || selected.acted || animating}
-                  title="与另一只己方宠物交换位置（1 行动点）"
-                >
-                  <span>↔ 换位</span>
-                </button>
-                <button
-                  className={`skill-btn ${selectedOrder?.skillId === REST_SKILL_ID ? 'skill-btn-current' : ''}`}
-                  onClick={() => {
-                    setPendingSkill(null);
-                    setSwapFrom(null);
-                    setPendingTame(null);
-                    setPendingBattleItem(null);
-                    setInspectEnemy(null);
-                    dispatch({ type: 'PLAYER_REST', actorUid: selected.uid });
-                  }}
-                  disabled={
-                    !canAct ||
-                    (selected.acted && !selectedOrder) ||
-                    (selectedOrder !== undefined && selectedOrder.skillId !== 'rest')
-                  }
-                >
-                  <span>😴 休息</span>
-                  <span className="skill-desc">
-                    {selectedOrder?.skillId === 'rest' ? '已选择' : '0 AP'}
+                <div className="skill-drawer-scroll">
+                  <span className="who">
+                    {selected.name}
+                    {(() => {
+                      const p = selected.passive && getPassive(selected.passive);
+                      return p ? (
+                        <span className="who-passive" title={`被动「${p.name}」：${p.desc}`}>
+                          💠{p.name}
+                        </span>
+                      ) : null;
+                    })()}
+                    {selectedOrder ? (
+                      <span className="order-badge">⚡ 已选择</span>
+                    ) : selected.acted ? (
+                      <span className="order-badge">已行动</span>
+                    ) : null}
                   </span>
-                </button>
-                <div className="hint-text">{hint}</div>
-                <div className="end-row">
-                  <span className="end-ap">⚡ {battle.playerAp}/{battle.playerApMax}</span>
-                  <div className="anim-controls">
-                    {animating && (
-                      <button className="anim-skip-btn" onClick={skipAnim}>⏭️</button>
-                    )}
+                  {selectedSkills.map((s) => {
+                    const left = skillUsesLeft(selected, s.id);
+                    const cd = skillCooldownLeft(selected, s.id);
+                    const limited = Number.isFinite(left);
+                    const exhausted = limited && left <= 0;
+                    const onCooldown = cd > 0;
+                    const isCurrent = selectedOrder?.skillId === s.id;
+                    const cannotOrder = selected.acted && !selectedOrder;
+                    return (
+                      <button
+                        key={s.id}
+                        className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
+                        onClick={() => onSkillClick(s)}
+                        disabled={!canAct || exhausted || onCooldown || cannotOrder}
+                        title={`${s.desc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}`}
+                      >
+                        <span className="skill-btn-head">
+                        {s.name}
+                        <span className="skill-num">{skillBrief(s)}</span>
+                      </span>
+                        <span className="skill-desc">{s.desc}</span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    className="skill-btn"
+                    onClick={() => {
+                      setPendingSkill(null);
+                      setPendingTame(null);
+                      setPendingBattleItem(null);
+                      setInspectEnemy(null);
+                      setSwapFrom(selected.uid);
+                    }}
+                    disabled={alivePlayers.length < 2 || selected.acted || animating}
+                    title="与另一只己方宠物交换位置（1 行动点）"
+                  >
+                    <span>↔ 换位</span>
+                  </button>
+                  <button
+                    className={`skill-btn ${selectedOrder?.skillId === REST_SKILL_ID ? 'skill-btn-current' : ''}`}
+                    onClick={() => {
+                      setPendingSkill(null);
+                      setSwapFrom(null);
+                      setPendingTame(null);
+                      setPendingBattleItem(null);
+                      setInspectEnemy(null);
+                      dispatch({ type: 'PLAYER_REST', actorUid: selected.uid });
+                    }}
+                    disabled={
+                      !canAct ||
+                      (selected.acted && !selectedOrder) ||
+                      (selectedOrder !== undefined && selectedOrder.skillId !== 'rest')
+                    }
+                  >
+                    <span>😴 休息</span>
+                    <span className="skill-desc">
+                      {selectedOrder?.skillId === 'rest' ? '已选择' : '0 AP'}
+                    </span>
+                  </button>
+                </div>
+                <div className="skill-drawer-bottom">
+                  <div className="hint-text">{hint}</div>
+                  <div className="end-row">
+                    <span className="end-ap">⚡ {battle.playerAp}/{battle.playerApMax}</span>
+                    <div className="anim-controls">
+                      {animating && (
+                        <button className="anim-skip-btn" onClick={skipAnim}>⏭️</button>
+                      )}
+                      <button
+                        className="anim-speed-btn"
+                        onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
+                      >
+                        ⏩ {animSpeed}x
+                      </button>
+                    </div>
                     <button
-                      className="anim-speed-btn"
-                      onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
+                      className="end-turn-btn"
+                      onClick={() => dispatch({ type: 'END_TURN' })}
+                      disabled={!canAct}
                     >
-                      ⏩ {animSpeed}x
+                      结束回合
                     </button>
                   </div>
-                  <button
-                    className="end-turn-btn"
-                    onClick={() => dispatch({ type: 'END_TURN' })}
-                    disabled={!canAct}
-                  >
-                    结束回合
-                  </button>
                 </div>
               </>
             ) : (
