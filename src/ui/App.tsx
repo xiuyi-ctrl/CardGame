@@ -509,7 +509,7 @@ function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dis
     ...Object.keys(FOODS).map((id) => ({ id, label: FOODS[id].name })),
     ...Object.keys(ITEMS).map((id) => ({ id, label: ITEMS[id].name })),
   ];
-  const enemyDesc = pb.encounter.map((e) => `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}`).join('、');
+  const enemyDesc = pb.encounter.map((e) => getMonster(e.speciesId).name).join('、');
   return (
     <div className="screen center-col">
       <div className="hud">

@@ -119,7 +119,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     dispatch({ type: 'FORMATION_CONFIRM', units });
   }
 
-  const enemyDesc = fb.encounter.map((e) => `${getMonster(e.speciesId).emoji} ${getMonster(e.speciesId).name}`).join('、');
+  const enemyDesc = fb.encounter.map((e) => getMonster(e.speciesId).name).join('、');
   const curNode = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
   const title = curNode?.type === 'boss' ? '👑 首领战布阵' : curNode?.type === 'guardian' ? '🛡️ 守卫战布阵' : '战前布阵';
 
