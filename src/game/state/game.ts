@@ -806,8 +806,8 @@ const ACT3_GUARDIAN_2V2: readonly { species: string[]; weight: number }[] = [
 
 /** 每幕首领候选池：末层 2~3 个首领节点从对应幕的池中随机抽取（不重复）。部分首领只在指定幕出现。 */
 export const ACT_BOSS_POOLS: Record<number, string[]> = {
-  1: ['boss_vine', 'boss_crab', 'boss_golem'],
-  2: ['boss_dark', 'boss_moss', 'boss_ghost'],
+  1: ['boss_vine', 'boss_crab', 'boss_dark'],
+  2: ['boss_moss', 'boss_ghost', 'boss_golem'],
   3: ['boss_fire', 'boss_dragon', 'boss_demon'],
 };
 
