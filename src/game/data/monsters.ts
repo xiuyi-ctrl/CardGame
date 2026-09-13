@@ -29,7 +29,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.75 }, rank: 1,
   },
   kiki: {
-    id: 'kiki', name: '铁墩', emoji: '🛡️',
+    id: 'kiki', name: '铁墩', emoji: '🛡️', image: '/05.png',
     baseHp: 12, baseSpd: 2,
     skills: ['steel_spike', 'shield_skill'],
     desc: '血厚的基础宠，皮糙肉厚的盾卫。',
@@ -38,7 +38,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.75 }, rank: 1,
   },
   mimi: {
-    id: 'mimi', name: '咪咪', emoji: '🐍',
+    id: 'mimi', name: '咪咪', emoji: '🐍', image: '/06.png',
     baseHp: 10, baseSpd: 3,
     skills: ['bite', 'poison_sting'],
     desc: '直接掌握高阶单点技能的影系输出。',
@@ -47,7 +47,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.75 }, rank: 1,
   },
   pipi: {
-    id: 'pipi', name: '刺刺', emoji: '🦔',
+    id: 'pipi', name: '刺刺', emoji: '🦔', image: '/04.png',
     baseHp: 11, baseSpd: 2,
     skills: ['weaken', 'provoke'],
     desc: '靠中毒持续伤害磨血。',
@@ -56,7 +56,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.75 }, rank: 1,
   },
   momo_queen: {
-    id: 'momo_queen', name: '迅牙', emoji: '🐹',
+    id: 'momo_queen', name: '迅牙', emoji: '🐹', image: '/01-1.png',
     baseHp: 18, baseSpd: 4,
     skills: ['leaf_needle', 'double_hit', 'shockwave'],
     desc: '迅迅的融合形态，高速多段连击手，先手爆发。',
@@ -65,7 +65,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.4 }, rank: 2,
   },
   lulu_king: {
-    id: 'lulu_king', name: '泡泡将', emoji: '🐢',
+    id: 'lulu_king', name: '泡泡将', emoji: '🐢', image: '/03-1.png',
     baseHp: 22, baseSpd: 2,
     skills: ['water_gun', 'heal_light', 'water_wave'],
     desc: '泡泡的融合形态，高血量的水系坦克，攻击群体并自愈。',
@@ -74,7 +74,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.4 }, rank: 2,
   },
   fifi_king: {
-    id: 'fifi_king', name: '灼刃', emoji: '🦊',
+    id: 'fifi_king', name: '灼刃', emoji: '🦊', image: '/02-1.png',
     baseHp: 13, baseSpd: 6,
     skills: ['flame_combo', 'roar', 'fire_shock'],
     desc: '灼灼的融合形态，高速度的火焰刺客，多段灼烧爆发。',
@@ -83,7 +83,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.4 }, rank: 2,
   },
   sisi: {
-    id: 'sisi', name: '棘尾', emoji: '🦂',
+    id: 'sisi', name: '棘尾', emoji: '🦂', image: '/04-1.png',
     baseHp: 16, baseSpd: 3,
     skills: ['weaken', 'provoke', 'thorn_skill'],
     desc: '刺刺的融合形态，控制+反伤的肉盾，擅长削弱和限制敌人。',
@@ -92,7 +92,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.4 }, rank: 2,
   },
   gora: {
-    id: 'gora', name: '铁卫', emoji: '🐊',
+    id: 'gora', name: '铁卫', emoji: '🐊', image: '/05-1.png',
     baseHp: 19, baseSpd: 2,
     skills: ['steel_spike', 'shield_skill', 'shield_counter'],
     desc: '铁墩的融合形态，高血铁壁，护盾防御的铁壁坦克。',
@@ -101,7 +101,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.4 }, rank: 2,
   },
   mimi_king: {
-    id: 'mimi_king', name: '蟒影', emoji: '🐍',
+    id: 'mimi_king', name: '蟒影', emoji: '🐍', image: '/06-1.png',
     baseHp: 17, baseSpd: 4,
     skills: ['poison_sting', 'shadow_strike', 'shadow_claw'],
     desc: '咪咪的融合形态，毒系影袭刺客，优先猎杀后排。',
@@ -110,7 +110,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.4 }, rank: 2,
   },
   gora_god: {
-    id: 'gora_god', name: '铁壁神', emoji: '🗿',
+    id: 'gora_god', name: '铁壁神', emoji: '🗿', image: '/05-2.png',
     baseHp: 30, baseSpd: 3,
     skills: ['steel_spike', 'iron_domain', 'shield_quake', 'iron_double', 'shield_skill'],
     desc: '铁墩的最终形态，每回合伤害上限10点的不朽堡垒，为队友提供护盾保护。',
@@ -118,7 +118,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.3 }, rank: 3,
   },
   mimi_god: {
-    id: 'mimi_god', name: '深渊蛇王', emoji: '👹',
+    id: 'mimi_god', name: '深渊蛇王', emoji: '👹', image: '/06-2.png',
     baseHp: 26, baseSpd: 6,
     skills: ['poison_sting', 'shadow_strike', 'poison_mist', 'toxic_bite'],
     desc: '咪咪的最终形态，蛇狩被动可无视护盾+真实伤害，淬毒噬咬对中毒目标伤害翻倍。',
@@ -126,7 +126,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.3 }, rank: 3,
   },
   sisi_god: {
-    id: 'sisi_god', name: '棘刺王', emoji: '🦂',
+    id: 'sisi_god', name: '棘刺王', emoji: '🦂', image: '/04-2.png',
     baseHp: 30, baseSpd: 4,
     skills: ['thorn_skill', 'steel_spike', 'revenge_thorn', 'group_taunt'],
     desc: '刺刺的最终形态，荆棘反伤坦克，受击越多反伤越痛，控制+反伤的极致肉盾。',
@@ -134,7 +134,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.3 }, rank: 3,
   },
   momo_god: {
-    id: 'momo_god', name: '迅天', emoji: '🐉',
+    id: 'momo_god', name: '迅天', emoji: '🐉', image: '/01-2.png',
     baseHp: 30, baseSpd: 6,
     skills: ['wind_flash', 'wind_feather', 'whirlwind', 'swift_strike'],
     desc: '迅迅最终形态，疾风连携越打越快，速度差转伤害，高速刺客。',
@@ -142,7 +142,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.3 }, rank: 3,
   },
   lulu_god: {
-    id: 'lulu_god', name: '泡泡龙神', emoji: '🐳',
+    id: 'lulu_god', name: '泡泡龙神', emoji: '🐳', image: '/03-2.png',
     baseHp: 32, baseSpd: 4,
     skills: ['tidal_domain', 'heal_light', 'water_shot', 'wave'],
     desc: '泡泡最终形态，生命之泉每回合回血+大额伤害减免，水幕护盾保护全体。',
@@ -150,7 +150,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.3 }, rank: 3,
   },
   fifi_god: {
-    id: 'fifi_god', name: '灼天', emoji: '🐲',
+    id: 'fifi_god', name: '灼天', emoji: '🐲', image: '/02-2.png',
     baseHp: 22, baseSpd: 7,
     skills: ['burn_burst', 'roar', 'flame_shield', 'flame_slash', 'flame_combo'],
     desc: '灼灼最终形态，余烬焚身对灼烧目标伤害叠加上限+5，焚身爆全体爆发。',
