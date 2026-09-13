@@ -130,7 +130,7 @@ const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_THORN_DEBUFF = /^(.+?) 的「荆棘」反噬，受到 (\d+) 点伤害$/;
 const RE_COUNTER = /^(.+?) 的「(.+?)」反击 (.+?) (\d+) 点并降低目标攻击\d+层$/;
 const RE_DEBUFF = /^(.+?) 使用「(.+?)」，(?:([^ ，]+) )?(中毒|灼烧|降低攻击|降低速度|眩晕)(?: \d+ 层)?$/;
-const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+)$/;
+const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+?)(?:，回复 (\d+) 点生命)?$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
 const RE_CHAIN_LINK = /^(.+?) 使用「(.+?)」！(.+?) 和 (.+?) 被锁链连接$/;
@@ -299,7 +299,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     const actorUid = entry.actorUid ?? findUid(b, side, m[1]);
     const targetName = m[3];
     const targetUid = entry.targetUid ?? (targetName === '自身' ? actorUid : findUid(b, side, targetName));
-    return { kind: 'buff', actorUid, targetUid, value: 0, skillName: m[2], addsStatus: entry.addsStatus, hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+    return { kind: 'buff', actorUid, targetUid, value: m[4] ? Number(m[4]) : 0, skillName: m[2], addsStatus: entry.addsStatus, hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   if ((m = text.match(RE_DOT))) {
     return {
@@ -715,6 +715,12 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               ++fxSeq; capturedTargetSeq = fxSeq;
               setFx((p) => ({ ...p, [ev.secondTargetUid!]: { cls: buffCls, seq: capturedTargetSeq } }));
               setPops((p) => [...p, { id: popId, uid: ev.secondTargetUid!, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
+            }
+            // 回血效果：buff 技能带 heal 值时，额外显示 +N 绿色飘字
+            if (ev.value > 0 && targetUid) {
+              ++fxSeq;
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-heal', seq: fxSeq } }));
+              setPops((p) => [...p, { id: ++popSeq, uid: targetUid, text: `+${ev.value}`, heal: true }]);
             }
           } else if (ev.kind === 'speed') {
             if (targetUid) {

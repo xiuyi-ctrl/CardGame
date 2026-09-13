@@ -427,9 +427,29 @@ function startRound(b: BattleState): BattleState {
       }
     } else {
       if (res.unit.speciesId.startsWith('boss_minion_')) {
+        const msgDead = `${res.unit.name} 被击倒了`;
+        nb = pushLog(nb, msgDead, sideOf(res.unit), res.unit.uid, res.unit.uid, undefined, undefined,
+          spans(msgDead, [['target', res.unit.name]]));
         nb = applyRockShardDeath(nb, res.unit);
         nb = applyToxicBurstDeath(nb, res.unit);
         nb = applyEmberDeath(nb, res.unit);
+        // 灵魂链接：死亡时为幽灵船长+1灵魂
+        const deadP = getUnitPassive(res.unit);
+        if (deadP?.kind === 'ghostSoul') {
+          const allies = res.unit.isPlayer ? nb.playerUnits : nb.enemyUnits;
+          const ghostCaptain = allies.find((u) => u.speciesId === 'boss_ghost' && u.hp > 0);
+          if (ghostCaptain) {
+            const curSoul = ghostCaptain.soul ?? 0;
+            if (curSoul < 20) {
+              const newSoul = curSoul + 1;
+              nb = replaceUnit(nb, { ...ghostCaptain, soul: newSoul });
+              nb = pushLog(nb, `${res.unit.name} 的「灵魂链接」触发！${ghostCaptain.name} 获得 1 个灵魂（共 ${newSoul}）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+              if (newSoul === 5) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+              else if (newSoul === 10) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+              else if (newSoul === 20) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+            }
+          }
+        }
       }
       nb = replaceUnit(nb, res.unit);
     }
@@ -1498,7 +1518,7 @@ function resolveAttack(
     if (t2.hp <= 0) break;
     if (seg > 0) {
       const tgtPassive = getUnitPassive(t2);
-      if ((tgtPassive?.kind === 'bigHitGuard' || tgtPassive?.kind === 'lifeSpring') && seg > tgtPassive.value) {
+      if (tgtPassive?.kind === 'bigHitGuard' && seg > tgtPassive.value) {
         seg = seg - 2;
       }
       if (tgtPassive?.kind === 'damageCap') {
@@ -1540,7 +1560,7 @@ function resolveAttack(
               p2 = { ...p2, shield: p2.shield - absorbed };
               if (p2.shield <= 0) p2 = { ...p2, statuses: p2.statuses.filter((s) => s.kind !== 'shield') };
             }
-            const actualDmg = chainDmg - Math.min(partner.shield, chainDmg);
+            const actualDmg = chainDmg - Math.min(p2.shield, chainDmg);
             p2 = { ...p2, hp: Math.max(0, p2.hp - actualDmg) };
             nb = replaceUnit(nb, p2);
             nb = pushLog(nb, `🔗 锁链传导！${partner.name} 受到 ${chainDmg} 点伤害`, sideOf(partner), t2.uid, partner.uid);
@@ -1850,7 +1870,7 @@ function resolveAttack(
   if (t2.hp <= 0 && t2.statuses.some((s) => s.kind === 'chainLink')) {
     const chain = t2.statuses.find((s) => s.kind === 'chainLink');
     if (chain?.sourceUid) {
-      const allies = t2.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const allies = t2.isPlayer ? nb.enemyUnits : nb.playerUnits;
       const master = allies.find((u) => u.hp > 0 && getUnitPassive(u)?.kind === 'chainMaster');
       if (master) {
         const healAmt = Math.floor(master.maxHp * 0.15);
@@ -1928,9 +1948,12 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           }
         }
         nb = replaceUnit(nb, buffed);
-        const msgBuff = `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}`;
+        const healPart = (skill.heal && skill.heal > 0) ? `，回复 ${skill.heal} 点生命` : '';
+        const msgBuff = `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}${healPart}`;
+        const buffSpans: [LogSpan['kind'], string][] = [['actor', actor.name], ['skill', skill.name]];
+        if (skill.heal && skill.heal > 0) buffSpans.push(['heal', `${skill.heal}`]);
         nb = pushLog(nb, msgBuff, sideOf(actor), actor.uid, t.uid, undefined, undefined,
-          spans(msgBuff, [['actor', actor.name], ['skill', skill.name]]));
+          spans(msgBuff, buffSpans));
       }
     } else {
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor), actor.uid, actor.uid);
