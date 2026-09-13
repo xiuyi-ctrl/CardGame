@@ -26,6 +26,16 @@ const EMPTY_ROW: MapNode[] = [];
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
 
+  // 预加载自定义宠物图片，避免切换界面时延迟显示
+  useEffect(() => {
+    for (const m of Object.values(MONSTERS)) {
+      if (m.image) {
+        const img = new Image();
+        img.src = m.image;
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!NO_SAVE_SCREENS.includes(state.screen)) {
       const t = setTimeout(() => {
