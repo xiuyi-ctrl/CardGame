@@ -1,25 +1,23 @@
 /**
- * 熟练度远征模式 - 专属事件池（10个）
- * 围绕熟练度成长设计
+ * 成长远征模式 - 专属事件池（10个）
+ * 围绕成长点成长设计
  */
 import { pick, shuffle } from '../rng';
 import type { EventNode } from '../state/game';
 
-/** 事件类型 */
-export type ProficiencyEventType =
-  | 'ancient_arena'      // 远古训练场
-  | 'battle_master'      // 战斗大师
-  | 'soul_resonance'     // 灵魂共鸣
-  | 'skill_mentor'       // 技能导师
-  | 'mysterious_altar'   // 神秘祭坛
-  | 'expedition_supply'  // 远征补给
-  | 'pet_recruit'        // 生物招募
-  | 'arena_challenge'    // 训练场挑战
-  | 'stone_of_forget'    // 遗忘之石
-  | 'wheel_of_fate';     // 命运之轮
+export type GrowthEventType =
+  | 'ancient_arena'
+  | 'battle_master'
+  | 'soul_resonance'
+  | 'skill_mentor'
+  | 'mysterious_altar'
+  | 'expedition_supply'
+  | 'pet_recruit'
+  | 'arena_challenge'
+  | 'stone_of_forget'
+  | 'wheel_of_fate';
 
-/** 所有事件类型 */
-export const PROFICIENCY_EVENT_TYPES: ProficiencyEventType[] = [
+export const GROWTH_EVENT_TYPES: GrowthEventType[] = [
   'ancient_arena',
   'battle_master',
   'soul_resonance',
@@ -32,8 +30,7 @@ export const PROFICIENCY_EVENT_TYPES: ProficiencyEventType[] = [
   'wheel_of_fate',
 ];
 
-/** 事件名称映射 */
-export const PROFICIENCY_EVENT_NAMES: Record<ProficiencyEventType, string> = {
+export const GROWTH_EVENT_NAMES: Record<GrowthEventType, string> = {
   ancient_arena: '远古训练场',
   battle_master: '战斗大师',
   soul_resonance: '灵魂共鸣',
@@ -46,23 +43,21 @@ export const PROFICIENCY_EVENT_NAMES: Record<ProficiencyEventType, string> = {
   wheel_of_fate: '命运之轮',
 };
 
-/** 生成熟练度远征模式事件 */
-export function buildProficiencyEvent(rng: () => number, eventType?: ProficiencyEventType): EventNode {
-  const type = eventType ?? pick(rng, PROFICIENCY_EVENT_TYPES);
-  return buildProficiencyEventByType(type);
+export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType): EventNode {
+  const type = eventType ?? pick(rng, GROWTH_EVENT_TYPES);
+  return buildGrowthEventByType(type);
 }
 
-/** 按类型构建事件 */
-function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
+function buildGrowthEventByType(type: GrowthEventType): EventNode {
   switch (type) {
     case 'ancient_arena':
       return {
         title: '远古训练场',
         desc: '你发现了一座古老的训练场，空气中弥漫着战斗的气息。',
         choices: [
-          { id: 'pa-train-core', label: '训练核心', desc: '选择 1 只宠物，获得 3 熟练度', kind: 'boost', boostStat: 'hp', proficiencyGain: 3 },
-          { id: 'pa-train-all', label: '训练全队', desc: '全队获得 1 熟练度', kind: 'none', teamProficiencyGain: 1 },
-          { id: 'pa-leave', label: '离开', desc: '无事发生', kind: 'none' },
+          { id: 'ga-train-core', label: '训练核心', desc: '选择 1 只宠物，获得 2 成长点', kind: 'boost', boostStat: 'hp', growthPointGain: 2 },
+          { id: 'ga-train-all', label: '训练全队', desc: '全队各获得 1 成长点', kind: 'none' },
+          { id: 'ga-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
     case 'battle_master':
@@ -70,9 +65,9 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '战斗大师',
         desc: '一位隐居的战斗大师愿意指导你。',
         choices: [
-          { id: 'pm-learn', label: '拜师学艺', desc: '选择 1 只宠物，获得 2 熟练度 + 1 成长点', kind: 'boost', boostStat: 'hp', proficiencyGain: 2, growthPointGain: 1 },
-          { id: 'pm-duel', label: '切磋', desc: '战斗（1 只精英），胜利后获得 1 成长点', kind: 'battle', battleEnemies: [{ speciesId: 'momo_queen' }], battleReward: { kind: 'gold', amount: 30 }, battlePenalty: { percent: 20 } },
-          { id: 'pm-leave', label: '离开', desc: '无事发生', kind: 'none' },
+          { id: 'gm-learn', label: '拜师学艺', desc: '选择 1 只宠物，获得 2 成长点', kind: 'boost', boostStat: 'hp', growthPointGain: 2 },
+          { id: 'gm-duel', label: '切磋', desc: '战斗（1 只精英），胜利后获得 30 金币', kind: 'battle', battleEnemies: [{ speciesId: 'momo_queen' }], battleReward: { kind: 'gold', amount: 30 }, battlePenalty: { percent: 20 } },
+          { id: 'gm-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
     case 'soul_resonance':
@@ -100,8 +95,8 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '神秘祭坛',
         desc: '一座古老的祭坛散发着神秘的光芒。',
         choices: [
-          { id: 'ma-sacrifice', label: '献祭', desc: '放生 1 只宠物，全队获得 5 熟练度', kind: 'sacrifice', teamProficiencyGain: 5 },
-          { id: 'ma-pray', label: '祈祷', desc: '消耗 20 金币，全队获得 2 熟练度', kind: 'gold', goldDelta: -20, teamProficiencyGain: 2 },
+          { id: 'ma-pray', label: '祈祷', desc: '消耗 20 金币，选择 1 只宠物获得 3 成长点', kind: 'boost', boostStat: 'hp', amount: 0, goldDelta: -20, growthPointGain: 3 },
+          { id: 'ma-bless', label: '祈福', desc: '选择 1 只宠物，获得 3 成长点', kind: 'boost', boostStat: 'hp', growthPointGain: 3 },
           { id: 'ma-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -130,7 +125,7 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '训练场挑战',
         desc: '训练场守卫向你发起挑战。',
         choices: [
-          { id: 'ac-accept', label: '接受挑战', desc: '战斗（2 只敌人），胜利后全队 +2 熟练度', kind: 'battle', battleEnemies: [{ speciesId: 'momo' }, { speciesId: 'lulu' }], battleReward: { kind: 'gold', amount: 25 }, battlePenalty: { percent: 15 }, teamProficiencyGain: 2 },
+          { id: 'ac-accept', label: '接受挑战', desc: '战斗（2 只敌人），胜利后获得 25 金币', kind: 'battle', battleEnemies: [{ speciesId: 'momo' }, { speciesId: 'lulu' }], battleReward: { kind: 'gold', amount: 25 }, battlePenalty: { percent: 15 } },
           { id: 'ac-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -148,7 +143,7 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '命运之轮',
         desc: '一个神秘的轮盘，似乎可以决定你的命运。',
         choices: [
-          { id: 'wf-bet', label: '投入 20 金', desc: '50% 获得 5 熟练度，50% 全亏', kind: 'gold', goldDelta: -20 },
+          { id: 'wf-bet', label: '投入 20 金', desc: '消耗 20 金币，选择 1 只宠物获得 2 成长点', kind: 'boost', boostStat: 'hp', amount: 0, goldDelta: -20, growthPointGain: 2 },
           { id: 'wf-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -161,7 +156,6 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
   }
 }
 
-/** 获取随机事件类型（不重复） */
-export function getRandomEventTypes(rng: () => number, count: number): ProficiencyEventType[] {
-  return shuffle(rng, [...PROFICIENCY_EVENT_TYPES]).slice(0, count);
+export function getRandomGrowthEventTypes(rng: () => number, count: number): GrowthEventType[] {
+  return shuffle(rng, [...GROWTH_EVENT_TYPES]).slice(0, count);
 }

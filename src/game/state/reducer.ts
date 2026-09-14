@@ -1,5 +1,5 @@
-import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks } from './game';
-import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, PROF_FIELD_MAX, PROF_ROSTER_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
+import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -8,20 +8,15 @@ import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
-import { generateProficiencyMap, getProficiencyEncounter, getProficiencyEliteEncounter } from '../core/proficiency-map';
-import { settleBattleProficiency, SLOT3_COST, SLOT4_COST, getRandomSkillChoices } from '../core/proficiency';
-import { PROFICIENCY_SHOP_ITEMS, getShopStock } from '../data/proficiency-shop';
-import { buildProficiencyEvent } from '../data/proficiency-events';
-import { getSpecialRewards, PROFICIENCY_SPECIAL_REWARDS } from '../data/proficiency-special';
-import { PROFICIENCY_MASTER, PROFICIENCY_PUPPET } from '../data/proficiency-boss';
+import { SLOT3_COST, SLOT4_COST, getRandomSkillChoices } from '../core/growth';
+import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
+import { buildGrowthEvent } from '../data/growth-events';
+import { getGrowthShopStock } from '../data/growth-shop';
+import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-special';
+import { GROWTH_MASTER, GROWTH_PUPPET } from '../data/growth-boss';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
-}
-
-/** 根据运行模式返回队伍上限 */
-function rosterMax(runMode?: 'main' | 'proficiency'): number {
-  return runMode === 'proficiency' ? PROF_ROSTER_MAX : ROSTER_MAX;
 }
 
 /** 钥匙门节点：是否已持有对应守卫的专用钥匙 */
@@ -104,14 +99,17 @@ export type GameAction =
   | { type: 'SET_PRERUN_CONFIG'; difficulty: Difficulty; relic?: string }
   | { type: 'START_PROFICIENCY'; seed: number; saveSlot?: number }
   | { type: 'START_PROFICIENCY_PICKED'; seed: number; saveSlot?: number; starterId: string; companionId: string }
-  | { type: 'PROF_GROWTH_MENU'; uid: string }
+  | { type: 'PROF_GROWTH_APPLY'; uid: string; updatedUnit: Unit }
+  | { type: 'PROF_GROWTH_MENU' }
+  | { type: 'PROF_SLOT_PICK'; skillId: string }
+  | { type: 'PROF_SLOT_CANCEL' }
+  | { type: 'PROF_SLOT_UNLOCK'; uid: string; slot: 3 | 4 }
   | { type: 'PROF_SHOP_BUY'; itemId: string }
   | { type: 'PROF_SHOP_REFRESH' }
   | { type: 'PROF_REST' }
-  | { type: 'PROF_GROWTH_APPLY'; uid: string; updatedUnit: Unit }
-  | { type: 'PROF_SLOT_UNLOCK'; uid: string; slot: 3 | 4 }
-  | { type: 'PROF_SLOT_PICK'; skillId: string }
-  | { type: 'PROF_SLOT_CANCEL' };
+  | { type: 'PROF_SHOP_EFFECT'; uid: string }
+  | { type: 'PROF_SKILL_REPLACE_START'; uid: string }
+  | { type: 'PROF_SKILL_REPLACE_SELECT'; replaceIdx: number };
 
 export function createInitialState(): GameState {
   const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
@@ -140,7 +138,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'proficiency-select', 'proficiency-result', 'skill-pick', 'growth-menu'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'skill-pick', 'growth-menu'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -216,38 +214,6 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
   };
 }
 
-function freshProficiencyRun(seed: number, saveSlot?: number, starterId?: string, companionId?: string): GameState {
-  const s1 = makeUnit(starterId ?? 'momo', true, 0, false);
-  const s2 = makeUnit(companionId ?? 'lulu', true, 1, false);
-  const roster = [s1, s2];
-  const map = generateProficiencyMap(seed);
-  const firstNode = map.layers[0]?.[0];
-  return {
-    screen: 'map',
-    seed,
-    act: 1,
-    map,
-    currentRow: 0,
-    currentNodeId: firstNode?.id ?? '',
-    roster,
-    field: roster.map((u) => u.uid),
-    inventory: {},
-    gold: 30,
-    rewards: [],
-    log: ['进入熟练度远征模式'],
-    visitedWatchtowers: [],
-    visitedNodeIds: firstNode ? [firstNode.id] : [],
-    runMode: 'proficiency',
-    currentLayer: 1,
-    proficiencyStats: { totalProficiency: 0, totalGrowthPoints: 0, battlesWon: 0, battlesLost: 0, kills: 0 },
-    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 } },
-    difficulty: 'normal',
-    unlocks: { ...DEFAULT_UNLOCKS },
-    relics: [],
-    saveSlot,
-  };
-}
-
 function healRoster(state: GameState, pct: number): GameState {
   return {
     ...state,
@@ -286,7 +252,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
 
   // 驯服入库：先填满空位，超出的进入溢出队列（等待玩家处理：替换/融合/放弃）
   let overflow: Unit[] = [];
-  const cap = rosterMax(state.runMode);
+  const cap = ROSTER_MAX;
   for (const t of battle.pendingTame) {
     if (roster.length < cap) roster.push(t);
     else overflow.push(t);
@@ -314,7 +280,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   // 本场战斗结束：进入奖励结算
   const settled: GameState = {
     ...state,
-    screen: overflow.length > 0 ? 'tame-overflow' : 'reward',
+    screen: overflow.length > 0 ? 'tame-overflow' : (state.runMode === 'proficiency' ? 'growth-menu' : 'reward'),
     roster,
     field: state.field.filter((uid) => roster.some((r) => r.uid === uid)),
     gold: state.gold + goldGain,
@@ -331,9 +297,9 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       ...state.log,
     ].slice(0, 20),
   };
-  // 战后全体恢复 60%（熟练度远征模式 80%）
+  // 战后全体恢复 60%
   const healCfg = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'];
-  const healRatio = state.runMode === 'proficiency' ? 0.8 : healCfg.healRatio;
+  const healRatio = healCfg.healRatio;
   const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * healRatio)) }));
   let rewards = challenge
     ? generateChallengeRewards({ ...settled, roster: healed }, node!.type as 'arena' | 'gauntlet')
@@ -355,37 +321,18 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     tameAttempts: result.runStats.tameAttempts + (battle.tameAttempts ?? 0),
     圣果Used: result.runStats.圣果Used + (battle.圣果Used ?? 0),
   } : result.runStats;
-  const withStats = { ...result, runStats };
-  // 熟练度远征模式：结算熟练度
+  // 成长点：仅远征模式，参战+1，存活+1
+  let finalRoster = result.roster;
   if (state.runMode === 'proficiency') {
-    const profResults = settleBattleProficiency(roster);
-    let totalProfGained = 0;
-    let totalGPGained = 0;
-    const updatedRoster = roster.map((u) => {
-      const pr = profResults.find((r) => r.uid === u.uid);
-      if (!pr) return u;
-      totalProfGained += pr.gained;
-      // 升级时获得成长点
-      if (pr.leveledUp) {
-        totalGPGained += 1;
-        return { ...u, growthPoints: (u.growthPoints ?? 0) + 1 };
-      }
-      return u;
+    finalRoster = result.roster.map((u) => {
+      const inBattle = [...battle.playerUnits, ...(battle.playerDown ?? [])].some((bu) => bu.uid === u.uid);
+      if (!inBattle) return u;
+      const survived = u.hp > 0;
+      const gp = (u.growthPoints ?? 0) + 1 + (survived ? 1 : 0);
+      return { ...u, growthPoints: gp };
     });
-    const ps = state.proficiencyStats ?? { totalProficiency: 0, totalGrowthPoints: 0, battlesWon: 0, battlesLost: 0, kills: 0 };
-    const newPs = {
-      ...ps,
-      totalProficiency: ps.totalProficiency + totalProfGained,
-      totalGrowthPoints: ps.totalGrowthPoints + totalGPGained,
-      battlesWon: ps.battlesWon + 1,
-    };
-    // Boss 击败后进入结算
-    if (bossNode) {
-      return { ...withStats, roster: updatedRoster, proficiencyStats: newPs, screen: 'proficiency-result', currentLayer: (state.currentLayer ?? 15) };
-    }
-    // 普通战斗后进入成长菜单
-    return { ...withStats, roster: updatedRoster, proficiencyStats: newPs, screen: 'growth-menu' };
   }
+  const withStats = { ...result, runStats, roster: finalRoster };
   // 最后一幕（act 3）首领战胜利：直接进入通关界面，不再弹出战利品/队伍管理等中间界面
   if (bossNode && state.act >= 3) return { ...withStats, screen: 'victory' };
   return withStats;
@@ -408,7 +355,7 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
 
 /** 进入一个地图节点：根据节点类型进入对应界面（MOVE 与 DEBUG_JUMP 共用） */
 function fieldUnits(state: GameState, maxCount?: number): Unit[] {
-  const limit = maxCount ?? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX);
+  const limit = maxCount ?? FIELD_MAX;
   const uids = state.field.length > 0 ? state.field : state.roster.slice(0, limit).map((u) => u.uid);
   return state.roster.filter((u) => uids.includes(u.uid)).slice(0, limit);
 }
@@ -421,30 +368,42 @@ function autoPosition(units: Unit[]): Unit[] {
 }
 
 function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?: string): GameState {
-  // 熟练度远征模式：特殊节点处理
+  // 成长远征模式：专属节点处理
   if (base.runMode === 'proficiency') {
     if (node.type === 'rest') return { ...base, screen: 'rest' };
     if (node.type === 'shop') {
       const rng = createRng(base.seed * 7919 + (base.currentLayer ?? 0) * 104729 + hashStr(node.id));
-      const stock = getShopStock(rng);
+      const stock = getGrowthShopStock(rng);
       const rs = base.runStats ? { ...base.runStats, shopVisits: base.runStats.shopVisits + 1 } : base.runStats;
       return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0, runStats: rs };
     }
     if (node.type === 'event') {
       const rng = createRng(base.seed * 3571 + (base.currentLayer ?? 0) * 9973 + hashStr(node.id));
-      const event = buildProficiencyEvent(rng);
+      const event = buildGrowthEvent(rng);
       return { ...base, screen: 'event', map: { ...base.map, events: { ...base.map.events, [node.id]: event } } };
     }
     if (node.type === 'special') {
       const rng = createRng(base.seed * 4919 + (base.currentLayer ?? 0) * 6131 + hashStr(node.id));
-      const specialIds = getSpecialRewards(rng);
-      const rewards = specialIds.map((id) => ({ ...PROFICIENCY_SPECIAL_REWARDS[id], kind: 'custom' as const }));
-      return { ...base, screen: 'special', map: { ...base.map, specials: { ...base.map.specials, [node.id]: { title: '奇遇关', desc: '选择一项奖励', rewards } } } };
+      const specialIds = getGrowthSpecialRewards(rng);
+      const rewards = specialIds.map((id) => {
+        const baseReward = { ...GROWTH_SPECIAL_REWARDS[id] };
+        const kindMap: Record<string, SpecialRewardKind> = {
+          growth_spring: 'gold',
+          growth_blessing: 'growthPoint',
+          stat_blessing: 'boost',
+          skill_blessing: 'slotUnlock',
+          skill_blessing_large: 'slotUnlock',
+          legend_recruit: 'recruit',
+          gold_treasure: 'gold',
+        };
+        return { ...baseReward, kind: kindMap[id] ?? 'custom' as const };
+      });
+      return { ...base, screen: 'special', map: { ...base.map, specials: { ...base.map.specials, [node.id]: { title: '奇遇', desc: '选择一项奖励', rewards } } } };
     }
     if (node.type === 'battle' || node.type === 'elite') {
       if (base.roster.length === 0) return { ...base, screen: 'map' };
       const rng = createRng(base.seed * 2731 + (base.currentLayer ?? 0) * 5039 + hashStr(node.id));
-      const encounter = node.type === 'elite' ? getProficiencyEliteEncounter(base.currentLayer ?? 1, rng) : getProficiencyEncounter(base.currentLayer ?? 1, rng);
+      const encounter = node.type === 'elite' ? getGrowthEliteEncounter(base.currentLayer ?? 1, rng) : getGrowthEncounter(base.currentLayer ?? 1, rng);
       const maxField = maxFieldForEnemy(encounter.length, base.runMode);
       const initial = autoPosition(fieldUnits(base, maxField));
       const options = { act: 1, nodeType: node.type as 'battle' | 'elite', difficulty: base.difficulty, untameable: true };
@@ -453,9 +412,9 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     if (node.type === 'boss') {
       if (base.roster.length === 0) return { ...base, screen: 'map' };
       const encounter = [
-        { speciesId: PROFICIENCY_MASTER.id },
-        { speciesId: PROFICIENCY_PUPPET.id },
-        { speciesId: PROFICIENCY_PUPPET.id },
+        { speciesId: GROWTH_MASTER.id },
+        { speciesId: GROWTH_PUPPET.id },
+        { speciesId: GROWTH_PUPPET.id },
       ];
       const maxField = maxFieldForEnemy(encounter.length, base.runMode);
       const initial = autoPosition(fieldUnits(base, maxField));
@@ -467,7 +426,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   // 主模式：原有逻辑
   if (node.type === 'rest') return { ...base, screen: 'rest' };
   if (node.type === 'shop') {
-    const rng = createRng(base.seed * 7919 + base.currentRow * 104729 + hashStr(node.id));
+    const rng = createRng(base.seed * 7919 + (base.currentRow) * 104729 + hashStr(node.id));
     const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
     const stock = shuffle(rng, pool).slice(0, 4);
     const rs = base.runStats ? { ...base.runStats, shopVisits: base.runStats.shopVisits + 1 } : base.runStats;
@@ -819,7 +778,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       } else if (choice.kind === 'item' && choice.itemId) {
         next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
-      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < rosterMax(state.runMode)) {
+      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
         next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
       } else if (choice.kind === 'damage') {
         next = {
@@ -828,13 +787,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         };
       } else if (choice.kind === 'battle' && choice.battleEnemies) {
         // 事件战斗：进入战斗界面
+        const reward = choice.battleReward ?? { kind: 'gold' as const, amount: choice.goldDelta ?? 0 };
+        const penalty = choice.battlePenalty ?? { percent: 15 };
         next = {
           ...next,
           screen: 'battle',
           eventBattle: {
             enemies: choice.battleEnemies,
-            reward: { kind: 'gold', amount: choice.goldDelta ?? 0 },
-            penalty: { percent: 15 },
+            reward,
+            penalty,
           },
         };
         return { ...next, log: ['进入事件战斗', ...next.log].slice(0, 20) };
@@ -871,7 +832,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           }),
         };
         const statCn = choice.boostStat === 'hp' ? '生命' : '速度';
-        next = { ...next, toast: { msg: `${boostedPet.name} 永久 +${choice.amount ?? 0} ${statCn}`, kind: 'success' } };
+        if ((choice.amount ?? 0) > 0) {
+          next = { ...next, toast: { msg: `${boostedPet.name} 永久 +${choice.amount} ${statCn}`, kind: 'success' } };
+        }
       } else if (choice.kind === 'purify') {
         // 清除诅咒：随机 1 只宠物
         const purifyIdx = next.roster.findIndex((u) => u.curse);
@@ -933,7 +896,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (choice.kind === 'item' && choice.itemId) {
         const it = ITEMS[choice.itemId];
         next = { ...next, toast: { msg: `${it?.emoji ?? '🎒'} ${it?.name ?? choice.itemId} ×1`, kind: 'success' } };
-      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length <= rosterMax(state.runMode)) {
+      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length <= ROSTER_MAX) {
         const m = getMonster(choice.monsterId);
         next = { ...next, toast: { msg: `招募了 ${m.emoji} ${m.name}！`, kind: 'success' } };
       } else if (choice.kind === 'purify') {
@@ -947,35 +910,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (choice.kind === 'status' && choice.statusKind === 'poison') {
         next = { ...next, toast: { msg: `全体中毒 ${choice.statusValue ?? 0} 层！`, kind: 'error' } };
       }
-      // 熟练度远征模式：处理熟练度/成长点效果
+      // 成长远征模式：处理成长点效果
       if (state.runMode === 'proficiency' && next.roster.length > 0) {
-        // 全队熟练度
-        if (choice.teamProficiencyGain && choice.teamProficiencyGain > 0) {
-          const gain = choice.teamProficiencyGain;
-          next = {
-            ...next,
-            roster: next.roster.map((u) => {
-              const prof = u.proficiency ?? 0;
-              const newProf = Math.min(55, prof + gain);
-              return { ...u, proficiency: newProf };
-            }),
-            toast: { msg: `全队获得 ${gain} 熟练度`, kind: 'success' },
-          };
-        }
-        // 目标宠物熟练度+成长点（boost 类型）
-        if (choice.kind === 'boost' && (choice.proficiencyGain || choice.growthPointGain || choice.resetGrowthPoints)) {
-          const boostIdx = next.roster.findIndex((u) => u.hp > 0);
-          if (boostIdx >= 0) {
+        // 目标宠物成长点（boost 类型）
+        if (choice.kind === 'boost' && (choice.growthPointGain || choice.resetGrowthPoints)) {
+          const boostTarget = next.roster.find((u) => u.hp > 0);
+          if (boostTarget) {
             next = {
               ...next,
-              roster: next.roster.map((u, i) => {
-                if (i !== boostIdx) return u;
+              roster: next.roster.map((u) => {
+                if (u.uid !== boostTarget.uid) return u;
                 let result = { ...u };
-                if (choice.proficiencyGain) {
-                  result = { ...result, proficiency: Math.min(55, (result.proficiency ?? 0) + choice.proficiencyGain) };
-                }
                 if (choice.growthPointGain) {
-                  result = { ...result, growthPoints: (result.growthPoints ?? 0) + choice.growthPointGain };
+                  result = { ...result, growthPoints: (result.growthPoints ?? 0) + (choice.growthPointGain as number) };
                 }
                 if (choice.resetGrowthPoints) {
                   // 重置成长点：返还所有属性加成
@@ -988,9 +935,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
                 return result;
               }),
             };
-            if (choice.proficiencyGain) {
-              next = { ...next, toast: { msg: `获得 ${choice.proficiencyGain} 熟练度`, kind: 'success' } };
-            }
             if (choice.growthPointGain) {
               next = { ...next, toast: { msg: `获得 ${choice.growthPointGain} 成长点`, kind: 'success' } };
             }
@@ -1015,7 +959,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const ev = state.map.events[state.currentNodeId];
       const choice = ev?.choices.find((x) => x.id === choiceId);
       if (choice && choice.kind === 'recruit' && choice.monsterId) {
-        if (next.roster.length < rosterMax(state.runMode)) {
+        if (next.roster.length < ROSTER_MAX) {
           next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
         } else {
           const hatched = makeUnit(choice.monsterId, true, 0, false);
@@ -1115,6 +1059,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       let next: GameState = { ...state };
       switch (reward.kind) {
         case 'gold':
+          // 成长之泉：全队+2成长点
+          if (reward.id === 'growth_spring') {
+            next = {
+              ...next,
+              roster: next.roster.map((u) => ({ ...u, growthPoints: (u.growthPoints ?? 0) + 2 })),
+            };
+            return { ...next, screen: 'map', postBattle: undefined, log: [`奇遇关：${reward.label}`, ...next.log].slice(0, 20) };
+          }
           next = { ...next, screen: 'map', postBattle: undefined, gold: next.gold + (reward.amount ?? 0) };
           break;
         case 'item':
@@ -1131,8 +1083,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           if (next.roster.length === 0) return state;
           next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' } };
           break;
+        case 'growthPoint':
+          if (next.roster.length === 0) return state;
+          next = { ...next, screen: 'roster', specialPending: { kind: 'growthPoint', uid: '', amount: reward.amount ?? 3 } };
+          break;
+        case 'slotUnlock':
+          if (next.roster.length === 0) return state;
+          // 技能之赐（大）给 slot=4，技能之赐给 slot=3
+          const slotNum: 3 | 4 = reward.id === 'skill_blessing_large' ? 4 : 3;
+          next = { ...next, screen: 'roster', specialPending: { kind: 'shopSlotUnlock', uid: '', slot: slotNum } };
+          break;
+        case 'recruit':
+          if (next.roster.length >= ROSTER_MAX) return state;
+          // 传奇招募：随机 rank 3 生物
+          const legendPool = ['momo_queen', 'lulu_king', 'fifi_king', 'mimi_king'];
+          const rngRecruit = createRng(state.seed + next.log.length * 31);
+          const pickId = legendPool[Math.floor(rngRecruit() * legendPool.length)];
+          next = { ...next, roster: [...next.roster, makeUnit(pickId, true, 0, false)], toast: { msg: `招募了 ${getMonster(pickId).name}！`, kind: 'success' } };
+          return { ...next, screen: 'map', postBattle: undefined, log: [`奇遇关：${reward.label}`, ...next.log].slice(0, 20) };
         case 'custom':
-          if (next.roster.length >= rosterMax(state.runMode)) return state;
+          if (next.roster.length >= ROSTER_MAX) return state;
           next = { ...next, screen: 'custom' };
           break;
       }
@@ -1165,15 +1135,37 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.specialPending?.kind === 'growthPoint') {
         const target = state.roster.find((u) => u.uid === action.uid);
         if (!target) return state;
+        const amount = state.specialPending.amount ?? 1;
         const updated = state.roster.map((u) =>
-          u.uid === target.uid ? { ...u, growthPoints: (u.growthPoints ?? 0) + 1 } : u,
+          u.uid === target.uid ? { ...u, growthPoints: (u.growthPoints ?? 0) + amount } : u,
         );
         return {
           ...state,
           roster: updated,
           specialPending: undefined,
           screen: 'shop',
-          toast: { msg: `${target.name} 获得 1 成长点`, kind: 'success' },
+          toast: { msg: `${target.name} 获得 ${amount} 成长点`, kind: 'success' },
+        };
+      }
+      if (state.specialPending?.kind === 'shopSlotUnlock') {
+        const target = state.roster.find((u) => u.uid === action.uid);
+        if (!target) return state;
+        const slotNum = state.specialPending.slot;
+        const extraSlots = target.extraSkillSlots ?? 0;
+        const maxSlots = slotNum === 3 ? 1 : 2;
+        if (extraSlots >= maxSlots) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '技能槽已满', kind: 'warning' } };
+        const updatedUnit = { ...target, extraSkillSlots: extraSlots + 1 };
+        const rng = createRng(state.seed + (action.uid.charCodeAt(0) << 8) + (slotNum === 4 ? 1 : 0));
+        const choices = getRandomSkillChoices(updatedUnit, 3, rng);
+        if (choices.length === 0) {
+          return { ...state, roster: state.roster.map((u) => u.uid === action.uid ? updatedUnit : u), specialPending: undefined, screen: 'map' };
+        }
+        return {
+          ...state,
+          roster: state.roster.map((u) => u.uid === action.uid ? updatedUnit : u),
+          specialPending: undefined,
+          screen: 'skill-pick',
+          skillPick: { uid: action.uid, slot: slotNum, choices },
         };
       }
       if (state.specialPending?.kind === 'arena') {
@@ -1216,7 +1208,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'PICK_CUSTOM': {
       if (state.screen !== 'custom') return state;
-      if (state.roster.length >= rosterMax(state.runMode)) return state;
+      if (state.roster.length >= ROSTER_MAX) return state;
       if (!CUSTOM_PRESETS.some((p) => p === action.presetId)) return state;
       const rng = createRng(state.seed * 7 + state.act * 13 + state.roster.length * 3 + state.currentRow);
       const unit = makeCustomUnit(action.presetId, rng);
@@ -1567,7 +1559,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (reward.kind === 'heal') {
         next = healRoster(next, (reward.amount ?? 30) / 100);
       } else if (reward.kind === 'recruit' && reward.monsterId) {
-        if (next.roster.length < rosterMax(state.runMode)) {
+        if (next.roster.length < ROSTER_MAX) {
           const u = makeUnit(reward.monsterId, true, 0, false);
           next = { ...next, roster: [...next.roster, u], toast: { msg: `招募了 ${u.name}！`, kind: 'success' } };
         } else {
@@ -1588,7 +1580,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_FIELD': {
       const isBoss = !!state.map.boss[state.currentNodeId];
       const enemyCount = state.formation?.encounter?.length ?? 1;
-      const maxField = isBoss ? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX) : maxFieldForEnemy(enemyCount, state.runMode);
+      const maxField = isBoss ? (state.runMode === 'proficiency' ? FIELD_MAX : FIELD_MAX) : maxFieldForEnemy(enemyCount, state.runMode);
       const uids = action.uids.filter((uid) => state.roster.some((u) => u.uid === uid)).slice(0, maxField);
       return { ...state, field: uids };
     }
@@ -1701,7 +1693,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'TAME_OVERFLOW_JOIN': {
       const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
       if (!tame) return state;
-      if (state.roster.length >= rosterMax(state.runMode)) return state;
+      if (state.roster.length >= ROSTER_MAX) return state;
       const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
       const next: GameState = {
         ...state,
@@ -1920,7 +1912,35 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'START_PROFICIENCY_PICKED': {
-      return freshProficiencyRun(action.seed, action.saveSlot, action.starterId, action.companionId);
+      const s1 = makeUnit(action.starterId ?? 'momo', true, 0, false);
+      const s2 = makeUnit(action.companionId ?? 'lulu', true, 1, false);
+      const roster = [s1, s2];
+      const map = generateGrowthMap(action.seed);
+      const firstNode = map.layers[0]?.[0];
+      return {
+        screen: 'map',
+        seed: action.seed,
+        act: 1,
+        map,
+        currentRow: 0,
+        currentNodeId: firstNode?.id ?? '',
+        roster,
+        field: roster.map((u) => u.uid),
+        inventory: {},
+        gold: 30,
+        rewards: [],
+        log: ['进入成长远征模式'],
+        visitedWatchtowers: [],
+        visitedNodeIds: firstNode ? [firstNode.id] : [],
+        runMode: 'proficiency',
+        currentLayer: 1,
+        proficiencyStats: { totalProficiency: 0, totalGrowthPoints: 0, battlesWon: 0, battlesLost: 0, kills: 0 },
+        runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 } },
+        difficulty: 'normal',
+        unlocks: { ...DEFAULT_UNLOCKS },
+        relics: [],
+        saveSlot: action.saveSlot,
+      } as GameState;
     }
 
     case 'PROF_GROWTH_APPLY': {
@@ -1935,6 +1955,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'PROF_SLOT_PICK': {
+      // 替换技能模式：替换指定位置的技能
+      if (state.skillReplace && state.skillReplace.replaceIdx >= 0) {
+        const unit = state.roster.find((u) => u.uid === state.skillReplace!.uid);
+        if (!unit) return state;
+        const idx = state.skillReplace.replaceIdx;
+        if (idx < 0 || idx >= unit.skills.length) return state;
+        const newSkills = [...unit.skills];
+        newSkills[idx] = action.skillId;
+        const updatedUnit = { ...unit, skills: newSkills };
+        return {
+          ...state,
+          roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
+          screen: 'growth-menu',
+          skillReplace: undefined,
+          skillPick: undefined,
+        };
+      }
+      // 技能槽解锁模式：追加新技能
       if (!state.skillPick) return state;
       const unit = state.roster.find((u) => u.uid === state.skillPick!.uid);
       if (!unit) return state;
@@ -1948,7 +1986,39 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'PROF_SLOT_CANCEL': {
-      return { ...state, screen: 'growth-menu', skillPick: undefined };
+      return { ...state, screen: 'growth-menu', skillPick: undefined, skillReplace: undefined };
+    }
+
+    case 'PROF_SKILL_REPLACE_START': {
+      const unit = state.roster.find((u) => u.uid === action.uid);
+      if (!unit) return state;
+      const gp = unit.growthPoints ?? 0;
+      if (gp < 1) return state;
+      if (unit.skills.length === 0) return state;
+      // 扣1成长点
+      const updatedUnit = { ...unit, growthPoints: gp - 1 };
+      // 生成3个随机技能（排除已学）
+      const rng = createRng(state.seed + (unit.uid.charCodeAt(0) << 8) + 99);
+      const choices = getRandomSkillChoices(updatedUnit, 3, rng);
+      if (choices.length === 0) {
+        return { ...state, roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)), screen: 'growth-menu' };
+      }
+      return {
+        ...state,
+        roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
+        screen: 'skill-pick',
+        skillReplace: { uid: unit.uid, replaceIdx: -1, choices },
+        skillPick: undefined,
+      };
+    }
+
+    case 'PROF_SKILL_REPLACE_SELECT': {
+      if (!state.skillReplace) return state;
+      const replaceIdx = action.replaceIdx;
+      return {
+        ...state,
+        skillReplace: { ...state.skillReplace, replaceIdx },
+      };
     }
 
     case 'PROF_SLOT_UNLOCK': {
@@ -1978,10 +2048,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'PROF_SHOP_BUY': {
       const itemId = action.itemId;
-      const itemDef = PROFICIENCY_SHOP_ITEMS[itemId as keyof typeof PROFICIENCY_SHOP_ITEMS];
-      if (!itemDef) return state;
-      if (state.gold < itemDef.price) return state;
-      let next: GameState = { ...state, gold: state.gold - itemDef.price, shopBought: true };
+      // 简单价格表（替代已删除的 PROFICIENCY_SHOP_ITEMS）
+      const shopPrices: Record<string, number> = {
+        heal_potion: 8, gold_bag: 10, book_small: 12, book_large: 20,
+        growth_stone: 15, stat_boost: 18, slot_unlock: 25, skill_replace: 12, forget_stone: 10, pet_recruit: 20,
+      };
+      const price = shopPrices[itemId] ?? 0;
+      if (price <= 0) return state;
+      if (state.gold < price) return state;
+      let next: GameState = { ...state, gold: state.gold - price, shopBought: true };
       const boughtItems = [...(state.shopBoughtItems ?? []), itemId];
       next = { ...next, shopBoughtItems: boughtItems };
       // 执行效果
@@ -1991,25 +2066,25 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (itemId === 'gold_bag') {
         next = { ...next, gold: next.gold + 25, toast: { msg: '获得 25 金币', kind: 'success' } };
       } else if (itemId === 'book_small') {
-        // 熟练之书（小）：选择宠物时在队伍界面处理
-        next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' }, toast: { msg: '选择一只宠物获得 2 熟练度', kind: 'info' } };
+        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 1 }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
       } else if (itemId === 'book_large') {
-        next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' }, toast: { msg: '选择一只宠物获得 5 熟练度', kind: 'info' } };
+        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 2 }, toast: { msg: '选择一只宠物获得 2 成长点', kind: 'info' } };
       } else if (itemId === 'growth_stone') {
-        next = { ...next, specialPending: { kind: 'growthPoint' as const, uid: '' }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
+        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 1 }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
       } else if (itemId === 'stat_boost') {
-        next = { ...next, screen: 'boost', specialPending: { kind: 'boost', uid: '' } };
+        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopStatBoost' as const, uid: '' }, toast: { msg: '选择一只宠物永久 +5 生命 或 +2 速度', kind: 'info' } };
       } else if (itemId === 'slot_unlock') {
-        next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' }, toast: { msg: '选择一只宠物解锁技能槽', kind: 'info' } };
+        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopSlotUnlock' as const, uid: '', slot: 3 as const }, toast: { msg: '选择一只宠物解锁技能槽', kind: 'info' } };
       } else if (itemId === 'skill_replace') {
-        next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' }, toast: { msg: '选择一只宠物替换技能', kind: 'info' } };
+        // 技能替换：跳到成长界面选择宠物
+        next = { ...next, screen: 'growth-menu', toast: { msg: '选择一只宠物替换技能', kind: 'info' } };
       } else if (itemId === 'forget_stone') {
-        next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' }, toast: { msg: '选择一只宠物重置成长点', kind: 'info' } };
+        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopForget' as const, uid: '' }, toast: { msg: '选择一只宠物重置成长点', kind: 'info' } };
       } else if (itemId === 'pet_recruit') {
         const rng = createRng(state.seed * 1111 + Date.now());
         const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
         const pick = pool[Math.floor(rng() * pool.length)];
-        if (next.roster.length < rosterMax(state.runMode)) {
+        if (next.roster.length < ROSTER_MAX) {
           next = { ...next, roster: [...next.roster, makeUnit(pick, true, 0, false)], toast: { msg: `招募了 ${getMonster(pick).name}！`, kind: 'success' } };
         } else {
           next = { ...next, toast: { msg: '队伍已满，无法招募', kind: 'warning' } };
@@ -2023,8 +2098,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (refreshCount >= 3) return state;
       const cost = [5, 10, 15][refreshCount] ?? 15;
       if (state.gold < cost) return state;
-      const rng = createRng(state.seed * 7919 + (state.currentLayer ?? 0) * 104729 + refreshCount * 31337);
-      const newStock = getShopStock(rng);
+      const rng = createRng(state.seed * 7919 + (state.currentRow) * 104729 + refreshCount * 31337);
+      const allItems = ['heal_potion', 'gold_bag', 'book_small', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit'];
+      const newStock = shuffle(rng, allItems).slice(0, 4);
       return {
         ...state,
         gold: state.gold - cost,
@@ -2036,7 +2112,45 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'PROF_REST': {
-      return { ...healRoster(state, 0.5), screen: 'map', shopBought: true };
+      return { ...healRoster(state, 1), screen: 'map', shopBought: true };
+    }
+
+    case 'PROF_SHOP_EFFECT': {
+      const pending = state.specialPending;
+      if (!pending) return state;
+      const uid = action.uid;
+      const target = state.roster.find((u) => u.uid === uid);
+      if (!target) return state;
+      if (pending.kind === 'shopGrantGrowthPoint') {
+        const updated = state.roster.map((u) => u.uid === uid ? { ...u, growthPoints: (u.growthPoints ?? 0) + pending.amount } : u);
+        return { ...state, roster: updated, specialPending: undefined, screen: 'shop', toast: { msg: `${target.name} 获得 ${pending.amount} 成长点`, kind: 'success' } };
+      }
+      if (pending.kind === 'shopStatBoost') {
+        return { ...state, specialPending: { kind: 'boost', uid }, screen: 'boost' };
+      }
+      if (pending.kind === 'shopSlotUnlock') {
+        // 直接解锁技能槽（免费）
+        const extraSlots = target.extraSkillSlots ?? 0;
+        const maxSlots = pending.slot === 3 ? 1 : 2;
+        if (extraSlots >= maxSlots) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已满', kind: 'warning' } };
+        const updated = { ...target, extraSkillSlots: extraSlots + 1 };
+        const rng = createRng(state.seed + (uid.charCodeAt(0) << 8) + (pending.slot === 4 ? 1 : 0));
+        const choices = getRandomSkillChoices(updated, 3, rng);
+        if (choices.length === 0) {
+          return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'shop' };
+        }
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: pending.slot, choices } };
+      }
+      if (pending.kind === 'shopForget') {
+        // 重置成长点：返还所有属性加成
+        const hpBonus = target.bonusStats?.hp ?? 0;
+        const spdBonus = target.bonusStats?.spd ?? 0;
+        const returnedPoints = Math.floor(hpBonus / 2) + spdBonus;
+        if (returnedPoints <= 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
+        const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + returnedPoints, bonusStats: { hp: 0, spd: 0 }, maxHp: target.maxHp - hpBonus, hp: Math.min(target.hp, target.maxHp - hpBonus), spd: target.spd - spdBonus };
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'shop', toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
+      }
+      return state;
     }
 
     case 'TITLE':

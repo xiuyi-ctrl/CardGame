@@ -85,7 +85,8 @@ export type PassiveKind =
   | 'flameAura' // 烈焰环绕：被攻击时30%概率灼烧攻击者2层（熔火领主在场时100%）
   | 'chainMaster' // 锁链掌控：锁链链接的敌人死亡时，回复15%最大生命+伤害+2持续2回合
   | 'chainAnchor' // 锁链锚定：被锁链连接时受到的伤害-2
-  | 'chainSpark'; // 锁链火花：攻击锁链目标时伤害+2
+  | 'chainSpark' // 锁链火花：攻击锁链目标时伤害+2
+  | 'growthDrain'; // 成长汲取：每次攻击命中 +1 成长点；累积 value 点时伤害 +3
 
 export interface PassiveDef {
   id: string;
@@ -208,11 +209,9 @@ export interface Unit {
   altSkills?: string[];
   /** 形态切换：第二形态的被动 id */
   altPassive?: string;
-  /** 熟练度远征模式：当前熟练度值（0~55） */
-  proficiency?: number;
-  /** 熟练度远征模式：可用成长点 */
+  /** 可用成长点 */
   growthPoints?: number;
-  /** 熟练度远征模式：额外解锁的技能槽数量（0~2） */
+  /** 额外解锁的技能槽数量（0~2） */
   extraSkillSlots?: number;
 }
 

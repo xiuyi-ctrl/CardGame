@@ -10,20 +10,18 @@ import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
-import { PROFICIENCY_SHOP_ITEMS, type ProficiencyShopItemType } from '../game/data/proficiency-shop';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
 import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
 import { GrowthScreen } from './GrowthScreen';
 import { SkillPickScreen } from './SkillPickScreen';
-import { ProficiencyResultScreen } from './ProficiencyResultScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { persistSave, persistUnlocks, loadUnlocks, quitGame, detectUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 
-const NO_SAVE_SCREENS = ['title', 'starter', 'proficiency-select', 'gameover', 'victory', 'achievements', 'difficulty-select'];
+const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
 const EMPTY_ROW: MapNode[] = [];
 
@@ -60,7 +58,6 @@ export default function App() {
     <div className="screen">
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
-      {state.screen === 'proficiency-select' && <ProficiencyStarterScreen state={state} dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
       {state.screen === 'formation' && <FormationScreen state={state} dispatch={dispatch} />}
       {state.screen === 'gauntlet-order' && <GauntletOrderScreen state={state} dispatch={dispatch} />}
@@ -86,8 +83,8 @@ export default function App() {
       {state.screen === 'achievements' && <AchievementsScreen state={state} dispatch={dispatch} />}
       {state.screen === 'growth-menu' && <GrowthScreen state={state} dispatch={dispatch} />}
       {state.screen === 'skill-pick' && <SkillPickScreen state={state} dispatch={dispatch} />}
-      {state.screen === 'proficiency-result' && <ProficiencyResultScreen state={state} dispatch={dispatch} />}
       {state.screen === 'difficulty-select' && <DifficultyScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'proficiency-select' && <ProficiencyStarterScreen state={state} dispatch={dispatch} />}
       {state.toast && (
         <div className={`toast ${state.toast.kind ?? 'info'}`}>
           {state.toast.msg}
@@ -1712,6 +1709,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const boostMode = pending?.kind === 'boost';
   const arenaMode = pending?.kind === 'arena';
   const growthPointMode = pending?.kind === 'growthPoint';
+  const shopSlotUnlockMode = pending?.kind === 'shopSlotUnlock';
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const title = evolveMode
@@ -1721,18 +1719,20 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
     : boostMode
       ? '属性强化：选择要强化的宠物'
       : growthPointMode
-        ? '选择一只宠物获得 1 成长点'
-        : arenaMode
-          ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
-          : state.postBattle
-            ? '战后休整（只能释放或融合宠物）'
-            : `队伍管理（上限 ${ROSTER_MAX} 只）`;
+        ? `选择一只宠物获得 ${pending.amount ?? 1} 成长点`
+        : shopSlotUnlockMode
+          ? `选择一只宠物解锁第${pending.slot === 4 ? '5' : '4'}技能槽`
+          : arenaMode
+            ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
+            : state.postBattle
+              ? '战后休整（只能释放或融合宠物）'
+              : `队伍管理（上限 ${ROSTER_MAX} 只）`;
 
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">{title}</div>
-      {!evolveMode && !boostMode && !growthPointMode && !arenaMode && !state.postBattle && (
+      {!evolveMode && !boostMode && !growthPointMode && !shopSlotUnlockMode && !arenaMode && !state.postBattle && (
         <div className="panel-row" style={{ marginBottom: 10 }}>
           <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
           {state.field.map((uid) => {
@@ -1748,7 +1748,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
             ? canEvolve
               ? () => dispatch({ type: 'EVOLVE_ONE', uid: u.uid })
               : undefined
-            : boostMode || growthPointMode
+            : boostMode || growthPointMode || shopSlotUnlockMode
               ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
               : arenaMode
                 ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
@@ -1809,8 +1809,9 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const boughtItems = state.shopBoughtItems ?? [];
   const isProf = state.runMode === 'proficiency';
+  const profShopIds = ['heal_potion', 'gold_bag', 'book_small', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit'];
   const stock = (state.shopStock ?? []).filter((id) =>
-    isProf ? !!PROFICIENCY_SHOP_ITEMS[id as ProficiencyShopItemType] : (!!FOODS[id] || !!ITEMS[id])
+    isProf ? profShopIds.includes(id) : (!!FOODS[id] || !!ITEMS[id])
   );
   const refreshCount = state.shopRefreshCount ?? 0;
   const refreshCost = 5 + refreshCount * 5;
@@ -1824,7 +1825,19 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       </p>
       <div className="reward-cards">
         {stock.map((id) => {
-          const profItem = isProf ? PROFICIENCY_SHOP_ITEMS[id as ProficiencyShopItemType] : undefined;
+          const profShopData: Record<string, { label: string; emoji: string; desc: string; price: number }> = {
+            heal_potion: { label: '生命药水', emoji: '🧪', desc: '全队回复 50% 生命', price: 8 },
+            gold_bag: { label: '金币袋', emoji: '💰', desc: '获得 25 金币', price: 10 },
+            book_small: { label: '成长之书（小）', emoji: '📖', desc: '选择一只宠物获得 1 成长点', price: 12 },
+            book_large: { label: '成长之书（大）', emoji: '📚', desc: '选择一只宠物获得 2 成长点', price: 20 },
+            growth_stone: { label: '成长之石', emoji: '💎', desc: '选择一只宠物获得 1 成长点', price: 15 },
+            stat_boost: { label: '属性强化', emoji: '⚡', desc: '选择一只宠物提升属性', price: 18 },
+            slot_unlock: { label: '技能槽解锁', emoji: '🔓', desc: '选择一只宠物解锁技能槽', price: 25 },
+            skill_replace: { label: '技能替换', emoji: '🔄', desc: '选择一只宠物替换技能', price: 12 },
+            forget_stone: { label: '遗忘之石', emoji: '🪨', desc: '选择一只宠物重置成长点', price: 10 },
+            pet_recruit: { label: '宠物招募', emoji: '🐾', desc: '招募一只随机宠物', price: 20 },
+          };
+          const profItem = isProf ? profShopData[id] : undefined;
           const f = !isProf ? FOODS[id] : undefined;
           const it = !isProf ? ITEMS[id] : undefined;
           const name = profItem?.label ?? f?.name ?? it?.name ?? id;
@@ -1858,7 +1871,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
             <button
               className="primary"
               disabled={state.roster.every((u) => u.hp >= u.maxHp)}
-              onClick={() => dispatch({ type: 'SHOP_REST' })}
+              onClick={() => dispatch(isProf ? { type: 'PROF_REST' } : { type: 'SHOP_REST' })}
             >
               {state.roster.every((u) => u.hp >= u.maxHp) ? '已满血' : '休整'}
             </button>

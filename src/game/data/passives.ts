@@ -85,8 +85,8 @@ export const PASSIVES: Record<string, PassiveDef> = {
   chain_anchor: { id: 'chain_anchor', name: '锁链锚定', desc: '被锁链连接时受到的伤害-2', kind: 'chainAnchor', value: 2 },
   chain_spark: { id: 'chain_spark', name: '锁链火花', desc: '攻击锁链目标时伤害+2', kind: 'chainSpark', value: 2 },
 
-  // 熟练度远征模式 Boss 被动
-  proficiency_drain: { id: 'proficiency_drain', name: '熟练汲取', desc: '每次攻击命中汲取1熟练度；累积10熟练度时伤害+3', kind: 'power', value: 3 },
+  // —— 成长远征模式 Boss ——
+  growth_drain: { id: 'growth_drain', name: '成长汲取', desc: '每次攻击命中 +1 成长点；累积 5 点时伤害 +3', kind: 'growthDrain', value: 5 },
 };
 
 export function getPassive(id?: string): PassiveDef | undefined {

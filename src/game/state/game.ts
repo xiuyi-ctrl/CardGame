@@ -100,14 +100,10 @@ export interface EventChoice {
   battlePenalty?: { percent?: number; goldLoss?: number; curseTarget?: boolean };
   /** 战斗胜利额外奖励 */
   bonusReward?: { kind: 'food'; foodId: string };
-  /** 熟练度远征模式：给予目标宠物的熟练度 */
-  proficiencyGain?: number;
-  /** 熟练度远征模式：给予目标宠物的成长点 */
+  /** 给予目标宠物的成长点 */
   growthPointGain?: number;
-  /** 熟练度远征模式：重置目标宠物的成长点 */
+  /** 重置目标宠物的成长点 */
   resetGrowthPoints?: boolean;
-  /** 熟练度远征模式：全队获得熟练度 */
-  teamProficiencyGain?: number;
 }
 
 export interface EventNode {
@@ -117,7 +113,7 @@ export interface EventNode {
 }
 
 /** 奇遇关高级奖励类型 */
-export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item';
+export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item' | 'growthPoint' | 'slotUnlock' | 'recruit';
 
 export interface SpecialReward {
   id: string;
@@ -192,7 +188,6 @@ export type Screen =
   | 'test-config'
   | 'achievements'
   | 'difficulty-select'
-  | 'proficiency-map'
   | 'proficiency-select'
   | 'proficiency-result'
   | 'skill-pick'
@@ -256,7 +251,11 @@ export interface GameState {
     | { kind: 'evolve'; super: boolean }
     | { kind: 'boost'; uid: string }
     | { kind: 'arena'; uid: string }
-    | { kind: 'growthPoint'; uid: string };
+    | { kind: 'growthPoint'; uid: string; amount?: number }
+    | { kind: 'shopGrantGrowthPoint'; uid: string; amount: number }
+    | { kind: 'shopStatBoost'; uid: string }
+    | { kind: 'shopSlotUnlock'; uid: string; slot: 3 | 4 }
+    | { kind: 'shopForget'; uid: string };
   /** 本次商人节点是否已购买过食物（买了就不能再立即休整） */
   shopBought?: boolean;
   /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */
@@ -342,11 +341,11 @@ export interface GameState {
   relics?: string[];
   /** 跨局解锁（持久化到 localStorage） */
   unlocks?: Unlocks;
-  /** 熟练度远征模式标记 */
+  /** 远征模式标记 */
   runMode?: 'main' | 'proficiency';
-  /** 熟练度远征模式：当前层数（1~15） */
+  /** 远征模式：当前层数（1~15） */
   currentLayer?: number;
-  /** 熟练度远征模式：本局统计数据 */
+  /** 远征模式：本局统计数据 */
   proficiencyStats?: {
     totalProficiency: number;
     totalGrowthPoints: number;
@@ -358,6 +357,12 @@ export interface GameState {
   skillPick?: {
     uid: string;
     slot: 3 | 4;
+    choices: string[];
+  };
+  /** 替换技能：待替换技能列表 + 目标单位uid + 可选新技能 */
+  skillReplace?: {
+    uid: string;
+    replaceIdx: number;
     choices: string[];
   };
 }
@@ -409,13 +414,12 @@ export interface Unlocks {
 export const DEFAULT_UNLOCKS: Unlocks = { difficulties: ['normal'], relics: [], bestGrade: undefined };
 
 export const ROSTER_MAX = 8;
-/** 熟练度远征模式队伍上限（6只，强调核心培养） */
-export const PROF_ROSTER_MAX = 6;
 /** 出战宠物上限（最大 5 只，实际受敌方数量限制：敌方 n 只时玩家最多 n+1 只） */
 export const FIELD_MAX = 5;
-/** 熟练度远征模式出战上限（3只，精英化） */
+/** 根据敌方数量计算我方出战上限（n+1，不超过 FIELD_MAX） */
+export const PROF_ROSTER_MAX = 6;
 export const PROF_FIELD_MAX = 3;
-/** 根据敌方数量计算我方出战上限（n+1，不超过 fieldMax） */
+
 export function maxFieldForEnemy(enemyCount: number, runMode?: 'main' | 'proficiency'): number {
   const fieldMax = runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX;
   return Math.min(enemyCount + 1, fieldMax);

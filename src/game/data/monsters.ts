@@ -384,22 +384,20 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     passive: 'swift_wind',
     tame: { difficulty: 0.3 }, rank: 3,
   },
-  // 熟练度远征模式专属 Boss
-  proficiency_master: {
-    id: 'proficiency_master', name: '熟练之主', emoji: '🐉',
+  // —— 成长远征模式 Boss ——
+  growth_master: {
+    id: 'growth_master', name: '成长之主', emoji: '🐉',
     baseHp: 40, baseSpd: 6,
-    skills: ['proficiency_strike', 'proficiency_field', 'roar', 'proficiency_burst'],
-    desc: '精通战斗技艺的远古存在，通过汲取对手的熟练度来强化自身。',
-    passive: 'proficiency_drain',
-    tame: { difficulty: 0 }, rank: 4,
+    skills: ['growth_strike', 'growth_field', 'roar', 'growth_burst'],
+    desc: '掌握成长奥秘的远古存在，通过汲取对手的成长力量来强化自身。',
+    passive: 'growth_drain', tame: { difficulty: 0 }, rank: 4,
   },
-  proficiency_puppet: {
-    id: 'proficiency_puppet', name: '熟练傀儡', emoji: '🤖',
+  growth_puppet: {
+    id: 'growth_puppet', name: '成长傀儡', emoji: '🤖',
     baseHp: 10, baseSpd: 2,
     skills: ['claw_attack'],
-    desc: '熟练之主的傀儡，被击败时不会触发驯服。',
-    passive: 'iron_guard',
-    tame: { difficulty: 0 }, rank: 4,
+    desc: '成长之主的傀儡，被击败时不会触发驯服。',
+    passive: 'iron_guard', tame: { difficulty: 0 }, rank: 4,
   },
 };
 

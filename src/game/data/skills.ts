@@ -451,24 +451,24 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
     hideEffects: true,
   },
-  // 熟练度远征模式 Boss 技能
-  proficiency_strike: {
-    id: 'proficiency_strike', name: '熟练冲击', desc: '造成8点伤害',
+  claw_attack: {
+    id: 'claw_attack', name: '爪击', desc: '造成3点伤害',
+    target: 'single', kind: 'attack', damage: 3,
+  },
+  // —— 成长远征模式 Boss 技能 ——
+  growth_strike: {
+    id: 'growth_strike', name: '成长冲击', desc: '造成 8 点伤害',
     target: 'single', kind: 'attack', damage: 8,
   },
-  proficiency_field: {
-    id: 'proficiency_field', name: '熟练领域', desc: '全体己方+2伤害，持续2回合',
+  growth_field: {
+    id: 'growth_field', name: '成长领域', desc: '全体己方 +2 伤害，持续 2 回合',
     target: 'allyAll', kind: 'buff',
     effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
     hideEffects: true,
   },
-  proficiency_burst: {
-    id: 'proficiency_burst', name: '熟练爆发', desc: '造成12点伤害',
+  growth_burst: {
+    id: 'growth_burst', name: '成长爆发', desc: '造成 12 点伤害',
     target: 'single', kind: 'attack', damage: 12,
-  },
-  claw_attack: {
-    id: 'claw_attack', name: '爪击', desc: '造成3点伤害',
-    target: 'single', kind: 'attack', damage: 3,
   },
 };
 
