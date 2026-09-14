@@ -785,7 +785,20 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
               return;
             }
           }
-          dispatch({ type: 'START_PROFICIENCY', seed: Date.now() });
+          // 选存档槽：优先当前选中，否则找空槽
+          let slot = selectedSlot;
+          if (!slot || slots.find((s) => s.slot === slot)?.state) {
+            const empty = slots.find((s) => !s.state);
+            if (empty) {
+              slot = empty.slot;
+            } else {
+              alert('存档已满，请在「存档管理」中删除一个存档');
+              return;
+            }
+          }
+          clearDeletedSlot(slot);
+          selectSlot(slot);
+          dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
         }}>
           ⚔️ 熟练度远征
         </button>
