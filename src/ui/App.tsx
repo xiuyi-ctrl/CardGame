@@ -805,26 +805,30 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
           🏆 成就
         </button>
         <button className="big-btn" onClick={() => {
-          // 从当前选中槽位检查是否有未完成的熟练度远征
-          const slotState = slots.find((s) => s.slot === selectedSlot);
+          // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
+          let slot = selectedSlot;
+          if (!slot) {
+            const occupied = slots.find(s => s.main || s.proficiency);
+            slot = occupied ? occupied.slot : slots.find(s => !s.main && !s.proficiency)?.slot;
+          }
+          if (!slot) { alert('存档已满，请在「存档管理」中删除一个存档'); return; }
+
+          // 检查该槽是否有未完成的熟练度远征
+          const slotState = slots.find(s => s.slot === slot);
           if (slotState?.proficiency) {
             const go = window.confirm('发现未完成的熟练度远征，是否继续？');
             if (go) {
               dispatch({ type: 'LOAD_GAME', state: slotState.proficiency });
               return;
             }
+            // 取消 → 覆盖当前槽位的远征记录
+            clearDeletedSlot(slot);
+            selectSlot(slot);
+            dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
+            return;
           }
-          // 选存档槽：优先当前选中，否则找空槽
-          let slot = selectedSlot;
-          if (!slot || (slots.find((s) => s.slot === slot)?.main || slots.find((s) => s.slot === slot)?.proficiency)) {
-            const empty = slots.find((s) => !s.main && !s.proficiency);
-            if (empty) {
-              slot = empty.slot;
-            } else {
-              alert('存档已满，请在「存档管理」中删除一个存档');
-              return;
-            }
-          }
+
+          // 无远征记录 → 新开
           clearDeletedSlot(slot);
           selectSlot(slot);
           dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
