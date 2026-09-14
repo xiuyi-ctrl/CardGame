@@ -84,6 +84,9 @@ export const PASSIVES: Record<string, PassiveDef> = {
   chain_master: { id: 'chain_master', name: '锁链掌控', desc: '锁链链接的敌人死亡时，回复15%最大生命+伤害+2持续2回合；自身被链接时，获取链接单位的被动效果', kind: 'chainMaster', value: 15 },
   chain_anchor: { id: 'chain_anchor', name: '锁链锚定', desc: '被锁链连接时受到的伤害-2', kind: 'chainAnchor', value: 2 },
   chain_spark: { id: 'chain_spark', name: '锁链火花', desc: '攻击锁链目标时伤害+2', kind: 'chainSpark', value: 2 },
+
+  // 熟练度远征模式 Boss 被动
+  proficiency_drain: { id: 'proficiency_drain', name: '熟练汲取', desc: '每次攻击命中汲取1熟练度；累积10熟练度时伤害+3', kind: 'power', value: 3 },
 };
 
 export function getPassive(id?: string): PassiveDef | undefined {

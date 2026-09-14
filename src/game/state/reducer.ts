@@ -208,8 +208,9 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
 
 function freshProficiencyRun(seed: number): GameState {
   const starter = makeUnit('momo', true, 0, false);
-  const companion = makeUnit('fifi', true, 1, false);
-  const roster = [starter, companion];
+  const tank = makeUnit('lulu', true, 1, false);
+  const dps = makeUnit('fifi', true, 2, false);
+  const roster = [starter, tank, dps];
   const map = generateProficiencyMap(seed);
   const firstNode = map.layers[0]?.[0];
   return {
@@ -222,7 +223,7 @@ function freshProficiencyRun(seed: number): GameState {
     roster,
     field: roster.map((u) => u.uid),
     inventory: {},
-    gold: 20,
+    gold: 30,
     rewards: [],
     log: ['进入熟练度远征模式'],
     visitedWatchtowers: [],
@@ -319,9 +320,10 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       ...state.log,
     ].slice(0, 20),
   };
-  // 战后全体恢复 60%，缓解减员滚雪球
+  // 战后全体恢复 60%（熟练度远征模式 80%）
   const healCfg = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'];
-  const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * healCfg.healRatio)) }));
+  const healRatio = state.runMode === 'proficiency' ? 0.8 : healCfg.healRatio;
+  const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * healRatio)) }));
   let rewards = challenge
     ? generateChallengeRewards({ ...settled, roster: healed }, node!.type as 'arena' | 'gauntlet')
     : generateRewards({ ...settled, roster: healed });
@@ -1905,8 +1907,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       next = { ...next, shopBoughtItems: boughtItems };
       // 执行效果
       if (itemId === 'heal_potion') {
-        next = healRoster(next, 0.3);
-        next = { ...next, toast: { msg: '全队回复 30% 生命', kind: 'success' } };
+        next = healRoster(next, 0.5);
+        next = { ...next, toast: { msg: '全队回复 50% 生命', kind: 'success' } };
       } else if (itemId === 'gold_bag') {
         next = { ...next, gold: next.gold + 25, toast: { msg: '获得 25 金币', kind: 'success' } };
       } else if (itemId === 'book_small') {
@@ -1955,7 +1957,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'PROF_REST': {
-      return { ...healRoster(state, 0.3), screen: 'map', shopBought: true };
+      return { ...healRoster(state, 0.5), screen: 'map', shopBought: true };
     }
 
     case 'TITLE':

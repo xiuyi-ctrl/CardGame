@@ -132,14 +132,14 @@ export function getProficiencyEncounter(
   layer: number,
   rng: () => number,
 ): { speciesId: string }[] {
-  // 根据层进度选择敌人规模
+  // 根据层进度选择敌人规模（降低难度）
   let maxEnemies: number;
   if (layer <= 5) {
-    maxEnemies = randInt(rng, 1, 2);
+    maxEnemies = 1;
   } else if (layer <= 10) {
-    maxEnemies = randInt(rng, 2, 3);
+    maxEnemies = randInt(rng, 1, 2);
   } else {
-    maxEnemies = 3;
+    maxEnemies = randInt(rng, 2, 3);
   }
 
   // 敌人池：从主模式品阶1~2的生物中随机选择
@@ -155,18 +155,17 @@ export function getProficiencyEncounter(
   return enemies;
 }
 
-/** 精英战斗遭遇（更强敌人） */
+/** 精英战斗遭遇（更强敌人，去除品阶3，全程最多2只） */
 export function getProficiencyEliteEncounter(
-  layer: number,
+  _layer: number,
   rng: () => number,
 ): { speciesId: string }[] {
-  // 精英战斗：2~3只品阶2的生物
+  // 精英战斗：仅品阶2的生物，全程最多2只
   const ELITE_POOL = [
     'momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king',
-    'momo_god', 'lulu_god', 'fifi_god', 'sisi_god', 'gora_god', 'mimi_god',
   ];
 
-  const count = layer >= 10 ? 3 : 2;
+  const count = 2;
   const enemies: { speciesId: string }[] = [];
   for (let i = 0; i < count; i++) {
     enemies.push({ speciesId: pick(rng, ELITE_POOL) });

@@ -182,7 +182,7 @@ export function getMaxSkillSlots(unit: Unit): number {
   return 3 + (unit.extraSkillSlots ?? 0);
 }
 
-/** 战斗结束时结算熟练度奖励 */
+/** 战斗结束时结算熟练度奖励（加快获取） */
 export function settleBattleProficiency(
   units: Unit[],
 ): { uid: string; gained: number; leveledUp: boolean; newLevel: number }[] {
@@ -192,12 +192,12 @@ export function settleBattleProficiency(
     if (!u.isPlayer) continue;
     let totalGain = 0;
 
-    // 参与战斗 +1
-    totalGain += 1;
+    // 参与战斗 +2
+    totalGain += 2;
 
-    // 存活奖励 +1
+    // 存活奖励 +2
     if (u.hp > 0) {
-      totalGain += 1;
+      totalGain += 2;
     }
 
     if (totalGain > 0) {
@@ -209,9 +209,9 @@ export function settleBattleProficiency(
   return results;
 }
 
-/** 击杀奖励熟练度 */
+/** 击杀奖励熟练度（翻倍） */
 export function getKillProficiency(isElite: boolean, isBoss: boolean): number {
-  if (isBoss) return 3;
-  if (isElite) return 2;
-  return 1;
+  if (isBoss) return 6;
+  if (isElite) return 4;
+  return 2;
 }

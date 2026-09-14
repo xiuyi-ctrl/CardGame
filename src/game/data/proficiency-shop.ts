@@ -25,76 +25,76 @@ export interface ProficiencyShopItem {
   emoji: string;
 }
 
-/** 所有商品 */
+/** 所有商品（降低价格，提高性价比） */
 export const PROFICIENCY_SHOP_ITEMS: Record<ProficiencyShopItemType, ProficiencyShopItem> = {
   book_small: {
     id: 'book_small',
     label: '熟练之书（小）',
     desc: '选择 1 只宠物，+2 熟练度',
-    price: 15,
+    price: 10,
     emoji: '📖',
   },
   book_large: {
     id: 'book_large',
     label: '熟练之书（大）',
     desc: '选择 1 只宠物，+5 熟练度',
-    price: 30,
+    price: 20,
     emoji: '📚',
   },
   growth_stone: {
     id: 'growth_stone',
     label: '成长之石',
     desc: '选择 1 只宠物，+1 成长点',
-    price: 25,
+    price: 15,
     emoji: '💎',
   },
   stat_boost: {
     id: 'stat_boost',
     label: '属性强化',
     desc: '选择 1 只宠物，永久 +2 生命 或 +1 速度',
-    price: 20,
+    price: 15,
     emoji: '⬆️',
   },
   slot_unlock: {
     id: 'slot_unlock',
     label: '技能槽解锁',
     desc: '选择 1 只宠物，解锁第 4 技能槽（无需成长点）',
-    price: 40,
+    price: 25,
     emoji: '🎰',
   },
   skill_replace: {
     id: 'skill_replace',
     label: '技能替换',
     desc: '选择 1 只宠物，替换 1 个技能（免费）',
-    price: 20,
+    price: 15,
     emoji: '🔄',
   },
   forget_stone: {
     id: 'forget_stone',
     label: '遗忘之石',
     desc: '选择 1 只宠物，重置其成长点',
-    price: 35,
+    price: 20,
     emoji: '🪨',
   },
   pet_recruit: {
     id: 'pet_recruit',
     label: '生物招募',
     desc: '获得 1 只随机生物（品阶 1~2）',
-    price: 50,
+    price: 25,
     emoji: '🐾',
   },
   heal_potion: {
     id: 'heal_potion',
     label: '治疗药水',
-    desc: '全队回复 30% 生命',
+    desc: '全队回复 50% 生命',
     price: 10,
     emoji: '🧪',
   },
   gold_bag: {
     id: 'gold_bag',
     label: '金币袋',
-    desc: '获得 25 金币（净赚 10）',
-    price: 15,
+    desc: '获得 25 金币（净赚 15）',
+    price: 10,
     emoji: '💰',
   },
 };
