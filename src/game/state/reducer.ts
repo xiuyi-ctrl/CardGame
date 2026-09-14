@@ -9,7 +9,7 @@ import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
 import { generateProficiencyMap, getProficiencyEncounter, getProficiencyEliteEncounter } from '../core/proficiency-map';
-import { settleBattleProficiency, SLOT4_COST, SLOT5_COST } from '../core/proficiency';
+import { settleBattleProficiency, SLOT3_COST, SLOT4_COST, getRandomSkillChoices } from '../core/proficiency';
 import { PROFICIENCY_SHOP_ITEMS, getShopStock } from '../data/proficiency-shop';
 import { buildProficiencyEvent } from '../data/proficiency-events';
 import { getSpecialRewards, PROFICIENCY_SPECIAL_REWARDS } from '../data/proficiency-special';
@@ -108,7 +108,8 @@ export type GameAction =
   | { type: 'PROF_SHOP_BUY'; itemId: string }
   | { type: 'PROF_SHOP_REFRESH' }
   | { type: 'PROF_REST' }
-  | { type: 'PROF_SLOT_UNLOCK'; uid: string; slot: 4 | 5 }
+  | { type: 'PROF_GROWTH_APPLY'; uid: string; updatedUnit: Unit }
+  | { type: 'PROF_SLOT_UNLOCK'; uid: string; slot: 3 | 4 }
   | { type: 'PROF_SLOT_PICK'; skillId: string }
   | { type: 'PROF_SLOT_CANCEL' };
 
@@ -1161,6 +1162,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (!state.roster.some((u) => u.uid === action.uid)) return state;
         return { ...state, specialPending: { kind: 'boost', uid: action.uid }, screen: 'boost' };
       }
+      if (state.specialPending?.kind === 'growthPoint') {
+        const target = state.roster.find((u) => u.uid === action.uid);
+        if (!target) return state;
+        const updated = state.roster.map((u) =>
+          u.uid === target.uid ? { ...u, growthPoints: (u.growthPoints ?? 0) + 1 } : u,
+        );
+        return {
+          ...state,
+          roster: updated,
+          specialPending: undefined,
+          screen: 'shop',
+          toast: { msg: `${target.name} 获得 1 成长点`, kind: 'success' },
+        };
+      }
       if (state.specialPending?.kind === 'arena') {
         const unit = state.roster.find((u) => u.uid === action.uid);
         if (!unit) return state;
@@ -1778,7 +1793,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'REST_HEAL': {
-      return { ...healRoster(state, 1), screen: 'roster' };
+      const screen = state.runMode === 'proficiency' ? 'map' : 'roster';
+      return { ...healRoster(state, 1), screen };
     }
 
     case 'OPEN_WATCHTOWER': {
@@ -1907,6 +1923,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return freshProficiencyRun(action.seed, action.saveSlot, action.starterId, action.companionId);
     }
 
+    case 'PROF_GROWTH_APPLY': {
+      return {
+        ...state,
+        roster: state.roster.map((u) => (u.uid === action.uid ? action.updatedUnit : u)),
+      };
+    }
+
     case 'PROF_GROWTH_MENU': {
       return { ...state, screen: 'growth-menu' };
     }
@@ -1915,9 +1938,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!state.skillPick) return state;
       const unit = state.roster.find((u) => u.uid === state.skillPick!.uid);
       if (!unit) return state;
-      const newSkills = [...unit.skills, action.skillId];
-      unit.skills = newSkills;
-      return { ...state, roster: [...state.roster], screen: 'growth-menu', skillPick: undefined };
+      const updatedUnit = { ...unit, skills: [...unit.skills, action.skillId] };
+      return {
+        ...state,
+        roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
+        screen: 'growth-menu',
+        skillPick: undefined,
+      };
     }
 
     case 'PROF_SLOT_CANCEL': {
@@ -1928,26 +1955,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const unit = state.roster.find((u) => u.uid === action.uid);
       if (!unit) return state;
       const gp = unit.growthPoints ?? 0;
-      const cost = action.slot === 4 ? SLOT4_COST : SLOT5_COST;
+      const cost = action.slot === 3 ? SLOT3_COST : SLOT4_COST;
       if (gp < cost) return state;
       const extraSlots = unit.extraSkillSlots ?? 0;
-      if (action.slot === 4 && extraSlots >= 1) return state;
-      if (action.slot === 5 && extraSlots >= 2) return state;
-      // 扣除成长点、增加技能槽
-      unit.growthPoints = gp - cost;
-      unit.extraSkillSlots = extraSlots + 1;
+      if (action.slot === 3 && extraSlots >= 1) return state;
+      if (action.slot === 4 && extraSlots >= 2) return state;
+      // 创建新 unit 对象（不可变更新）
+      const updatedUnit = { ...unit, growthPoints: gp - cost, extraSkillSlots: extraSlots + 1 };
       // 生成3个随机技能
-      const { createRng } = require('../rng');
-      const rng = createRng(state.seed + (unit.uid.charCodeAt(0) << 8) + (action.slot === 5 ? 1 : 0));
-      const { getRandomSkillChoices } = require('../core/proficiency');
-      const choices = getRandomSkillChoices(unit, 3, rng);
+      const rng = createRng(state.seed + (unit.uid.charCodeAt(0) << 8) + (action.slot === 4 ? 1 : 0));
+      const choices = getRandomSkillChoices(updatedUnit, 3, rng);
       if (choices.length === 0) {
-        // 无可用技能，直接返回
-        return { ...state, roster: [...state.roster], screen: 'growth-menu' };
+        return { ...state, roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)), screen: 'growth-menu' };
       }
       return {
         ...state,
-        roster: [...state.roster],
+        roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
         screen: 'skill-pick',
         skillPick: { uid: unit.uid, slot: action.slot, choices },
       };
@@ -1973,7 +1996,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (itemId === 'book_large') {
         next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' }, toast: { msg: '选择一只宠物获得 5 熟练度', kind: 'info' } };
       } else if (itemId === 'growth_stone') {
-        next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
+        next = { ...next, specialPending: { kind: 'growthPoint' as const, uid: '' }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
       } else if (itemId === 'stat_boost') {
         next = { ...next, screen: 'boost', specialPending: { kind: 'boost', uid: '' } };
       } else if (itemId === 'slot_unlock') {

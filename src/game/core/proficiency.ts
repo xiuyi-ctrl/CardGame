@@ -3,6 +3,7 @@
  * 管理熟练度获取、等级计算、成长点分配
  */
 import type { Unit } from '../types';
+import { SKILLS } from '../data/skills';
 
 /** 熟练度等级表：升级所需熟练度 */
 export const PROFICIENCY_LEVEL_TABLE: readonly number[] = [
@@ -29,10 +30,10 @@ export const PROFICIENCY_LEVEL_MAX = 10;
 export const STAT_CAP_HP = 20;
 export const STAT_CAP_SPD = 10;
 
+/** 成本：解锁第3技能槽 */
+export const SLOT3_COST = 2;
 /** 成本：解锁第4技能槽 */
-export const SLOT4_COST = 2;
-/** 成本：解锁第5技能槽 */
-export const SLOT5_COST = 3;
+export const SLOT4_COST = 3;
 
 /** 计算熟练度等级（给定当前熟练度值） */
 export function getProficiencyLevel(prof: number): number {
@@ -90,8 +91,8 @@ export function proficiencyDisplay(prof: number): { level: number; current: numb
 export type GrowthChoice =
   | { kind: 'hp'; amount: number }
   | { kind: 'spd'; amount: number }
+  | { kind: 'slot3' }
   | { kind: 'slot4' }
-  | { kind: 'slot5' }
   | { kind: 'reroll' };
 
 /** 获取可用的成长选项 */
@@ -112,11 +113,11 @@ export function getAvailableGrowthChoices(unit: Unit): GrowthChoice[] {
 
   // 技能槽解锁
   const extraSlots = unit.extraSkillSlots ?? 0;
-  if (extraSlots < 1 && gp >= SLOT4_COST) {
-    choices.push({ kind: 'slot4' });
+  if (extraSlots < 1 && gp >= SLOT3_COST) {
+    choices.push({ kind: 'slot3' });
   }
-  if (extraSlots < 2 && gp >= SLOT5_COST) {
-    choices.push({ kind: 'slot5' });
+  if (extraSlots < 2 && gp >= SLOT4_COST) {
+    choices.push({ kind: 'slot4' });
   }
 
   // 技能替换（始终可用，只要有点数）
@@ -127,59 +128,100 @@ export function getAvailableGrowthChoices(unit: Unit): GrowthChoice[] {
   return choices;
 }
 
+/** 获取全部成长选项（含点数不够的，供 UI 置灰显示） */
+export function getAllGrowthChoices(unit: Unit): GrowthChoice[] {
+  const choices: GrowthChoice[] = [];
+
+  // 属性提升
+  const hpBonus = unit.bonusStats?.hp ?? 0;
+  const spdBonus = unit.bonusStats?.spd ?? 0;
+
+  if (hpBonus < STAT_CAP_HP) {
+    choices.push({ kind: 'hp', amount: 2 });
+  }
+  if (spdBonus < STAT_CAP_SPD) {
+    choices.push({ kind: 'spd', amount: 1 });
+  }
+
+  // 技能槽解锁
+  const extraSlots = unit.extraSkillSlots ?? 0;
+  if (extraSlots < 1) {
+    choices.push({ kind: 'slot3' });
+  }
+  if (extraSlots < 2) {
+    choices.push({ kind: 'slot4' });
+  }
+
+  // 技能替换
+  choices.push({ kind: 'reroll' });
+
+  return choices;
+}
+
+/** 成长选项所需点数 */
+export function growthChoiceCost(choice: GrowthChoice): number {
+  switch (choice.kind) {
+    case 'hp': return 1;
+    case 'spd': return 1;
+    case 'slot3': return SLOT3_COST;
+    case 'slot4': return SLOT4_COST;
+    case 'reroll': return 1;
+  }
+}
+
 /** 执行成长点分配 */
-export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): boolean {
+/** 不可变成长：返回新 Unit 或 null（失败） */
+export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): Unit | null {
   const gp = unit.growthPoints ?? 0;
 
   switch (choice.kind) {
     case 'hp': {
-      if (gp < 1) return false;
+      if (gp < 1) return null;
       const hpBonus = unit.bonusStats?.hp ?? 0;
-      if (hpBonus >= STAT_CAP_HP) return false;
-      unit.growthPoints = gp - 1;
-      unit.bonusStats = { ...unit.bonusStats, hp: hpBonus + 2 };
-      unit.maxHp += 2;
-      unit.hp += 2;
-      return true;
+      if (hpBonus >= STAT_CAP_HP) return null;
+      return {
+        ...unit,
+        growthPoints: gp - 1,
+        bonusStats: { ...unit.bonusStats, hp: hpBonus + 2 },
+        maxHp: unit.maxHp + 2,
+        hp: unit.hp + 2,
+      };
     }
     case 'spd': {
-      if (gp < 1) return false;
+      if (gp < 1) return null;
       const spdBonus = unit.bonusStats?.spd ?? 0;
-      if (spdBonus >= STAT_CAP_SPD) return false;
-      unit.growthPoints = gp - 1;
-      unit.bonusStats = { ...unit.bonusStats, spd: spdBonus + 1 };
-      unit.spd += 1;
-      return true;
+      if (spdBonus >= STAT_CAP_SPD) return null;
+      return {
+        ...unit,
+        growthPoints: gp - 1,
+        bonusStats: { ...unit.bonusStats, spd: spdBonus + 1 },
+        spd: unit.spd + 1,
+      };
+    }
+    case 'slot3': {
+      if (gp < SLOT3_COST) return null;
+      const extraSlots = unit.extraSkillSlots ?? 0;
+      if (extraSlots >= 1) return null;
+      return { ...unit, growthPoints: gp - SLOT3_COST, extraSkillSlots: 1 };
     }
     case 'slot4': {
-      if (gp < SLOT4_COST) return false;
+      if (gp < SLOT4_COST) return null;
       const extraSlots = unit.extraSkillSlots ?? 0;
-      if (extraSlots >= 1) return false;
-      unit.growthPoints = gp - SLOT4_COST;
-      unit.extraSkillSlots = 1;
-      return true;
-    }
-    case 'slot5': {
-      if (gp < SLOT5_COST) return false;
-      const extraSlots = unit.extraSkillSlots ?? 0;
-      if (extraSlots >= 2) return false;
-      unit.growthPoints = gp - SLOT5_COST;
-      unit.extraSkillSlots = extraSlots + 1;
-      return true;
+      if (extraSlots >= 2) return null;
+      return { ...unit, growthPoints: gp - SLOT4_COST, extraSkillSlots: extraSlots + 1 };
     }
     case 'reroll': {
-      if (gp < 1) return false;
-      unit.growthPoints = gp - 1;
-      return true;
+      if (gp < 1) return null;
+      return { ...unit, growthPoints: gp - 1 };
     }
     default:
-      return false;
+      return null;
   }
 }
 
-/** 获取单位最大技能槽数（基础3 + 额外解锁） */
+/** 获取单位最大技能槽数（基础2 + 额外解锁） */
 export function getMaxSkillSlots(unit: Unit): number {
-  return 3 + (unit.extraSkillSlots ?? 0);
+  return 2 + (unit.extraSkillSlots ?? 0);
 }
 
 /** 战斗结束时结算熟练度奖励（加快获取） */
@@ -218,7 +260,6 @@ export function getKillProficiency(isElite: boolean, isBoss: boolean): number {
 
 /** 从技能库随机选取 n 个不重复技能（排除已学技能） */
 export function getRandomSkillChoices(unit: Unit, n: number, rng: () => number): string[] {
-  const { SKILLS } = require('../data/skills') as typeof import('../data/skills');
   const allIds = Object.keys(SKILLS);
   const owned = new Set(unit.skills);
   const candidates = allIds.filter((id) => !owned.has(id));

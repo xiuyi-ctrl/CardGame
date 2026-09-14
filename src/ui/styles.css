@@ -2833,6 +2833,13 @@ button.primary {
   border-color: var(--gold);
   background: rgba(232, 194, 106, 0.1);
 }
+.growth-choice-btn.disabled,
+.growth-choice-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--border);
+  background: var(--bg-card);
+}
 .growth-no-choices {
   color: var(--text-dim);
   font-size: 13px;

@@ -255,7 +255,8 @@ export interface GameState {
   specialPending?:
     | { kind: 'evolve'; super: boolean }
     | { kind: 'boost'; uid: string }
-    | { kind: 'arena'; uid: string };
+    | { kind: 'arena'; uid: string }
+    | { kind: 'growthPoint'; uid: string };
   /** 本次商人节点是否已购买过食物（买了就不能再立即休整） */
   shopBought?: boolean;
   /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */
@@ -353,10 +354,10 @@ export interface GameState {
     battlesLost: number;
     kills: number;
   };
-  /** 技能槽解锁后：待选技能列表 + 目标单位uid + 技能槽编号(4/5) */
+  /** 技能槽解锁后：待选技能列表 + 目标单位uid + 技能槽编号(3/4) */
   skillPick?: {
     uid: string;
-    slot: 4 | 5;
+    slot: 3 | 4;
     choices: string[];
   };
 }

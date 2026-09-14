@@ -1711,6 +1711,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const evolveMode = pending?.kind === 'evolve';
   const boostMode = pending?.kind === 'boost';
   const arenaMode = pending?.kind === 'arena';
+  const growthPointMode = pending?.kind === 'growthPoint';
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const title = evolveMode
@@ -1719,17 +1720,19 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
       : '进化之光：选择要进化的宠物'
     : boostMode
       ? '属性强化：选择要强化的宠物'
-      : arenaMode
-        ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
-        : state.postBattle
-          ? '战后休整（只能释放或融合宠物）'
-          : `队伍管理（上限 ${ROSTER_MAX} 只）`;
+      : growthPointMode
+        ? '选择一只宠物获得 1 成长点'
+        : arenaMode
+          ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
+          : state.postBattle
+            ? '战后休整（只能释放或融合宠物）'
+            : `队伍管理（上限 ${ROSTER_MAX} 只）`;
 
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">{title}</div>
-      {!evolveMode && !boostMode && !arenaMode && !state.postBattle && (
+      {!evolveMode && !boostMode && !growthPointMode && !arenaMode && !state.postBattle && (
         <div className="panel-row" style={{ marginBottom: 10 }}>
           <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
           {state.field.map((uid) => {
@@ -1745,7 +1748,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
             ? canEvolve
               ? () => dispatch({ type: 'EVOLVE_ONE', uid: u.uid })
               : undefined
-            : boostMode
+            : boostMode || growthPointMode
               ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
               : arenaMode
                 ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
@@ -1757,12 +1760,12 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
         <div key={u.uid} className="roster-item">
           <UnitCard
             unit={u}
-            className={`roster-card ${(evolveMode && canEvolve) || boostMode || arenaMode || state.postBattle ? 'clickable' : ''} ${isPostBattleSelected ? 'selected' : ''}`}
+            className={`roster-card ${(evolveMode && canEvolve) || boostMode || growthPointMode || arenaMode || state.postBattle ? 'clickable' : ''} ${isPostBattleSelected ? 'selected' : ''}`}
             onClick={onCard}
             showSkillDesc
             topStats
             footer={
-              !evolveMode && !boostMode && !arenaMode ? <PetCardFooter unit={u} state={state} setConfirm={setConfirm} /> : undefined
+              !evolveMode && !boostMode && !growthPointMode && !arenaMode ? <PetCardFooter unit={u} state={state} setConfirm={setConfirm} /> : undefined
             }
           />
               <div className="roster-actions">
@@ -1789,7 +1792,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
           );
         })}
       </div>
-      {!evolveMode && !boostMode && !arenaMode && (
+      {!evolveMode && !boostMode && !growthPointMode && !arenaMode && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
           <button className="primary big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
             继续前进 →

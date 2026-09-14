@@ -10,8 +10,11 @@ import type { Unit } from '../game/types';
 import { PetIcon } from './components';
 import {
   proficiencyDisplay,
-  getAvailableGrowthChoices,
+  getAllGrowthChoices,
+  growthChoiceCost,
   applyGrowthChoice,
+  SLOT3_COST,
+  SLOT4_COST,
   type GrowthChoice,
 } from '../game/core/proficiency';
 
@@ -29,17 +32,18 @@ export function GrowthScreen({ state, dispatch }: Props) {
 
   const handleGrowthChoice = (unit: Unit, choice: GrowthChoice) => {
     // 技能槽解锁：路由到技能选择界面（由 reducer 处理 state 转换）
-    if (choice.kind === 'slot4' || choice.kind === 'slot5') {
-      dispatch({ type: 'PROF_SLOT_UNLOCK', uid: unit.uid, slot: choice.kind === 'slot4' ? 4 : 5 });
+    if (choice.kind === 'slot3' || choice.kind === 'slot4') {
+      dispatch({ type: 'PROF_SLOT_UNLOCK', uid: unit.uid, slot: choice.kind === 'slot3' ? 3 : 4 });
       return;
     }
-    const success = applyGrowthChoice(unit, choice);
-    if (success) {
+    const updatedUnit = applyGrowthChoice(unit, choice);
+    if (updatedUnit) {
       const label =
         choice.kind === 'hp' ? `生命 +${choice.amount}` :
         choice.kind === 'spd' ? `速度 +${choice.amount}` :
         '技能替换点已消耗';
       setMessage(`${unit.name}：${label}`);
+      dispatch({ type: 'PROF_GROWTH_APPLY', uid: unit.uid, updatedUnit });
       dispatch({ type: 'SHOW_TOAST', msg: `${unit.name} 获得 ${label}`, kind: 'success' });
     }
   };
@@ -82,26 +86,26 @@ export function GrowthScreen({ state, dispatch }: Props) {
         <div className="growth-choices">
           <h3>为 {selectedUnit.name} 选择成长：</h3>
           <div className="growth-choice-list">
-            {getAvailableGrowthChoices(selectedUnit).map((choice, i) => {
+            {getAllGrowthChoices(selectedUnit).map((choice, i) => {
+              const cost = growthChoiceCost(choice);
+              const canAfford = (selectedUnit.growthPoints ?? 0) >= cost;
               const label =
-                choice.kind === 'hp' ? `生命 +${choice.amount}` :
-                choice.kind === 'spd' ? `速度 +${choice.amount}` :
-                choice.kind === 'slot4' ? '解锁第4技能槽 (2点)' :
-                choice.kind === 'slot5' ? '解锁第5技能槽 (3点)' :
+                choice.kind === 'hp' ? `生命 +${choice.amount} (1点)` :
+                choice.kind === 'spd' ? `速度 +${choice.amount} (1点)` :
+                choice.kind === 'slot3' ? `解锁第3技能槽 (${SLOT3_COST}点)` :
+                choice.kind === 'slot4' ? `解锁第4技能槽 (${SLOT4_COST}点)` :
                 '替换技能 (1点)';
               return (
                 <button
                   key={i}
-                  className="growth-choice-btn"
+                  className={`growth-choice-btn ${!canAfford ? 'disabled' : ''}`}
+                  disabled={!canAfford}
                   onClick={() => handleGrowthChoice(selectedUnit, choice)}
                 >
                   {label}
                 </button>
               );
             })}
-            {getAvailableGrowthChoices(selectedUnit).length === 0 && (
-              <div className="growth-no-choices">没有可用的成长选项</div>
-            )}
           </div>
         </div>
       )}
