@@ -584,13 +584,28 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       try {
         const json = localStorage.getItem(`petCardSave_${i}`);
         if (json) {
-          const parsed = JSON.parse(json) as GameState;
-          result.push({ slot: i, state: parsed });
+          const parsed = JSON.parse(json) as Record<string, unknown>;
+          // 新格式：{ main?, proficiency? }
+          if ('main' in parsed || 'proficiency' in parsed) {
+            const main = (parsed.main && typeof parsed.main === 'object' && 'seed' in (parsed.main as object)) ? parsed.main as unknown as GameState : null;
+            const prof = (parsed.proficiency && typeof parsed.proficiency === 'object' && 'seed' in (parsed.proficiency as object)) ? parsed.proficiency as unknown as GameState : null;
+            result.push({ slot: i, main, proficiency: prof });
+          } else if ('seed' in parsed && 'roster' in parsed) {
+            // 旧格式：直接 GameState
+            const gs = parsed as unknown as GameState;
+            if (gs.runMode === 'proficiency') {
+              result.push({ slot: i, main: null, proficiency: gs });
+            } else {
+              result.push({ slot: i, main: gs, proficiency: null });
+            }
+          } else {
+            result.push({ slot: i, main: null, proficiency: null });
+          }
         } else {
-          result.push({ slot: i, state: null });
+          result.push({ slot: i, main: null, proficiency: null });
         }
       } catch {
-        result.push({ slot: i, state: null });
+        result.push({ slot: i, main: null, proficiency: null });
       }
     }
     return result;
@@ -619,7 +634,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     setSlotsLoading(true);
     void listSaves().then((s) => {
       setSlots(s);
-      setHasSave(s.some((x) => x.state !== null));
+      setHasSave(s.some((x) => x.main || x.proficiency));
       setSlotsLoading(false);
     });
   }
@@ -629,7 +644,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     void listSaves().then((s) => {
       if (!cancelled) {
         setSlots(s);
-        setHasSave(s.some((x) => x.state !== null));
+        setHasSave(s.some((x) => x.main || x.proficiency));
       }
     });
     return () => { cancelled = true; };
@@ -644,7 +659,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   function onNewGame() {
     if (selectedSlot) {
       const target = slots.find((s) => s.slot === selectedSlot);
-      if (target?.state) {
+      if (target?.main || target?.proficiency) {
         setOverwriteTarget(selectedSlot);
         return;
       }
@@ -653,7 +668,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       dispatch({ type: 'STARTER', saveSlot: selectedSlot, unlocks: loadUnlocks() });
       return;
     }
-    const empty = slots.find((s) => !s.state);
+    const empty = slots.find((s) => !s.main && !s.proficiency);
     if (empty) {
       clearDeletedSlot(empty.slot);
       selectSlot(empty.slot);
@@ -666,13 +681,14 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   function confirmOverwrite() {
     if (overwriteTarget === null) return;
     const slotNum = overwriteTarget;
-    const slotUnlocks = slots.find((s) => s.slot === slotNum)?.state?.unlocks;
+    const slotState = slots.find((s) => s.slot === slotNum);
+    const slotUnlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks;
     setOverwriteTarget(null);
     if (slotUnlocks) persistUnlocks(slotUnlocks);
     void deleteSave(slotNum).then(() => {
       setSlots((prev) => {
-        const next = prev.map((s) => s.slot === slotNum ? { ...s, state: null } : s);
-        setHasSave(next.some((x) => x.state !== null));
+        const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null, proficiency: null } : s);
+        setHasSave(next.some((x) => x.main || x.proficiency));
         return next;
       });
       clearDeletedSlot(slotNum);
@@ -683,9 +699,12 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
 
   function onContinue() {
     if (!selectedSlot) return;
-    const target = slots.find((s) => s.slot === selectedSlot && s.state);
-    if (target?.state) {
-      dispatch({ type: 'LOAD_GAME', state: target.state });
+    const target = slots.find((s) => s.slot === selectedSlot);
+    if (!target) return;
+    // 优先加载主模式，无则加载熟练度
+    const toLoad = target.main ?? target.proficiency;
+    if (toLoad) {
+      dispatch({ type: 'LOAD_GAME', state: toLoad });
     }
   }
 
@@ -705,8 +724,8 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     setDeleteTarget(null);
     void deleteSave(slotNum).then(() => {
       setSlots((prev) => {
-        const next = prev.map((s) => s.slot === slotNum ? { ...s, state: null } : s);
-        setHasSave(next.some((x) => x.state !== null));
+        const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null, proficiency: null } : s);
+        setHasSave(next.some((x) => x.main || x.proficiency));
         return next;
       });
       if (selectedSlot === slotNum) {
@@ -716,13 +735,22 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   }
 
   function slotSummary(s: SaveSlotInfo) {
-    if (!s.state) return { text: '空', sub: '', cls: 'empty' };
-    const st = s.state;
-    const rosterCount = st.roster.length;
-    const diffLabel = DIFFICULTY_CONFIG[st.difficulty ?? 'normal'].label;
+    const parts: string[] = [];
+    const subs: string[] = [];
+    if (s.main) {
+      const st = s.main;
+      const diffLabel = DIFFICULTY_CONFIG[st.difficulty ?? 'normal'].label;
+      parts.push(`主模式 第${st.act}幕 ${st.roster.length}只 ${st.gold}金`);
+      subs.push(diffLabel);
+    }
+    if (s.proficiency) {
+      const st = s.proficiency;
+      parts.push(`远征 第${st.currentLayer ?? 1}层 ${st.roster.length}只 ${st.gold}金`);
+    }
+    if (parts.length === 0) return { text: '空', sub: '', cls: 'empty' };
     return {
-      text: `第${st.act}幕 · ${rosterCount}只 · ${st.gold}金`,
-      sub: `${diffLabel} · ${new Date().toLocaleDateString()}`,
+      text: parts.join(' | '),
+      sub: subs.length > 0 ? subs.join(' · ') : '',
       cls: 'occupied',
     };
   }
@@ -760,7 +788,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         <button className="primary big-btn" onClick={onNewGame}>
           新游戏
         </button>
-        <button className="big-btn" onClick={onContinue} disabled={!selectedSlot || !slots.find((s) => s.slot === selectedSlot && s.state)}>
+        <button className="big-btn" onClick={onContinue} disabled={!selectedSlot || !(slots.find((s) => s.slot === selectedSlot)?.main || slots.find((s) => s.slot === selectedSlot)?.proficiency)}>
           {hasSave === null ? '检查存档…' : selectedSlot ? '继续游戏' : '请先选择存档'}
         </button>
         <button className="big-btn" onClick={openSaveMgmt}>
@@ -770,25 +798,26 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
           📖 生物图鉴
         </button>
         <button className="big-btn" onClick={() => {
-          const unlocks = slots.find((s) => s.slot === selectedSlot)?.state?.unlocks ?? loadUnlocks();
+          const slotState = slots.find((s) => s.slot === selectedSlot);
+          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? loadUnlocks();
           dispatch({ type: 'ACHIEVEMENTS', unlocks });
         }}>
           🏆 成就
         </button>
         <button className="big-btn" onClick={() => {
-          // 检查是否有未完成的熟练度远征存档
-          const profSave = slots.find((s) => s.state?.runMode === 'proficiency');
-          if (profSave?.state) {
+          // 从当前选中槽位检查是否有未完成的熟练度远征
+          const slotState = slots.find((s) => s.slot === selectedSlot);
+          if (slotState?.proficiency) {
             const go = window.confirm('发现未完成的熟练度远征，是否继续？');
             if (go) {
-              dispatch({ type: 'LOAD_GAME', state: profSave.state });
+              dispatch({ type: 'LOAD_GAME', state: slotState.proficiency });
               return;
             }
           }
           // 选存档槽：优先当前选中，否则找空槽
           let slot = selectedSlot;
-          if (!slot || slots.find((s) => s.slot === slot)?.state) {
-            const empty = slots.find((s) => !s.state);
+          if (!slot || (slots.find((s) => s.slot === slot)?.main || slots.find((s) => s.slot === slot)?.proficiency)) {
+            const empty = slots.find((s) => !s.main && !s.proficiency);
             if (empty) {
               slot = empty.slot;
             } else {
@@ -829,7 +858,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                       <div className="save-slot-num">存档 {s.slot}{isActive ? '（当前）' : ''}</div>
                       <div className="save-slot-text">{info.text}</div>
                       {info.sub && <div className="save-slot-sub">{info.sub}</div>}
-                      {s.state && (
+                      {(s.main || s.proficiency) && (
                         <button className="save-slot-del" onClick={(e) => onDeleteSlot(s.slot, e)} title="删除存档">✕</button>
                       )}
                     </div>

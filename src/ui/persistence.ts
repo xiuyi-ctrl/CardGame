@@ -24,41 +24,88 @@ function slotKey(slot: number): string {
   return `petCardSave_${slot}`;
 }
 
+/** 双模式存档：每个槽位同时保存主模式和熟练度远征 */
+export interface DualSave {
+  main?: GameState | null;
+  proficiency?: GameState | null;
+}
+
+/** 检测 JSON 是否为旧格式（直接 GameState） */
+function isLegacySave(obj: unknown): obj is GameState {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return typeof o.seed === 'number' && typeof o.screen === 'string' && Array.isArray(o.roster);
+}
+
+/** 从 localStorage 原始 JSON 解析为 DualSave（含旧格式迁移） */
+function parseDualSave(json: string): DualSave | null {
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    // 新格式：已有 main/proficiency 字段
+    if ('main' in (parsed as Record<string, unknown>) || 'proficiency' in (parsed as Record<string, unknown>)) {
+      const ds = parsed as DualSave;
+      return {
+        main: isValidGameState(ds.main) ? ds.main : null,
+        proficiency: isValidGameState(ds.proficiency) ? ds.proficiency : null,
+      };
+    }
+    // 旧格式：直接是 GameState
+    if (isLegacySave(parsed)) {
+      const key = parsed.runMode === 'proficiency' ? 'proficiency' : 'main';
+      return { [key]: parsed } as DualSave;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 读取槽位原始 DualSave（内部用） */
+async function readDualSave(slot: number): Promise<DualSave | null> {
+  if (slot < 1 || slot > SAVE_SLOT_COUNT) return null;
+  let json: string | null = null;
+  if (window.petCard) {
+    try { json = await window.petCard.loadGame(slot); } catch { json = null; }
+  } else {
+    try { json = localStorage.getItem(slotKey(slot)); } catch { json = null; }
+  }
+  if (!json) return null;
+  return parseDualSave(json);
+}
+
+/** 写入 DualSave 到槽位 */
+async function writeDualSave(slot: number, ds: DualSave): Promise<void> {
+  if (deletedSlots.has(slot)) return;
+  const json = JSON.stringify(ds);
+  if (window.petCard) {
+    try { await window.petCard.saveGame(slot, json); } catch { /* ignore */ }
+  } else {
+    try { localStorage.setItem(slotKey(slot), json); } catch { /* ignore */ }
+  }
+}
+
+/** 保存当前 GameState 到对应模式分支 */
 export async function persistSave(state: GameState): Promise<void> {
   const slot = state.saveSlot;
   if (typeof slot !== 'number' || slot < 1 || slot > SAVE_SLOT_COUNT) return;
   if (deletedSlots.has(slot)) return;
-  const json = JSON.stringify(state);
-  if (window.petCard) {
-    try {
-      await window.petCard.saveGame(slot, json);
-    } catch { /* ignore */ }
-  } else {
-    try {
-      localStorage.setItem(slotKey(slot), json);
-    } catch { /* ignore */ }
-  }
+  const mode = state.runMode === 'proficiency' ? 'proficiency' : 'main';
+  const existing = await readDualSave(slot);
+  const ds: DualSave = { ...existing, [mode]: state };
+  await writeDualSave(slot, ds);
 }
 
-export async function loadSave(slot: number): Promise<GameState | null> {
-  if (slot < 1 || slot > SAVE_SLOT_COUNT) return null;
-  let json: string | null = null;
-  if (window.petCard) {
-    try {
-      json = await window.petCard.loadGame(slot);
-    } catch { json = null; }
-  } else {
-    try {
-      json = localStorage.getItem(slotKey(slot));
-    } catch { json = null; }
-  }
-  if (!json) return null;
-  try {
-    const parsed = JSON.parse(json) as unknown;
-    return isValidGameState(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+/** 加载指定槽位的 DualSave */
+export async function loadSave(slot: number): Promise<DualSave | null> {
+  return readDualSave(slot);
+}
+
+/** 从 DualSave 中取指定模式的 GameState */
+export function loadSlotMode(ds: DualSave | null, mode: 'main' | 'proficiency'): GameState | null {
+  if (!ds) return null;
+  const s = ds[mode];
+  return isValidGameState(s) ? s : null;
 }
 
 export async function deleteSave(slot: number): Promise<boolean> {
@@ -80,15 +127,19 @@ export function clearDeletedSlot(slot: number): void {
 
 export interface SaveSlotInfo {
   slot: number;
-  state: GameState | null;
-  timestamp?: number;
+  main: GameState | null;
+  proficiency: GameState | null;
 }
 
 export async function listSaves(): Promise<SaveSlotInfo[]> {
   const results: SaveSlotInfo[] = [];
   for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
-    const state = await loadSave(i);
-    results.push({ slot: i, state });
+    const ds = await readDualSave(i);
+    results.push({
+      slot: i,
+      main: ds?.main ?? null,
+      proficiency: ds?.proficiency ?? null,
+    });
   }
   return results;
 }
