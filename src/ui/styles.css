@@ -2732,3 +2732,155 @@ button.primary {
   from { opacity: 1; }
   to { opacity: 0; }
 }
+
+/* 熟练度远征模式 - 成长点分配界面 */
+.growth-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+.growth-hint {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 0;
+}
+.growth-message {
+  background: var(--bg-card);
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: var(--gold);
+  font-size: 14px;
+}
+.growth-roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+.growth-pet-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  transition: border-color 0.15s;
+  min-width: 200px;
+}
+.growth-pet-card:hover {
+  border-color: var(--gold);
+}
+.growth-pet-card.selected {
+  border-color: var(--gold);
+  background: rgba(232, 194, 106, 0.1);
+}
+.growth-pet-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.growth-pet-name {
+  font-weight: bold;
+  color: var(--text);
+}
+.growth-pet-level {
+  font-size: 12px;
+  color: var(--gold);
+}
+.growth-pet-gp {
+  font-size: 12px;
+  color: var(--hp-good);
+}
+.growth-pet-stats {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.growth-choices {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  width: 100%;
+  max-width: 400px;
+}
+.growth-choices h3 {
+  margin: 0 0 12px 0;
+  color: var(--text);
+  font-size: 16px;
+}
+.growth-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.growth-choice-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.growth-choice-btn:hover {
+  border-color: var(--gold);
+  background: rgba(232, 194, 106, 0.1);
+}
+.growth-no-choices {
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px;
+}
+.growth-actions {
+  margin-top: 8px;
+}
+
+/* 熟练度远征模式 - 结算界面 */
+.result-stats {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 24px;
+  width: 100%;
+  max-width: 320px;
+}
+.result-stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.result-stat-row:last-child {
+  border-bottom: none;
+}
+.result-stat-row span:first-child {
+  color: var(--text-dim);
+}
+.result-stat-row span:last-child {
+  color: var(--gold);
+  font-weight: bold;
+}
+.result-team {
+  margin-top: 16px;
+  text-align: center;
+}
+.result-team-title {
+  font-size: 16px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.result-team-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}

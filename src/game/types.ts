@@ -208,6 +208,12 @@ export interface Unit {
   altSkills?: string[];
   /** 形态切换：第二形态的被动 id */
   altPassive?: string;
+  /** 熟练度远征模式：当前熟练度值（0~55） */
+  proficiency?: number;
+  /** 熟练度远征模式：可用成长点 */
+  growthPoints?: number;
+  /** 熟练度远征模式：额外解锁的技能槽数量（0~2） */
+  extraSkillSlots?: number;
 }
 
 /** 日志高亮片段类型 */

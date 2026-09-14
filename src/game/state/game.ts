@@ -183,7 +183,10 @@ export type Screen =
   | 'test-pick'
   | 'test-config'
   | 'achievements'
-  | 'difficulty-select';
+  | 'difficulty-select'
+  | 'proficiency-map'
+  | 'proficiency-result'
+  | 'growth-menu';
 
 export interface RunStats {
   battlesWon: number;
@@ -328,6 +331,18 @@ export interface GameState {
   relics?: string[];
   /** 跨局解锁（持久化到 localStorage） */
   unlocks?: Unlocks;
+  /** 熟练度远征模式标记 */
+  runMode?: 'main' | 'proficiency';
+  /** 熟练度远征模式：当前层数（1~15） */
+  currentLayer?: number;
+  /** 熟练度远征模式：本局统计数据 */
+  proficiencyStats?: {
+    totalProficiency: number;
+    totalGrowthPoints: number;
+    battlesWon: number;
+    battlesLost: number;
+    kills: number;
+  };
 }
 
 export type Difficulty = 'normal' | 'hard' | 'nightmare';

@@ -14,6 +14,8 @@ import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
 import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
+import { GrowthScreen } from './GrowthScreen';
+import { ProficiencyResultScreen } from './ProficiencyResultScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
@@ -79,6 +81,8 @@ export default function App() {
       {state.screen === 'test-pick' && <TestPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
       {state.screen === 'achievements' && <AchievementsScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'growth-menu' && <GrowthScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'proficiency-result' && <ProficiencyResultScreen state={state} dispatch={dispatch} />}
       {state.screen === 'difficulty-select' && <DifficultyScreen state={state} dispatch={dispatch} />}
       {state.toast && (
         <div className={`toast ${state.toast.kind ?? 'info'}`}>
@@ -770,6 +774,9 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
           dispatch({ type: 'ACHIEVEMENTS', unlocks });
         }}>
           🏆 成就
+        </button>
+        <button className="big-btn" onClick={() => dispatch({ type: 'SELECT_DIFFICULTY' })}>
+          ⚔️ 熟练度远征
         </button>
         <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
           {showDebug ? '收起测试面板' : '🔬 测试关卡'}
