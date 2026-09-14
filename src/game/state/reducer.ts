@@ -97,7 +97,7 @@ export type GameAction =
   | { type: 'SELECT_DIFFICULTY' }
   | { type: 'SELECT_DIFFICULTY_BACK' }
   | { type: 'SET_PRERUN_CONFIG'; difficulty: Difficulty; relic?: string }
-  | { type: 'START_PROFICIENCY'; seed: number }
+  | { type: 'START_PROFICIENCY'; seed: number; saveSlot?: number }
   | { type: 'PROF_GROWTH_MENU'; uid: string }
   | { type: 'PROF_SHOP_BUY'; itemId: string }
   | { type: 'PROF_SHOP_REFRESH' }
@@ -130,7 +130,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'proficiency-result', 'growth-menu'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -206,7 +206,7 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
   };
 }
 
-function freshProficiencyRun(seed: number): GameState {
+function freshProficiencyRun(seed: number, saveSlot?: number): GameState {
   const starter = makeUnit('momo', true, 0, false);
   const tank = makeUnit('lulu', true, 1, false);
   const dps = makeUnit('fifi', true, 2, false);
@@ -235,6 +235,7 @@ function freshProficiencyRun(seed: number): GameState {
     difficulty: 'normal',
     unlocks: { ...DEFAULT_UNLOCKS },
     relics: [],
+    saveSlot,
   };
 }
 
@@ -1890,7 +1891,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, difficulty: action.difficulty, relics: action.relic ? [action.relic] : [], screen: 'starter' };
 
     case 'START_PROFICIENCY': {
-      return freshProficiencyRun(action.seed);
+      return freshProficiencyRun(action.seed, action.saveSlot);
     }
 
     case 'PROF_GROWTH_MENU': {

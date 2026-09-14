@@ -775,7 +775,18 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         }}>
           🏆 成就
         </button>
-        <button className="big-btn" onClick={() => dispatch({ type: 'START_PROFICIENCY', seed: Date.now() })}>
+        <button className="big-btn" onClick={() => {
+          // 检查是否有未完成的熟练度远征存档
+          const profSave = slots.find((s) => s.state?.runMode === 'proficiency');
+          if (profSave?.state) {
+            const go = window.confirm('发现未完成的熟练度远征，是否继续？');
+            if (go) {
+              dispatch({ type: 'LOAD_GAME', state: profSave.state });
+              return;
+            }
+          }
+          dispatch({ type: 'START_PROFICIENCY', seed: Date.now() });
+        }}>
           ⚔️ 熟练度远征
         </button>
         <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
