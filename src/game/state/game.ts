@@ -193,7 +193,9 @@ export type Screen =
   | 'achievements'
   | 'difficulty-select'
   | 'proficiency-map'
+  | 'proficiency-select'
   | 'proficiency-result'
+  | 'skill-pick'
   | 'growth-menu';
 
 export interface RunStats {
@@ -351,6 +353,12 @@ export interface GameState {
     battlesLost: number;
     kills: number;
   };
+  /** 技能槽解锁后：待选技能列表 + 目标单位uid + 技能槽编号(4/5) */
+  skillPick?: {
+    uid: string;
+    slot: 4 | 5;
+    choices: string[];
+  };
 }
 
 export type Difficulty = 'normal' | 'hard' | 'nightmare';
@@ -400,11 +408,16 @@ export interface Unlocks {
 export const DEFAULT_UNLOCKS: Unlocks = { difficulties: ['normal'], relics: [], bestGrade: undefined };
 
 export const ROSTER_MAX = 8;
+/** 熟练度远征模式队伍上限（6只，强调核心培养） */
+export const PROF_ROSTER_MAX = 6;
 /** 出战宠物上限（最大 5 只，实际受敌方数量限制：敌方 n 只时玩家最多 n+1 只） */
 export const FIELD_MAX = 5;
-/** 根据敌方数量计算我方出战上限（n+1，不超过 FIELD_MAX） */
-export function maxFieldForEnemy(enemyCount: number): number {
-  return Math.min(enemyCount + 1, FIELD_MAX);
+/** 熟练度远征模式出战上限（3只，精英化） */
+export const PROF_FIELD_MAX = 3;
+/** 根据敌方数量计算我方出战上限（n+1，不超过 fieldMax） */
+export function maxFieldForEnemy(enemyCount: number, runMode?: 'main' | 'proficiency'): number {
+  const fieldMax = runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX;
+  return Math.min(enemyCount + 1, fieldMax);
 }
 
 /** 地图节点图标（UI 与侦查/瞭望共用） */

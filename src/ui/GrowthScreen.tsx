@@ -28,16 +28,18 @@ export function GrowthScreen({ state, dispatch }: Props) {
   const selectedUnit = roster.find((u) => u.uid === selectedUid);
 
   const handleGrowthChoice = (unit: Unit, choice: GrowthChoice) => {
+    // 技能槽解锁：路由到技能选择界面（由 reducer 处理 state 转换）
+    if (choice.kind === 'slot4' || choice.kind === 'slot5') {
+      dispatch({ type: 'PROF_SLOT_UNLOCK', uid: unit.uid, slot: choice.kind === 'slot4' ? 4 : 5 });
+      return;
+    }
     const success = applyGrowthChoice(unit, choice);
     if (success) {
       const label =
         choice.kind === 'hp' ? `生命 +${choice.amount}` :
         choice.kind === 'spd' ? `速度 +${choice.amount}` :
-        choice.kind === 'slot4' ? '解锁第4技能槽' :
-        choice.kind === 'slot5' ? '解锁第5技能槽' :
         '技能替换点已消耗';
       setMessage(`${unit.name}：${label}`);
-      // 触发重新渲染
       dispatch({ type: 'SHOW_TOAST', msg: `${unit.name} 获得 ${label}`, kind: 'success' });
     }
   };

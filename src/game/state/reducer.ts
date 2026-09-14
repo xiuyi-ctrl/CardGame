@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks } from './game';
-import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, PROF_FIELD_MAX, PROF_ROSTER_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -9,7 +9,7 @@ import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
 import { generateProficiencyMap, getProficiencyEncounter, getProficiencyEliteEncounter } from '../core/proficiency-map';
-import { settleBattleProficiency } from '../core/proficiency';
+import { settleBattleProficiency, SLOT4_COST, SLOT5_COST } from '../core/proficiency';
 import { PROFICIENCY_SHOP_ITEMS, getShopStock } from '../data/proficiency-shop';
 import { buildProficiencyEvent } from '../data/proficiency-events';
 import { getSpecialRewards, PROFICIENCY_SPECIAL_REWARDS } from '../data/proficiency-special';
@@ -17,6 +17,11 @@ import { PROFICIENCY_MASTER, PROFICIENCY_PUPPET } from '../data/proficiency-boss
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
+}
+
+/** 根据运行模式返回队伍上限 */
+function rosterMax(runMode?: 'main' | 'proficiency'): number {
+  return runMode === 'proficiency' ? PROF_ROSTER_MAX : ROSTER_MAX;
 }
 
 /** 钥匙门节点：是否已持有对应守卫的专用钥匙 */
@@ -98,10 +103,14 @@ export type GameAction =
   | { type: 'SELECT_DIFFICULTY_BACK' }
   | { type: 'SET_PRERUN_CONFIG'; difficulty: Difficulty; relic?: string }
   | { type: 'START_PROFICIENCY'; seed: number; saveSlot?: number }
+  | { type: 'START_PROFICIENCY_PICKED'; seed: number; saveSlot?: number; starterId: string; companionId: string }
   | { type: 'PROF_GROWTH_MENU'; uid: string }
   | { type: 'PROF_SHOP_BUY'; itemId: string }
   | { type: 'PROF_SHOP_REFRESH' }
-  | { type: 'PROF_REST' };
+  | { type: 'PROF_REST' }
+  | { type: 'PROF_SLOT_UNLOCK'; uid: string; slot: 4 | 5 }
+  | { type: 'PROF_SLOT_PICK'; skillId: string }
+  | { type: 'PROF_SLOT_CANCEL' };
 
 export function createInitialState(): GameState {
   const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
@@ -130,7 +139,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'proficiency-result', 'growth-menu'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'proficiency-select', 'proficiency-result', 'skill-pick', 'growth-menu'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -206,11 +215,10 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
   };
 }
 
-function freshProficiencyRun(seed: number, saveSlot?: number): GameState {
-  const starter = makeUnit('momo', true, 0, false);
-  const tank = makeUnit('lulu', true, 1, false);
-  const dps = makeUnit('fifi', true, 2, false);
-  const roster = [starter, tank, dps];
+function freshProficiencyRun(seed: number, saveSlot?: number, starterId?: string, companionId?: string): GameState {
+  const s1 = makeUnit(starterId ?? 'momo', true, 0, false);
+  const s2 = makeUnit(companionId ?? 'lulu', true, 1, false);
+  const roster = [s1, s2];
   const map = generateProficiencyMap(seed);
   const firstNode = map.layers[0]?.[0];
   return {
@@ -277,8 +285,9 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
 
   // 驯服入库：先填满空位，超出的进入溢出队列（等待玩家处理：替换/融合/放弃）
   let overflow: Unit[] = [];
+  const cap = rosterMax(state.runMode);
   for (const t of battle.pendingTame) {
-    if (roster.length < ROSTER_MAX) roster.push(t);
+    if (roster.length < cap) roster.push(t);
     else overflow.push(t);
   }
 
@@ -316,7 +325,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       ...keyLog,
       ...(corruptNode ? ['被侵蚀区域：奖励已翻倍'] : []),
       ...(battle.pendingTame.length > 0 ? [`驯服了 ${battle.pendingTame.length} 只宠物`] : []),
-      ...(overflow.length > 0 ? [`队伍已满（${ROSTER_MAX} 只），需要处理 ${overflow.length} 只驯服的宠物`] : []),
+      ...(overflow.length > 0 ? [`队伍已满（${cap} 只），需要处理 ${overflow.length} 只驯服的宠物`] : []),
       ...(roster.length < state.roster.length ? [`战斗中有宠物阵亡，永远失去了它`] : []),
       ...state.log,
     ].slice(0, 20),
@@ -398,7 +407,7 @@ function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: Ga
 
 /** 进入一个地图节点：根据节点类型进入对应界面（MOVE 与 DEBUG_JUMP 共用） */
 function fieldUnits(state: GameState, maxCount?: number): Unit[] {
-  const limit = maxCount ?? FIELD_MAX;
+  const limit = maxCount ?? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX);
   const uids = state.field.length > 0 ? state.field : state.roster.slice(0, limit).map((u) => u.uid);
   return state.roster.filter((u) => uids.includes(u.uid)).slice(0, limit);
 }
@@ -435,7 +444,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
       if (base.roster.length === 0) return { ...base, screen: 'map' };
       const rng = createRng(base.seed * 2731 + (base.currentLayer ?? 0) * 5039 + hashStr(node.id));
       const encounter = node.type === 'elite' ? getProficiencyEliteEncounter(base.currentLayer ?? 1, rng) : getProficiencyEncounter(base.currentLayer ?? 1, rng);
-      const maxField = maxFieldForEnemy(encounter.length);
+      const maxField = maxFieldForEnemy(encounter.length, base.runMode);
       const initial = autoPosition(fieldUnits(base, maxField));
       const options = { act: 1, nodeType: node.type as 'battle' | 'elite', difficulty: base.difficulty, untameable: true };
       return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
@@ -447,7 +456,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
         { speciesId: PROFICIENCY_PUPPET.id },
         { speciesId: PROFICIENCY_PUPPET.id },
       ];
-      const maxField = maxFieldForEnemy(encounter.length);
+      const maxField = maxFieldForEnemy(encounter.length, base.runMode);
       const initial = autoPosition(fieldUnits(base, maxField));
       const options = { act: 1, nodeType: 'boss' as const, difficulty: base.difficulty, untameable: true };
       return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
@@ -475,7 +484,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   if (node.type === 'boss') {
     const encounter = base.map.boss[node.id];
     if (!encounter || base.roster.length === 0) return { ...base, screen: 'map' };
-    const maxField = maxFieldForEnemy(encounter.length);
+    const maxField = maxFieldForEnemy(encounter.length, base.runMode);
     const initial = autoPosition(fieldUnits(base, maxField));
     const options = { act: base.act, nodeType: 'boss' as const, difficulty: base.difficulty };
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
@@ -510,7 +519,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     const encounter = base.map.encounter[node.id];
     if (!encounter) return { ...base, screen: 'map' };
     if (base.roster.length === 0) return { ...base, screen: 'map' };
-    const maxField = maxFieldForEnemy(encounter.length);
+    const maxField = maxFieldForEnemy(encounter.length, base.runMode);
     const initial = autoPosition(fieldUnits(base, maxField));
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true, act: base.act, nodeType: 'guardian', difficulty: base.difficulty }, prevRow, prevNodeId } };
   }
@@ -532,7 +541,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   }
   // 车轮战：一次上一只，先让玩家选择出战顺序（n v n，只选 n 只）
   if (node.type === 'gauntlet') {
-    const maxField = maxFieldForEnemy(encounter.length);
+    const maxField = maxFieldForEnemy(encounter.length, base.runMode);
     const units = fieldUnits(base, maxField);
     if (units.length === 0) return { ...base, screen: 'map' };
     return { ...base, screen: 'gauntlet-order', gauntletOrder: units, gauntletSize: encounter.length, gauntletPrevRow: prevRow, gauntletPrevNodeId: prevNodeId };
@@ -545,7 +554,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     difficulty: base.difficulty,
   };
   if (base.roster.length === 0) return { ...base, screen: 'map' };
-  const maxField = maxFieldForEnemy(encounter.length);
+  const maxField = maxFieldForEnemy(encounter.length, base.runMode);
   const initial = autoPosition(fieldUnits(base, maxField));
   return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
 }
@@ -809,7 +818,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       } else if (choice.kind === 'item' && choice.itemId) {
         next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
-      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
+      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < rosterMax(state.runMode)) {
         next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
       } else if (choice.kind === 'damage') {
         next = {
@@ -923,7 +932,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (choice.kind === 'item' && choice.itemId) {
         const it = ITEMS[choice.itemId];
         next = { ...next, toast: { msg: `${it?.emoji ?? '🎒'} ${it?.name ?? choice.itemId} ×1`, kind: 'success' } };
-      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length <= ROSTER_MAX) {
+      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length <= rosterMax(state.runMode)) {
         const m = getMonster(choice.monsterId);
         next = { ...next, toast: { msg: `招募了 ${m.emoji} ${m.name}！`, kind: 'success' } };
       } else if (choice.kind === 'purify') {
@@ -1005,7 +1014,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const ev = state.map.events[state.currentNodeId];
       const choice = ev?.choices.find((x) => x.id === choiceId);
       if (choice && choice.kind === 'recruit' && choice.monsterId) {
-        if (next.roster.length < ROSTER_MAX) {
+        if (next.roster.length < rosterMax(state.runMode)) {
           next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
         } else {
           const hatched = makeUnit(choice.monsterId, true, 0, false);
@@ -1122,7 +1131,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           next = { ...next, screen: 'roster', specialPending: { kind: 'boost', uid: '' } };
           break;
         case 'custom':
-          if (next.roster.length >= ROSTER_MAX) return state;
+          if (next.roster.length >= rosterMax(state.runMode)) return state;
           next = { ...next, screen: 'custom' };
           break;
       }
@@ -1192,7 +1201,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'PICK_CUSTOM': {
       if (state.screen !== 'custom') return state;
-      if (state.roster.length >= ROSTER_MAX) return state;
+      if (state.roster.length >= rosterMax(state.runMode)) return state;
       if (!CUSTOM_PRESETS.some((p) => p === action.presetId)) return state;
       const rng = createRng(state.seed * 7 + state.act * 13 + state.roster.length * 3 + state.currentRow);
       const unit = makeCustomUnit(action.presetId, rng);
@@ -1543,7 +1552,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (reward.kind === 'heal') {
         next = healRoster(next, (reward.amount ?? 30) / 100);
       } else if (reward.kind === 'recruit' && reward.monsterId) {
-        if (next.roster.length < ROSTER_MAX) {
+        if (next.roster.length < rosterMax(state.runMode)) {
           const u = makeUnit(reward.monsterId, true, 0, false);
           next = { ...next, roster: [...next.roster, u], toast: { msg: `招募了 ${u.name}！`, kind: 'success' } };
         } else {
@@ -1564,7 +1573,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_FIELD': {
       const isBoss = !!state.map.boss[state.currentNodeId];
       const enemyCount = state.formation?.encounter?.length ?? 1;
-      const maxField = isBoss ? FIELD_MAX : maxFieldForEnemy(enemyCount);
+      const maxField = isBoss ? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX) : maxFieldForEnemy(enemyCount, state.runMode);
       const uids = action.uids.filter((uid) => state.roster.some((u) => u.uid === uid)).slice(0, maxField);
       return { ...state, field: uids };
     }
@@ -1677,7 +1686,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'TAME_OVERFLOW_JOIN': {
       const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
       if (!tame) return state;
-      if (state.roster.length >= ROSTER_MAX) return state;
+      if (state.roster.length >= rosterMax(state.runMode)) return state;
       const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
       const next: GameState = {
         ...state,
@@ -1891,11 +1900,57 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, difficulty: action.difficulty, relics: action.relic ? [action.relic] : [], screen: 'starter' };
 
     case 'START_PROFICIENCY': {
-      return freshProficiencyRun(action.seed, action.saveSlot);
+      return { ...state, screen: 'proficiency-select', seed: action.seed, saveSlot: action.saveSlot, runMode: 'proficiency' };
+    }
+
+    case 'START_PROFICIENCY_PICKED': {
+      return freshProficiencyRun(action.seed, action.saveSlot, action.starterId, action.companionId);
     }
 
     case 'PROF_GROWTH_MENU': {
       return { ...state, screen: 'growth-menu' };
+    }
+
+    case 'PROF_SLOT_PICK': {
+      if (!state.skillPick) return state;
+      const unit = state.roster.find((u) => u.uid === state.skillPick!.uid);
+      if (!unit) return state;
+      const newSkills = [...unit.skills, action.skillId];
+      unit.skills = newSkills;
+      return { ...state, roster: [...state.roster], screen: 'growth-menu', skillPick: undefined };
+    }
+
+    case 'PROF_SLOT_CANCEL': {
+      return { ...state, screen: 'growth-menu', skillPick: undefined };
+    }
+
+    case 'PROF_SLOT_UNLOCK': {
+      const unit = state.roster.find((u) => u.uid === action.uid);
+      if (!unit) return state;
+      const gp = unit.growthPoints ?? 0;
+      const cost = action.slot === 4 ? SLOT4_COST : SLOT5_COST;
+      if (gp < cost) return state;
+      const extraSlots = unit.extraSkillSlots ?? 0;
+      if (action.slot === 4 && extraSlots >= 1) return state;
+      if (action.slot === 5 && extraSlots >= 2) return state;
+      // 扣除成长点、增加技能槽
+      unit.growthPoints = gp - cost;
+      unit.extraSkillSlots = extraSlots + 1;
+      // 生成3个随机技能
+      const { createRng } = require('../rng');
+      const rng = createRng(state.seed + (unit.uid.charCodeAt(0) << 8) + (action.slot === 5 ? 1 : 0));
+      const { getRandomSkillChoices } = require('../core/proficiency');
+      const choices = getRandomSkillChoices(unit, 3, rng);
+      if (choices.length === 0) {
+        // 无可用技能，直接返回
+        return { ...state, roster: [...state.roster], screen: 'growth-menu' };
+      }
+      return {
+        ...state,
+        roster: [...state.roster],
+        screen: 'skill-pick',
+        skillPick: { uid: unit.uid, slot: action.slot, choices },
+      };
     }
 
     case 'PROF_SHOP_BUY': {
@@ -1931,7 +1986,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const rng = createRng(state.seed * 1111 + Date.now());
         const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
         const pick = pool[Math.floor(rng() * pool.length)];
-        if (next.roster.length < 8) {
+        if (next.roster.length < rosterMax(state.runMode)) {
           next = { ...next, roster: [...next.roster, makeUnit(pick, true, 0, false)], toast: { msg: `招募了 ${getMonster(pick).name}！`, kind: 'success' } };
         } else {
           next = { ...next, toast: { msg: '队伍已满，无法招募', kind: 'warning' } };

@@ -215,3 +215,19 @@ export function getKillProficiency(isElite: boolean, isBoss: boolean): number {
   if (isElite) return 4;
   return 2;
 }
+
+/** 从技能库随机选取 n 个不重复技能（排除已学技能） */
+export function getRandomSkillChoices(unit: Unit, n: number, rng: () => number): string[] {
+  const { SKILLS } = require('../data/skills') as typeof import('../data/skills');
+  const allIds = Object.keys(SKILLS);
+  const owned = new Set(unit.skills);
+  const candidates = allIds.filter((id) => !owned.has(id));
+  const result: string[] = [];
+  const pool = [...candidates];
+  for (let i = 0; i < n && pool.length > 0; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    result.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return result;
+}

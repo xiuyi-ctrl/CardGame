@@ -4,24 +4,26 @@ import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
-import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, getMonster } from '../game/data/monsters';
+import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
+import { PROFICIENCY_SHOP_ITEMS, type ProficiencyShopItemType } from '../game/data/proficiency-shop';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
 import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
 import { GrowthScreen } from './GrowthScreen';
+import { SkillPickScreen } from './SkillPickScreen';
 import { ProficiencyResultScreen } from './ProficiencyResultScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { persistSave, persistUnlocks, loadUnlocks, quitGame, detectUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 
-const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
+const NO_SAVE_SCREENS = ['title', 'starter', 'proficiency-select', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
 const EMPTY_ROW: MapNode[] = [];
 
@@ -58,6 +60,7 @@ export default function App() {
     <div className="screen">
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
+      {state.screen === 'proficiency-select' && <ProficiencyStarterScreen state={state} dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
       {state.screen === 'formation' && <FormationScreen state={state} dispatch={dispatch} />}
       {state.screen === 'gauntlet-order' && <GauntletOrderScreen state={state} dispatch={dispatch} />}
@@ -82,6 +85,7 @@ export default function App() {
       {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
       {state.screen === 'achievements' && <AchievementsScreen state={state} dispatch={dispatch} />}
       {state.screen === 'growth-menu' && <GrowthScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'skill-pick' && <SkillPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'proficiency-result' && <ProficiencyResultScreen state={state} dispatch={dispatch} />}
       {state.screen === 'difficulty-select' && <DifficultyScreen state={state} dispatch={dispatch} />}
       {state.toast && (
@@ -1319,6 +1323,72 @@ function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   );
 }
 
+function ProficiencyStarterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const toggle = (id: string) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length < 2 ? [...prev, id] : prev
+    );
+  };
+
+  const confirmed = selected.length === 2;
+
+  return (
+    <div className="center-col">
+      <div className="section-title">⚔️ 熟练度远征</div>
+      <div className="section-sub">从 6 只基础生物中选择 2 只出征</div>
+      <div className="starter-grid">
+        {BASE_POOL.map((id) => {
+          const sp = getMonster(id);
+          const stats = computeStats(id);
+          const isSel = selected.includes(id);
+          return (
+            <div
+              key={id}
+              className={`unit-card clickable ${isSel ? 'selected' : ''}`}
+              onClick={() => toggle(id)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div className="card-top" style={{ margin: 0 }}>
+                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
+                </div>
+                <div className="card-name" style={{ margin: 0 }}>{sp.name}</div>
+              </div>
+              <div className="card-sub">
+                生命 {stats.maxHp} · 速度 {stats.spd}
+              </div>
+              <div className="skill-list">
+                {sp.skills.map((s) => (
+                  <SkillTag key={s} skill={getSkill(s)} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ color: 'var(--text-dim)', fontSize: 13, marginTop: 8 }}>
+        已选 {selected.length}/2{confirmed ? ' — 点击「出发」开始远征' : ' — 点击卡片选择或取消'}
+      </p>
+      <button
+        className="primary big-btn"
+        disabled={!confirmed}
+        onClick={() => {
+          dispatch({
+            type: 'START_PROFICIENCY_PICKED',
+            seed: state.seed ?? Date.now(),
+            saveSlot: state.saveSlot,
+            starterId: selected[0],
+            companionId: selected[1],
+          });
+        }}
+      >
+        {confirmed ? '出发 →' : '请选择 2 只'}
+      </button>
+    </div>
+  );
+}
+
 function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const isFirst = state.currentNodeId === '';
   const optionsRow = isFirst ? state.currentRow : state.currentRow + 1;
@@ -1630,7 +1700,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
     } else {
       const isBoss = !!state.map.boss[state.currentNodeId];
       const enemyCount = state.formation?.encounter?.length ?? 1;
-      const maxField = isBoss ? FIELD_MAX : maxFieldForEnemy(enemyCount);
+      const maxField = isBoss ? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX) : maxFieldForEnemy(enemyCount, state.runMode);
       if (state.field.length < maxField) {
         dispatch({ type: 'SET_FIELD', uids: [...state.field, uid] });
       }
@@ -1735,7 +1805,10 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 
 function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const boughtItems = state.shopBoughtItems ?? [];
-  const stock = (state.shopStock ?? []).filter((id) => FOODS[id] || ITEMS[id]);
+  const isProf = state.runMode === 'proficiency';
+  const stock = (state.shopStock ?? []).filter((id) =>
+    isProf ? !!PROFICIENCY_SHOP_ITEMS[id as ProficiencyShopItemType] : (!!FOODS[id] || !!ITEMS[id])
+  );
   const refreshCount = state.shopRefreshCount ?? 0;
   const refreshCost = 5 + refreshCount * 5;
   const canRefresh = refreshCount < 3 && state.gold >= refreshCost;
@@ -1748,12 +1821,13 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       </p>
       <div className="reward-cards">
         {stock.map((id) => {
-          const f = FOODS[id];
-          const it = ITEMS[id];
-          const name = f ? f.name : it.name;
-          const emoji = f ? f.emoji : it.emoji;
-          const desc = f ? f.desc : it.desc;
-          const price = f ? f.price : it.price;
+          const profItem = isProf ? PROFICIENCY_SHOP_ITEMS[id as ProficiencyShopItemType] : undefined;
+          const f = !isProf ? FOODS[id] : undefined;
+          const it = !isProf ? ITEMS[id] : undefined;
+          const name = profItem?.label ?? f?.name ?? it?.name ?? id;
+          const emoji = profItem?.emoji ?? f?.emoji ?? it?.emoji ?? '🎁';
+          const desc = profItem?.desc ?? f?.desc ?? it?.desc ?? '';
+          const price = profItem?.price ?? f?.price ?? it?.price ?? 0;
           const soldOut = boughtItems.includes(id);
           return (
             <div key={id} className={`reward-card ${soldOut ? 'dim' : ''}`}>
@@ -1765,7 +1839,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
                 <button
                   className="primary"
                   disabled={soldOut || state.gold < price}
-                  onClick={() => dispatch({ type: 'SHOP_BUY', foodId: id })}
+                  onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_BUY', itemId: id } : { type: 'SHOP_BUY', foodId: id })}
                 >
                   {soldOut ? '已购买' : '购买'}
                 </button>
@@ -1796,7 +1870,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
             <button
               className="primary"
               disabled={!canRefresh}
-              onClick={() => dispatch({ type: 'SHOP_REFRESH' })}
+              onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_REFRESH' } : { type: 'SHOP_REFRESH' })}
             >
               {refreshCount >= 3 ? '已用完' : '刷新'}
             </button>
