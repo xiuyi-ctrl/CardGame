@@ -100,6 +100,14 @@ export interface EventChoice {
   battlePenalty?: { percent?: number; goldLoss?: number; curseTarget?: boolean };
   /** 战斗胜利额外奖励 */
   bonusReward?: { kind: 'food'; foodId: string };
+  /** 熟练度远征模式：给予目标宠物的熟练度 */
+  proficiencyGain?: number;
+  /** 熟练度远征模式：给予目标宠物的成长点 */
+  growthPointGain?: number;
+  /** 熟练度远征模式：重置目标宠物的成长点 */
+  resetGrowthPoints?: boolean;
+  /** 熟练度远征模式：全队获得熟练度 */
+  teamProficiencyGain?: number;
 }
 
 export interface EventNode {

@@ -775,7 +775,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         }}>
           🏆 成就
         </button>
-        <button className="big-btn" onClick={() => dispatch({ type: 'SELECT_DIFFICULTY' })}>
+        <button className="big-btn" onClick={() => dispatch({ type: 'START_PROFICIENCY', seed: Date.now() })}>
           ⚔️ 熟练度远征
         </button>
         <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>

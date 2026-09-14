@@ -60,8 +60,8 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '远古训练场',
         desc: '你发现了一座古老的训练场，空气中弥漫着战斗的气息。',
         choices: [
-          { id: 'pa-train-core', label: '训练核心', desc: '选择 1 只宠物，获得 3 熟练度', kind: 'boost', boostStat: 'hp' },
-          { id: 'pa-train-all', label: '训练全队', desc: '全队获得 1 熟练度', kind: 'boost', boostStat: 'spd' },
+          { id: 'pa-train-core', label: '训练核心', desc: '选择 1 只宠物，获得 3 熟练度', kind: 'boost', boostStat: 'hp', proficiencyGain: 3 },
+          { id: 'pa-train-all', label: '训练全队', desc: '全队获得 1 熟练度', kind: 'none', teamProficiencyGain: 1 },
           { id: 'pa-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -70,7 +70,7 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '战斗大师',
         desc: '一位隐居的战斗大师愿意指导你。',
         choices: [
-          { id: 'pm-learn', label: '拜师学艺', desc: '选择 1 只宠物，获得 2 熟练度 + 1 成长点', kind: 'boost', boostStat: 'hp' },
+          { id: 'pm-learn', label: '拜师学艺', desc: '选择 1 只宠物，获得 2 熟练度 + 1 成长点', kind: 'boost', boostStat: 'hp', proficiencyGain: 2, growthPointGain: 1 },
           { id: 'pm-duel', label: '切磋', desc: '战斗（1 只精英），胜利后获得 1 成长点', kind: 'battle', battleEnemies: [{ speciesId: 'momo_queen' }], battleReward: { kind: 'gold', amount: 30 }, battlePenalty: { percent: 20 } },
           { id: 'pm-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
@@ -80,8 +80,8 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '灵魂共鸣',
         desc: '一股神秘的力量在涌动，似乎可以强化你的宠物。',
         choices: [
-          { id: 'sr-hp', label: '强化生命', desc: '选择 1 只宠物，永久 +2 生命', kind: 'boost', boostStat: 'hp' },
-          { id: 'sr-spd', label: '强化速度', desc: '选择 1 只宠物，永久 +1 速度', kind: 'boost', boostStat: 'spd' },
+          { id: 'sr-hp', label: '强化生命', desc: '选择 1 只宠物，永久 +2 生命', kind: 'boost', boostStat: 'hp', amount: 2 },
+          { id: 'sr-spd', label: '强化速度', desc: '选择 1 只宠物，永久 +1 速度', kind: 'boost', boostStat: 'spd', amount: 1 },
           { id: 'sr-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -100,8 +100,8 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '神秘祭坛',
         desc: '一座古老的祭坛散发着神秘的光芒。',
         choices: [
-          { id: 'ma-sacrifice', label: '献祭', desc: '放生 1 只宠物，全队获得 5 熟练度', kind: 'sacrifice' },
-          { id: 'ma-pray', label: '祈祷', desc: '消耗 20 金币，全队获得 2 熟练度', kind: 'gold', goldDelta: -20 },
+          { id: 'ma-sacrifice', label: '献祭', desc: '放生 1 只宠物，全队获得 5 熟练度', kind: 'sacrifice', teamProficiencyGain: 5 },
+          { id: 'ma-pray', label: '祈祷', desc: '消耗 20 金币，全队获得 2 熟练度', kind: 'gold', goldDelta: -20, teamProficiencyGain: 2 },
           { id: 'ma-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -130,7 +130,7 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '训练场挑战',
         desc: '训练场守卫向你发起挑战。',
         choices: [
-          { id: 'ac-accept', label: '接受挑战', desc: '战斗（2 只敌人），胜利后全队 +2 熟练度', kind: 'battle', battleEnemies: [{ speciesId: 'momo' }, { speciesId: 'lulu' }], battleReward: { kind: 'gold', amount: 25 }, battlePenalty: { percent: 15 } },
+          { id: 'ac-accept', label: '接受挑战', desc: '战斗（2 只敌人），胜利后全队 +2 熟练度', kind: 'battle', battleEnemies: [{ speciesId: 'momo' }, { speciesId: 'lulu' }], battleReward: { kind: 'gold', amount: 25 }, battlePenalty: { percent: 15 }, teamProficiencyGain: 2 },
           { id: 'ac-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -139,7 +139,7 @@ function buildProficiencyEventByType(type: ProficiencyEventType): EventNode {
         title: '遗忘之石',
         desc: '一块古老的石头散发着神秘的光芒。',
         choices: [
-          { id: 'sf-reset', label: '重置', desc: '选择 1 只宠物，重置其成长点（重新分配）', kind: 'boost', boostStat: 'hp' },
+          { id: 'sf-reset', label: '重置', desc: '选择 1 只宠物，重置其成长点（重新分配）', kind: 'boost', boostStat: 'hp', resetGrowthPoints: true },
           { id: 'sf-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
