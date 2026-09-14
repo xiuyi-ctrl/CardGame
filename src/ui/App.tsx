@@ -615,6 +615,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   });
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [overwriteTarget, setOverwriteTarget] = useState<number | null>(null);
+  const [profConfirmSlot, setProfConfirmSlot] = useState<number | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [dbgAct, setDbgAct] = useState(1);
   const [dbgRow, setDbgRow] = useState(5);
@@ -695,6 +696,24 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       selectSlot(slotNum);
       dispatch({ type: 'STARTER', saveSlot: slotNum, unlocks: slotUnlocks });
     });
+  }
+
+  function profConfirmContinue() {
+    if (profConfirmSlot === null) return;
+    const slotState = slots.find(s => s.slot === profConfirmSlot);
+    setProfConfirmSlot(null);
+    if (slotState?.proficiency) {
+      dispatch({ type: 'LOAD_GAME', state: slotState.proficiency });
+    }
+  }
+
+  function profConfirmRestart() {
+    if (profConfirmSlot === null) return;
+    const slot = profConfirmSlot;
+    setProfConfirmSlot(null);
+    clearDeletedSlot(slot);
+    selectSlot(slot);
+    dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
   }
 
   function onContinue() {
@@ -816,15 +835,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
           // 检查该槽是否有未完成的熟练度远征
           const slotState = slots.find(s => s.slot === slot);
           if (slotState?.proficiency) {
-            const go = window.confirm('发现未完成的熟练度远征，是否继续？');
-            if (go) {
-              dispatch({ type: 'LOAD_GAME', state: slotState.proficiency });
-              return;
-            }
-            // 取消 → 覆盖当前槽位的远征记录
-            clearDeletedSlot(slot);
-            selectSlot(slot);
-            dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
+            setProfConfirmSlot(slot);
             return;
           }
 
@@ -904,6 +915,23 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
             <div className="panel-row" style={{ justifyContent: 'center' }}>
               <button className="primary" onClick={confirmOverwrite}>确定覆盖</button>
               <button onClick={() => setOverwriteTarget(null)}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {profConfirmSlot !== null && (
+        <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setProfConfirmSlot(null)}>
+          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">⚔️ 熟练度远征</div>
+            <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
+              存档 <b style={{ color: 'var(--gold)' }}>{profConfirmSlot}</b> 有未完成的熟练度远征
+            </p>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
+              重新开始将覆盖当前远征记录
+            </p>
+            <div className="panel-row" style={{ justifyContent: 'center' }}>
+              <button className="primary" onClick={profConfirmContinue}>继续游戏</button>
+              <button onClick={profConfirmRestart}>重新开始</button>
             </div>
           </div>
         </div>
