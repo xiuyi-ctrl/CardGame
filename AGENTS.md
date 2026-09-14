@@ -74,6 +74,16 @@
 - **遗物系统**：`RELIC_DEFS`（6 个遗物）+ `RELIC_ORDER`，通关后解锁。`freshRun` 根据 `relicId` 应用开局效果（金币/圣果/宠物/药水）。存入 `GameState.relics`，持久化于 localStorage（`petCardUnlocks`）。
 - **成就与解锁**：`Unlocks` 接口（`difficulties`/`relics`/`bestGrade`），`loadUnlocks()`/`persistUnlocks()` 读写 localStorage。`VictoryScreen` 通关时 `detectUnlocks` 自动检测新解锁项并显示通知。`AchievementsScreen`（主菜单「🏆 成就」）展示所有难度/遗物/评级里程碑进度。
 
+- **熟练度远征模式**：独立 Roguelike 爬塔模式（`runMode: 'proficiency'`），从主菜单「⚔️ 熟练度远征」进入。核心机制：
+  - **开局**：3 只宠物（迅迅/泡泡/灼灼，覆盖输出/治疗/坦克），30 金币，无法驯服/融合/招募。
+  - **地图**：线性 15 层，每层 1 个节点（战斗/精英/事件/商店/奇遇/休憩），第 15 层为 Boss「熟练之主」。
+  - **成长系统**：战斗获得熟练度（每场参与+2/存活+2），击杀奖励（普通+2/精英+4/Boss+6）。熟练度满 55 升满级，每级获得 1 成长点分配属性（+2HP 或 +1SPD）或解锁技能槽/替换技能。
+  - **敌人缩放**：层1-5固定1只，层6-10最多2只，层11-15最多3只；精英全程2只（仅品阶2）；Boss 40HP + 1只10HP小怪。
+  - **回复**：战后回血80%，休息点50%，商店药水50%。
+  - **专属数据文件**：`core/proficiency.ts`（等级/成长点）、`core/proficiency-map.ts`（地图生成）、`data/proficiency-events.ts`（10个专属事件）、`data/proficiency-shop.ts`（10种商店商品，价格已降低）、`data/proficiency-special.ts`（8种奇遇奖励）、`data/proficiency-boss.ts`（Boss数据）。
+  - **流程控制**：`freshProficiencyRun()` 创建初始状态 → `enterNode()` 使用专属事件/商店/奇遇/Boss → 战斗后 `settleBattleProficiency()` 结算熟练度 → Boss 击败或失败进入 `proficiency-result` 结算界面。
+  - **UI 组件**：`GrowthScreen.tsx`（成长点分配）、`ProficiencyResultScreen.tsx`（结算界面）。
+
 ## 会话约定
 
 - **一律用中文描述**（回复、总结、说明均用中文，代码注释/标识符保持英文）。
