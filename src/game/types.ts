@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink';
+  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -8,6 +8,8 @@ export interface StatusEffect {
   sourceUid?: string;
   /** 施加时的回合号（施放回合不计入持续回合数） */
   appliedRound?: number;
+  /** 技能封印：被封印的技能ID列表 */
+  sealedSkills?: string[];
 }
 
 export type SkillTarget = 'single' | 'all' | 'random' | 'self' | 'ally' | 'allyAll';
@@ -43,6 +45,8 @@ export interface SkillDef {
   spdScaling?: number;
   /** 技能描述已自包含效果信息，skillFullDesc 不再自动追加 effects 文本 */
   hideEffects?: boolean;
+  /** 成长值消耗（成长之主Boss专属，使用时扣除对应成长值） */
+  growthCost?: number;
 }
 
 /** 被动技能效果类型 */
@@ -86,7 +90,9 @@ export type PassiveKind =
   | 'chainMaster' // 锁链掌控：锁链链接的敌人死亡时，回复15%最大生命+伤害+2持续2回合
   | 'chainAnchor' // 锁链锚定：被锁链连接时受到的伤害-2
   | 'chainSpark' // 锁链火花：攻击锁链目标时伤害+2
-  | 'growthDrain'; // 成长汲取：每次攻击命中 +1 成长点；累积 value 点时伤害 +3
+  | 'growthDrain' // 成长汲取：每次攻击命中 +1 成长点；累积 value 点时伤害 +3
+  | 'growthValue' // 成长值：攻击命中+2，回合结束+1，每5值受伤-1（上限-5）
+  | 'sacrifice'; // 献祭：存活时回合结束给Boss+1成长值，死亡时+3
 
 export interface PassiveDef {
   id: string;
@@ -123,6 +129,8 @@ export interface MonsterSpecies {
   tame: SpeciesTame;
   /** 1=普通 2=精英 3=传奇 4=Boss */
   rank: 1 | 2 | 3 | 4;
+  /** 初始成长值（成长之主Boss专属） */
+  growthValue?: number;
 }
 
 export interface FoodDef {
@@ -213,6 +221,12 @@ export interface Unit {
   growthPoints?: number;
   /** 额外解锁的技能槽数量（0~2） */
   extraSkillSlots?: number;
+  /** 成长值（成长之主Boss专属，攻击命中+2/回合结束+1，每5值受伤-1上限-5） */
+  growthValue?: number;
+  /** 献祭来源uid（傀儡专属，记录Boss uid，死亡时给Boss加成长值） */
+  sacrificeUid?: string;
+  /** 终焉成长剩余使用次数（初始3） */
+  ultimateUsesLeft?: number;
 }
 
 /** 日志高亮片段类型 */

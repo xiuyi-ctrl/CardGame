@@ -387,17 +387,18 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   // —— 成长远征模式 Boss ——
   growth_master: {
     id: 'growth_master', name: '成长之主', emoji: '🐉',
-    baseHp: 80, baseSpd: 10,
-    skills: ['growth_strike', 'growth_field', 'roar', 'growth_burst'],
-    desc: '掌握成长奥秘的远古存在，通过汲取对手的成长力量来强化自身。',
-    passive: 'growth_drain', tame: { difficulty: 0 }, rank: 4,
+    baseHp: 80, baseSpd: 8,
+    skills: ['growth_bind', 'growth_roar', 'growth_ultimate', 'growth_impact', 'growth_eruption', 'growth_summon'],
+    desc: '掌握成长奥秘的远古存在，通过累积成长值强化自身并召唤傀儡作战。',
+    passive: 'growth_value', tame: { difficulty: 0 }, rank: 4,
+    growthValue: 5,
   },
   growth_puppet: {
     id: 'growth_puppet', name: '成长傀儡', emoji: '🤖',
     baseHp: 10, baseSpd: 2,
-    skills: ['claw_attack'],
-    desc: '成长之主的傀儡，被击败时不会触发驯服。',
-    passive: 'iron_guard', tame: { difficulty: 0 }, rank: 4,
+    skills: ['puppet_bind', 'puppet_fist', 'puppet_soul_return'],
+    desc: '成长之主的傀儡，献祭自身为成长之主提供成长值。',
+    passive: 'sacrifice', tame: { difficulty: 0 }, rank: 4,
   },
 };
 

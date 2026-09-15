@@ -2005,8 +2005,10 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
     const unit = state.roster.find((u) => u.uid === state.fusionMainUid);
     const subSkills = state.fusionSubSkills ?? [];
     const learnSkill = state.fusionLearnSkill;
+    const replaceIdx = state.fusionReplaceIdx;
     const maxSlots = unit ? getMaxSkillSlots(unit) : 3;
     const hasEmptySlot = unit ? unit.skills.length < maxSlots : false;
+    const canConfirm = !!learnSkill && (replaceIdx !== undefined || hasEmptySlot);
 
     if (!unit) {
       return (
@@ -2021,7 +2023,7 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
     return (
       <div className="screen">
         <div className="section-title">选择技能</div>
-        <p className="card-sub">为 {unit.name} 选择要继承的技能（从副宠），再点击要替换的已有技能</p>
+        <p className="card-sub">为 {unit.name} 选择要继承的技能（从副宠），再选择要替换的已有技能，最后点击确认</p>
 
         <div className="fusion-skill-layout">
           {/* 左栏：副宠技能（选择要学的） */}
@@ -2035,7 +2037,7 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                   <button
                     key={sid}
                     className={`fusion-skill-btn ${selected ? 'selected' : ''}`}
-                    onClick={() => dispatch({ type: 'REST_FUSION_SKILL', skillId: sid })}
+                    onClick={() => dispatch({ type: 'REST_FUSION_SET_LEARN', skillId: sid })}
                   >
                     <span className="fusion-skill-name">{sk?.name ?? sid}</span>
                     <span className="fusion-skill-desc">{sk?.desc ?? ''}</span>
@@ -2054,14 +2056,15 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
               {unit.skills.map((sid, idx) => {
                 const sk = getSkill(sid);
                 const canReplace = !!learnSkill;
+                const selected = replaceIdx === idx;
                 return (
                   <button
                     key={`${sid}-${idx}`}
-                    className={`fusion-skill-btn ${canReplace ? 'replaceable' : ''}`}
+                    className={`fusion-skill-btn ${canReplace ? 'replaceable' : ''} ${selected ? 'replace-selected' : ''}`}
                     disabled={!canReplace}
                     onClick={() => {
                       if (learnSkill) {
-                        dispatch({ type: 'REST_FUSION_SKILL', skillId: learnSkill, replaceIdx: idx });
+                        dispatch({ type: 'REST_FUSION_SELECT_REPLACE', replaceIdx: idx });
                       }
                     }}
                   >
@@ -2075,21 +2078,35 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
               })}
               {hasEmptySlot && learnSkill && (
                 <button
-                  className="fusion-skill-btn empty-slot"
-                  onClick={() => dispatch({ type: 'REST_FUSION_SKILL', skillId: learnSkill })}
+                  className={`fusion-skill-btn empty-slot ${replaceIdx === -1 ? 'replace-selected' : ''}`}
+                  onClick={() => dispatch({ type: 'REST_FUSION_SELECT_REPLACE', replaceIdx: unit.skills.length })}
                 >
                   <span className="fusion-skill-name">+ 添加到空槽</span>
                 </button>
-              )}
-              {!hasEmptySlot && unit.skills.length >= maxSlots && (
-                <div className="fusion-skill-hint">槽位已满，选择左侧技能后点击要替换的技能</div>
               )}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-          <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
+        {/* 确认按钮 */}
+        <div className="fusion-confirm-row">
+          <button
+            className="big-btn"
+            onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}
+          >
+            ← 返回
+          </button>
+          <button
+            className="primary big-btn"
+            disabled={!canConfirm}
+            onClick={() => {
+              if (learnSkill) {
+                dispatch({ type: 'REST_FUSION_SKILL', skillId: learnSkill, replaceIdx });
+              }
+            }}
+          >
+            {canConfirm ? '确认替换' : '请先选择技能'}
+          </button>
         </div>
       </div>
     );

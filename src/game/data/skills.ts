@@ -456,19 +456,51 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 3,
   },
   // —— 成长远征模式 Boss 技能 ——
-  growth_strike: {
-    id: 'growth_strike', name: '成长冲击', desc: '造成 8 点伤害',
+  growth_bind: {
+    id: 'growth_bind', name: '成长束缚', desc: '攻击单个敌人造成8伤害，封印其2个随机技能1回合',
     target: 'single', kind: 'attack', damage: 8,
-  },
-  growth_field: {
-    id: 'growth_field', name: '成长领域', desc: '全体己方 +2 伤害，持续 2 回合',
-    target: 'allyAll', kind: 'buff',
-    effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
+    effects: [{ kind: 'skillSeal', value: 2, turns: 1 }],
     hideEffects: true,
   },
-  growth_burst: {
-    id: 'growth_burst', name: '成长爆发', desc: '造成 12 点伤害',
+  growth_roar: {
+    id: 'growth_roar', name: '成长战吼', desc: '自身+3伤害，持续2回合', hideEffects: true,
+    target: 'self', kind: 'buff',
+    effects: [{ kind: 'atkUp', value: 3, turns: 2 }],
+  },
+  growth_ultimate: {
+    id: 'growth_ultimate', name: '终焉成长', desc: '消耗10成长值，回复20HP，自身永久+1伤害（限3次）',
+    target: 'self', kind: 'heal', heal: 20, uses: 3,
+    growthCost: 10,
+    effects: [{ kind: 'atkUp', value: 1, turns: 999 }],
+    hideEffects: true,
+  },
+  growth_impact: {
+    id: 'growth_impact', name: '成长冲击', desc: '消耗3成长值，对单个敌人造成12点伤害',
     target: 'single', kind: 'attack', damage: 12,
+    growthCost: 3,
+  },
+  growth_eruption: {
+    id: 'growth_eruption', name: '成长爆发', desc: '消耗3成长值，对所有敌人造成8点伤害',
+    target: 'all', kind: 'attack', damage: 8,
+    growthCost: 3,
+  },
+  growth_summon: {
+    id: 'growth_summon', name: '成长召唤', desc: '消耗3成长值，召唤一只成长傀儡（场上最多2只）',
+    target: 'self', kind: 'buff', growthCost: 3,
+  },
+  puppet_bind: {
+    id: 'puppet_bind', name: '傀儡束缚', desc: '攻击单个敌人造成5伤害，封印其1个随机技能1回合',
+    target: 'single', kind: 'attack', damage: 5,
+    effects: [{ kind: 'skillSeal', value: 1, turns: 1 }],
+    hideEffects: true,
+  },
+  puppet_fist: {
+    id: 'puppet_fist', name: '傀儡拳', desc: '造成8点伤害',
+    target: 'single', kind: 'attack', damage: 8,
+  },
+  puppet_soul_return: {
+    id: 'puppet_soul_return', name: '归魂', desc: '对所有敌人造成6点伤害，然后自身死亡',
+    target: 'all', kind: 'attack', damage: 6,
   },
 };
 

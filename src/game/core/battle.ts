@@ -104,6 +104,7 @@ export function makeUnit(
     acted: false,
     soul: passive?.kind === 'soulSiphon' ? 0 : undefined,
     passiveSpdBonus: spdBonus || undefined,
+    growthValue: s.growthValue,
   };
 }
 
@@ -208,7 +209,8 @@ function makeEnemy(
     unit.hp = unit.maxHp;
     unit.spd = Math.max(1, unit.spd + cfg.enemySpdBonus);
   }
-  if (layer && layer > 1) {
+  // Boss（rank 4）不随层数缩放
+  if (layer && layer > 1 && s.rank < 4) {
     const hpMult = 1 + (layer - 1) * 0.10;
     const spdMult = 1 + (layer - 1) * 0.05;
     unit.maxHp = Math.round(unit.maxHp * hpMult);
@@ -369,6 +371,16 @@ export function createBattle(
     if (b.enemyUnits.length === 1 && b.enemyUnits[0]) {
       b.enemyUnits = [{ ...b.enemyUnits[0], row: 'front', column: 1 }];
     }
+    // 成长之主Boss：为成长傀儡设置 sacrificeUid 指向Boss
+    const growthMaster = b.enemyUnits.find((u) => u.speciesId === 'growth_master' && u.hp > 0);
+    if (growthMaster) {
+      b.enemyUnits = b.enemyUnits.map((u) => {
+        if (u.speciesId === 'growth_puppet' && u.hp > 0) {
+          return { ...u, sacrificeUid: growthMaster.uid };
+        }
+        return u;
+      });
+    }
   }
   b.playerAp = b.playerUnits.filter((u) => u.hp > 0).length;
   b.playerApMax = b.playerAp;
@@ -520,6 +532,33 @@ function startRound(b: BattleState): BattleState {
       const healed = { ...u, hp: Math.min(maxHp, u.hp + healAmt) };
       nb = replaceUnit(nb, healed);
       nb = pushLog(nb, `${u.name} 的「${p.name}」恢复 ${healAmt} 点生命`, sideOf(u), u.uid);
+    }
+  }
+  // 成长值被动：回合结束 +1 成长值（成长之主专属）
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const gp = getUnitPassive(u);
+    if (gp?.kind === 'growthValue') {
+      const curGV = u.growthValue ?? 0;
+      nb = replaceUnit(nb, { ...u, growthValue: curGV + 1 });
+      nb = pushLog(nb, `${u.name} 的成长值 +1（共 ${curGV + 1}）`, sideOf(u), u.uid, u.uid, undefined, undefined,
+        spans(`${u.name} 的成长值 +1（共 ${curGV + 1}）`, [['actor', u.name], ['heal', String(curGV + 1)]]));
+    }
+  }
+  // 献祭被动：存活的傀儡回合结束给予成长之主 +1 成长值
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const sp = getUnitPassive(u);
+    if (sp?.kind === 'sacrifice') {
+      const masterUid = u.sacrificeUid;
+      if (masterUid) {
+        const master = actorFromId(nb, masterUid);
+        if (master && master.hp > 0) {
+          const curGV = master.growthValue ?? 0;
+          nb = replaceUnit(nb, { ...master, growthValue: curGV + 1 });
+          nb = pushLog(nb, `${u.name} 的「献祭」给予 ${master.name} 成长值 +1（共 ${curGV + 1}）`, sideOf(master), u.uid, master.uid);
+        }
+      }
     }
   }
   // 潮汐节律/共鸣：每3回合触发一次（爆发1回合、休2回合），触发回合 round % 3 === 1
@@ -872,7 +911,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   return { targets, battle: nb };
 }
 
-function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number; sourceUid?: string }, round?: number): Unit {
+function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number; sourceUid?: string; sealedSkills?: string[] }, round?: number): Unit {
   const idx = unit.statuses.findIndex((s) => s.kind === effect.kind);
   if (idx >= 0) {
     const next = [...unit.statuses];
@@ -891,6 +930,7 @@ function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kin
         value: Math.max(next[idx].value, effect.value),
         turns: Math.max(next[idx].turns, effect.turns),
         ...(effect.kind === 'taunt' || effect.kind === 'chainLink' ? { sourceUid: effect.sourceUid } : {}),
+        ...(effect.kind === 'skillSeal' && effect.sealedSkills ? { sealedSkills: effect.sealedSkills } : {}),
       };
     }
     return { ...unit, statuses: next };
@@ -1075,6 +1115,28 @@ function selectEnemyAction(
         candidates.push({ kind: 'buff', skill: bs, score: 50 });
       }
     }
+    // 成长之主Boss AI
+    if (bs.id === 'growth_roar') {
+      if (!actor.statuses.some((s) => s.kind === 'atkUp') && rngVal1 < 0.6) {
+        candidates.push({ kind: 'buff', skill: bs, score: 55 });
+      }
+    }
+    if (bs.id === 'growth_ultimate') {
+      const curGV = actor.growthValue ?? 0;
+      if (curGV >= 10 && hpRatio < 0.6 && (actor.ultimateUsesLeft ?? 3) > 0) {
+        candidates.push({ kind: 'heal', skill: bs, targetUid: actor.uid, score: 75 });
+      }
+    }
+    if (bs.id === 'growth_summon') {
+      const alivePuppets = allies.filter((u) => u.speciesId === 'growth_puppet' && u.hp > 0);
+      if (alivePuppets.length < 2 && (actor.growthValue ?? 0) >= 3) {
+        if (alivePuppets.length === 0 && rngVal1 < 0.7) {
+          candidates.push({ kind: 'buff', skill: bs, score: 70 });
+        } else if (alivePuppets.length === 1 && rngVal1 < 0.4) {
+          candidates.push({ kind: 'buff', skill: bs, score: 55 });
+        }
+      }
+    }
   }
   // ─── 3. 换位 ───
   const nTypeSwap = b.nodeType ?? 'battle';
@@ -1112,6 +1174,24 @@ function selectEnemyAction(
     if (src) targetPool = [src];
   }
   const actorPassive = getUnitPassive(actor);
+  // 成长值消耗攻击技能AI（成长之主）
+  const growthAtkSkills = skills.filter((s) => s.growthCost && s.kind === 'attack');
+  for (const ga of growthAtkSkills) {
+    const curGV = actor.growthValue ?? 0;
+    if (curGV >= (ga.growthCost ?? 0)) {
+      const scoredTargets = targetPool.map((t) => {
+        let tScore = (ga.damage ?? 0) + 10;
+        if (t.hp / t.maxHp < 0.3) tScore += 15;
+        if (ga.target === 'all' && targetPool.length >= 2) tScore += 8;
+        return { target: t, score: tScore };
+      });
+      scoredTargets.sort((a, c) => c.score - a.score);
+      const best = scoredTargets[0];
+      if (best) {
+        candidates.push({ kind: 'attack', skill: ga, targetUid: best.target.uid, score: best.score + 5 });
+      }
+    }
+  }
   const hasVenomPower = actorPassive?.kind === 'venomPower';
   const hasScorchPlus = actorPassive?.kind === 'scorchPlus';
   if (actorPassive?.kind === 'bloodScent' && targetPool.length > 1) {
@@ -1520,7 +1600,7 @@ function resolveAttack(
   const segments = splitDamage(finalDmg, count);
   let t2 = tWithPassive;
   const skillEffectKinds: string[] = (skill.effects ?? [])
-    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark')
+    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark' || e.kind === 'skillSeal')
     .map((e) => e.kind);
   let lastHitLog: number | undefined;
   let shieldIgnoreLeft = (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) ? 8 : 0;
@@ -1595,6 +1675,23 @@ function resolveAttack(
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
         if (e.kind === 'poison') didPoison = true;
+      } else if (e.kind === 'skillSeal') {
+        // 技能封印：随机选择e.value个技能封印
+        const availableSkills = t2.skills.filter((s) => {
+          const sd = getSkill(s);
+          return sd && sd.kind === 'attack';
+        });
+        const sealCount = Math.min(e.value, availableSkills.length);
+        if (sealCount > 0) {
+          // 随机选择技能封印
+          const shuffled = [...availableSkills].sort(() => Math.abs((nb.rngCount ?? 0)) % 100 / 100 - 0.5);
+          nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+          const sealed = shuffled.slice(0, sealCount);
+          t2 = applyStatusTo(t2, { kind: 'skillSeal', value: sealCount, turns: e.turns, sealedSkills: sealed }, nb.round);
+          // 记录封印的技能名
+          const sealedNames = sealed.map((s) => getSkill(s)?.name ?? s).join('、');
+          nb = pushLog(nb, `${t2.name} 的「${sealedNames}」被封印 ${e.turns} 回合`, sideOf(t2), actor.uid, t2.uid, ['skillSeal']);
+        }
       }
     }
     nb = replaceUnit(nb, t2);
@@ -1645,6 +1742,17 @@ function resolveAttack(
             else if (newSoul === 10) { const m = `${freshActor.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
             else if (newSoul === 20) { const m = `${freshActor.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
           }
+        }
+      }
+    }
+    // 成长值被动：攻击命中 +2 成长值
+    if (t2.hp <= 0 || seg > 0) {
+      const freshActor2 = actorFromId(nb, actor.uid);
+      if (freshActor2 && freshActor2.hp > 0) {
+        const gp = getUnitPassive(freshActor2);
+        if (gp?.kind === 'growthValue') {
+          const curGV = freshActor2.growthValue ?? 0;
+          nb = replaceUnit(nb, { ...freshActor2, growthValue: curGV + 2 });
         }
       }
     }
@@ -1892,6 +2000,15 @@ function resolveAttack(
       }
     }
   }
+  // 献祭被动：傀儡死亡时给予成长之主 +3 成长值
+  if (t2.hp <= 0 && t2.sacrificeUid) {
+    const master = actorFromId(nb, t2.sacrificeUid);
+    if (master && master.hp > 0) {
+      const curGV = master.growthValue ?? 0;
+      nb = replaceUnit(nb, { ...master, growthValue: curGV + 3 });
+      nb = pushLog(nb, `${t2.name} 的「献祭」触发！${master.name} 获得 3 成长值（共 ${curGV + 3}）`, sideOf(master), t2.uid, master.uid);
+    }
+  }
   return { battle: nb, lastHitLog, passiveAdds, didPoison };
 }
 
@@ -1901,8 +2018,29 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (actor.statuses.some((s) => s.kind === 'stun')) {
     return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
+  // 技能封印检查：skillSeal 封印指定技能
+  const sealStatus = actor.statuses.find((s) => s.kind === 'skillSeal');
+  if (sealStatus && sealStatus.sealedSkills?.includes(skill.id)) {
+    // 被封印的技能无法使用
+    return markActed(pushLog(b, `${actor.name} 的「${skill.name}」被封印，无法使用`, sideOf(actor)), actor.uid);
+  }
+  // 成长值消耗检查
+  if (skill.growthCost) {
+    const curGV = actor.growthValue ?? 0;
+    if (curGV < skill.growthCost) {
+      return markActed(pushLog(b, `${actor.name} 的成长值不足，无法使用「${skill.name}」（需要 ${skill.growthCost}，当前 ${curGV}）`, sideOf(actor)), actor.uid);
+    }
+  }
 
   let nb = b;
+  // 扣除成长值消耗
+  if (skill.growthCost) {
+    const freshActor = actorFromId(nb, actor.uid);
+    if (freshActor && freshActor.hp > 0) {
+      nb = replaceUnit(nb, { ...freshActor, growthValue: (freshActor.growthValue ?? 0) - skill.growthCost });
+      nb = pushLog(nb, `${freshActor.name} 消耗 ${skill.growthCost} 成长值使用「${skill.name}」`, sideOf(freshActor), freshActor.uid, freshActor.uid);
+    }
+  }
   const { targets, battle } = resolveTargets(nb, actor, skill, explicitTarget);
   nb = battle;
   if (targets.length === 0) {
@@ -2003,6 +2141,45 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           if (curSoul < 5 && newSoul >= 5) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
           if (curSoul < 10 && newSoul >= 10) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
           if (curSoul < 20 && newSoul >= 20) nb = pushLog(nb, `${ghostCaptain.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`, sideOf(ghostCaptain), ghostCaptain.uid, ghostCaptain.uid);
+        }
+      }
+    }
+    // 成长召唤：消耗3成长值，召唤一只成长傀儡（场上最多2只）
+    if (skill.id === 'growth_summon') {
+      const allies = actor.isPlayer ? nb.playerUnits : nb.enemyUnits;
+      const alivePuppets = allies.filter((u) => u.speciesId === 'growth_puppet' && u.hp > 0);
+      if (alivePuppets.length >= 2) {
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，但场上已有2只傀儡，召唤失败`, sideOf(actor), actor.uid, actor.uid);
+      } else {
+        const dead = allies.find((u) => u.speciesId === 'growth_puppet' && u.hp <= 0);
+        if (dead) {
+          const fresh = makeEnemy({ speciesId: 'growth_puppet' }, dead.row, dead.column, true, nb.difficulty);
+          const summoned = { ...fresh, acted: true, uid: dead.uid, summoning: true, isPlayer: actor.isPlayer, sacrificeUid: actor.uid };
+          nb = replaceUnit(nb, summoned);
+          nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
+        } else {
+          const usedCols = new Set(allies.filter((u) => u.hp > 0).map((u) => `${u.row}:${u.column}`));
+          let placed = false;
+          for (const row of ['front', 'back'] as const) {
+            for (const col of [0, 1, 2] as const) {
+              if (!usedCols.has(`${row}:${col}`)) {
+                const fresh = makeEnemy({ speciesId: 'growth_puppet' }, row, col, true, nb.difficulty);
+                const summoned = { ...fresh, acted: true, summoning: true, isPlayer: actor.isPlayer, sacrificeUid: actor.uid };
+                if (actor.isPlayer) {
+                  nb = { ...nb, playerUnits: [...nb.playerUnits, summoned] };
+                } else {
+                  nb = { ...nb, enemyUnits: [...nb.enemyUnits, summoned] };
+                }
+                nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，召唤了${summoned.name}！`, sideOf(actor), actor.uid, summoned.uid);
+                placed = true;
+                break;
+              }
+            }
+            if (placed) break;
+          }
+          if (!placed) {
+            nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，但没有空位，召唤失败`, sideOf(actor), actor.uid, actor.uid);
+          }
         }
       }
     }
@@ -2263,6 +2440,14 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         const msgBB = `${burnedActor.name} 的「焚身爆」反噬，损失 5 点生命`;
         nb = pushLog(nb, msgBB, sideOf(burnedActor), burnedActor.uid, burnedActor.uid, undefined, undefined,
           spans(msgBB, [['actor', burnedActor.name], ['passive', '焚身爆'], ['damage', '5']]));
+      }
+    }
+    // 归魂：使用后自身死亡（对全体敌人造成伤害后）
+    if (skill.id === 'puppet_soul_return') {
+      const soulActor = actorFromId(nb, actor.uid);
+      if (soulActor && soulActor.hp > 0) {
+        nb = replaceUnit(nb, { ...soulActor, hp: 0 });
+        nb = pushLog(nb, `${soulActor.name} 使用「归魂」，自爆身亡！`, sideOf(soulActor), soulActor.uid, soulActor.uid);
       }
     }
     // 暗影追随：暗影之王击杀时，暗影仆从永久伤害 +1（须在暗影追猎 return 前执行）
@@ -2818,6 +3003,10 @@ export function getDamageGuard(u: Unit, b?: BattleState): number {
   // 锁链锚定：被锁链连接时减伤
   if (p?.kind === 'chainAnchor' && u.statuses.some((s) => s.kind === 'chainLink')) {
     guard += p.value;
+  }
+  // 成长值：每5成长值受伤-1（最多-5）
+  if (p?.kind === 'growthValue' && u.growthValue) {
+    guard += Math.min(5, Math.floor(u.growthValue / 5));
   }
   return guard;
 }

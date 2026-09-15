@@ -87,6 +87,8 @@ export const PASSIVES: Record<string, PassiveDef> = {
 
   // —— 成长远征模式 Boss ——
   growth_drain: { id: 'growth_drain', name: '成长汲取', desc: '每次攻击命中 +1 成长点；累积 5 点时伤害 +3', kind: 'growthDrain', value: 5 },
+  growth_value: { id: 'growth_value', name: '成长值', desc: '攻击命中+2成长值，回合结束+1成长值；每5成长值受伤-1（最多-5）', kind: 'growthValue', value: 5 },
+  sacrifice: { id: 'sacrifice', name: '献祭', desc: '存活时每回合结束给予成长之主+1成长值；死亡时给予+3成长值', kind: 'sacrifice', value: 3 },
 };
 
 export function getPassive(id?: string): PassiveDef | undefined {

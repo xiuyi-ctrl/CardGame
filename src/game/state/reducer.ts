@@ -113,6 +113,8 @@ export type GameAction =
   | { type: 'REST_FUSION_SET_SUB'; uid: string }
   | { type: 'REST_FUSION_CONFIRM' }
   | { type: 'REST_FUSION_SKILL'; skillId: string; replaceIdx?: number }
+  | { type: 'REST_FUSION_SET_LEARN'; skillId: string }
+  | { type: 'REST_FUSION_SELECT_REPLACE'; replaceIdx: number }
   | { type: 'REST_FUSION_CANCEL' }
   | { type: 'REST_FUSION_MODE' }
   | { type: 'REVIVE'; uid: string; ratio: number };
@@ -1210,7 +1212,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (!unit || unit.skills.length === 0) {
           return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '该宠物没有可替换的技能', kind: 'warning' } };
         }
-        const rng = createRng(state.seed + (unit.uid.charCodeAt(0) << 8) + 99);
+        const rng = createRng(state.seed + hashStr(unit.uid) + 500);
         const choices = getRandomSkillChoices(unit, 3, rng);
         if (choices.length === 0) {
           return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '没有可学习的新技能', kind: 'warning' } };
@@ -1227,10 +1229,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (!target) return state;
         const slotNum = state.specialPending.slot;
         const extraSlots = target.extraSkillSlots ?? 0;
-        const maxSlots = slotNum === 3 ? 1 : 2;
-        if (extraSlots >= maxSlots) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '技能槽已满', kind: 'warning' } };
+        // 顺序解锁检查
+        if (slotNum === 3 && extraSlots >= 1) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '技能槽已满', kind: 'warning' } };
+        if (slotNum === 4 && (extraSlots < 1 || extraSlots >= 2)) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: extraSlots < 1 ? '请先解锁第3技能槽' : '技能槽已满', kind: 'warning' } };
+        if (slotNum === 5 && (extraSlots < 2 || extraSlots >= 3)) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: extraSlots < 2 ? '请先解锁第4技能槽' : '技能槽已满', kind: 'warning' } };
         const updatedUnit = { ...target, extraSkillSlots: extraSlots + 1 };
-        const rng = createRng(state.seed + (action.uid.charCodeAt(0) << 8) + (slotNum === 4 ? 1 : 0));
+        const rng = createRng(state.seed + hashStr(action.uid) + 600 + (slotNum === 4 ? 1 : 0));
         const choices = getRandomSkillChoices(updatedUnit, 3, rng);
         if (choices.length === 0) {
           return { ...state, roster: state.roster.map((u) => u.uid === action.uid ? updatedUnit : u), specialPending: undefined, screen: 'map' };
@@ -1257,6 +1261,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           battle,
           log: [`${unit.name} 出战斗兽场！`, ...state.log].slice(0, 20),
         };
+      }
+      if (state.specialPending?.kind === 'shopForget') {
+        const target = state.roster.find((u) => u.uid === action.uid);
+        if (!target) return state;
+        const hpBonus = target.bonusStats?.hp ?? 0;
+        const spdBonus = target.bonusStats?.spd ?? 0;
+        const returnedPoints = Math.floor(hpBonus / 2) + spdBonus;
+        if (returnedPoints <= 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
+        const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + returnedPoints, bonusStats: { hp: 0, spd: 0 }, maxHp: target.maxHp - hpBonus, hp: Math.min(target.hp, target.maxHp - hpBonus), spd: target.spd - spdBonus };
+        return { ...state, roster: state.roster.map((u) => u.uid === action.uid ? updated : u), specialPending: undefined, screen: 'shop', toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
       }
       return state;
     }
@@ -1877,13 +1891,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!unit) return state;
       // 点击已选主宠 → 取消选择
       if (state.fusionMainUid === action.uid) {
-        return { ...state, fusionMainUid: undefined, fusionLearnSkill: undefined };
+        return { ...state, fusionMainUid: undefined, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
       }
       // 点击已选副宠 → 移到主宠位，副宠清空
       if (state.fusionSubUid === action.uid) {
-        return { ...state, fusionMainUid: action.uid, fusionSubUid: undefined, fusionLearnSkill: undefined };
+        return { ...state, fusionMainUid: action.uid, fusionSubUid: undefined, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
       }
-      return { ...state, fusionMainUid: action.uid, fusionLearnSkill: undefined };
+      return { ...state, fusionMainUid: action.uid, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
     }
 
     case 'REST_FUSION_SET_SUB': {
@@ -1892,13 +1906,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!unit) return state;
       // 点击已选副宠 → 取消选择
       if (state.fusionSubUid === action.uid) {
-        return { ...state, fusionSubUid: undefined, fusionLearnSkill: undefined };
+        return { ...state, fusionSubUid: undefined, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
       }
       // 点击已选主宠 → 移到副宠位，主宠清空
       if (state.fusionMainUid === action.uid) {
-        return { ...state, fusionSubUid: action.uid, fusionMainUid: undefined, fusionLearnSkill: undefined };
+        return { ...state, fusionSubUid: action.uid, fusionMainUid: undefined, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
       }
-      return { ...state, fusionSubUid: action.uid, fusionLearnSkill: undefined };
+      return { ...state, fusionSubUid: action.uid, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
     }
 
     case 'REST_FUSION_CONFIRM': {
@@ -1933,6 +1947,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           fusionSubUid: undefined,
           fusionSubSkills: undefined,
           fusionLearnSkill: undefined,
+          fusionReplaceIdx: undefined,
           toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain}）`, kind: 'success' },
         };
       }
@@ -1942,8 +1957,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         screen: 'rest-fusion-skill',
         fusionSubSkills: subSkills,
         fusionLearnSkill: undefined,
+        fusionReplaceIdx: undefined,
         toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain}），选择要学习的技能`, kind: 'success' },
       };
+    }
+
+    case 'REST_FUSION_SET_LEARN': {
+      if (state.screen !== 'rest-fusion-skill') return state;
+      // 点击已选技能 → 取消选择
+      if (state.fusionLearnSkill === action.skillId) {
+        return { ...state, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
+      }
+      return { ...state, fusionLearnSkill: action.skillId, fusionReplaceIdx: undefined };
+    }
+
+    case 'REST_FUSION_SELECT_REPLACE': {
+      if (state.screen !== 'rest-fusion-skill') return state;
+      return { ...state, fusionReplaceIdx: action.replaceIdx };
     }
 
     case 'REST_FUSION_SKILL': {
@@ -1951,12 +1981,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const unit = state.roster.find((u) => u.uid === state.fusionMainUid);
       if (!unit) return state;
       const learnSkill = action.skillId;
+      const replaceIdx = action.replaceIdx ?? state.fusionReplaceIdx;
       const maxSlots = getMaxSkillSlots(unit);
       let newSkills: string[];
-      if (action.replaceIdx !== undefined && action.replaceIdx < unit.skills.length) {
+      if (replaceIdx !== undefined && replaceIdx < unit.skills.length) {
         // 替换指定位置
         newSkills = [...unit.skills];
-        newSkills[action.replaceIdx] = learnSkill;
+        newSkills[replaceIdx] = learnSkill;
       } else if (unit.skills.length >= maxSlots) {
         // 无空槽且未指定替换 → 追加到末尾（替换最后一个）
         newSkills = [...unit.skills];
@@ -1974,6 +2005,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         fusionSubUid: undefined,
         fusionSubSkills: undefined,
         fusionLearnSkill: undefined,
+        fusionReplaceIdx: undefined,
       };
     }
 
@@ -1985,6 +2017,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         fusionSubUid: undefined,
         fusionSubSkills: undefined,
         fusionLearnSkill: undefined,
+        fusionReplaceIdx: undefined,
       };
     }
 
@@ -2229,7 +2262,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 扣1成长点
       const updatedUnit = { ...unit, growthPoints: gp - 1 };
       // 生成3个随机技能（排除已学）
-      const rng = createRng(state.seed + (unit.uid.charCodeAt(0) << 8) + 99);
+      const rng = createRng(state.seed + hashStr(unit.uid) + 700);
       const choices = getRandomSkillChoices(updatedUnit, 3, rng);
       if (choices.length === 0) {
         return { ...state, roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)), screen: 'growth-menu' };
@@ -2260,12 +2293,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (gp < cost) return state;
       const extraSlots = unit.extraSkillSlots ?? 0;
       if (action.slot === 3 && extraSlots >= 1) return state;
-      if (action.slot === 4 && extraSlots >= 2) return state;
-      if (action.slot === 5 && extraSlots >= 3) return state;
+      if (action.slot === 4 && (extraSlots < 1 || extraSlots >= 2)) return state;
+      if (action.slot === 5 && (extraSlots < 2 || extraSlots >= 3)) return state;
       // 创建新 unit 对象（不可变更新）
       const updatedUnit = { ...unit, growthPoints: gp - cost, extraSkillSlots: extraSlots + 1 };
-      // 生成3个随机技能
-      const rng = createRng(state.seed + (unit.uid.charCodeAt(0) << 8) + (action.slot === 4 ? 1 : action.slot === 5 ? 2 : 0));
+      // 生成3个随机技能（使用完整UID哈希确保每只宠物不同）
+      const rng = createRng(state.seed + hashStr(unit.uid) + (action.slot === 4 ? 1000 : action.slot === 5 ? 2000 : 0));
       const choices = getRandomSkillChoices(updatedUnit, 3, rng);
       if (choices.length === 0) {
         return { ...state, roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)), screen: 'growth-menu' };
@@ -2353,7 +2386,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           if (slotsToAdd <= 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁', kind: 'warning' } };
           const updated = { ...target, extraSkillSlots: 3 };
           // 为每个新解锁的槽位选技能
-          const rng = createRng(state.seed + (uid.charCodeAt(0) << 8) + 999);
+          const rng = createRng(state.seed + hashStr(uid) + 800);
           let current = updated;
           for (let i = 0; i < slotsToAdd; i++) {
             const slotNum = (extraSlots + i + 3) as 3 | 4 | 5;
@@ -2366,10 +2399,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
         // 普通解锁单个槽位
         const extraSlots = target.extraSkillSlots ?? 0;
-        const maxSlots = pending.slot === 3 ? 1 : 2;
-        if (extraSlots >= maxSlots) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已满', kind: 'warning' } };
+        // 顺序解锁检查
+        if (pending.slot === 3 && extraSlots >= 1) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已满', kind: 'warning' } };
+        if (pending.slot === 4 && (extraSlots < 1 || extraSlots >= 2)) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: extraSlots < 1 ? '请先解锁第3技能槽' : '技能槽已满', kind: 'warning' } };
+        if (pending.slot === 5 && (extraSlots < 2 || extraSlots >= 3)) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: extraSlots < 2 ? '请先解锁第4技能槽' : '技能槽已满', kind: 'warning' } };
         const updated = { ...target, extraSkillSlots: extraSlots + 1 };
-        const rng = createRng(state.seed + (uid.charCodeAt(0) << 8) + (pending.slot === 4 ? 1 : 0));
+        const rng = createRng(state.seed + hashStr(uid) + 900 + (pending.slot === 4 ? 1 : 0));
         const choices = getRandomSkillChoices(updated, 3, rng);
         if (choices.length === 0) {
           return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'shop' };
@@ -2387,7 +2422,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       if (pending.kind === 'legendSkill') {
         // 传奇招募：从传奇技能池随机1个教给选中的宠物
-        const rngLeg = createRng(state.seed + (uid.charCodeAt(0) << 8) + 777);
+        const rngLeg = createRng(state.seed + hashStr(uid) + 1000);
         const legChoices = getRandomLegendarySkillChoices(target, 1, rngLeg);
         if (legChoices.length === 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '没有可用的传奇技能', kind: 'warning' } };
         const skillId = legChoices[0];

@@ -392,6 +392,8 @@ export interface GameState {
   fusionSubSkills?: string[];
   /** 休整融合：技能选择阶段 — 玩家已选要学习的技能 */
   fusionLearnSkill?: string;
+  /** 休整融合：技能选择阶段 — 玩家已选要替换的槽位索引 */
+  fusionReplaceIdx?: number;
   /** 复活属性保留比例（事件触发时暂存） */
   reviveRatio?: number;
 }

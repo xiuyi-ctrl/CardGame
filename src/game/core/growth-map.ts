@@ -113,6 +113,9 @@ export function generateGrowthMap(seed: number): RunMap {
   // 奇遇关：每隔10~20层，最多4个，排除1-5层、Boss层、商店层和保底休憩层
   const specialLayers = generateFixedPositions(rng, 10, 20, 4, shopLayers);
 
+  // 跟踪上次休憩层（5层内不重复）
+  let lastRestLayer = -6;
+
   for (let layer = 1; layer <= TOTAL_LAYERS; layer++) {
     let nodeType: NodeType;
     if (layer === 1) {
@@ -121,13 +124,21 @@ export function generateGrowthMap(seed: number): RunMap {
       nodeType = 'boss';
     } else if (GUARANTEED_REST_LAYERS.has(layer)) {
       nodeType = 'rest';
+      lastRestLayer = layer;
     } else if (shopLayers.has(layer)) {
       nodeType = 'shop';
     } else if (specialLayers.has(layer)) {
       nodeType = 'special';
     } else {
       const probs = getLayerProbs(layer);
-      nodeType = pickNodeType(rng, probs);
+      // 5层内已有休憩则禁用休憩概率
+      if (layer - lastRestLayer < 5) {
+        const noRest = { ...probs, rest: 0 };
+        nodeType = pickNodeType(rng, noRest);
+      } else {
+        nodeType = pickNodeType(rng, probs);
+      }
+      if (nodeType === 'rest') lastRestLayer = layer;
     }
     const node: MapNode = {
       id: `pf_${layer}`,

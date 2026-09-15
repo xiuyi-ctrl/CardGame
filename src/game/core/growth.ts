@@ -79,15 +79,15 @@ export function getAvailableGrowthChoices(unit: Unit): GrowthChoice[] {
     choices.push({ kind: 'spd', amount: 1 });
   }
 
-  // 技能槽解锁
+  // 技能槽解锁（必须按顺序：slot3 → slot4 → slot5）
   const extraSlots = unit.extraSkillSlots ?? 0;
   if (extraSlots < 1 && gp >= SLOT3_COST) {
     choices.push({ kind: 'slot3' });
   }
-  if (extraSlots < 2 && gp >= SLOT4_COST) {
+  if (extraSlots >= 1 && extraSlots < 2 && gp >= SLOT4_COST) {
     choices.push({ kind: 'slot4' });
   }
-  if (extraSlots < 3 && gp >= SLOT5_COST) {
+  if (extraSlots >= 2 && extraSlots < 3 && gp >= SLOT5_COST) {
     choices.push({ kind: 'slot5' });
   }
 
@@ -114,15 +114,15 @@ export function getAllGrowthChoices(unit: Unit): GrowthChoice[] {
     choices.push({ kind: 'spd', amount: 1 });
   }
 
-  // 技能槽解锁
+  // 技能槽解锁（必须按顺序：slot3 → slot4 → slot5）
   const extraSlots = unit.extraSkillSlots ?? 0;
   if (extraSlots < 1) {
     choices.push({ kind: 'slot3' });
   }
-  if (extraSlots < 2) {
+  if (extraSlots >= 1 && extraSlots < 2) {
     choices.push({ kind: 'slot4' });
   }
-  if (extraSlots < 3) {
+  if (extraSlots >= 2 && extraSlots < 3) {
     choices.push({ kind: 'slot5' });
   }
 

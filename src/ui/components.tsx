@@ -36,6 +36,7 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   sporeShield: '🍄',
   toxicBurstReady: '💀',
   chainLink: '🔗',
+  skillSeal: '🔒',
 };
 
 function effectText(e: StatusEffect): string {
@@ -83,6 +84,12 @@ function effectText(e: StatusEffect): string {
       return `毒性爆发蓄力中（死亡时触发全体爆发）`;
     case 'chainLink':
       return `锁链连接 传导${e.value}%${turns}`;
+    case 'skillSeal':
+      if (e.sealedSkills && e.sealedSkills.length > 0) {
+        const names = e.sealedSkills.map((s) => getSkill(s)?.name ?? s).join('、');
+        return `技能封印：${names}${turns}`;
+      }
+      return `技能封印 封印${e.value}个技能${turns}`;
   }
 }
 
@@ -495,6 +502,11 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
     if (passive.kind === 'soulSiphon') {
       const souls = unit.soul ?? 0;
       return souls > 0 ? `💀×${souls}` : null;
+    }
+    // 成长值：显示当前成长值
+    if (passive.kind === 'growthValue') {
+      const gv = unit.growthValue ?? 0;
+      return `🌱×${gv}`;
     }
     // 非叠加型被动不显示数值（与卡片 PassiveBadge 规则统一）
     return null;
