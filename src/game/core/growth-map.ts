@@ -1,13 +1,13 @@
 /**
  * 成长远征模式 - 线性爬塔地图生成
- * 每层1个节点，共15层 + 最终Boss
+ * 每层1个节点，共50层 + 3个Boss（层15/30/50）
  */
 import { createRng, randInt, pick } from '../rng';
 import type { MapNode, NodeType, RunMap, EventNode, SpecialNode } from '../state/game';
 import { labelOf } from '../state/game';
 
 /** 总层数 */
-export const TOTAL_LAYERS = 15;
+export const TOTAL_LAYERS = 50;
 
 /** 节点类型概率表（按层进度调整） */
 interface NodeProb {
@@ -20,31 +20,45 @@ interface NodeProb {
 }
 
 const BASE_PROBS: NodeProb = {
-  battle: 60,
-  elite: 12,
-  event: 10,
-  shop: 8,
-  special: 5,
-  rest: 5,
+  battle: 55,
+  elite: 15,
+  event: 12,
+  shop: 0,
+  special: 0,
+  rest: 8,
 };
 
 /** 根据层进度微调概率 */
 function getLayerProbs(layer: number): NodeProb {
   const p = { ...BASE_PROBS };
-  if (layer <= 5) {
-    p.elite -= 5;
+  // 前10层：降精英，升战斗（教学期）
+  if (layer <= 10) {
+    p.elite -= 8;
     p.battle += 5;
+    p.rest += 3;
   }
-  if (layer >= 10) {
+  // 11~25层：中期平稳
+  if (layer > 10 && layer <= 25) {
+    p.elite -= 3;
+    p.battle += 3;
+  }
+  // 26~40层：升精英
+  if (layer > 25 && layer <= 40) {
+    p.elite += 3;
+    p.battle -= 3;
+  }
+  // 41~50层：后期高压
+  if (layer > 40) {
     p.elite += 5;
-    p.battle -= 5;
+    p.battle -= 2;
+    p.rest += 1;
   }
   return p;
 }
 
 /** 按概率选择节点类型 */
 function pickNodeType(rng: () => number, probs: NodeProb): NodeType {
-  const total = probs.battle + probs.elite + probs.event + probs.shop + probs.special + probs.rest;
+  const total = probs.battle + probs.elite + probs.event + probs.rest;
   const roll = rng() * total;
   let acc = 0;
   acc += probs.battle;
@@ -53,12 +67,15 @@ function pickNodeType(rng: () => number, probs: NodeProb): NodeType {
   if (roll < acc) return 'elite';
   acc += probs.event;
   if (roll < acc) return 'event';
-  acc += probs.shop;
-  if (roll < acc) return 'shop';
-  acc += probs.special;
-  if (roll < acc) return 'special';
   return 'rest';
 }
+
+/** 固定商店层：每~8层一个 */
+const FORCED_SHOP_LAYERS = new Set([5, 12, 20, 28, 36, 44]);
+/** 固定奇遇层 */
+const FORCED_SPECIAL_LAYERS = new Set([10, 25, 40]);
+/** Boss层 */
+const BOSS_LAYERS = new Set([15, 30, 50]);
 
 /** 生成成长远征模式地图 */
 export function generateGrowthMap(seed: number): RunMap {
@@ -68,23 +85,18 @@ export function generateGrowthMap(seed: number): RunMap {
   const events: Record<string, EventNode> = {};
   const specials: Record<string, SpecialNode> = {};
 
-  const forcedShopLayers = new Set([5, 10, 15]);
-  const forcedSpecialLayer = 10;
-
   for (let layer = 1; layer <= TOTAL_LAYERS; layer++) {
     let nodeType: NodeType;
     if (layer === 1) {
       nodeType = 'battle';
-    } else if (layer === TOTAL_LAYERS) {
+    } else if (BOSS_LAYERS.has(layer)) {
       nodeType = 'boss';
-    } else if (forcedShopLayers.has(layer)) {
+    } else if (FORCED_SHOP_LAYERS.has(layer)) {
       nodeType = 'shop';
-    } else if (layer === forcedSpecialLayer) {
+    } else if (FORCED_SPECIAL_LAYERS.has(layer)) {
       nodeType = 'special';
     } else {
       const probs = getLayerProbs(layer);
-      probs.shop = 0;
-      probs.special = 0;
       nodeType = pickNodeType(rng, probs);
     }
     const node: MapNode = {
@@ -96,7 +108,31 @@ export function generateGrowthMap(seed: number): RunMap {
     layers.push([node]);
   }
 
-  return { layers, encounter, boss: {}, events, specials };
+  return { layers, encounter, boss: pregenerateBoss(), events, specials };
+}
+
+/** 预生成Boss遭遇（供 nodeInfo 显示） */
+function pregenerateBoss(): Record<string, { speciesId: string }[]> {
+  const bossMap: Record<string, { speciesId: string }[]> = {};
+  // 层15: 古树之主
+  bossMap['pf_15'] = [
+    { speciesId: 'boss_vine' },
+    { speciesId: 'boss_minion_tree_guard' },
+    { speciesId: 'boss_minion_thorn' },
+  ];
+  // 层30: 岩甲巨像
+  bossMap['pf_30'] = [
+    { speciesId: 'boss_golem' },
+    { speciesId: 'boss_minion_rock' },
+    { speciesId: 'boss_minion_crystal' },
+  ];
+  // 层50: 成长之主
+  bossMap['pf_50'] = [
+    { speciesId: 'growth_master' },
+    { speciesId: 'growth_puppet' },
+    { speciesId: 'growth_puppet' },
+  ];
+  return bossMap;
 }
 
 /** 获取成长远征模式的普通战斗遭遇 */
@@ -105,9 +141,9 @@ export function getGrowthEncounter(
   rng: () => number,
 ): { speciesId: string }[] {
   let maxEnemies: number;
-  if (layer <= 5) {
+  if (layer <= 10) {
     maxEnemies = 1;
-  } else if (layer <= 10) {
+  } else if (layer <= 25) {
     maxEnemies = randInt(rng, 1, 2);
   } else {
     maxEnemies = randInt(rng, 2, 3);

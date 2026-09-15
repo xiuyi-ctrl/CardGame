@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
-import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats, BOSS_MINIONS } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -411,10 +411,27 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     }
     if (node.type === 'boss') {
       if (base.roster.length === 0) return { ...base, screen: 'map' };
+      // 用 node.id 提取层号（格式 pf_N）
+      const layerMatch = node.id.match(/^pf_(\d+)$/);
+      const layer = layerMatch ? parseInt(layerMatch[1], 10) : (base.currentRow + 1);
+      let bossId: string;
+      let minionIds: string[];
+      if (layer <= 20) {
+        // 层15: 古树之主
+        bossId = 'boss_vine';
+        minionIds = BOSS_MINIONS['boss_vine'] ?? [];
+      } else if (layer <= 40) {
+        // 层30: 岩甲巨像
+        bossId = 'boss_golem';
+        minionIds = BOSS_MINIONS['boss_golem'] ?? [];
+      } else {
+        // 层50: 成长之主
+        bossId = GROWTH_MASTER.id;
+        minionIds = [GROWTH_PUPPET.id, GROWTH_PUPPET.id];
+      }
       const encounter = [
-        { speciesId: GROWTH_MASTER.id },
-        { speciesId: GROWTH_PUPPET.id },
-        { speciesId: GROWTH_PUPPET.id },
+        { speciesId: bossId },
+        ...minionIds.map((id) => ({ speciesId: id })),
       ];
       const maxField = maxFieldForEnemy(encounter.length, base.runMode);
       const initial = autoPosition(fieldUnits(base, maxField));
