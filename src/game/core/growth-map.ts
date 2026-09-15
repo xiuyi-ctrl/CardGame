@@ -76,12 +76,27 @@ function pickNodeType(rng: () => number, probs: NodeProb): NodeType {
   return 'rest';
 }
 
-/** 固定商店层：每~8层一个 */
-const FORCED_SHOP_LAYERS = new Set([5, 12, 20, 28, 36, 44]);
-/** 固定奇遇层 */
-const FORCED_SPECIAL_LAYERS = new Set([10, 25, 40]);
 /** Boss层 */
 const BOSS_LAYERS = new Set([15, 30, 50]);
+
+/** 随机间隔生成固定节点位置（不与Boss/其他固定节点重叠） */
+function generateFixedPositions(
+  rng: () => number,
+  minInterval: number,
+  maxInterval: number,
+  maxCount: number,
+  exclude: Set<number>,
+): Set<number> {
+  const positions = new Set<number>();
+  let current = 2 + Math.floor(rng() * minInterval); // 起始层
+  while (positions.size < maxCount && current <= TOTAL_LAYERS) {
+    if (!BOSS_LAYERS.has(current) && !exclude.has(current) && current !== 1) {
+      positions.add(current);
+    }
+    current += minInterval + Math.floor(rng() * (maxInterval - minInterval + 1));
+  }
+  return positions;
+}
 
 /** 生成成长远征模式地图 */
 export function generateGrowthMap(seed: number): RunMap {
@@ -91,15 +106,20 @@ export function generateGrowthMap(seed: number): RunMap {
   const events: Record<string, EventNode> = {};
   const specials: Record<string, SpecialNode> = {};
 
+  // 商店：每隔6~8层，最多6个
+  const shopLayers = generateFixedPositions(rng, 6, 8, 6, new Set());
+  // 奇遇关：每隔10~20层，最多4个，不与商店重叠
+  const specialLayers = generateFixedPositions(rng, 10, 20, 4, shopLayers);
+
   for (let layer = 1; layer <= TOTAL_LAYERS; layer++) {
     let nodeType: NodeType;
     if (layer === 1) {
       nodeType = 'battle';
     } else if (BOSS_LAYERS.has(layer)) {
       nodeType = 'boss';
-    } else if (FORCED_SHOP_LAYERS.has(layer)) {
+    } else if (shopLayers.has(layer)) {
       nodeType = 'shop';
-    } else if (FORCED_SPECIAL_LAYERS.has(layer)) {
+    } else if (specialLayers.has(layer)) {
       nodeType = 'special';
     } else {
       const probs = getLayerProbs(layer);
