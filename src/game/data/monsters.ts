@@ -158,7 +158,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0.3 }, rank: 3,
   },
   boss_vine: {
-    id: 'boss_vine', name: '古树之主', emoji: '🌳',
+    id: 'boss_vine', name: '古树之主', emoji: '🌳', image: '/07.png',
     baseHp: 28, baseSpd: 2,
     skills: ['leaf_needle', 'roar', 'leaf_quake', 'vine_whip', 'wild_leaf', 'boss_vine_shield'],
     desc: '越挨打越快的站桩树王，小怪会保护它。速度越快，狂叶和叶震波伤害越高。',
@@ -166,7 +166,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_tree_guard: {
-    id: 'boss_minion_tree_guard', name: '树精卫士', emoji: '🌿',
+    id: 'boss_minion_tree_guard', name: '树精卫士', emoji: '🌿', image: '/07-1.png',
     baseHp: 18, baseSpd: 2,
     skills: ['weaken', 'entangle'],
     desc: '古树之主的贴身护卫，削弱敌人保护Boss。',
@@ -174,7 +174,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_thorn: {
-    id: 'boss_minion_thorn', name: '荆棘卫士', emoji: '🌱',
+    id: 'boss_minion_thorn', name: '荆棘卫士', emoji: '🌱', image: '/07-2.png',
     baseHp: 12, baseSpd: 3,
     skills: ['poison_vine', 'steel_spike'],
     desc: '骚扰型小怪，毒刺+铁刺双debuff削弱敌人。',
