@@ -182,7 +182,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_crab: {
-    id: 'boss_crab', name: '潮汐巨蟹', emoji: '🦀',
+    id: 'boss_crab', name: '潮汐巨蟹', emoji: '🦀', image: '/08.png',
     baseHp: 36, baseSpd: 3,
     skills: ['double_hit', 'claw_smash', 'wave_aura', 'water_cannon', 'tidal_slam'],
     desc: '多段连击手，每2回合爆发一次，配合波光环强化连击。',
@@ -190,7 +190,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_shrimp: {
-    id: 'boss_minion_shrimp', name: '潮汐虾兵', emoji: '🦐',
+    id: 'boss_minion_shrimp', name: '潮汐虾兵', emoji: '🦐', image: '/08-1.png',
     baseHp: 16, baseSpd: 4,
     skills: ['double_hit', 'aqua_shot'],
     desc: '与巨蟹共享爆发节奏，爆发回合双压力。',
@@ -198,7 +198,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_hermit: {
-    id: 'boss_minion_hermit', name: '寄居蟹', emoji: '🐚',
+    id: 'boss_minion_hermit', name: '寄居蟹', emoji: '🐚', image: '/08-2.png',
     baseHp: 14, baseSpd: 1,
     skills: ['punch', 'shell_up'],
     desc: '纯肉盾，缩壳拖慢节奏让巨蟹等到爆发回合。',
@@ -206,7 +206,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_golem: {
-    id: 'boss_golem', name: '岩甲巨像', emoji: '🗻',
+    id: 'boss_golem', name: '岩甲巨像', emoji: '🗻', image: '/12.png',
     baseHp: 40, baseSpd: 2,
     skills: ['steel_spike', 'quake', 'rock_reforge', 'rock_throw'],
     desc: '受击计数惩罚机制，多段连击反而触发全屏伤害。碎岩重组可主动消灭小怪触发自爆，加速岩壳崩解。',
@@ -214,7 +214,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_rock: {
-    id: 'boss_minion_rock', name: '碎石傀儡', emoji: '🪨',
+    id: 'boss_minion_rock', name: '碎石傀儡', emoji: '🪨', image: '/12-1.png',
     baseHp: 10, baseSpd: 1,
     skills: ['steel_spike', 'gravel_throw'],
     desc: '低血量自爆小怪，死亡时对全体敌人造成3点真实伤害并加速巨像岩壳崩解。',
@@ -222,7 +222,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_crystal: {
-    id: 'boss_minion_crystal', name: '晶石虫', emoji: '💎',
+    id: 'boss_minion_crystal', name: '晶石虫', emoji: '💎', image: '/12-2.png',
     baseHp: 8, baseSpd: 5,
     skills: ['double_hit', 'crystal_sting'],
     desc: '高速多段小怪，连击快速堆叠巨像受击计数器，死亡自爆同样计入巨像计数。',
@@ -230,7 +230,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_dark: {
-    id: 'boss_dark', name: '暗影之王', emoji: '😈',
+    id: 'boss_dark', name: '暗影之王', emoji: '😈', image: '/09.png',
     baseHp: 36, baseSpd: 5,
     skills: ['dark_shock', 'shadow_flurry', 'roar', 'shadow_rift'],
     desc: '残血收割者，暗影印记+乱舞打出斩杀连段，击杀再动滚雪球。',
@@ -238,7 +238,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_shadow_servant: {
-    id: 'boss_minion_shadow_servant', name: '暗影仆从', emoji: '👤',
+    id: 'boss_minion_shadow_servant', name: '暗影仆从', emoji: '👤', image: '/09-1.png',
     baseHp: 14, baseSpd: 5,
     skills: ['shadow_claw', 'snipe'],
     desc: '暗影之王的贴身侍卫，杀人后永久增伤。',
@@ -246,7 +246,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_shadow_bat: {
-    id: 'boss_minion_shadow_bat', name: '影蝠', emoji: '🦇',
+    id: 'boss_minion_shadow_bat', name: '影蝠', emoji: '🦇', image: '/09-2.png',
     baseHp: 10, baseSpd: 6,
     skills: ['shadow_claw', 'leech_bite'],
     desc: '残血收割者，与王共同压制低血量目标。',
@@ -254,7 +254,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_fire: {
-    id: 'boss_fire', name: '熔火领主', emoji: '🌋',
+    id: 'boss_fire', name: '熔火领主', emoji: '🌋', image: '/14.png',
     baseHp: 42, baseSpd: 6,
     skills: ['blood_fang', 'roar', 'flame_shield', 'flame_combo'],
     altSkills: ['flame_burst', 'inferno', 'flame_pillar', 'roar'],
@@ -264,7 +264,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_lava_golem: {
-    id: 'boss_minion_lava_golem', name: '烈焰巨人', emoji: '🪨',
+    id: 'boss_minion_lava_golem', name: '烈焰巨人', emoji: '🪨', image: '/14-1.png',
     baseHp: 20, baseSpd: 3,
     skills: ['flame_combo', 'fire_shock'],
     desc: '高血量坦克，死亡时释放火焰引爆全场。',
@@ -272,7 +272,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_fire_sprite: {
-    id: 'boss_minion_fire_sprite', name: '火精灵', emoji: '🧚',
+    id: 'boss_minion_fire_sprite', name: '火精灵', emoji: '🧚', image: '/14-2.png',
     baseHp: 12, baseSpd: 5,
     skills: ['flame_combo', 'flame_slash'],
     desc: '高速骚扰型，被攻击时反向灼烧攻击者。',
@@ -280,7 +280,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_moss: {
-    id: 'boss_moss', name: '苔藓领主', emoji: '🍄',
+    id: 'boss_moss', name: '苔藓领主', emoji: '🍄', image: '/10.png',
     baseHp: 44, baseSpd: 3,
     skills: ['poison_sting', 'spore_burst', 'spore_summon', 'spore_shield'],
     desc: '全首领最高血量之一，中毒扩散全队，愈光/解毒手段变得关键。',
@@ -288,7 +288,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_spore_sac: {
-    id: 'boss_minion_spore_sac', name: '毒孢囊', emoji: '🫧',
+    id: 'boss_minion_spore_sac', name: '毒孢囊', emoji: '🫧', image: '/10-1.png',
     baseHp: 10, baseSpd: 4,
     skills: ['poison_sting', 'toxic_burst'],
     desc: '移动毒弹，死亡时毒雾爆发全体敌人。',
@@ -296,7 +296,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_slug: {
-    id: 'boss_minion_slug', name: '沼地蛞蝓', emoji: '🐛',
+    id: 'boss_minion_slug', name: '沼地蛞蝓', emoji: '🐛', image: '/10-2.png',
     baseHp: 16, baseSpd: 1,
     skills: ['poison_sting', 'slime_cover'],
     desc: '减速坦克，拖慢玩家给领主铺毒时间。',
@@ -304,7 +304,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_ghost: {
-    id: 'boss_ghost', name: '幽灵船长', emoji: '👻',
+    id: 'boss_ghost', name: '幽灵船长', emoji: '👻', image: '/11.png',
     baseHp: 42, baseSpd: 6,
     skills: ['soul_echo', 'ghostly_harvest', 'roar', 'ghostly_summon', 'soul_rend'],
     desc: '高速灵魂收集者，攻击命中汲取灵魂增强自身，灵魂越多伤害越高。小怪全灭时可重新召唤。',
@@ -312,7 +312,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_ghost_sailor: {
-    id: 'boss_minion_ghost_sailor', name: '幽灵水手', emoji: '🧟',
+    id: 'boss_minion_ghost_sailor', name: '幽灵水手', emoji: '🧟', image: '/11-1.png',
     baseHp: 16, baseSpd: 4,
     skills: ['shadow_claw', 'soul_share'],
     desc: '幽灵船长的船员，可主动为船长献祭灵魂。',
@@ -320,7 +320,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_phantom: {
-    id: 'boss_minion_phantom', name: '幽影', emoji: '💨',
+    id: 'boss_minion_phantom', name: '幽影', emoji: '💨', image: '/11-2.png',
     baseHp: 10, baseSpd: 6,
     skills: ['shadow_claw', 'ghost_burst'],
     desc: '高速幽灵刺客，可自爆对全体敌人造成3点伤害。',
@@ -328,7 +328,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_dragon: {
-    id: 'boss_dragon', name: '玄铁渊龙', emoji: '⚔️',
+    id: 'boss_dragon', name: '玄铁渊龙', emoji: '⚔️', image: '/13.png',
     baseHp: 60, baseSpd: 7,
     skills: ['chain_bind', 'chain_activate', 'iron_tail', 'dragon_claw', 'iron_wall'],
     passive: 'chain_master',
@@ -336,7 +336,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_chain_guard: {
-    id: 'boss_minion_chain_guard', name: '玄铁链卫', emoji: '⛓️',
+    id: 'boss_minion_chain_guard', name: '玄铁链卫', emoji: '⛓️', image: '/13-1.png',
     baseHp: 24, baseSpd: 3,
     skills: ['chain_link', 'iron_tail'],
     passive: 'chain_anchor',
@@ -344,7 +344,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     tame: { difficulty: 0 }, rank: 4,
   },
   boss_minion_chain_smith: {
-    id: 'boss_minion_chain_smith', name: '渊龙锁匠', emoji: '🔗',
+    id: 'boss_minion_chain_smith', name: '渊龙锁匠', emoji: '🔗', image: '/13-2.png',
     baseHp: 20, baseSpd: 6,
     skills: ['pierce_strike', 'chain_bind'],
     passive: 'chain_spark',
