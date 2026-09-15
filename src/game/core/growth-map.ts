@@ -31,8 +31,14 @@ const BASE_PROBS: NodeProb = {
 /** 根据层进度微调概率 */
 function getLayerProbs(layer: number): NodeProb {
   const p = { ...BASE_PROBS };
-  // 前10层：降精英，升战斗（教学期）
-  if (layer <= 10) {
+  // 前5层：无精英、无休整（教学期）
+  if (layer <= 5) {
+    p.elite = 0;
+    p.rest = 0;
+    p.battle += 15 + p.elite + p.rest;
+  }
+  // 6~10层：降精英，升战斗
+  if (layer > 5 && layer <= 10) {
     p.elite -= 8;
     p.battle += 5;
     p.rest += 3;

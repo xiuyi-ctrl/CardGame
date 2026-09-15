@@ -240,6 +240,25 @@ button.primary {
   cursor: not-allowed;
 }
 
+.locked-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-panel);
+  border-style: dashed;
+}
+
+.locked-hint {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: normal;
+  white-space: nowrap;
+}
+
 .debug-panel {
   margin-top: 20px;
   padding: 14px 18px;

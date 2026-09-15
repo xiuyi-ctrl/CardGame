@@ -387,7 +387,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   // —— 成长远征模式 Boss ——
   growth_master: {
     id: 'growth_master', name: '成长之主', emoji: '🐉',
-    baseHp: 40, baseSpd: 6,
+    baseHp: 80, baseSpd: 10,
     skills: ['growth_strike', 'growth_field', 'roar', 'growth_burst'],
     desc: '掌握成长奥秘的远古存在，通过汲取对手的成长力量来强化自身。',
     passive: 'growth_drain', tame: { difficulty: 0 }, rank: 4,

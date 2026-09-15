@@ -826,29 +826,42 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         }}>
           🏆 成就
         </button>
-        <button className="big-btn" onClick={() => {
-          // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
-          let slot = selectedSlot;
-          if (!slot) {
-            const occupied = slots.find(s => s.main || s.proficiency);
-            slot = occupied ? occupied.slot : slots.find(s => !s.main && !s.proficiency)?.slot;
-          }
-          if (!slot) { alert('存档已满，请在「存档管理」中删除一个存档'); return; }
+        {(() => {
+          const slotState = slots.find((s) => s.slot === selectedSlot);
+          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? loadUnlocks();
+          const profLocked = !unlocks.proficiencyUnlocked;
+          return (
+            <button
+              className={`big-btn${profLocked ? ' locked-btn' : ''}`}
+              disabled={profLocked}
+              onClick={() => {
+                if (profLocked) return;
+                // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
+                let slot = selectedSlot;
+                if (!slot) {
+                  const occupied = slots.find(s => s.main || s.proficiency);
+                  slot = occupied ? occupied.slot : slots.find(s => !s.main && !s.proficiency)?.slot;
+                }
+                if (!slot) { alert('存档已满，请在「存档管理」中删除一个存档'); return; }
 
-          // 检查该槽是否有未完成的熟练度远征
-          const slotState = slots.find(s => s.slot === slot);
-          if (slotState?.proficiency) {
-            setProfConfirmSlot(slot);
-            return;
-          }
+                // 检查该槽是否有未完成的熟练度远征
+                const slotState2 = slots.find(s => s.slot === slot);
+                if (slotState2?.proficiency) {
+                  setProfConfirmSlot(slot);
+                  return;
+                }
 
-          // 无远征记录 → 新开
-          clearDeletedSlot(slot);
-          selectSlot(slot);
-          dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
-        }}>
-          ⚔️ 熟练度远征
-        </button>
+                // 无远征记录 → 新开
+                clearDeletedSlot(slot);
+                selectSlot(slot);
+                dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
+              }}
+            >
+              ⚔️ 熟练度远征
+              {profLocked && <span className="locked-hint">🔒 通关第 1 幕后解锁</span>}
+            </button>
+          );
+        })()}
         <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
           {showDebug ? '收起测试面板' : '🔬 测试关卡'}
         </button>
@@ -1712,6 +1725,9 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const arenaMode = pending?.kind === 'arena';
   const growthPointMode = pending?.kind === 'growthPoint';
   const shopSlotUnlockMode = pending?.kind === 'shopSlotUnlock';
+  const eventBoostMode = pending?.kind === 'eventBoostHp' || pending?.kind === 'eventBoostSpd';
+  const eventResetGrowthMode = pending?.kind === 'eventResetGrowth';
+  const eventSkillReplaceMode = pending?.kind === 'eventSkillReplace';
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const title = evolveMode
@@ -1722,11 +1738,17 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
       ? '属性强化：选择要强化的宠物'
       : growthPointMode
         ? `选择一只宠物获得 ${pending.amount ?? 1} 成长点`
-        : shopSlotUnlockMode
-          ? `选择一只宠物解锁第${pending.slot === 4 ? '5' : '4'}技能槽`
-          : arenaMode
-            ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
-            : state.postBattle
+        : eventBoostMode
+          ? `选择一只宠物永久 +${pending.amount ?? 1} ${pending.kind === 'eventBoostSpd' ? '速度' : '生命'}`
+          : eventResetGrowthMode
+            ? '选择一只宠物重置其成长点'
+            : eventSkillReplaceMode
+              ? '选择一只宠物替换技能'
+              : shopSlotUnlockMode
+                ? `选择一只宠物解锁第${pending.slot === 4 ? '5' : '4'}技能槽`
+                : arenaMode
+                  ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
+                  : state.postBattle
               ? '战后休整（只能释放或融合宠物）'
               : `队伍管理（上限 ${ROSTER_MAX} 只）`;
 
@@ -1750,7 +1772,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
             ? canEvolve
               ? () => dispatch({ type: 'EVOLVE_ONE', uid: u.uid })
               : undefined
-            : boostMode || growthPointMode || shopSlotUnlockMode
+            : boostMode || growthPointMode || shopSlotUnlockMode || eventBoostMode || eventResetGrowthMode || eventSkillReplaceMode
               ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
               : arenaMode
                 ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
@@ -1762,12 +1784,12 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
         <div key={u.uid} className="roster-item">
           <UnitCard
             unit={u}
-            className={`roster-card ${(evolveMode && canEvolve) || boostMode || growthPointMode || arenaMode || state.postBattle ? 'clickable' : ''} ${isPostBattleSelected ? 'selected' : ''}`}
+            className={`roster-card ${(evolveMode && canEvolve) || boostMode || growthPointMode || eventBoostMode || eventResetGrowthMode || eventSkillReplaceMode || arenaMode || state.postBattle ? 'clickable' : ''} ${isPostBattleSelected ? 'selected' : ''}`}
             onClick={onCard}
             showSkillDesc
             topStats
             footer={
-              !evolveMode && !boostMode && !growthPointMode && !arenaMode ? <PetCardFooter unit={u} state={state} setConfirm={setConfirm} /> : undefined
+              !evolveMode && !boostMode && !growthPointMode && !eventBoostMode && !eventResetGrowthMode && !eventSkillReplaceMode && !arenaMode ? <PetCardFooter unit={u} state={state} setConfirm={setConfirm} /> : undefined
             }
           />
               <div className="roster-actions">
@@ -1794,7 +1816,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
           );
         })}
       </div>
-      {!evolveMode && !boostMode && !growthPointMode && !arenaMode && (
+      {!evolveMode && !boostMode && !growthPointMode && !eventBoostMode && !eventResetGrowthMode && !eventSkillReplaceMode && !arenaMode && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
           <button className="primary big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
             继续前进 →

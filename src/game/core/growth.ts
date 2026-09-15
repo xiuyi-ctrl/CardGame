@@ -21,6 +21,38 @@ export const SLOT5_COST = 10;
 /** 成本：替换技能 */
 export const REROLL_COST = 5;
 
+// ─── 技能池分类 ───
+
+/** 传奇技能池（仅奇遇关「传奇招募」可获得） */
+export const LEGENDARY_SKILLS = new Set([
+  'iron_domain', 'shield_quake', 'iron_double',
+  'poison_mist', 'toxic_bite',
+  'wind_flash', 'wind_feather', 'whirlwind', 'swift_strike',
+  'tidal_domain', 'water_shot', 'wave',
+  'burn_burst', 'flame_shield', 'flame_slash',
+]);
+
+/** Boss专属技能池（不可被玩家获得） */
+export const BOSS_ONLY_SKILLS = new Set([
+  'vine_whip', 'shadow_flurry', 'inferno', 'tidal_slam', 'quake', 'spore_burst',
+  'soul_rend', 'dragon_breath', 'hellfire', 'revenge_thorn', 'group_taunt',
+  'blood_fang', 'flame_pillar', 'wild_leaf', 'leaf_quake', 'boss_vine_shield',
+  'poison_vine', 'entangle', 'claw_smash', 'wave_aura', 'water_cannon',
+  'shell_up', 'rock_throw', 'gravel_throw', 'crystal_sting', 'rock_reforge',
+  'shadow_rift', 'leech_bite', 'spore_summon', 'spore_shield', 'slime_cover',
+  'iron_tail', 'dragon_claw', 'iron_wall',
+  'chain_bind', 'chain_activate', 'chain_link',
+  'ghostly_harvest', 'soul_echo', 'soul_share', 'ghost_burst', 'ghostly_summon',
+  'claw_attack', 'growth_strike', 'growth_field', 'growth_burst',
+]);
+
+/** 普通技能池（解锁槽位/替换技能用）：排除Boss专属 + 传奇 + 造物 */
+export function getNormalSkillPool(): string[] {
+  return Object.keys(SKILLS).filter(
+    (id) => !BOSS_ONLY_SKILLS.has(id) && !LEGENDARY_SKILLS.has(id),
+  );
+}
+
 /** 成长点分配选项类型 */
 export type GrowthChoice =
   | { kind: 'hp'; amount: number }
@@ -171,11 +203,24 @@ export function getMaxSkillSlots(unit: Unit): number {
   return 2 + Math.min(unit.extraSkillSlots ?? 0, 3);
 }
 
-/** 从技能库随机选取 n 个不重复技能（排除已学技能） */
+/** 从普通技能库随机选取 n 个不重复技能（排除已学、Boss专属、传奇技能） */
 export function getRandomSkillChoices(unit: Unit, n: number, rng: () => number): string[] {
-  const allIds = Object.keys(SKILLS);
   const owned = new Set(unit.skills);
-  const candidates = allIds.filter((id) => !owned.has(id));
+  const candidates = getNormalSkillPool().filter((id) => !owned.has(id));
+  const result: string[] = [];
+  const pool = [...candidates];
+  for (let i = 0; i < n && pool.length > 0; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    result.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return result;
+}
+
+/** 从传奇技能库随机选取 n 个不重复技能（排除已学技能） */
+export function getRandomLegendarySkillChoices(unit: Unit, n: number, rng: () => number): string[] {
+  const owned = new Set(unit.skills);
+  const candidates = [...LEGENDARY_SKILLS].filter((id) => !owned.has(id));
   const result: string[] = [];
   const pool = [...candidates];
   for (let i = 0; i < n && pool.length > 0; i++) {

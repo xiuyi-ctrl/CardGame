@@ -1,18 +1,15 @@
 /**
- * 成长远征模式 - 专属商店商品池（9种）
- * 围绕成长点成长设计（删除"成长之书"与"成长之石"重复项）
+ * 成长远征模式 - 专属商店商品池（6种）
+ * 围绕成长点成长设计
  */
 
 export type GrowthShopItemType =
   | 'book_small'
   | 'book_large'
-  | 'stat_boost'
   | 'slot_unlock'
-  | 'skill_replace'
   | 'forget_stone'
   | 'pet_recruit'
-  | 'heal_potion'
-  | 'gold_bag';
+  | 'heal_potion';
 
 export interface GrowthShopItem {
   id: GrowthShopItemType;
@@ -27,42 +24,28 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
     id: 'book_small',
     label: '成长之书（小）',
     desc: '选择 1 只宠物，+1 成长点',
-    price: 12,
+    price: 15,
     emoji: '📖',
   },
   book_large: {
     id: 'book_large',
     label: '成长之书（大）',
     desc: '选择 1 只宠物，+2 成长点',
-    price: 20,
+    price: 25,
     emoji: '📚',
-  },
-  stat_boost: {
-    id: 'stat_boost',
-    label: '属性强化',
-    desc: '选择 1 只宠物，永久 +2 生命 或 +1 速度',
-    price: 18,
-    emoji: '⬆️',
   },
   slot_unlock: {
     id: 'slot_unlock',
     label: '技能槽解锁',
-    desc: '选择 1 只宠物，解锁第 4 技能槽（无需成长点）',
-    price: 25,
+    desc: '选择 1 只宠物，解锁一个技能槽（无需成长点）',
+    price: 50,
     emoji: '🎰',
-  },
-  skill_replace: {
-    id: 'skill_replace',
-    label: '技能替换',
-    desc: '选择 1 只宠物，替换 1 个技能（免费）',
-    price: 12,
-    emoji: '🔄',
   },
   forget_stone: {
     id: 'forget_stone',
     label: '遗忘之石',
     desc: '选择 1 只宠物，重置其成长点',
-    price: 10,
+    price: 30,
     emoji: '🪨',
   },
   pet_recruit: {
@@ -74,17 +57,10 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
   },
   heal_potion: {
     id: 'heal_potion',
-    label: '治疗药水',
+    label: '治疗圣水',
     desc: '全队回复 50% 生命',
-    price: 8,
+    price: 30,
     emoji: '🧪',
-  },
-  gold_bag: {
-    id: 'gold_bag',
-    label: '金币袋',
-    desc: '获得 25 金币（净赚 15）',
-    price: 10,
-    emoji: '💰',
   },
 };
 

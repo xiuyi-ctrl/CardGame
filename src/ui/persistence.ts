@@ -163,6 +163,7 @@ export function loadUnlocks(): Unlocks {
         difficulties: parsed.difficulties ?? DEFAULT_UNLOCKS.difficulties,
         relics: parsed.relics ?? [],
         bestGrade: parsed.bestGrade,
+        proficiencyUnlocked: parsed.proficiencyUnlocked ?? false,
       };
     }
   } catch { /* ignore */ }

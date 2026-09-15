@@ -73,7 +73,8 @@ export interface EventChoice {
   label: string;
   desc: string;
   kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none'
-      | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status' | 'revive';
+      | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status' | 'revive' | 'growthPoint'
+      | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace';
   /** heal/damage=百分比，gold=金额 */
   amount?: number;
   /** 复活属性保留比例（0~1） */
@@ -106,6 +107,12 @@ export interface EventChoice {
   growthPointGain?: number;
   /** 重置目标宠物的成长点 */
   resetGrowthPoints?: boolean;
+  /** 目标全体（而非单只选择） */
+  targetAll?: boolean;
+  /** 永久属性提升不计入上限 */
+  noCap?: boolean;
+  /** 成功概率（0~1），缺省=1（必定成功） */
+  chance?: number;
 }
 
 export interface EventNode {
@@ -263,7 +270,12 @@ export interface GameState {
     | { kind: 'shopGrantGrowthPoint'; uid: string; amount: number }
     | { kind: 'shopStatBoost'; uid: string }
     | { kind: 'shopSlotUnlock'; uid: string; slot: 3 | 4 | 5 }
-    | { kind: 'shopForget'; uid: string };
+    | { kind: 'shopForget'; uid: string }
+    | { kind: 'eventBoostHp'; uid: string; amount?: number }
+    | { kind: 'eventBoostSpd'; uid: string; amount?: number }
+    | { kind: 'eventResetGrowth'; uid: string }
+    | { kind: 'eventSkillReplace'; uid: string }
+    | { kind: 'legendSkill'; uid: string };
   /** 本次商人节点是否已购买过食物（买了就不能再立即休整） */
   shopBought?: boolean;
   /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */
@@ -423,9 +435,10 @@ export interface Unlocks {
   difficulties: string[];
   relics: string[];
   bestGrade?: string;
+  proficiencyUnlocked?: boolean;
 }
 
-export const DEFAULT_UNLOCKS: Unlocks = { difficulties: ['normal'], relics: [], bestGrade: undefined };
+export const DEFAULT_UNLOCKS: Unlocks = { difficulties: ['normal'], relics: [], bestGrade: undefined, proficiencyUnlocked: false };
 
 export const ROSTER_MAX = 8;
 /** 出战宠物上限（最大 5 只，实际受敌方数量限制：敌方 n 只时玩家最多 n+1 只） */

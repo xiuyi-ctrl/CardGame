@@ -1,14 +1,12 @@
 /**
- * 成长远征模式 - 专属奇遇关奖励池（7种）
- * 围绕成长点设计（删除"熟练之冠"，替换为"技能之赐（大）"）
+ * 成长远征模式 - 专属奇遇关奖励池（6种）
+ * 围绕成长点设计
  */
 
 export type GrowthSpecialKind =
-  | 'growth_spring'
   | 'growth_blessing'
   | 'stat_blessing'
   | 'skill_blessing'
-  | 'skill_blessing_large'
   | 'legend_recruit'
   | 'gold_treasure'
   | 'revive';
@@ -21,40 +19,28 @@ export interface GrowthSpecialReward {
 }
 
 export const GROWTH_SPECIAL_REWARDS: Record<GrowthSpecialKind, GrowthSpecialReward> = {
-  growth_spring: {
-    id: 'growth_spring',
-    label: '成长之泉',
-    desc: '全队各获得 2 成长点',
-    emoji: '⛲',
-  },
   growth_blessing: {
     id: 'growth_blessing',
     label: '成长之赐',
-    desc: '选择 1 只宠物，获得 3 成长点',
+    desc: '全队各获得 5 成长点',
     emoji: '🌟',
   },
   stat_blessing: {
     id: 'stat_blessing',
     label: '属性之赐',
-    desc: '选择 1 只宠物，永久 +5 生命 或 +2 速度',
+    desc: '选择 1 只宠物，永久 +5 生命 或 +2 速度（不计入属性提升上限）',
     emoji: '💪',
   },
   skill_blessing: {
     id: 'skill_blessing',
     label: '技能之赐',
-    desc: '选择 1 只宠物，解锁第 4 技能槽（免费）',
+    desc: '选择 1 只宠物，解锁所有技能槽（免费）',
     emoji: '🎯',
-  },
-  skill_blessing_large: {
-    id: 'skill_blessing_large',
-    label: '技能之赐（大）',
-    desc: '选择 1 只宠物，解锁第 5 技能槽（免费）',
-    emoji: '🏅',
   },
   legend_recruit: {
     id: 'legend_recruit',
     label: '传奇招募',
-    desc: '获得 1 只随机传奇生物（品阶 3）',
+    desc: '获得 1 个随机传奇技能',
     emoji: '👑',
   },
   gold_treasure: {
