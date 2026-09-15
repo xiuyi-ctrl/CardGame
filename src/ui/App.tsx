@@ -65,7 +65,9 @@ export default function App() {
       {state.screen === 'reward' && <RewardScreen state={state} dispatch={dispatch} />}
       {state.screen === 'roster' && <RosterScreen state={state} dispatch={dispatch} />}
       {state.screen === 'shop' && <ShopScreen state={state} dispatch={dispatch} />}
-      {state.screen === 'rest' && <RestScreen dispatch={dispatch} />}
+      {state.screen === 'rest' && <RestScreen state={state} dispatch={dispatch} />}
+      {(state.screen === 'rest-fusion-select' || state.screen === 'rest-fusion-sub' || state.screen === 'rest-fusion-skill') && <RestFusionScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'revive-select' && <ReviveSelectScreen state={state} dispatch={dispatch} />}
       {state.screen === 'event' && <EventScreen state={state} dispatch={dispatch} />}
       {state.screen === 'special' && <SpecialScreen state={state} dispatch={dispatch} />}
       {state.screen === 'custom' && <CustomScreen state={state} dispatch={dispatch} />}
@@ -1821,7 +1823,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">商人 🏪</div>
       <p className="card-sub" style={{ textAlign: 'center' }}>
-        本店随机出售 4 种商品，可免费立即休整（回满血·不解诅咒）。
+        本店随机出售 4 种商品。
       </p>
       <div className="reward-cards">
         {stock.map((id) => {
@@ -1863,6 +1865,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
             </div>
           );
         })}
+        {!isProf && (
         <div className="reward-card">
           <div className="ricon">🛌</div>
           <div className="rtitle">立即休整</div>
@@ -1871,12 +1874,13 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
             <button
               className="primary"
               disabled={state.roster.every((u) => u.hp >= u.maxHp)}
-              onClick={() => dispatch(isProf ? { type: 'PROF_REST' } : { type: 'SHOP_REST' })}
+              onClick={() => dispatch({ type: 'SHOP_REST' })}
             >
               {state.roster.every((u) => u.hp >= u.maxHp) ? '已满血' : '休整'}
             </button>
           </div>
         </div>
+        )}
         <div className="reward-card">
           <div className="ricon">🔄</div>
           <div className="rtitle">刷新商品</div>
@@ -1902,15 +1906,146 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
   );
 }
 
-function RestScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+function RestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const isProf = state.runMode === 'proficiency';
   return (
     <div className="center-col">
       <div style={{ fontSize: 56 }}>🛌</div>
       <div className="title-sub">营火休整</div>
-      <p className="card-sub">让所有宠物恢复全部生命</p>
-      <button className="primary big-btn" onClick={() => dispatch({ type: 'REST_HEAL' })}>
-        休息（恢复满血）
-      </button>
+      {isProf ? (
+        <>
+          <p className="card-sub">选择一项：恢复全部生命，或进行宠物融合</p>
+          <button className="primary big-btn" style={{ marginBottom: 12 }} onClick={() => dispatch({ type: 'REST_HEAL' })}>
+            休息（恢复满血）
+          </button>
+          <button
+            className="primary big-btn"
+            disabled={state.roster.length < 2}
+            onClick={() => dispatch({ type: 'REST_FUSION_MODE' })}
+          >
+            宠物融合
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="card-sub">让所有宠物恢复全部生命</p>
+          <button className="primary big-btn" onClick={() => dispatch({ type: 'REST_HEAL' })}>
+            休息（恢复满血）
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReviveSelectScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const deadPets = state.deadPets ?? [];
+  if (deadPets.length === 0) {
+    return (
+      <div className="screen">
+        <div className="section-title">灵魂墓园</div>
+        <p className="card-sub">没有死亡的宠物可复活</p>
+        <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>返回</button>
+      </div>
+    );
+  }
+  const ratio = state.reviveRatio ?? 0.5;
+  return (
+    <div className="screen">
+      <div className="section-title">灵魂墓园</div>
+      <p className="card-sub">选择一只死亡宠物复活（保留 {Math.round(ratio * 100)}% 属性）</p>
+      <div className="reward-cards">
+        {deadPets.map((u) => {
+          const species = getMonster(u.speciesId);
+          const newHp = Math.max(1, Math.round(u.maxHp * ratio));
+          const newMaxHp = ratio >= 1 ? u.maxHp : Math.round(u.maxHp * ratio);
+          const newSpd = ratio >= 1 ? u.spd : Math.max(1, Math.round(u.spd * ratio));
+          return (
+            <button key={u.uid} className="reward-card" onClick={() => dispatch({ type: 'REVIVE', uid: u.uid, ratio })}>
+              <div className="reward-card-emoji">{species.emoji}</div>
+              <div className="reward-card-name">{u.name}</div>
+              <div className="reward-card-desc">
+                HP: {newHp}/{newMaxHp} | SPD: {newSpd}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>返回</button>
+    </div>
+  );
+}
+
+function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  if (state.screen === 'rest-fusion-select') {
+    return (
+      <div className="screen">
+        <div className="section-title">选择主宠</div>
+        <p className="card-sub">主宠将继承副宠 50% 基础属性并学习一个技能</p>
+        <div className="reward-cards">
+          {state.roster.map((u) => (
+            <div key={u.uid} className="reward-card">
+              <div className="ricon">{u.emoji}</div>
+              <div className="rtitle">{u.name}</div>
+              <div className="rdesc">HP {u.hp}/{u.maxHp} SPD {u.spd}</div>
+              <button className="primary" onClick={() => dispatch({ type: 'REST_FUSION_MAIN', uid: u.uid })}>选择</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+          <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
+        </div>
+      </div>
+    );
+  }
+  if (state.screen === 'rest-fusion-sub') {
+    const main = state.roster.find((u) => u.uid === state.fusionMainUid);
+    return (
+      <div className="screen">
+        <div className="section-title">选择副宠</div>
+        <p className="card-sub">副宠将被消耗，其基础属性50%转移给 {main?.name}</p>
+        <div className="reward-cards">
+          {state.roster.filter((u) => u.uid !== state.fusionMainUid).map((u) => {
+            const base = getMonster(u.speciesId);
+            return (
+              <div key={u.uid} className="reward-card">
+                <div className="ricon">{u.emoji}</div>
+                <div className="rtitle">{u.name}</div>
+                <div className="rdesc">基础 HP {base.baseHp} SPD {base.baseSpd} → 生命+{Math.round(base.baseHp * 0.5)} 速度+{Math.round(base.baseSpd * 0.5)}</div>
+                <button className="primary" onClick={() => dispatch({ type: 'REST_FUSION_SUB', uid: u.uid })}>融合</button>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+          <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
+        </div>
+      </div>
+    );
+  }
+  // rest-fusion-skill
+  const choices = state.skillPick?.choices ?? [];
+  const unit = state.roster.find((u) => u.uid === state.skillPick?.uid);
+  return (
+    <div className="screen">
+      <div className="section-title">选择技能</div>
+      <p className="card-sub">为 {unit?.name} 选择一个技能替换最后一位</p>
+      <div className="reward-cards">
+        {choices.map((sid) => {
+          const sk = getSkill(sid);
+          return (
+            <div key={sid} className="reward-card">
+              <div className="ricon">⚡</div>
+              <div className="rtitle">{sk?.name ?? sid}</div>
+              <div className="rdesc">{sk?.desc ?? ''}</div>
+              <button className="primary" onClick={() => dispatch({ type: 'REST_FUSION_SKILL', skillId: sid })}>选择</button>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+        <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
+      </div>
     </div>
   );
 }

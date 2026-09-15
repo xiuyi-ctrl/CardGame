@@ -14,6 +14,8 @@ import {
   applyGrowthChoice,
   SLOT3_COST,
   SLOT4_COST,
+  SLOT5_COST,
+  REROLL_COST,
   type GrowthChoice,
 } from '../game/core/growth';
 
@@ -33,8 +35,8 @@ export function GrowthScreen({ state, dispatch }: Props) {
 
   const handleGrowthChoice = (unit: Unit, choice: GrowthChoice) => {
     // 技能槽解锁：路由到技能选择界面（由 reducer 处理 state 转换）
-    if (choice.kind === 'slot3' || choice.kind === 'slot4') {
-      dispatch({ type: 'PROF_SLOT_UNLOCK', uid: unit.uid, slot: choice.kind === 'slot3' ? 3 : 4 });
+    if (choice.kind === 'slot3' || choice.kind === 'slot4' || choice.kind === 'slot5') {
+      dispatch({ type: 'PROF_SLOT_UNLOCK', uid: unit.uid, slot: choice.kind === 'slot3' ? 3 : choice.kind === 'slot4' ? 4 : 5 });
       return;
     }
     // 技能替换：路由到替换技能界面
@@ -109,11 +111,12 @@ export function GrowthScreen({ state, dispatch }: Props) {
               const cost = growthChoiceCost(choice);
               const canAfford = (selectedUnit.growthPoints ?? 0) >= cost;
               const label =
-                choice.kind === 'hp' ? `生命 +${choice.amount} (1点)` :
-                choice.kind === 'spd' ? `速度 +${choice.amount} (1点)` :
+                choice.kind === 'hp' ? `生命 +${choice.amount} (2点)` :
+                choice.kind === 'spd' ? `速度 +${choice.amount} (2点)` :
                 choice.kind === 'slot3' ? `解锁第3技能槽 (${SLOT3_COST}点)` :
                 choice.kind === 'slot4' ? `解锁第4技能槽 (${SLOT4_COST}点)` :
-                '替换技能 (1点)';
+                choice.kind === 'slot5' ? `解锁第5技能槽 (${SLOT5_COST}点)` :
+                `替换技能 (${REROLL_COST}点)`;
               return (
                 <button
                   key={i}

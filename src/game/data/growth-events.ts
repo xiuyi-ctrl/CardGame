@@ -15,7 +15,8 @@ export type GrowthEventType =
   | 'pet_recruit'
   | 'arena_challenge'
   | 'stone_of_forget'
-  | 'wheel_of_fate';
+  | 'wheel_of_fate'
+  | 'revive_dead';
 
 export const GROWTH_EVENT_TYPES: GrowthEventType[] = [
   'ancient_arena',
@@ -28,6 +29,7 @@ export const GROWTH_EVENT_TYPES: GrowthEventType[] = [
   'arena_challenge',
   'stone_of_forget',
   'wheel_of_fate',
+  'revive_dead',
 ];
 
 export const GROWTH_EVENT_NAMES: Record<GrowthEventType, string> = {
@@ -41,6 +43,7 @@ export const GROWTH_EVENT_NAMES: Record<GrowthEventType, string> = {
   arena_challenge: '训练场挑战',
   stone_of_forget: '遗忘之石',
   wheel_of_fate: '命运之轮',
+  revive_dead: '灵魂墓园',
 };
 
 export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType): EventNode {
@@ -145,6 +148,15 @@ function buildGrowthEventByType(type: GrowthEventType): EventNode {
         choices: [
           { id: 'wf-bet', label: '投入 20 金', desc: '消耗 20 金币，选择 1 只宠物获得 2 成长点', kind: 'boost', boostStat: 'hp', amount: 0, goldDelta: -20, growthPointGain: 2 },
           { id: 'wf-leave', label: '离开', desc: '无事发生', kind: 'none' },
+        ],
+      };
+    case 'revive_dead':
+      return {
+        title: '灵魂墓园',
+        desc: '你发现了一处古老的墓园，亡灵的低语回荡在空气中。或许可以尝试唤醒逝去的伙伴……',
+        choices: [
+          { id: 'rd-revive', label: '尝试复活', desc: '选择 1 只死亡宠物复活（保留 50% 基础属性）', kind: 'revive', reviveRatio: 0.5 },
+          { id: 'rd-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
     default:

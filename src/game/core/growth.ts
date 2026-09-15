@@ -6,16 +6,20 @@ import type { Unit } from '../types';
 import { SKILLS } from '../data/skills';
 
 /** 属性提升上限 */
-export const STAT_CAP_HP = 20;
-export const STAT_CAP_SPD = 10;
+export const STAT_CAP_HP = 30;
+export const STAT_CAP_SPD = 15;
 
+/** 成本：属性提升 */
+export const HP_COST = 2;
+export const SPD_COST = 2;
 /** 成本：解锁第3技能槽 */
-export const SLOT3_COST = 2;
+export const SLOT3_COST = 5;
 /** 成本：解锁第4技能槽 */
-export const SLOT4_COST = 3;
-
-/** 单只生物累计成长点上限 */
-export const GROWTH_POINT_CAP = 10;
+export const SLOT4_COST = 8;
+/** 成本：解锁第5技能槽 */
+export const SLOT5_COST = 10;
+/** 成本：替换技能 */
+export const REROLL_COST = 5;
 
 /** 成长点分配选项类型 */
 export type GrowthChoice =
@@ -23,6 +27,7 @@ export type GrowthChoice =
   | { kind: 'spd'; amount: number }
   | { kind: 'slot3' }
   | { kind: 'slot4' }
+  | { kind: 'slot5' }
   | { kind: 'reroll' };
 
 /** 获取可用的成长选项 */
@@ -34,10 +39,10 @@ export function getAvailableGrowthChoices(unit: Unit): GrowthChoice[] {
   const hpBonus = unit.bonusStats?.hp ?? 0;
   const spdBonus = unit.bonusStats?.spd ?? 0;
 
-  if (gp >= 1 && hpBonus < STAT_CAP_HP) {
+  if (gp >= HP_COST && hpBonus < STAT_CAP_HP) {
     choices.push({ kind: 'hp', amount: 2 });
   }
-  if (gp >= 1 && spdBonus < STAT_CAP_SPD) {
+  if (gp >= SPD_COST && spdBonus < STAT_CAP_SPD) {
     choices.push({ kind: 'spd', amount: 1 });
   }
 
@@ -49,9 +54,12 @@ export function getAvailableGrowthChoices(unit: Unit): GrowthChoice[] {
   if (extraSlots < 2 && gp >= SLOT4_COST) {
     choices.push({ kind: 'slot4' });
   }
+  if (extraSlots < 3 && gp >= SLOT5_COST) {
+    choices.push({ kind: 'slot5' });
+  }
 
-  // 技能替换（始终可用，只要有点数）
-  if (gp >= 1) {
+  // 技能替换
+  if (gp >= REROLL_COST) {
     choices.push({ kind: 'reroll' });
   }
 
@@ -81,6 +89,9 @@ export function getAllGrowthChoices(unit: Unit): GrowthChoice[] {
   if (extraSlots < 2) {
     choices.push({ kind: 'slot4' });
   }
+  if (extraSlots < 3) {
+    choices.push({ kind: 'slot5' });
+  }
 
   // 技能替换
   choices.push({ kind: 'reroll' });
@@ -91,11 +102,12 @@ export function getAllGrowthChoices(unit: Unit): GrowthChoice[] {
 /** 成长选项所需点数 */
 export function growthChoiceCost(choice: GrowthChoice): number {
   switch (choice.kind) {
-    case 'hp': return 1;
-    case 'spd': return 1;
+    case 'hp': return HP_COST;
+    case 'spd': return SPD_COST;
     case 'slot3': return SLOT3_COST;
     case 'slot4': return SLOT4_COST;
-    case 'reroll': return 1;
+    case 'slot5': return SLOT5_COST;
+    case 'reroll': return REROLL_COST;
   }
 }
 
@@ -105,24 +117,24 @@ export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): Unit | null
 
   switch (choice.kind) {
     case 'hp': {
-      if (gp < 1) return null;
+      if (gp < HP_COST) return null;
       const hpBonus = unit.bonusStats?.hp ?? 0;
       if (hpBonus >= STAT_CAP_HP) return null;
       return {
         ...unit,
-        growthPoints: gp - 1,
+        growthPoints: gp - HP_COST,
         bonusStats: { ...unit.bonusStats, hp: hpBonus + 2 },
         maxHp: unit.maxHp + 2,
         hp: unit.hp + 2,
       };
     }
     case 'spd': {
-      if (gp < 1) return null;
+      if (gp < SPD_COST) return null;
       const spdBonus = unit.bonusStats?.spd ?? 0;
       if (spdBonus >= STAT_CAP_SPD) return null;
       return {
         ...unit,
-        growthPoints: gp - 1,
+        growthPoints: gp - SPD_COST,
         bonusStats: { ...unit.bonusStats, spd: spdBonus + 1 },
         spd: unit.spd + 1,
       };
@@ -139,18 +151,24 @@ export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): Unit | null
       if (extraSlots >= 2) return null;
       return { ...unit, growthPoints: gp - SLOT4_COST, extraSkillSlots: extraSlots + 1 };
     }
+    case 'slot5': {
+      if (gp < SLOT5_COST) return null;
+      const extraSlots = unit.extraSkillSlots ?? 0;
+      if (extraSlots >= 3) return null;
+      return { ...unit, growthPoints: gp - SLOT5_COST, extraSkillSlots: extraSlots + 1 };
+    }
     case 'reroll': {
-      if (gp < 1) return null;
-      return { ...unit, growthPoints: gp - 1 };
+      if (gp < REROLL_COST) return null;
+      return { ...unit, growthPoints: gp - REROLL_COST };
     }
     default:
       return null;
   }
 }
 
-/** 获取单位最大技能槽数（基础2 + 额外解锁） */
+/** 获取单位最大技能槽数（基础2 + 额外解锁，最多5） */
 export function getMaxSkillSlots(unit: Unit): number {
-  return 2 + (unit.extraSkillSlots ?? 0);
+  return 2 + Math.min(unit.extraSkillSlots ?? 0, 3);
 }
 
 /** 从技能库随机选取 n 个不重复技能（排除已学技能） */

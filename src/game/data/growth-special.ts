@@ -10,7 +10,8 @@ export type GrowthSpecialKind =
   | 'skill_blessing'
   | 'skill_blessing_large'
   | 'legend_recruit'
-  | 'gold_treasure';
+  | 'gold_treasure'
+  | 'revive';
 
 export interface GrowthSpecialReward {
   id: GrowthSpecialKind;
@@ -61,6 +62,12 @@ export const GROWTH_SPECIAL_REWARDS: Record<GrowthSpecialKind, GrowthSpecialRewa
     label: '金币宝藏',
     desc: '获得 80 金币',
     emoji: '💎',
+  },
+  revive: {
+    id: 'revive',
+    label: '生命之泉',
+    desc: '复活 1 只死亡宠物（保留 100% 属性）',
+    emoji: '💖',
   },
 };
 

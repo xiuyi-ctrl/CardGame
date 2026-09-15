@@ -4,7 +4,7 @@
  */
 import { createRng, randInt, pick } from '../rng';
 import type { MapNode, NodeType, RunMap, EventNode, SpecialNode } from '../state/game';
-import { labelOf } from '../state/game';
+import { labelOf, ACT_BOSS_POOLS, BOSS_MINIONS } from '../state/game';
 
 /** 总层数 */
 export const TOTAL_LAYERS = 50;
@@ -108,25 +108,28 @@ export function generateGrowthMap(seed: number): RunMap {
     layers.push([node]);
   }
 
-  return { layers, encounter, boss: pregenerateBoss(), events, specials };
+  return { layers, encounter, boss: pregenerateBoss(seed), events, specials };
 }
 
-/** 预生成Boss遭遇（供 nodeInfo 显示） */
-function pregenerateBoss(): Record<string, { speciesId: string }[]> {
+/** 预生成Boss遭遇（按幕次随机选Boss，供 nodeInfo 显示 + enterNode 读取） */
+function pregenerateBoss(seed: number): Record<string, { speciesId: string }[]> {
+  const rng = createRng(seed * 4919 + 6131);
   const bossMap: Record<string, { speciesId: string }[]> = {};
-  // 层15: 古树之主
+  // 层15: 第一幕Boss随机选一个
+  const act1Boss = pick(rng, ACT_BOSS_POOLS[1]);
+  const act1Minions = BOSS_MINIONS[act1Boss] ?? [];
   bossMap['pf_15'] = [
-    { speciesId: 'boss_vine' },
-    { speciesId: 'boss_minion_tree_guard' },
-    { speciesId: 'boss_minion_thorn' },
+    { speciesId: act1Boss },
+    ...act1Minions.map((m) => ({ speciesId: m })),
   ];
-  // 层30: 岩甲巨像
+  // 层30: 第二幕Boss随机选一个
+  const act2Boss = pick(rng, ACT_BOSS_POOLS[2]);
+  const act2Minions = BOSS_MINIONS[act2Boss] ?? [];
   bossMap['pf_30'] = [
-    { speciesId: 'boss_golem' },
-    { speciesId: 'boss_minion_rock' },
-    { speciesId: 'boss_minion_crystal' },
+    { speciesId: act2Boss },
+    ...act2Minions.map((m) => ({ speciesId: m })),
   ];
-  // 层50: 成长之主
+  // 层50: 成长之主（固定）
   bossMap['pf_50'] = [
     { speciesId: 'growth_master' },
     { speciesId: 'growth_puppet' },

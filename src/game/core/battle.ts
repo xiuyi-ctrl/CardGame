@@ -45,6 +45,8 @@ corruptDebuff?: 'spd' | 'dmg' | 'burn';
   nodeType?: string;
   /** 难度等级，影响敌方属性缩放 */
   difficulty?: Difficulty;
+  /** 成长远征：当前层数，每层+10%生命+5%速度 */
+  layer?: number;
 }
 
 export function computeStats(speciesId: string) {
@@ -196,6 +198,7 @@ function makeEnemy(
   col: 0 | 1 | 2,
   untameable = false,
   difficulty?: Difficulty,
+  layer?: number,
 ): Unit {
   const s = getMonster(e.speciesId);
   const unit = makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
@@ -204,6 +207,13 @@ function makeEnemy(
     unit.maxHp = Math.round(unit.maxHp * cfg.enemyHpMult);
     unit.hp = unit.maxHp;
     unit.spd = Math.max(1, unit.spd + cfg.enemySpdBonus);
+  }
+  if (layer && layer > 1) {
+    const hpMult = 1 + (layer - 1) * 0.10;
+    const spdMult = 1 + (layer - 1) * 0.05;
+    unit.maxHp = Math.round(unit.maxHp * hpMult);
+    unit.hp = unit.maxHp;
+    unit.spd = Math.max(1, Math.round(unit.spd * spdMult));
   }
   return unit;
 }
@@ -324,6 +334,7 @@ export function createBattle(
   };
   const untameable = options?.untameable === true;
   const difficulty = options?.difficulty;
+  const layer = options?.layer;
   if (options?.gauntlet) {
     const [first, ...playerRest] = preparedPlayer;
     // 车轮战：我方也一次只上一只，其余进入替补席，阵亡后按序顶替
@@ -331,8 +342,8 @@ export function createBattle(
     b.playerBench = playerRest;
     b.playerDown = [];
     const [firstEnemy, ...enemyRest] = enemySpecies;
-    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty), row: 'front', column: 1 }] : [];
-    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty));
+    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer), row: 'front', column: 1 }] : [];
+    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else {
     // 敌方数量固定为 encounter 原始数量（不再复制补齐）；
@@ -341,7 +352,7 @@ export function createBattle(
     const picked = exact ? [...enemySpecies] : [...enemySpecies];
     const layout = planEnemyLayout(picked);
     b.playerUnits = preparedPlayer;
-    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty));
+    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty, layer));
     // Boss 小怪战：Boss 显示在前排中间（column 1），与两侧小怪互换位置
     if (b.enemyUnits.length >= 2 && b.enemyUnits[0]?.speciesId.startsWith('boss_')) {
       const boss = b.enemyUnits[0];

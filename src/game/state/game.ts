@@ -73,9 +73,11 @@ export interface EventChoice {
   label: string;
   desc: string;
   kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none'
-      | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status';
+      | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status' | 'revive';
   /** heal/damage=百分比，gold=金额 */
   amount?: number;
+  /** 复活属性保留比例（0~1） */
+  reviveRatio?: number;
   /** 金币变动（food/exp 附加） */
   goldDelta?: number;
   foodId?: string;
@@ -113,7 +115,7 @@ export interface EventNode {
 }
 
 /** 奇遇关高级奖励类型 */
-export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item' | 'growthPoint' | 'slotUnlock' | 'recruit';
+export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item' | 'growthPoint' | 'slotUnlock' | 'recruit' | 'revive' | 'reviveHalf';
 
 export interface SpecialReward {
   id: string;
@@ -191,7 +193,11 @@ export type Screen =
   | 'proficiency-select'
   | 'proficiency-result'
   | 'skill-pick'
-  | 'growth-menu';
+  | 'growth-menu'
+  | 'rest-fusion-select'
+  | 'rest-fusion-sub'
+  | 'rest-fusion-skill'
+  | 'revive-select';
 
 export interface RunStats {
   battlesWon: number;
@@ -240,6 +246,8 @@ export interface GameState {
   currentRow: number;
   currentNodeId: string;
   roster: Unit[];
+  /** 死亡宠物墓地（成长远征模式用于复活功能） */
+  deadPets?: Unit[];
   field: string[];
   inventory: Record<string, number>;
   gold: number;
@@ -254,7 +262,7 @@ export interface GameState {
     | { kind: 'growthPoint'; uid: string; amount?: number }
     | { kind: 'shopGrantGrowthPoint'; uid: string; amount: number }
     | { kind: 'shopStatBoost'; uid: string }
-    | { kind: 'shopSlotUnlock'; uid: string; slot: 3 | 4 }
+    | { kind: 'shopSlotUnlock'; uid: string; slot: 3 | 4 | 5 }
     | { kind: 'shopForget'; uid: string };
   /** 本次商人节点是否已购买过食物（买了就不能再立即休整） */
   shopBought?: boolean;
@@ -356,7 +364,7 @@ export interface GameState {
   /** 技能槽解锁后：待选技能列表 + 目标单位uid + 技能槽编号(3/4) */
   skillPick?: {
     uid: string;
-    slot: 3 | 4;
+    slot: 3 | 4 | 5;
     choices: string[];
   };
   /** 替换技能：待替换技能列表 + 目标单位uid + 可选新技能 */
@@ -365,6 +373,12 @@ export interface GameState {
     replaceIdx: number;
     choices: string[];
   };
+  /** 休整融合：已选主宠uid */
+  fusionMainUid?: string;
+  /** 休整融合：已选副宠uid */
+  fusionSubUid?: string;
+  /** 复活属性保留比例（事件触发时暂存） */
+  reviveRatio?: number;
 }
 
 export type Difficulty = 'normal' | 'hard' | 'nightmare';
@@ -417,7 +431,7 @@ export const ROSTER_MAX = 8;
 /** 出战宠物上限（最大 5 只，实际受敌方数量限制：敌方 n 只时玩家最多 n+1 只） */
 export const FIELD_MAX = 5;
 /** 根据敌方数量计算我方出战上限（n+1，不超过 FIELD_MAX） */
-export const PROF_ROSTER_MAX = 6;
+export const PROF_ROSTER_MAX = 5;
 export const PROF_FIELD_MAX = 3;
 
 export function maxFieldForEnemy(enemyCount: number, runMode?: 'main' | 'proficiency'): number {
