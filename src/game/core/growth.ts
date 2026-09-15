@@ -25,31 +25,32 @@ export const REROLL_COST = 5;
 
 /** 传奇技能池（仅奇遇关「传奇招募」可获得） */
 export const LEGENDARY_SKILLS = new Set([
-  'iron_domain', 'shield_quake', 'iron_double',
+  // 原传奇宠物技能
+  'iron_domain', 'iron_double',
   'poison_mist', 'toxic_bite',
-  'wind_flash', 'wind_feather', 'whirlwind', 'swift_strike',
-  'tidal_domain', 'water_shot', 'wave',
+  'wind_flash',
+  'tidal_domain',
   'burn_burst', 'flame_shield', 'flame_slash',
+  // Boss技能（高强度）
+  'inferno', 'soul_rend', 'dragon_breath', 'hellfire',
+  'dragon_claw', 'iron_tail',   'boss_vine_shield',
+  // 新增Boss技能
+  'leaf_quake', 'wild_leaf', 'quake', 'shadow_rift',
+  'flame_burst', 'flame_pillar', 'spore_burst', 'spore_shield',
+  'ghostly_harvest', 'iron_wall',
 ]);
 
-/** Boss专属技能池（不可被玩家获得） */
-export const BOSS_ONLY_SKILLS = new Set([
-  'vine_whip', 'shadow_flurry', 'inferno', 'tidal_slam', 'quake', 'spore_burst',
-  'soul_rend', 'dragon_breath', 'hellfire', 'revenge_thorn', 'group_taunt',
-  'blood_fang', 'flame_pillar', 'wild_leaf', 'leaf_quake', 'boss_vine_shield',
-  'poison_vine', 'entangle', 'claw_smash', 'wave_aura', 'water_cannon',
-  'shell_up', 'rock_throw', 'gravel_throw', 'crystal_sting', 'rock_reforge',
-  'shadow_rift', 'leech_bite', 'spore_summon', 'spore_shield', 'slime_cover',
-  'iron_tail', 'dragon_claw', 'iron_wall',
-  'chain_bind', 'chain_activate', 'chain_link',
-  'ghostly_harvest', 'soul_echo', 'soul_share', 'ghost_burst', 'ghostly_summon',
-  'claw_attack', 'growth_strike', 'growth_field', 'growth_burst',
+/** 不出现在任何技能池中的技能（Boss专属，玩家不可获取） */
+export const BLOCKED_SKILLS = new Set([
+  'shell_up', 'rock_reforge', 'spore_summon', 'ghostly_summon',
+  'soul_share', 'chain_bind', 'chain_activate', 'chain_link',
+  'growth_strike', 'growth_field', 'growth_burst',
 ]);
 
-/** 普通技能池（解锁槽位/替换技能用）：排除Boss专属 + 传奇 + 造物 */
+/** 普通技能池（解锁槽位/替换技能用）：排除传奇技能 + 不可获取技能 */
 export function getNormalSkillPool(): string[] {
   return Object.keys(SKILLS).filter(
-    (id) => !BOSS_ONLY_SKILLS.has(id) && !LEGENDARY_SKILLS.has(id),
+    (id) => !LEGENDARY_SKILLS.has(id) && !BLOCKED_SKILLS.has(id),
   );
 }
 

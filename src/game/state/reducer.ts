@@ -109,9 +109,10 @@ export type GameAction =
   | { type: 'PROF_SHOP_EFFECT'; uid: string }
   | { type: 'PROF_SKILL_REPLACE_START'; uid: string }
   | { type: 'PROF_SKILL_REPLACE_SELECT'; replaceIdx: number }
-  | { type: 'REST_FUSION_MAIN'; uid: string }
-  | { type: 'REST_FUSION_SUB'; uid: string }
-  | { type: 'REST_FUSION_SKILL'; skillId: string }
+  | { type: 'REST_FUSION_SET_MAIN'; uid: string }
+  | { type: 'REST_FUSION_SET_SUB'; uid: string }
+  | { type: 'REST_FUSION_CONFIRM' }
+  | { type: 'REST_FUSION_SKILL'; skillId: string; replaceIdx?: number }
   | { type: 'REST_FUSION_CANCEL' }
   | { type: 'REST_FUSION_MODE' }
   | { type: 'REVIVE'; uid: string; ratio: number };
@@ -143,7 +144,7 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'skill-pick', 'growth-menu', 'revive-select', 'rest-fusion-select', 'rest-fusion-sub', 'rest-fusion-skill'];
+  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'skill-pick', 'growth-menu', 'revive-select', 'rest-fusion', 'rest-fusion-skill'];
   return (
     typeof o.seed === 'number' &&
     typeof o.act === 'number' &&
@@ -331,13 +332,29 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     tameAttempts: result.runStats.tameAttempts + (battle.tameAttempts ?? 0),
     圣果Used: result.runStats.圣果Used + (battle.圣果Used ?? 0),
   } : result.runStats;
-  // 成长点：仅远征模式，参战+1，存活+1
+  // 成长点：仅远征模式，参战+2，击杀按敌人等级额外奖励
   let finalRoster = result.roster;
   if (state.runMode === 'proficiency') {
+    // 计算击杀奖励：所有敌人被击败时按rank给成长点
+    let killGp = 0;
+    for (const eu of battle.enemyUnits) {
+      if (eu.hp > 0) continue; // 未击杀的跳过
+      const rank = getMonster(eu.speciesId).rank;
+      if (bossNode && rank === 4) {
+        // Boss小怪 vs Boss本体：小怪物种id不在boss遭遇列表的第一个即为小怪
+        const bossEncounter = state.map.boss[state.currentNodeId];
+        const isMainBoss = bossEncounter && bossEncounter.length > 0 && bossEncounter[0].speciesId === eu.speciesId;
+        killGp += isMainBoss ? 6 : 2;
+      } else if (rank === 2) {
+        killGp += 4;
+      } else {
+        killGp += 2;
+      }
+    }
     finalRoster = result.roster.map((u) => {
       const inBattle = [...battle.playerUnits, ...(battle.playerDown ?? [])].some((bu) => bu.uid === u.uid);
       if (!inBattle) return u;
-      const gp = (u.growthPoints ?? 0) + 1;
+      const gp = (u.growthPoints ?? 0) + 2 + killGp;
       return { ...u, growthPoints: gp };
     });
   }
@@ -1851,20 +1868,43 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'REST_FUSION_MODE': {
       if (state.screen !== 'rest') return state;
       if (state.roster.length < 2) return { ...state, toast: { msg: '需要至少2只宠物才能融合', kind: 'warning' } };
-      return { ...state, screen: 'rest-fusion-select' };
+      return { ...state, screen: 'rest-fusion', fusionMainUid: undefined, fusionSubUid: undefined, fusionSubSkills: undefined, fusionLearnSkill: undefined };
     }
 
-    case 'REST_FUSION_MAIN': {
-      if (state.screen !== 'rest-fusion-select') return state;
+    case 'REST_FUSION_SET_MAIN': {
+      if (state.screen !== 'rest-fusion') return state;
       const unit = state.roster.find((u) => u.uid === action.uid);
       if (!unit) return state;
-      return { ...state, fusionMainUid: unit.uid, screen: 'rest-fusion-sub' };
+      // 点击已选主宠 → 取消选择
+      if (state.fusionMainUid === action.uid) {
+        return { ...state, fusionMainUid: undefined, fusionLearnSkill: undefined };
+      }
+      // 点击已选副宠 → 移到主宠位，副宠清空
+      if (state.fusionSubUid === action.uid) {
+        return { ...state, fusionMainUid: action.uid, fusionSubUid: undefined, fusionLearnSkill: undefined };
+      }
+      return { ...state, fusionMainUid: action.uid, fusionLearnSkill: undefined };
     }
 
-    case 'REST_FUSION_SUB': {
-      if (state.screen !== 'rest-fusion-sub') return state;
+    case 'REST_FUSION_SET_SUB': {
+      if (state.screen !== 'rest-fusion') return state;
+      const unit = state.roster.find((u) => u.uid === action.uid);
+      if (!unit) return state;
+      // 点击已选副宠 → 取消选择
+      if (state.fusionSubUid === action.uid) {
+        return { ...state, fusionSubUid: undefined, fusionLearnSkill: undefined };
+      }
+      // 点击已选主宠 → 移到副宠位，主宠清空
+      if (state.fusionMainUid === action.uid) {
+        return { ...state, fusionSubUid: action.uid, fusionMainUid: undefined, fusionLearnSkill: undefined };
+      }
+      return { ...state, fusionSubUid: action.uid, fusionLearnSkill: undefined };
+    }
+
+    case 'REST_FUSION_CONFIRM': {
+      if (state.screen !== 'rest-fusion') return state;
       const main = state.roster.find((u) => u.uid === state.fusionMainUid);
-      const sub = state.roster.find((u) => u.uid === action.uid);
+      const sub = state.roster.find((u) => u.uid === state.fusionSubUid);
       if (!main || !sub || main.uid === sub.uid) return state;
       // 基础属性 50% 继承
       const subBase = getMonster(sub.speciesId);
@@ -1878,48 +1918,62 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         spd: main.spd + spdGain,
         bonusStats: { hp: (main.bonusStats?.hp ?? 0) + hpGain, spd: (main.bonusStats?.spd ?? 0) + spdGain },
       };
-      // 移除副宠
-      const roster = state.roster.filter((u) => u.uid !== sub.uid);
-      // 生成技能选择：从副宠技能中排除主宠已学
+      // 计算副宠可学技能（排除主宠已学）
       const owned = new Set(updatedMain.skills);
       const subSkills = sub.skills.filter((id) => !owned.has(id));
-      const rng = createRng(state.seed + (main.uid.charCodeAt(0) << 8) + (sub.uid.charCodeAt(0) << 4) + 77);
-      const skillChoices = subSkills.length > 0
-        ? shuffle(rng, subSkills).slice(0, Math.min(3, subSkills.length))
-        : getRandomSkillChoices(updatedMain, 3, rng);
+      // 移除副宠
+      const roster = state.roster.filter((u) => u.uid !== sub.uid);
+      // 无技能可学 → 直接完成
+      if (subSkills.length === 0) {
+        return {
+          ...state,
+          roster: roster.map((u) => (u.uid === main.uid ? updatedMain : u)),
+          screen: 'map',
+          fusionMainUid: undefined,
+          fusionSubUid: undefined,
+          fusionSubSkills: undefined,
+          fusionLearnSkill: undefined,
+          toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain}）`, kind: 'success' },
+        };
+      }
       return {
         ...state,
         roster: roster.map((u) => (u.uid === main.uid ? updatedMain : u)),
-        fusionSubUid: sub.uid,
-        screen: skillChoices.length > 0 ? 'rest-fusion-skill' : 'map',
-        skillPick: skillChoices.length > 0 ? { uid: main.uid, slot: 3 as const, choices: skillChoices } : undefined,
-        fusionMainUid: skillChoices.length > 0 ? state.fusionMainUid : undefined,
-        toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain}）`, kind: 'success' },
+        screen: 'rest-fusion-skill',
+        fusionSubSkills: subSkills,
+        fusionLearnSkill: undefined,
+        toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain}），选择要学习的技能`, kind: 'success' },
       };
     }
 
     case 'REST_FUSION_SKILL': {
       if (state.screen !== 'rest-fusion-skill') return state;
-      if (!state.skillPick) return state;
-      const unit = state.roster.find((u) => u.uid === state.skillPick!.uid);
+      const unit = state.roster.find((u) => u.uid === state.fusionMainUid);
       if (!unit) return state;
-      // 替换最后一个技能（槽位已满时）或追加（有空槽时）
+      const learnSkill = action.skillId;
       const maxSlots = getMaxSkillSlots(unit);
       let newSkills: string[];
-      if (unit.skills.length >= maxSlots) {
+      if (action.replaceIdx !== undefined && action.replaceIdx < unit.skills.length) {
+        // 替换指定位置
         newSkills = [...unit.skills];
-        newSkills[newSkills.length - 1] = action.skillId;
+        newSkills[action.replaceIdx] = learnSkill;
+      } else if (unit.skills.length >= maxSlots) {
+        // 无空槽且未指定替换 → 追加到末尾（替换最后一个）
+        newSkills = [...unit.skills];
+        newSkills[newSkills.length - 1] = learnSkill;
       } else {
-        newSkills = [...unit.skills, action.skillId];
+        // 有空槽 → 追加
+        newSkills = [...unit.skills, learnSkill];
       }
       const updatedUnit = { ...unit, skills: newSkills };
       return {
         ...state,
         roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
         screen: 'map',
-        skillPick: undefined,
         fusionMainUid: undefined,
         fusionSubUid: undefined,
+        fusionSubSkills: undefined,
+        fusionLearnSkill: undefined,
       };
     }
 
@@ -1929,7 +1983,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         screen: 'rest',
         fusionMainUid: undefined,
         fusionSubUid: undefined,
-        skillPick: undefined,
+        fusionSubSkills: undefined,
+        fusionLearnSkill: undefined,
       };
     }
 

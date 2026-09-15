@@ -13,6 +13,7 @@ import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
+import { getMaxSkillSlots } from '../game/core/growth';
 import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
 import { GrowthScreen } from './GrowthScreen';
 import { SkillPickScreen } from './SkillPickScreen';
@@ -66,7 +67,7 @@ export default function App() {
       {state.screen === 'roster' && <RosterScreen state={state} dispatch={dispatch} />}
       {state.screen === 'shop' && <ShopScreen state={state} dispatch={dispatch} />}
       {state.screen === 'rest' && <RestScreen state={state} dispatch={dispatch} />}
-      {(state.screen === 'rest-fusion-select' || state.screen === 'rest-fusion-sub' || state.screen === 'rest-fusion-skill') && <RestFusionScreen state={state} dispatch={dispatch} />}
+      {(state.screen === 'rest-fusion' || state.screen === 'rest-fusion-skill') && <RestFusionScreen state={state} dispatch={dispatch} />}
       {state.screen === 'revive-select' && <ReviveSelectScreen state={state} dispatch={dispatch} />}
       {state.screen === 'event' && <EventScreen state={state} dispatch={dispatch} />}
       {state.screen === 'special' && <SpecialScreen state={state} dispatch={dispatch} />}
@@ -1999,72 +2000,252 @@ function ReviveSelectScreen({ state, dispatch }: { state: GameState; dispatch: D
 }
 
 function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  if (state.screen === 'rest-fusion-select') {
+  // ─── 技能选择阶段 ───
+  if (state.screen === 'rest-fusion-skill') {
+    const unit = state.roster.find((u) => u.uid === state.fusionMainUid);
+    const subSkills = state.fusionSubSkills ?? [];
+    const learnSkill = state.fusionLearnSkill;
+    const maxSlots = unit ? getMaxSkillSlots(unit) : 3;
+    const hasEmptySlot = unit ? unit.skills.length < maxSlots : false;
+
+    if (!unit) {
+      return (
+        <div className="screen">
+          <div className="section-title">融合</div>
+          <p className="card-sub">找不到目标宠物</p>
+          <button className="btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>返回</button>
+        </div>
+      );
+    }
+
     return (
       <div className="screen">
-        <div className="section-title">选择主宠</div>
-        <p className="card-sub">主宠将继承副宠 50% 基础属性并学习一个技能</p>
-        <div className="reward-cards">
-          {state.roster.map((u) => (
-            <div key={u.uid} className="reward-card">
-              <div className="ricon">{u.emoji}</div>
-              <div className="rtitle">{u.name}</div>
-              <div className="rdesc">HP {u.hp}/{u.maxHp} SPD {u.spd}</div>
-              <button className="primary" onClick={() => dispatch({ type: 'REST_FUSION_MAIN', uid: u.uid })}>选择</button>
+        <div className="section-title">选择技能</div>
+        <p className="card-sub">为 {unit.name} 选择要继承的技能（从副宠），再点击要替换的已有技能</p>
+
+        <div className="fusion-skill-layout">
+          {/* 左栏：副宠技能（选择要学的） */}
+          <div className="fusion-skill-col">
+            <div className="fusion-skill-header">副宠技能（点击选择继承）</div>
+            <div className="fusion-skill-list">
+              {subSkills.map((sid) => {
+                const sk = getSkill(sid);
+                const selected = learnSkill === sid;
+                return (
+                  <button
+                    key={sid}
+                    className={`fusion-skill-btn ${selected ? 'selected' : ''}`}
+                    onClick={() => dispatch({ type: 'REST_FUSION_SKILL', skillId: sid })}
+                  >
+                    <span className="fusion-skill-name">{sk?.name ?? sid}</span>
+                    <span className="fusion-skill-desc">{sk?.desc ?? ''}</span>
+                    {sk?.damage != null && <span className="fusion-skill-stat">伤害 {sk.damage}</span>}
+                    {sk?.heal != null && <span className="fusion-skill-stat">治疗 {sk.heal}</span>}
+                  </button>
+                );
+              })}
             </div>
-          ))}
+          </div>
+
+          {/* 右栏：主宠已有技能（选择要替换的） */}
+          <div className="fusion-skill-col">
+            <div className="fusion-skill-header">主宠技能（{learnSkill ? '点击替换' : '先选左侧技能'}）</div>
+            <div className="fusion-skill-list">
+              {unit.skills.map((sid, idx) => {
+                const sk = getSkill(sid);
+                const canReplace = !!learnSkill;
+                return (
+                  <button
+                    key={`${sid}-${idx}`}
+                    className={`fusion-skill-btn ${canReplace ? 'replaceable' : ''}`}
+                    disabled={!canReplace}
+                    onClick={() => {
+                      if (learnSkill) {
+                        dispatch({ type: 'REST_FUSION_SKILL', skillId: learnSkill, replaceIdx: idx });
+                      }
+                    }}
+                  >
+                    <span className="fusion-skill-name">{sk?.name ?? sid}</span>
+                    <span className="fusion-skill-desc">{sk?.desc ?? ''}</span>
+                    {sk?.damage != null && <span className="fusion-skill-stat">伤害 {sk.damage}</span>}
+                    {sk?.heal != null && <span className="fusion-skill-stat">治疗 {sk.heal}</span>}
+                    <span className="fusion-skill-slot">槽位 {idx + 1}</span>
+                  </button>
+                );
+              })}
+              {hasEmptySlot && learnSkill && (
+                <button
+                  className="fusion-skill-btn empty-slot"
+                  onClick={() => dispatch({ type: 'REST_FUSION_SKILL', skillId: learnSkill })}
+                >
+                  <span className="fusion-skill-name">+ 添加到空槽</span>
+                </button>
+              )}
+              {!hasEmptySlot && unit.skills.length >= maxSlots && (
+                <div className="fusion-skill-hint">槽位已满，选择左侧技能后点击要替换的技能</div>
+              )}
+            </div>
+          </div>
         </div>
+
         <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
           <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
         </div>
       </div>
     );
   }
-  if (state.screen === 'rest-fusion-sub') {
-    const main = state.roster.find((u) => u.uid === state.fusionMainUid);
-    return (
-      <div className="screen">
-        <div className="section-title">选择副宠</div>
-        <p className="card-sub">副宠将被消耗，其基础属性50%转移给 {main?.name}</p>
-        <div className="reward-cards">
-          {state.roster.filter((u) => u.uid !== state.fusionMainUid).map((u) => {
+
+  // ─── 宠物选择阶段（rest-fusion） ───
+  const main = state.fusionMainUid ? state.roster.find((u) => u.uid === state.fusionMainUid) : undefined;
+  const sub = state.fusionSubUid ? state.roster.find((u) => u.uid === state.fusionSubUid) : undefined;
+  const canConfirm = !!main && !!sub && main.uid !== sub.uid;
+
+  // 拖拽处理
+  const handleDragStart = (e: React.DragEvent, uid: string, slot: 'main' | 'sub') => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({ uid, from: slot }));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetSlot: 'main' | 'sub') => {
+    e.preventDefault();
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      if (targetSlot === 'main') {
+        dispatch({ type: 'REST_FUSION_SET_MAIN', uid: data.uid });
+      } else {
+        dispatch({ type: 'REST_FUSION_SET_SUB', uid: data.uid });
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  // 副宠属性预览
+  const subBase = sub ? getMonster(sub.speciesId) : undefined;
+  const hpGain = subBase ? Math.round(subBase.baseHp * 0.5) : 0;
+  const spdGain = subBase ? Math.round(subBase.baseSpd * 0.5) : 0;
+
+  return (
+    <div className="screen">
+      <div className="section-title">宠物融合</div>
+      <p className="card-sub">拖动或点击宠物放入槽位，主宠继承副宠 50% 基础属性并学习一个技能</p>
+
+      {/* 两个槽位 */}
+      <div className="fusion-slots">
+        <div
+          className={`fusion-slot ${main ? 'filled' : 'empty'}`}
+          onDrop={(e) => handleDrop(e, 'main')}
+          onDragOver={handleDragOver}
+        >
+          <div className="fusion-slot-label">主宠</div>
+          {main ? (
+            <div
+              className="fusion-slot-card"
+              draggable
+              onDragStart={(e) => handleDragStart(e, main.uid, 'main')}
+              onClick={() => dispatch({ type: 'REST_FUSION_SET_MAIN', uid: main.uid })}
+            >
+              <div className="fusion-slot-emoji">{main.emoji}</div>
+              <div className="fusion-slot-name">{main.name}</div>
+              <div className="fusion-slot-stats">HP {main.hp}/{main.maxHp} SPD {main.spd}</div>
+            </div>
+          ) : (
+            <div className="fusion-slot-empty">拖入主宠</div>
+          )}
+        </div>
+
+        <div className="fusion-slot-arrow">→</div>
+
+        <div
+          className={`fusion-slot ${sub ? 'filled' : 'empty'}`}
+          onDrop={(e) => handleDrop(e, 'sub')}
+          onDragOver={handleDragOver}
+        >
+          <div className="fusion-slot-label">副宠（消耗）</div>
+          {sub ? (
+            <div
+              className="fusion-slot-card"
+              draggable
+              onDragStart={(e) => handleDragStart(e, sub.uid, 'sub')}
+              onClick={() => dispatch({ type: 'REST_FUSION_SET_SUB', uid: sub.uid })}
+            >
+              <div className="fusion-slot-emoji">{sub.emoji}</div>
+              <div className="fusion-slot-name">{sub.name}</div>
+              <div className="fusion-slot-stats">HP {sub.hp}/{sub.maxHp} SPD {sub.spd}</div>
+            </div>
+          ) : (
+            <div className="fusion-slot-empty">拖入副宠</div>
+          )}
+        </div>
+      </div>
+
+      {/* 融合预览 */}
+      {canConfirm && (
+        <div className="fusion-preview">
+          融合后 {main.name}：生命 +{hpGain}，速度 +{spdGain}
+        </div>
+      )}
+
+      {/* 融合按钮 */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+        <button
+          className="primary big-btn"
+          disabled={!canConfirm}
+          onClick={() => dispatch({ type: 'REST_FUSION_CONFIRM' })}
+        >
+          {canConfirm ? '开始融合' : '请选择主宠和副宠'}
+        </button>
+      </div>
+
+      {/* 可选宠物列表 */}
+      <div className="fusion-roster">
+        <div className="fusion-roster-label">可选宠物（点击或拖入上方槽位）</div>
+        <div className="fusion-roster-grid">
+          {state.roster.map((u) => {
+            const isMain = u.uid === state.fusionMainUid;
+            const isSub = u.uid === state.fusionSubUid;
             const base = getMonster(u.speciesId);
             return (
-              <div key={u.uid} className="reward-card">
-                <div className="ricon">{u.emoji}</div>
-                <div className="rtitle">{u.name}</div>
-                <div className="rdesc">基础 HP {base.baseHp} SPD {base.baseSpd} → 生命+{Math.round(base.baseHp * 0.5)} 速度+{Math.round(base.baseSpd * 0.5)}</div>
-                <button className="primary" onClick={() => dispatch({ type: 'REST_FUSION_SUB', uid: u.uid })}>融合</button>
+              <div
+                key={u.uid}
+                className={`fusion-roster-card ${isMain ? 'is-main' : ''} ${isSub ? 'is-sub' : ''}`}
+                draggable
+                onDragStart={(e) => {
+                  const slot = isMain ? 'main' : isSub ? 'sub' : undefined;
+                  if (slot) {
+                    handleDragStart(e, u.uid, slot);
+                  } else {
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ uid: u.uid, from: 'roster' }));
+                    e.dataTransfer.effectAllowed = 'move';
+                  }
+                }}
+                onClick={() => {
+                  if (isMain) {
+                    dispatch({ type: 'REST_FUSION_SET_MAIN', uid: u.uid });
+                  } else if (isSub) {
+                    dispatch({ type: 'REST_FUSION_SET_SUB', uid: u.uid });
+                  } else if (!state.fusionMainUid) {
+                    dispatch({ type: 'REST_FUSION_SET_MAIN', uid: u.uid });
+                  } else {
+                    dispatch({ type: 'REST_FUSION_SET_SUB', uid: u.uid });
+                  }
+                }}
+              >
+                <div className="fusion-roster-emoji">{u.emoji}</div>
+                <div className="fusion-roster-name">{u.name}</div>
+                <div className="fusion-roster-stats">HP {u.hp}/{u.maxHp} SPD {u.spd}</div>
+                <div className="fusion-roster-base">基础 HP {base.baseHp} SPD {base.baseSpd}</div>
+                {isMain && <div className="fusion-roster-badge main">主宠</div>}
+                {isSub && <div className="fusion-roster-badge sub">副宠</div>}
               </div>
             );
           })}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-          <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
-        </div>
       </div>
-    );
-  }
-  // rest-fusion-skill
-  const choices = state.skillPick?.choices ?? [];
-  const unit = state.roster.find((u) => u.uid === state.skillPick?.uid);
-  return (
-    <div className="screen">
-      <div className="section-title">选择技能</div>
-      <p className="card-sub">为 {unit?.name} 选择一个技能替换最后一位</p>
-      <div className="reward-cards">
-        {choices.map((sid) => {
-          const sk = getSkill(sid);
-          return (
-            <div key={sid} className="reward-card">
-              <div className="ricon">⚡</div>
-              <div className="rtitle">{sk?.name ?? sid}</div>
-              <div className="rdesc">{sk?.desc ?? ''}</div>
-              <button className="primary" onClick={() => dispatch({ type: 'REST_FUSION_SKILL', skillId: sid })}>选择</button>
-            </div>
-          );
-        })}
-      </div>
+
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
         <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
       </div>

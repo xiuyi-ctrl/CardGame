@@ -201,8 +201,7 @@ export type Screen =
   | 'proficiency-result'
   | 'skill-pick'
   | 'growth-menu'
-  | 'rest-fusion-select'
-  | 'rest-fusion-sub'
+  | 'rest-fusion'
   | 'rest-fusion-skill'
   | 'revive-select';
 
@@ -389,6 +388,10 @@ export interface GameState {
   fusionMainUid?: string;
   /** 休整融合：已选副宠uid */
   fusionSubUid?: string;
+  /** 休整融合：副宠可学习的技能列表（进入技能选择时暂存） */
+  fusionSubSkills?: string[];
+  /** 休整融合：技能选择阶段 — 玩家已选要学习的技能 */
+  fusionLearnSkill?: string;
   /** 复活属性保留比例（事件触发时暂存） */
   reviveRatio?: number;
 }
