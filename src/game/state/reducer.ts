@@ -337,8 +337,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     finalRoster = result.roster.map((u) => {
       const inBattle = [...battle.playerUnits, ...(battle.playerDown ?? [])].some((bu) => bu.uid === u.uid);
       if (!inBattle) return u;
-      const survived = u.hp > 0;
-      const gp = (u.growthPoints ?? 0) + 1 + (survived ? 1 : 0);
+      const gp = (u.growthPoints ?? 0) + 1;
       return { ...u, growthPoints: gp };
     });
   }
