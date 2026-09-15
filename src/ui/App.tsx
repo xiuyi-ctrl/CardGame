@@ -1022,7 +1022,13 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
     () =>
       CODEX_GROUPS.map((g) => ({
         ...g,
-        items: Object.values(MONSTERS).filter(g.match),
+        items: Object.values(MONSTERS)
+          .filter(g.match)
+          .sort((a, b) => {
+            const numA = a.image ? parseInt(a.image.replace('/', '').replace('.png', ''), 10) : 999;
+            const numB = b.image ? parseInt(b.image.replace('/', '').replace('.png', ''), 10) : 999;
+            return numA - numB;
+          }),
       })).filter((g) => g.items.length > 0),
     [],
   );
@@ -1050,16 +1056,19 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
           {groups.map((g) => (
             <div key={g.key} className="codex-group">
               <div className="codex-group-title">{g.label}</div>
-              {g.items.map((m) => (
-                <div
-                  key={m.id}
-                  className={`codex-item ${m.id === selectedId ? 'selected' : ''}`}
-                  onClick={() => setSelectedId(m.id)}
-                >
-                  <span className="codex-item-emoji">{m.image ? <img src={m.image} className="pet-image" alt={m.name} /> : m.emoji}</span>
-                  <span className="codex-item-name">{m.name}</span>
-                </div>
-              ))}
+              {g.items.map((m) => {
+                const num = m.image ? m.image.replace('/', '').replace('.png', '') : '';
+                return (
+                  <div
+                    key={m.id}
+                    className={`codex-item ${m.id === selectedId ? 'selected' : ''}`}
+                    onClick={() => setSelectedId(m.id)}
+                  >
+                    <span className="codex-item-num">{num}</span>
+                    <span className="codex-item-name">{m.name}</span>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
