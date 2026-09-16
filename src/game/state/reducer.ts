@@ -8,7 +8,7 @@ import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
-import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots } from '../core/growth';
+import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceReset } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
 import { buildGrowthEvent } from '../data/growth-events';
 import { getGrowthShopStock } from '../data/growth-shop';
@@ -111,6 +111,8 @@ export type GameAction =
   | { type: 'CANCEL_GROWTH_ITEM' }
   | { type: 'PROF_SKILL_REPLACE_START'; uid: string }
   | { type: 'PROF_SKILL_REPLACE_SELECT'; replaceIdx: number }
+  | { type: 'PROF_SKILL_ENHANCE'; uid: string; slotIndex: number }
+  | { type: 'PROF_SKILL_ENHANCE_RESET'; uid: string; slotIndex: number }
   | { type: 'REST_FUSION_SET_MAIN'; uid: string }
   | { type: 'REST_FUSION_SET_SUB'; uid: string }
   | { type: 'REST_FUSION_CONFIRM' }
@@ -2303,6 +2305,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'PROF_SKILL_ENHANCE': {
+      const unit = state.roster.find((u) => u.uid === action.uid);
+      if (!unit) return state;
+      const enhanced = applySkillEnhance(unit, action.slotIndex);
+      if (!enhanced) return state;
+      return {
+        ...state,
+        roster: state.roster.map((u) => (u.uid === unit.uid ? enhanced : u)),
+      };
+    }
+
+    case 'PROF_SKILL_ENHANCE_RESET': {
+      const unit = state.roster.find((u) => u.uid === action.uid);
+      if (!unit) return state;
+      const result = applySkillEnhanceReset(unit, action.slotIndex);
+      if (!result) return state;
+      return {
+        ...state,
+        roster: state.roster.map((u) => (u.uid === unit.uid ? result.newUnit : u)),
+      };
+    }
+
     case 'PROF_SLOT_UNLOCK': {
       const unit = state.roster.find((u) => u.uid === action.uid);
       if (!unit) return state;
@@ -2334,6 +2358,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const shopPrices: Record<string, number> = {
         book_small: 15, book_large: 25, slot_unlock: 50,
         forget_stone: 30, pet_recruit: 20, heal_potion: 30,
+        reset_stone: 40,
       };
       const price = shopPrices[itemId] ?? 0;
       if (price <= 0) return state;
@@ -2352,7 +2377,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       } else {
         next = { ...next, inventory: { ...next.inventory, [itemId]: (next.inventory[itemId] ?? 0) + 1 } };
-        const itemNames: Record<string, string> = { book_small: '成长之书（小）', book_large: '成长之书（大）', slot_unlock: '技能槽解锁', forget_stone: '遗忘之石', heal_potion: '治疗圣水' };
+        const itemNames: Record<string, string> = { book_small: '成长之书（小）', book_large: '成长之书（大）', slot_unlock: '技能槽解锁', forget_stone: '遗忘之石', heal_potion: '治疗圣水', reset_stone: '还原石' };
         next = { ...next, toast: { msg: `获得了 ${itemNames[itemId] ?? itemId}，请在背包中使用`, kind: 'info' } };
       }
       return next;

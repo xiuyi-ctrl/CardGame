@@ -231,6 +231,8 @@ export interface Unit {
   sacrificeUid?: string;
   /** 终焉成长剩余使用次数（初始3） */
   ultimateUsesLeft?: number;
+  /** 技能强化等级（技能槽位索引 -> 强化等级 0-3，连击/速度类上限2） */
+  skillEnhancements?: Record<number, number>;
 }
 
 /** 日志高亮片段类型 */

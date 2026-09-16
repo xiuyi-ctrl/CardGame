@@ -6,6 +6,7 @@ import { getPassive } from '../data/passives';
 import { createRng } from '../rng';
 import type { Difficulty } from '../state/game';
 import { DIFFICULTY_CONFIG } from '../state/game';
+import { getSkillEnhanceLevel, getSkillEnhanceBonus } from './growth';
 
 export const TAME_THRESHOLD = 0.4;
 /** 每次驯服失败对该敌人捕捉概率的乘法加成（如 0.25 = +25%） */
@@ -811,8 +812,12 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   // 波光环：仅连击类攻击技能（hits>1）消耗 comboBoost 状态并增加连击段数
   const comboBoost = actor.statuses.find((s) => s.kind === 'comboBoost');
   const baseHits = skill.hits ?? 1;
-  const isComboAttack = skill.kind === 'attack' && baseHits > 1;
-  const effectiveHits = comboBoost && isComboAttack ? baseHits + comboBoost.value : baseHits;
+  // 技能强化：连击类段数加成
+  const enhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+  const enhanceBonus = getSkillEnhanceBonus(skill.id, enhanceLevel);
+  const enhancedHits = baseHits + enhanceBonus.hitsBonus;
+  const isComboAttack = skill.kind === 'attack' && enhancedHits > 1;
+  const effectiveHits = comboBoost && isComboAttack ? enhancedHits + comboBoost.value : enhancedHits;
   if (comboBoost && isComboAttack) {
     const boosted = { ...actor, statuses: actor.statuses.filter((s) => s.kind !== 'comboBoost') };
     nb = replaceUnit(nb, boosted);
@@ -1557,6 +1562,9 @@ function resolveAttack(
   count: number,
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[]; didPoison: boolean } {
   let nb = b;
+  // 技能强化：伤害加成
+  const enhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+  const enhanceBonus = getSkillEnhanceBonus(skill.id, enhanceLevel);
   // 恐惧爆发：伤害 = 8 + 目标恐惧层数
   // 恐惧收割：伤害 = 目标恐惧层数×2
   let base: number;
@@ -1569,6 +1577,8 @@ function resolveAttack(
   } else {
     base = (skill.damage ?? 0) + getDamageBonus(actor, nb);
   }
+  // 技能强化：伤害加成
+  base += enhanceBonus.damageBonus;
   // 锁链火花：攻击锁链目标时伤害+2
   const ap0 = getUnitPassive(actor, nb);
   const chainSparkBonus = ap0?.kind === 'chainSpark' && target.statuses.some((s) => s.kind === 'chainLink') ? ap0.value : 0;
@@ -1712,21 +1722,24 @@ function resolveAttack(
     for (const e of skill.effects ?? []) {
       if (skill.id === 'weaken') {
         const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
-        t2 = applyStatusTo(t2, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
+        const weakenValue = e.value + enhanceBonus.effectBonus;
+        t2 = applyStatusTo(t2, { kind: rngKind, value: weakenValue, turns: e.turns }, nb.round);
         nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
       } else if (e.kind === 'shield') {
         // 护盾：应用给攻击者自身（如铁壁双击）
         const shielded = actorFromId(nb, actor.uid);
         if (shielded && shielded.hp > 0) {
-          const newShield = { ...shielded, shield: Math.min(99, shielded.shield + e.value) };
+          const shieldValue = e.value + enhanceBonus.effectBonus;
+          const newShield = { ...shielded, shield: Math.min(99, shielded.shield + shieldValue) };
           nb = replaceUnit(nb, newShield);
-          nb = pushLog(nb, `${shielded.name} 获得 ${e.value} 点护盾`, sideOf(shielded), actor.uid, actor.uid);
+          nb = pushLog(nb, `${shielded.name} 获得 ${shieldValue} 点护盾`, sideOf(shielded), actor.uid, actor.uid);
         }
       } else if (e.kind === 'fear') {
         nb = applyFear(nb, t2, e.value);
         t2 = actorFromId(nb, t2.uid) ?? t2;
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
-        t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
+        const effectValue = e.value + enhanceBonus.effectBonus;
+        t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, value: effectValue, sourceUid: actor.uid } : { ...e, value: effectValue }, nb.round);
         if (e.kind === 'poison') didPoison = true;
       } else if (e.kind === 'skillSeal') {
         // 技能封印：随机选择e.value个技能封印
@@ -2145,7 +2158,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
 
   if (skill.kind === 'heal') {
     let r = nb;
-    const amt = Math.max(1, skill.heal ?? 0);
+    const baseHeal = Math.max(1, skill.heal ?? 0);
+    // 技能强化：治疗加成
+    const healEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+    const healEnhanceBonus = getSkillEnhanceBonus(skill.id, healEnhanceLevel);
+    const amt = baseHeal + healEnhanceBonus.healBonus;
     const addsKinds = (skill.effects ?? []).map((e) => e.kind);
     for (const t of targets) {
       const maxHp = getEffectiveMaxHp(t);
@@ -2166,23 +2183,28 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   } else if (skill.kind === 'buff') {
     const hasRealBuff = (skill.effects && skill.effects.length > 0) || (skill.heal && skill.heal > 0);
     if (hasRealBuff) {
+      // 技能强化：buff 效果加成
+      const buffEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+      const buffEnhanceBonus = getSkillEnhanceBonus(skill.id, buffEnhanceLevel);
       for (const t of targets) {
         let buffed = t;
         if (skill.heal && skill.heal > 0) {
           const maxHp = getEffectiveMaxHp(buffed);
-          buffed = { ...buffed, hp: Math.min(maxHp, buffed.hp + skill.heal) };
+          const healAmt = skill.heal + buffEnhanceBonus.healBonus;
+          buffed = { ...buffed, hp: Math.min(maxHp, buffed.hp + healAmt) };
         }
         for (const e of skill.effects ?? []) {
-          buffed = applyStatusTo(buffed, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
+          const effectValue = e.value + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceBonus.effectBonus);
+          buffed = applyStatusTo(buffed, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
           if (e.kind === 'shield') {
-            buffed = { ...buffed, shield: Math.min(99, buffed.shield + e.value) };
+            buffed = { ...buffed, shield: Math.min(99, buffed.shield + effectValue) };
           }
         }
         nb = replaceUnit(nb, buffed);
-        const healPart = (skill.heal && skill.heal > 0) ? `，回复 ${skill.heal} 点生命` : '';
+        const healPart = (skill.heal && skill.heal > 0) ? `，回复 ${skill.heal + buffEnhanceBonus.healBonus} 点生命` : '';
         const msgBuff = `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}${healPart}`;
         const buffSpans: [LogSpan['kind'], string][] = [['actor', actor.name], ['skill', skill.name]];
-        if (skill.heal && skill.heal > 0) buffSpans.push(['heal', `${skill.heal}`]);
+        if (skill.heal && skill.heal > 0) buffSpans.push(['heal', `${skill.heal + buffEnhanceBonus.healBonus}`]);
         nb = pushLog(nb, msgBuff, sideOf(actor), actor.uid, t.uid, undefined, undefined,
           spans(msgBuff, buffSpans));
       }

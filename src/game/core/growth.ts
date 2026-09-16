@@ -35,6 +35,155 @@ export const SLOT5_COST = 10;
 /** 成本：替换技能 */
 export const REROLL_COST = 8;
 
+// ─── 技能强化系统 ───
+
+/** 强化基础消耗表 */
+export const ENHANCE_COST_TABLE = [8, 10, 12];
+/** 传奇技能强化消耗倍率 */
+export const LEGENDARY_ENHANCE_MULTIPLIER = 1.5;
+/** 强化重置返还比例 */
+export const ENHANCE_RESET_REFUND_RATIO = 0.5;
+
+/** 判断技能是否为连击类（hits ≥ 2） */
+function isMultiHitSkill(skillId: string): boolean {
+  const sk = SKILLS[skillId];
+  return sk ? (sk.hits ?? 0) >= 2 : false;
+}
+
+/** 判断技能是否为速度增益类（buff 且 effect 为 atkUp 用于速度提升） */
+function isSpeedBuffSkill(skillId: string): boolean {
+  const sk = SKILLS[skillId];
+  if (!sk || sk.kind !== 'buff' || !sk.effects) return false;
+  // 速度增益技能通常有 atkUp 效果，但这里用特殊标记检查
+  // 风羽（wind_feather）是唯一的速度增益技能
+  return skillId === 'wind_feather';
+}
+
+/** 获取技能最大强化等级（连击/速度类最多2次，其他最多3次） */
+export function getSkillEnhanceMaxLevel(skillId: string): number {
+  if (isMultiHitSkill(skillId) || isSpeedBuffSkill(skillId)) return 2;
+  return 3;
+}
+
+/** 获取技能当前强化等级 */
+export function getSkillEnhanceLevel(unit: Unit, slotIndex: number): number {
+  return unit.skillEnhancements?.[slotIndex] ?? 0;
+}
+
+/** 获取技能强化下一级消耗（含传奇倍率，已取整） */
+export function getSkillEnhanceCost(unit: Unit, slotIndex: number): number {
+  const level = getSkillEnhanceLevel(unit, slotIndex);
+  const skillId = unit.skills[slotIndex];
+  if (!skillId || level >= getSkillEnhanceMaxLevel(skillId)) return Infinity;
+  const base = ENHANCE_COST_TABLE[level] ?? ENHANCE_COST_TABLE[ENHANCE_COST_TABLE.length - 1];
+  const sk = SKILLS[skillId];
+  const isLegendary = sk && LEGENDARY_SKILLS.has(skillId);
+  return isLegendary ? Math.ceil(base * LEGENDARY_ENHANCE_MULTIPLIER) : base;
+}
+
+/** 获取技能强化累计消耗（0→level 的总消耗） */
+export function getSkillEnhanceTotalCost(skillId: string, level: number): number {
+  const sk = SKILLS[skillId];
+  const isLegendary = sk && LEGENDARY_SKILLS.has(skillId);
+  let total = 0;
+  for (let i = 0; i < level && i < ENHANCE_COST_TABLE.length; i++) {
+    const base = ENHANCE_COST_TABLE[i];
+    total += isLegendary ? Math.ceil(base * LEGENDARY_ENHANCE_MULTIPLIER) : base;
+  }
+  return total;
+}
+
+/** 获取技能强化的伤害/治疗/buff 加成 */
+export function getSkillEnhanceBonus(skillId: string, level: number): {
+  damageBonus: number;
+  healBonus: number;
+  hitsBonus: number;
+  effectBonus: number;
+} {
+  if (level <= 0) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  const sk = SKILLS[skillId];
+  if (!sk) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+
+  // 连击类：段数+1/级
+  if (isMultiHitSkill(skillId)) {
+    return { damageBonus: 0, healBonus: 0, hitsBonus: level, effectBonus: 0 };
+  }
+
+  // 纯攻击：伤害+2/级
+  if (sk.kind === 'attack' && !sk.heal) {
+    return { damageBonus: level * 2, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  }
+
+  // 纯治疗：治疗+2/级
+  if (sk.kind === 'heal') {
+    return { damageBonus: 0, healBonus: level * 2, hitsBonus: 0, effectBonus: 0 };
+  }
+
+  // Buff 类：效果值+1/级（护盾类每级+2）
+  if (sk.kind === 'buff') {
+    const isShield = sk.effects?.some(e => e.kind === 'shield');
+    const effectBonusPerLevel = isShield ? 2 : 1;
+    return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level * effectBonusPerLevel };
+  }
+
+  // 状态技能：效果值+1/级
+  if (sk.kind === 'status') {
+    return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level };
+  }
+
+  // 攻击+治疗混合：伤害+1 且 治疗+1/级
+  if (sk.kind === 'attack' && sk.heal) {
+    return { damageBonus: level, healBonus: level, hitsBonus: 0, effectBonus: 0 };
+  }
+
+  // 攻击+状态混合：伤害+1 且 效果值+1/级
+  if (sk.kind === 'attack' && sk.effects && sk.effects.length > 0) {
+    return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: level };
+  }
+
+  return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+}
+
+/** 应用技能强化（不可变） */
+export function applySkillEnhance(unit: Unit, slotIndex: number): Unit | null {
+  const gp = unit.growthPoints ?? 0;
+  const cost = getSkillEnhanceCost(unit, slotIndex);
+  if (gp < cost || cost === Infinity) return null;
+
+  const level = getSkillEnhanceLevel(unit, slotIndex);
+  const maxLevel = getSkillEnhanceMaxLevel(unit.skills[slotIndex]);
+  if (level >= maxLevel) return null;
+
+  const newEnhancements = { ...unit.skillEnhancements, [slotIndex]: level + 1 };
+  return {
+    ...unit,
+    growthPoints: gp - cost,
+    skillEnhancements: newEnhancements,
+  };
+}
+
+/** 重置技能强化（不可变），返回 { newUnit, refundPoints } */
+export function applySkillEnhanceReset(unit: Unit, slotIndex: number): { newUnit: Unit; refundPoints: number } | null {
+  const level = getSkillEnhanceLevel(unit, slotIndex);
+  if (level <= 0) return null;
+
+  const skillId = unit.skills[slotIndex];
+  const totalCost = getSkillEnhanceTotalCost(skillId, level);
+  const refundPoints = Math.ceil(totalCost * ENHANCE_RESET_REFUND_RATIO);
+
+  const newEnhancements = { ...unit.skillEnhancements };
+  delete newEnhancements[slotIndex];
+
+  return {
+    newUnit: {
+      ...unit,
+      growthPoints: (unit.growthPoints ?? 0) + refundPoints,
+      skillEnhancements: newEnhancements,
+    },
+    refundPoints,
+  };
+}
+
 // ─── 技能池分类 ───
 
 /** 传奇技能池（仅奇遇关「传奇招募」可获得） */

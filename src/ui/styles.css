@@ -2880,6 +2880,169 @@ button.primary {
   margin-top: 8px;
 }
 
+/* 技能强化入口按钮 */
+.growth-enhance-entry-btn {
+  font-weight: bold;
+  border: 1px solid var(--gold) !important;
+  color: var(--gold) !important;
+}
+.growth-enhance-entry-btn:hover {
+  background: var(--gold) !important;
+  color: #1a1a2e !important;
+}
+
+/* 技能强化列表 */
+.growth-skill-enhance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+.growth-skill-enhance-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+.growth-skill-enhance-item:hover {
+  border-color: var(--gold);
+}
+.growth-skill-enhance-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.growth-skill-enhance-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.growth-skill-enhance-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.growth-skill-enhance-name {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--text);
+}
+.growth-skill-enhance-level {
+  font-size: 13px;
+  color: var(--gold);
+  font-weight: bold;
+}
+.growth-skill-enhance-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.growth-skill-enhance-label {
+  color: var(--text-dim);
+}
+.growth-skill-enhance-val {
+  color: var(--text);
+}
+.growth-skill-enhance-val.next {
+  color: var(--gold);
+}
+.growth-skill-enhance-bonus {
+  font-size: 12px;
+  color: var(--gold);
+}
+.growth-skill-enhance-actions {
+  display: flex;
+  gap: 6px;
+}
+.growth-enhance-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.growth-enhance-btn:hover:not(.disabled):not(:disabled) {
+  background: var(--gold);
+  color: #1a1a2e;
+}
+.growth-enhance-btn.disabled,
+.growth-enhance-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.growth-reset-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid #ff6b6b;
+  color: #ff6b6b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.growth-reset-btn:hover {
+  background: #ff6b6b;
+  color: #fff;
+}
+.growth-skill-max {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* 技能强化弹窗 */
+.growth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.growth-modal {
+  background: var(--bg-panel);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.growth-modal h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--gold);
+  text-align: center;
+}
+.growth-modal-content {
+  margin: 12px 0;
+}
+.growth-modal-content p {
+  margin: 6px 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.growth-modal-content p:last-child {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.growth-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
 /* 熟练度远征模式 - 结算界面 */
 .result-stats {
   background: var(--bg-panel);
