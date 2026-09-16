@@ -477,6 +477,13 @@ function startRound(b: BattleState): BattleState {
       nb = replaceUnit(nb, res.unit);
     }
   }
+  // 盾反清理：若 shieldCounter 已过期但 shield 状态仍存在，一并移除
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    if (!u.statuses.some((s) => s.kind === 'shieldCounter') && u.statuses.some((s) => s.kind === 'shield')) {
+      nb = replaceUnit(nb, { ...u, statuses: u.statuses.filter((s) => s.kind !== 'shield') });
+    }
+  }
   // DOT结算完毕后重置伤害累计（新回合开始）
   nb = { ...nb, roundDmgMap: {} };
   // 形态切换检查：HP≤50% 且有 altPassive 时切换形态
