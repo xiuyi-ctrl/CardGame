@@ -384,6 +384,8 @@ export interface GameState {
     replaceIdx: number;
     choices: string[];
   };
+  /** 替换技能随机种子递增计数器 */
+  skillReplaceCount?: number;
   /** 休整融合：已选主宠uid */
   fusionMainUid?: string;
   /** 休整融合：已选副宠uid */

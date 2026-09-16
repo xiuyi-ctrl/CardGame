@@ -8,7 +8,7 @@ import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
-import { SLOT3_COST, SLOT4_COST, SLOT5_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots } from '../core/growth';
+import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
 import { buildGrowthEvent } from '../data/growth-events';
 import { getGrowthShopStock } from '../data/growth-shop';
@@ -2257,15 +2257,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const unit = state.roster.find((u) => u.uid === action.uid);
       if (!unit) return state;
       const gp = unit.growthPoints ?? 0;
-      if (gp < 1) return state;
+      if (gp < REROLL_COST) return state;
       if (unit.skills.length === 0) return state;
-      // 扣1成长点
-      const updatedUnit = { ...unit, growthPoints: gp - 1 };
+      // 扣除替换技能成本
+      const updatedUnit = { ...unit, growthPoints: gp - REROLL_COST };
       // 生成3个随机技能（排除已学）
-      const rng = createRng(state.seed + hashStr(unit.uid) + 700);
+      const count = state.skillReplaceCount ?? 0;
+      const rng = createRng(state.seed + hashStr(unit.uid) + 700 + count * 137);
       const choices = getRandomSkillChoices(updatedUnit, 3, rng);
       if (choices.length === 0) {
-        return { ...state, roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)), screen: 'growth-menu' };
+        return { ...state, roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)), screen: 'growth-menu', skillReplaceCount: count + 1 };
       }
       return {
         ...state,
@@ -2273,6 +2274,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         screen: 'skill-pick',
         skillReplace: { uid: unit.uid, replaceIdx: -1, choices },
         skillPick: undefined,
+        skillReplaceCount: count + 1,
       };
     }
 

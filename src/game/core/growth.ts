@@ -44,7 +44,8 @@ export const LEGENDARY_SKILLS = new Set([
 export const BLOCKED_SKILLS = new Set([
   'shell_up', 'rock_reforge', 'spore_summon', 'ghostly_summon',
   'soul_share', 'chain_bind', 'chain_activate', 'chain_link',
-  'growth_strike', 'growth_field', 'growth_burst',
+  'growth_bind', 'growth_roar', 'growth_ultimate', 'growth_impact', 'growth_eruption', 'growth_summon',
+  'puppet_bind', 'puppet_fist', 'puppet_soul_return',
 ]);
 
 /** 普通技能池（解锁槽位/替换技能用）：排除传奇技能 + 不可获取技能 */
