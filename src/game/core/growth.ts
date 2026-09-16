@@ -38,6 +38,8 @@ export const LEGENDARY_SKILLS = new Set([
   'leaf_quake', 'wild_leaf', 'quake', 'shadow_rift',
   'flame_burst', 'flame_pillar', 'spore_burst', 'spore_shield',
   'ghostly_harvest', 'iron_wall',
+  // 恐惧技能
+  'fear_gaze', 'hell_scream', 'fear_burst',
 ]);
 
 /** 不出现在任何技能池中的技能（Boss专属，玩家不可获取） */
