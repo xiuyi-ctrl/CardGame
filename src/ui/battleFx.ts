@@ -134,6 +134,7 @@ const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+?)(?:，回复 (\d+) 点生
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
 const RE_CHAIN_LINK = /^(.+?) 使用「(.+?)」！(.+?) 和 (.+?) 被锁链连接$/;
+const RE_FEAR_REACH = /^(.+?) 恐惧达到 (\d+) 层$/;
 
 /** buff 技能飘字：按技能施加的状态显示，如战吼→「攻击↑」；无法识别时兜底「强化」 */
 function buffText(skillName: string): string {
@@ -393,6 +394,10 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     const firstTargetUid = findUid(b, opposite, m[3])!;
     const secondTargetUid = findUid(b, opposite, m[4])!;
     return { kind: 'buff', actorUid, targetUid: actorUid, revealUids: [firstTargetUid, secondTargetUid], noPop: true, value: 0, skillName: m[2], hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_FEAR_REACH))) {
+    const uid = entry.targetUid ?? findUid(b, side, m[1]);
+    return { kind: 'buff', actorUid: uid, targetUid: uid, noPop: true, value: 0, skillName: '', hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   return null;
 }

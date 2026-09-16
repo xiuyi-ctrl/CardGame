@@ -502,6 +502,60 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'puppet_soul_return', name: '归魂', desc: '对所有敌人造成6点伤害，然后自身死亡',
     target: 'all', kind: 'attack', damage: 6,
   },
+
+  // —— 炼狱魔君 ——
+  fear_gaze: {
+    id: 'fear_gaze', name: '恐惧凝视',     desc: '攻击单个敌人造成8伤害，附加恐惧2层',
+    target: 'single', kind: 'attack', damage: 8,
+    effects: [{ kind: 'fear', value: 2, turns: 2 }],
+    hideEffects: true,
+  },
+  hell_scream: {
+    id: 'hell_scream', name: '地狱尖啸', desc: '攻击所有敌人造成5伤害，附加恐惧1层',
+    target: 'all', kind: 'attack', damage: 5,
+    effects: [{ kind: 'fear', value: 1, turns: 2 }],
+    hideEffects: true,
+  },
+  fear_burst: {
+    id: 'fear_burst', name: '恐惧爆发',     desc: '攻击单个敌人，伤害=8+目标恐惧层数',
+    target: 'single', kind: 'attack', damage: 8,
+  },
+  despair_gaze: {
+    id: 'despair_gaze', name: '绝望凝视',     desc: '若目标恐惧≥3层，使其跳过下一次行动（恐惧震慑），然后清除恐惧层数',
+    target: 'single', kind: 'status',
+    effects: [{ kind: 'stun', value: 1, turns: 1 }],
+    hideEffects: true,
+  },
+  fear_harvest: {
+    id: 'fear_harvest', name: '恐惧收割',     desc: '攻击单个敌人，伤害=目标恐惧层数×2',
+    target: 'single', kind: 'attack', damage: 0,
+  },
+
+  // —— 炼狱小鬼 ——
+  fear_claw: {
+    id: 'fear_claw', name: '恐惧之爪', desc: '攻击单个敌人造成4伤害，附加恐惧1层',
+    target: 'single', kind: 'attack', damage: 4,
+    effects: [{ kind: 'fear', value: 1, turns: 2 }],
+    hideEffects: true,
+  },
+  fear_bolt: {
+    id: 'fear_bolt', name: '恐惧弹', desc: '攻击单个敌人造成6伤害',
+    target: 'single', kind: 'attack', damage: 6,
+  },
+
+  // —— 地狱犬 ——
+  fear_bite: {
+    id: 'fear_bite', name: '恐惧撕咬', desc: '攻击单个敌人造成5伤害，附加恐惧1层',
+    target: 'single', kind: 'attack', damage: 5,
+    effects: [{ kind: 'fear', value: 1, turns: 2 }],
+    hideEffects: true,
+  },
+  fear_howl: {
+    id: 'fear_howl', name: '恐惧咆哮', desc: '攻击所有敌人造成2伤害，附加恐惧1层',
+    target: 'all', kind: 'attack', damage: 2,
+    effects: [{ kind: 'fear', value: 1, turns: 2 }],
+    hideEffects: true,
+  },
 };
 
 export function getSkill(id: string): SkillDef {

@@ -37,6 +37,7 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   toxicBurstReady: '💀',
   chainLink: '🔗',
   skillSeal: '🔒',
+  fear: '😱',
 };
 
 function effectText(e: StatusEffect): string {
@@ -90,6 +91,8 @@ function effectText(e: StatusEffect): string {
         return `技能封印：${names}${turns}`;
       }
       return `技能封印 封印${e.value}个技能${turns}`;
+    case 'fear':
+      return `恐惧 ${e.value} 层`;
   }
 }
 
@@ -167,6 +170,7 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   sporeShield: { icon: '🍄', label: '孢子防护' },
   toxicBurstReady: { icon: '💀', label: '毒性爆发蓄力' },
   chainLink: { icon: '🔗', label: '锁链连接' },
+  fear: { icon: '😱', label: '恐惧' },
 };
 
 /** 内联宠物图标：有 image 时显示小图，否则显示 emoji */
@@ -213,12 +217,14 @@ export function StatusIcons({ unit }: { unit: Unit }) {
         const tip =
           s.kind === 'burn' || s.kind === 'poison'
             ? `${meta.label}（${s.value} 层，每回合结算一半）`
+            : s.kind === 'fear'
+            ? `${meta.label}（${s.value} 层，≥3层受伤+1，≥6层震慑）`
             : s.kind === 'windSpd'
             ? `${meta.label}（速度 +${s.value}，剩余 ${s.turns} 回合）`
             : `${meta.label}（剩余 ${s.turns} 回合）`;
         return (
           <span key={i} title={tip}>
-            {meta.icon}
+            {meta.icon}{s.kind === 'fear' && s.value > 1 ? <sup>×{s.value}</sup> : null}
           </span>
         );
       })}

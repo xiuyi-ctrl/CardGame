@@ -561,6 +561,20 @@ function startRound(b: BattleState): BattleState {
       }
     }
   }
+  // 恐惧嚎叫被动：每回合开始随机给1个敌人恐惧1层
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const fp = getUnitPassive(u);
+    if (fp?.kind === 'fearOnRoundStart') {
+      const enemies = u.isPlayer ? nb.enemyUnits.filter((e) => e.hp > 0) : nb.playerUnits.filter((e) => e.hp > 0);
+      if (enemies.length > 0) {
+        const target = enemies[Math.floor(Math.random() * enemies.length)];
+        nb = applyFear(nb, target, 1);
+        nb = pushLog(nb, `${u.name} 的「${fp.name}」触发！${target.name} 恐惧 +1`, sideOf(u), u.uid, target.uid, undefined, undefined,
+          spans(`${u.name} 的「${fp.name}」触发！${target.name} 恐惧 +1`, [['actor', u.name], ['target', target.name], ['status', '恐惧']]));
+      }
+    }
+  }
   // 潮汐节律/共鸣：每3回合触发一次（爆发1回合、休2回合），触发回合 round % 3 === 1
   // appliedRound = nb.round - 1 配合 atkUp 跳过规则，确保 atkUp 精确持续当回合
   if (nb.round % 3 === 1) {
@@ -1281,6 +1295,15 @@ function selectEnemyAction(
         candidates.push({ kind: 'status', skill: st, score: 40 + aliveEnemies * 5 });
       }
     } else {
+      // 绝望凝视：仅对恐惧≥3层目标使用，50%概率
+      if (st.id === 'despair_gaze') {
+        const validTargets = targetPool.filter((t) => getFearStacks(t) >= 3);
+        if (validTargets.length > 0 && rngVal1 < 0.5 && skillUsesLeft(actor, st.id) > 0 && skillCooldownLeft(actor, st.id) <= 0) {
+          const best = validTargets.sort((a, b) => b.hp - a.hp)[0];
+          candidates.push({ kind: 'status', skill: st, targetUid: best.uid, score: 30 });
+        }
+        continue;
+      }
       // 单体 debuff：优先对高血量/无 debuff 目标使用
       const scoredTargets = targetPool.map((t) => {
         let tScore = 20;
@@ -1527,7 +1550,18 @@ function resolveAttack(
   count: number,
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[]; didPoison: boolean } {
   let nb = b;
-  const base = (skill.damage ?? 0) + getDamageBonus(actor, nb);
+  // 恐惧爆发：伤害 = 8 + 目标恐惧层数
+  // 恐惧收割：伤害 = 目标恐惧层数×2
+  let base: number;
+  if (skill.id === 'fear_burst') {
+    const fearStacks = getFearStacks(target);
+    base = 8 + fearStacks;
+  } else if (skill.id === 'fear_harvest') {
+    const fearStacks = getFearStacks(target);
+    base = fearStacks * 2;
+  } else {
+    base = (skill.damage ?? 0) + getDamageBonus(actor, nb);
+  }
   // 锁链火花：攻击锁链目标时伤害+2
   const ap0 = getUnitPassive(actor, nb);
   const chainSparkBonus = ap0?.kind === 'chainSpark' && target.statuses.some((s) => s.kind === 'chainLink') ? ap0.value : 0;
@@ -1542,6 +1576,15 @@ function resolveAttack(
     perHitDmg += getEffectiveSpd(actor) * skill.spdScaling;
   }
   if (target.isPlayer && nb.corruptDebuff === 'dmg') {
+    perHitDmg += 2;
+  }
+  // 恐惧：目标恐惧≥3层时受到伤害+1
+  const targetFearStacks = getFearStacks(target);
+  if (targetFearStacks >= 3) {
+    perHitDmg += 1;
+  }
+  // 恐惧之王：对有恐惧效果的敌人伤害+2（ap0 已在上方声明）
+  if (ap0?.kind === 'fearLord' && targetFearStacks > 0) {
     perHitDmg += 2;
   }
   const passiveAdds: string[] = [];
@@ -1600,7 +1643,7 @@ function resolveAttack(
   const segments = splitDamage(finalDmg, count);
   let t2 = tWithPassive;
   const skillEffectKinds: string[] = (skill.effects ?? [])
-    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark' || e.kind === 'skillSeal')
+    .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark' || e.kind === 'skillSeal' || e.kind === 'fear')
     .map((e) => e.kind);
   let lastHitLog: number | undefined;
   let shieldIgnoreLeft = (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) ? 8 : 0;
@@ -1672,6 +1715,9 @@ function resolveAttack(
           nb = replaceUnit(nb, newShield);
           nb = pushLog(nb, `${shielded.name} 获得 ${e.value} 点护盾`, sideOf(shielded), actor.uid, actor.uid);
         }
+      } else if (e.kind === 'fear') {
+        nb = applyFear(nb, t2, e.value);
+        t2 = actorFromId(nb, t2.uid) ?? t2;
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, sourceUid: actor.uid } : e, nb.round);
         if (e.kind === 'poison') didPoison = true;
@@ -1705,6 +1751,7 @@ function resolveAttack(
         if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
         if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
         if (e.kind === 'stun') return '眩晕';
+        if (e.kind === 'fear') return `恐惧 ${e.value} 层`;
         return e.kind;
       }).join('，');
       const msg0 = `${actor.name} 使用「${skill.name}」，${target.name} ${effectDesc}`;
@@ -1769,6 +1816,17 @@ function resolveAttack(
         nb = pushLog(nb, msgEnt, sideOf(actor), actor.uid, t2.uid, ['atkDown'], undefined,
           spans(msgEnt, [['actor', actor.name], ['passive', ap.name], ['target', t2.name], ['status', '伤害 -1']]));
       }
+    }
+    // 恐惧支配/恐惧之王：攻击命中附加恐惧1层
+    if ((ap?.kind === 'fearOnHit' || ap?.kind === 'fearLord') && t2.hp > 0) {
+      nb = applyFear(nb, t2, 1);
+      t2 = actorFromId(nb, t2.uid) ?? t2;
+      const freshT2 = t2;
+      const fearStacks = getFearStacks(freshT2);
+      const passiveName = ap?.kind === 'fearLord' ? '恐惧之王' : '恐惧支配';
+      const msgFH = `${actor.name} 的「${passiveName}」使 ${freshT2.name} 恐惧 +1（共 ${fearStacks} 层）`;
+      nb = pushLog(nb, msgFH, sideOf(actor), actor.uid, freshT2.uid, undefined, undefined,
+        spans(msgFH, [['actor', actor.name], ['passive', passiveName], ['target', freshT2.name], ['status', `恐惧 ${fearStacks} 层`]]));
     }
     // 烈焰环绕：被攻击时 30% 概率使攻击者灼烧 1 层，熔火领主在场时 100%
     if (t2.hp > 0) {
@@ -1918,6 +1976,23 @@ function resolveAttack(
             const msgSB = `${t2.name} 的「粘滞躯体」使 ${attacker3.name} 速度 -${tp2.value}`;
             nb = pushLog(nb, msgSB, sideOf(t2), t2.uid, attacker3.uid, undefined, undefined,
               spans(msgSB, [['passive', '粘滞躯体'], ['target', attacker3.name], ['status', `速度 -${tp2.value}`]]));
+          }
+        }
+      }
+      // 恐惧传递：被攻击时50%概率给攻击者恐惧1层
+      if (t2.hp > 0) {
+        const tp2 = getUnitPassive(t2);
+        if (tp2?.kind === 'fearOnBeingHit') {
+          const roll = Math.abs((nb.rngCount ?? 0)) % 100;
+          nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+          if (roll < 50) {
+            const attackerFear = actorFromId(nb, actor.uid);
+            if (attackerFear && attackerFear.hp > 0) {
+              nb = applyFear(nb, attackerFear, 1);
+              const msgFB = `${t2.name} 的「恐惧传递」使 ${attackerFear.name} 恐惧 +1`;
+              nb = pushLog(nb, msgFB, sideOf(t2), t2.uid, attackerFear.uid, undefined, undefined,
+                spans(msgFB, [['passive', '恐惧传递'], ['target', attackerFear.name], ['status', '恐惧']]));
+            }
           }
         }
       }
@@ -2332,6 +2407,13 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           weakenAppliedKind = rngKind;
           affected = applyStatusTo(affected, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
           nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+        } else if (skill.id === 'despair_gaze') {
+          // 绝望凝视：若目标恐惧≥3层，使其眩晕1回合，然后清除恐惧
+          const fearStacks = getFearStacks(affected);
+          if (fearStacks >= 3) {
+            affected = applyStatusTo(affected, { kind: 'stun', value: 1, turns: 1 }, nb.round);
+            affected = { ...affected, statuses: affected.statuses.filter((s) => s.kind !== 'fear') };
+          }
         } else {
           affected = applyStatusTo(affected, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
         }
@@ -2349,9 +2431,10 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
       if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
       if (e.kind === 'stun') return '眩晕';
+      if (e.kind === 'fear') return `恐惧 ${e.value} 层`;
       return e.kind;
     }).join('，');
-    const hitAdds = addsKinds.filter((k) => ['burn', 'poison', 'atkDown', 'spdDown', 'stun'].includes(k));
+    const hitAdds = addsKinds.filter((k) => ['burn', 'poison', 'atkDown', 'spdDown', 'stun', 'fear'].includes(k));
     if (skill.target === 'all') {
       const allTargetUids = targets.filter((t) => { const u = actorFromId(nb, t.uid); return u && u.hp > 0; }).map((t) => t.uid);
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${effectDesc}`, sideOf(actor), actor.uid, undefined, hitAdds.length > 0 ? hitAdds : undefined, allTargetUids);
@@ -3009,6 +3092,38 @@ export function getDamageGuard(u: Unit, b?: BattleState): number {
     guard += Math.min(5, Math.floor(u.growthValue / 5));
   }
   return guard;
+}
+
+/** 获取单位当前恐惧层数 */
+export function getFearStacks(u: Unit): number {
+  return u.statuses.filter((s) => s.kind === 'fear').reduce((sum, s) => sum + s.value, 0);
+}
+
+/** 给单位附加恐惧（value 层，无持续回合限制），≥6 层触发恐惧震慑 + 清除所有恐惧 */
+export function applyFear(b: BattleState, target: Unit, value: number): BattleState {
+  const curFear = getFearStacks(target);
+  const newFear = curFear + value;
+  // 合并为单一条目（类似灼烧/中毒）
+  let updatedTarget = { ...target };
+  const fearIdx = updatedTarget.statuses.findIndex((s) => s.kind === 'fear');
+  const nextStatuses = [...updatedTarget.statuses];
+  if (fearIdx >= 0) {
+    nextStatuses[fearIdx] = { ...nextStatuses[fearIdx], value: newFear };
+  } else {
+    nextStatuses.push({ kind: 'fear' as const, value: newFear, turns: 99 });
+  }
+  updatedTarget = { ...updatedTarget, statuses: nextStatuses };
+  let nb = replaceUnit(b, updatedTarget);
+  // 恐惧≥6层：先推一条日志记录 fear=6 的快照，再触发震慑
+  if (newFear >= 6) {
+    nb = pushLog(nb, `${target.name} 恐惧达到 ${newFear} 层`, sideOf(target), target.uid, target.uid, undefined, undefined,
+      spans(`${target.name} 恐惧达到 ${newFear} 层`, [['target', target.name], ['status', `恐惧 ${newFear} 层`]]));
+    const clearedTarget = { ...updatedTarget, statuses: nextStatuses.filter((s) => s.kind !== 'fear').concat([{ kind: 'stun' as const, value: 1, turns: 1 }]) };
+    nb = replaceUnit(nb, clearedTarget);
+    nb = pushLog(nb, `${target.name} 恐惧震慑！无法行动 1 回合`, sideOf(target), target.uid, target.uid, undefined, undefined,
+      spans(`${target.name} 恐惧震慑！无法行动 1 回合`, [['target', target.name], ['status', '恐惧震慑']]));
+  }
+  return nb;
 }
 
 /** 获取单位的有效速度（含临时buff，整数） */

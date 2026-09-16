@@ -927,6 +927,7 @@ export const BOSS_MINIONS: Record<string, string[]> = {
   boss_ghost: ['boss_minion_ghost_sailor', 'boss_minion_phantom'],
   boss_fire: ['boss_minion_lava_golem', 'boss_minion_fire_sprite'],
   boss_dragon: ['boss_minion_chain_guard', 'boss_minion_chain_smith'],
+  boss_demon: ['boss_minion_demon_imp', 'boss_minion_hellhound'],
 };
 
 function buildEncounter(

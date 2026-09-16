@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal';
+  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'fear';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -92,7 +92,11 @@ export type PassiveKind =
   | 'chainSpark' // 锁链火花：攻击锁链目标时伤害+2
   | 'growthDrain' // 成长汲取：每次攻击命中 +1 成长点；累积 value 点时伤害 +3
   | 'growthValue' // 成长值：攻击命中+2，回合结束+1，每5值受伤-1（上限-5）
-  | 'sacrifice'; // 献祭：存活时回合结束给Boss+1成长值，死亡时+3
+  | 'sacrifice' // 献祭：存活时回合结束给Boss+1成长值，死亡时+3
+  | 'fearOnHit' // 恐惧支配：攻击命中附加恐惧1层
+  | 'fearLord' // 恐惧之王：攻击命中附加恐惧1层；对有恐惧效果的敌人伤害+2
+  | 'fearOnBeingHit' // 恐惧传递：被攻击时50%概率给攻击者恐惧1层
+  | 'fearOnRoundStart'; // 恐惧嚎叫：每回合开始随机给1个敌人恐惧1层
 
 export interface PassiveDef {
   id: string;

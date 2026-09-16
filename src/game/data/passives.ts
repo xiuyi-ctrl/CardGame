@@ -89,6 +89,12 @@ export const PASSIVES: Record<string, PassiveDef> = {
   growth_drain: { id: 'growth_drain', name: '成长汲取', desc: '每次攻击命中 +1 成长点；累积 5 点时伤害 +3', kind: 'growthDrain', value: 5 },
   growth_value: { id: 'growth_value', name: '成长值', desc: '攻击命中+2成长值，回合结束+1成长值；每5成长值受伤-1（最多-5）', kind: 'growthValue', value: 5 },
   sacrifice: { id: 'sacrifice', name: '献祭', desc: '存活时每回合结束给予成长之主+1成长值；死亡时给予+3成长值', kind: 'sacrifice', value: 3 },
+
+  // —— 炼狱魔君 ——
+  fear_on_hit: { id: 'fear_on_hit', name: '恐惧支配', desc: '攻击命中附加恐惧1层；≥6层触发恐惧震慑（眩晕1回合+清除）', kind: 'fearOnHit', value: 1 },
+  fear_lord: { id: 'fear_lord', name: '恐惧之王', desc: '攻击命中附加恐惧1层；对有恐惧效果的敌人伤害+2', kind: 'fearLord', value: 1 },
+  fear_on_being_hit: { id: 'fear_on_being_hit', name: '恐惧传递', desc: '被攻击时50%概率给攻击者恐惧1层', kind: 'fearOnBeingHit', value: 1 },
+  fear_on_round_start: { id: 'fear_on_round_start', name: '恐惧嚎叫', desc: '每回合开始随机给1个敌人恐惧1层', kind: 'fearOnRoundStart', value: 1 },
 };
 
 export function getPassive(id?: string): PassiveDef | undefined {
