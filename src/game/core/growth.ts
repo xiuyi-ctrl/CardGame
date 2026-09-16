@@ -9,9 +9,23 @@ import { SKILLS } from '../data/skills';
 export const STAT_CAP_HP = 30;
 export const STAT_CAP_SPD = 15;
 
-/** 成本：属性提升 */
-export const HP_COST = 2;
-export const SPD_COST = 2;
+/** HP 递增消耗表（15 次升级到 +30） */
+const HP_COST_TABLE = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 10];
+/** SPD 递增消耗表（15 次升级到 +15） */
+const SPD_COST_TABLE = [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5];
+
+/** 根据已升级次数返回 HP 下次消耗 */
+export function getHpCost(hpBonus: number): number {
+  const idx = Math.floor(hpBonus / 2);
+  return idx < HP_COST_TABLE.length ? HP_COST_TABLE[idx] : HP_COST_TABLE[HP_COST_TABLE.length - 1];
+}
+
+/** 根据已升级次数返回 SPD 下次消耗 */
+export function getSpdCost(spdBonus: number): number {
+  const idx = spdBonus;
+  return idx < SPD_COST_TABLE.length ? SPD_COST_TABLE[idx] : SPD_COST_TABLE[SPD_COST_TABLE.length - 1];
+}
+
 /** 成本：解锁第3技能槽 */
 export const SLOT3_COST = 5;
 /** 成本：解锁第4技能槽 */
@@ -19,7 +33,7 @@ export const SLOT4_COST = 8;
 /** 成本：解锁第5技能槽 */
 export const SLOT5_COST = 10;
 /** 成本：替换技能 */
-export const REROLL_COST = 5;
+export const REROLL_COST = 8;
 
 // ─── 技能池分类 ───
 
@@ -71,14 +85,14 @@ export function getAvailableGrowthChoices(unit: Unit): GrowthChoice[] {
   const choices: GrowthChoice[] = [];
   const gp = unit.growthPoints ?? 0;
 
-  // 属性提升
+  // 属性提升（递增消耗）
   const hpBonus = unit.bonusStats?.hp ?? 0;
   const spdBonus = unit.bonusStats?.spd ?? 0;
 
-  if (gp >= HP_COST && hpBonus < STAT_CAP_HP) {
+  if (hpBonus < STAT_CAP_HP && gp >= getHpCost(hpBonus)) {
     choices.push({ kind: 'hp', amount: 2 });
   }
-  if (gp >= SPD_COST && spdBonus < STAT_CAP_SPD) {
+  if (spdBonus < STAT_CAP_SPD && gp >= getSpdCost(spdBonus)) {
     choices.push({ kind: 'spd', amount: 1 });
   }
 
@@ -136,10 +150,10 @@ export function getAllGrowthChoices(unit: Unit): GrowthChoice[] {
 }
 
 /** 成长选项所需点数 */
-export function growthChoiceCost(choice: GrowthChoice): number {
+export function growthChoiceCost(choice: GrowthChoice, hpBonus: number, spdBonus: number): number {
   switch (choice.kind) {
-    case 'hp': return HP_COST;
-    case 'spd': return SPD_COST;
+    case 'hp': return getHpCost(hpBonus);
+    case 'spd': return getSpdCost(spdBonus);
     case 'slot3': return SLOT3_COST;
     case 'slot4': return SLOT4_COST;
     case 'slot5': return SLOT5_COST;
@@ -150,27 +164,27 @@ export function growthChoiceCost(choice: GrowthChoice): number {
 /** 不可变成长：返回新 Unit 或 null（失败） */
 export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): Unit | null {
   const gp = unit.growthPoints ?? 0;
+  const hpBonus = unit.bonusStats?.hp ?? 0;
+  const spdBonus = unit.bonusStats?.spd ?? 0;
 
   switch (choice.kind) {
     case 'hp': {
-      if (gp < HP_COST) return null;
-      const hpBonus = unit.bonusStats?.hp ?? 0;
-      if (hpBonus >= STAT_CAP_HP) return null;
+      const cost = getHpCost(hpBonus);
+      if (gp < cost || hpBonus >= STAT_CAP_HP) return null;
       return {
         ...unit,
-        growthPoints: gp - HP_COST,
+        growthPoints: gp - cost,
         bonusStats: { ...unit.bonusStats, hp: hpBonus + 2 },
         maxHp: unit.maxHp + 2,
         hp: unit.hp + 2,
       };
     }
     case 'spd': {
-      if (gp < SPD_COST) return null;
-      const spdBonus = unit.bonusStats?.spd ?? 0;
-      if (spdBonus >= STAT_CAP_SPD) return null;
+      const cost = getSpdCost(spdBonus);
+      if (gp < cost || spdBonus >= STAT_CAP_SPD) return null;
       return {
         ...unit,
-        growthPoints: gp - SPD_COST,
+        growthPoints: gp - cost,
         bonusStats: { ...unit.bonusStats, spd: spdBonus + 1 },
         spd: unit.spd + 1,
       };

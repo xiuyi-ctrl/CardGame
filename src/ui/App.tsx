@@ -3093,9 +3093,11 @@ function ProficiencyResultScreen({ state, dispatch }: { state: GameState; dispat
       )}
 
       <div className="panel-row" style={{ gap: 12, marginTop: 16 }}>
-        <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
-          重新开始
-        </button>
+        {won && (
+          <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
+            重新开始
+          </button>
+        )}
         <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
           返回主菜单
         </button>

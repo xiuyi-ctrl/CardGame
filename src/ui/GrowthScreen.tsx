@@ -109,11 +109,13 @@ export function GrowthScreen({ state, dispatch }: Props) {
           <h3>为 {selectedUnit.name} 选择成长：</h3>
           <div className="growth-choice-list">
             {getAllGrowthChoices(selectedUnit).map((choice, i) => {
-              const cost = growthChoiceCost(choice);
+              const hpBonus = selectedUnit.bonusStats?.hp ?? 0;
+              const spdBonus = selectedUnit.bonusStats?.spd ?? 0;
+              const cost = growthChoiceCost(choice, hpBonus, spdBonus);
               const canAfford = (selectedUnit.growthPoints ?? 0) >= cost;
               const label =
-                choice.kind === 'hp' ? `生命 +${choice.amount} (2点)` :
-                choice.kind === 'spd' ? `速度 +${choice.amount} (2点)` :
+                choice.kind === 'hp' ? `生命 +${choice.amount} (${cost}点)` :
+                choice.kind === 'spd' ? `速度 +${choice.amount} (${cost}点)` :
                 choice.kind === 'slot3' ? `解锁第3技能槽 (${SLOT3_COST}点)` :
                 choice.kind === 'slot4' ? `解锁第4技能槽 (${SLOT4_COST}点)` :
                 choice.kind === 'slot5' ? `解锁第5技能槽 (${SLOT5_COST}点)` :
