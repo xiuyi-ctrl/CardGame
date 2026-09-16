@@ -1641,7 +1641,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const rsLoss = state.runStats ? { ...state.runStats, battlesLost: state.runStats.battlesLost + 1 } : state.runStats;
         // 熟练度远征模式：失败进入结算界面
         if (state.runMode === 'proficiency') {
-          return { ...state, screen: 'proficiency-result', battle: undefined, runStats: rsLoss };
+          return { ...state, screen: 'proficiency-result', battle: undefined, runStats: rsLoss, proficiencyResult: 'lost' };
         }
         return { ...state, screen: 'gameover', battle: undefined, runStats: rsLoss };
       }
@@ -2077,14 +2077,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 熟练度远征模式：层数递增
       if (state.runMode === 'proficiency') {
         if (bossCleared(state)) {
-          return { ...state, screen: 'proficiency-result' };
+          return { ...state, screen: 'proficiency-result', proficiencyResult: 'won' };
         }
         const nextLayer = (state.currentLayer ?? 1) + 1;
         const nextRow = state.currentRow + 1;
         if (nextRow < state.map.layers.length) {
           return { ...state, screen: 'map', currentLayer: nextLayer, chestResult: undefined, gauntletOrder: undefined, gauntletSize: undefined, postBattle: undefined, skipSelecting: false, scoutSelecting: false, scoutResult: undefined };
         }
-        return { ...state, screen: 'proficiency-result' };
+        return { ...state, screen: 'proficiency-result', proficiencyResult: 'won' };
       }
       if (bossCleared(state)) {
         if (state.act >= 3) return { ...state, screen: 'victory' };

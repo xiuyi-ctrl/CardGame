@@ -88,6 +88,7 @@ export default function App() {
       {state.screen === 'skill-pick' && <SkillPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'difficulty-select' && <DifficultyScreen state={state} dispatch={dispatch} />}
       {state.screen === 'proficiency-select' && <ProficiencyStarterScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'proficiency-result' && <ProficiencyResultScreen state={state} dispatch={dispatch} />}
       {state.toast && (
         <div className={`toast ${state.toast.kind ?? 'info'}`}>
           {state.toast.msg}
@@ -3050,6 +3051,55 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
       <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
         返回标题
       </button>
+    </div>
+  );
+}
+
+function ProficiencyResultScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const won = state.proficiencyResult === 'won';
+  const maxLayer = state.currentRow + 1;
+  const totalLayers = 50;
+  const battleCount = (state.runStats?.battlesWon ?? 0) + (state.runStats?.battlesLost ?? 0);
+  const alive = state.roster.filter((u) => u.hp > 0);
+  const bestPet = [...alive].sort((a, b) => (b.growthPoints ?? 0) - (a.growthPoints ?? 0))[0];
+
+  return (
+    <div className="center-col">
+      <div style={{ fontSize: 64 }}>{won ? '🏆' : '💀'}</div>
+      <div className="title-name" style={{ color: won ? '#e8c26a' : '#e05555' }}>
+        成长远征 · {won ? '胜利' : '失败'}
+      </div>
+
+      <div style={{ margin: '16px 0', textAlign: 'center' }}>
+        <p className="card-sub" style={{ margin: '4px 0' }}>到达层数：{maxLayer} / {totalLayers}</p>
+        <p className="card-sub" style={{ margin: '4px 0' }}>总战斗场次：{battleCount}</p>
+      </div>
+
+      <div style={{ margin: '12px 0', textAlign: 'center' }}>
+        <div className="section-sub">最终队伍</div>
+        <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
+          {alive.map((u) => (
+            <span className="chip" key={u.uid} style={{ margin: '4px' }}>
+              {u.emoji} {u.name} +{u.growthPoints ?? 0}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {bestPet && (
+        <div style={{ margin: '12px 0', textAlign: 'center' }}>
+          <p className="card-sub">最高成长：{bestPet.emoji} {bestPet.name} +{bestPet.growthPoints ?? 0}</p>
+        </div>
+      )}
+
+      <div className="panel-row" style={{ gap: 12, marginTop: 16 }}>
+        <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
+          重新开始
+        </button>
+        <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+          返回主菜单
+        </button>
+      </div>
     </div>
   );
 }

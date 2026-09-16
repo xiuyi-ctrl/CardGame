@@ -212,7 +212,7 @@ function makeEnemy(
   // Boss（rank 4）不随层数缩放
   if (layer && layer > 1 && s.rank < 4) {
     const hpMult = 1 + (layer - 1) * 0.10;
-    const spdMult = 1 + (layer - 1) * 0.05;
+    const spdMult = 1 + (layer - 1) * 0.10;
     unit.maxHp = Math.round(unit.maxHp * hpMult);
     unit.hp = unit.maxHp;
     unit.spd = Math.max(1, Math.round(unit.spd * spdMult));

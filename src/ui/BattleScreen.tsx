@@ -715,15 +715,9 @@ export function BattleScreen({ state, dispatch }: Props) {
             <div style={{ fontSize: 48 }}>{isChallenge ? '⚠️' : '💀'}</div>
             <h2>{isChallenge ? '挑战失败' : '全队阵亡'}</h2>
             <p>{isChallenge ? '没有宠物阵亡，但需要承受挑战失败的代价' : '阵亡的宠物永久消失，本次远征到此结束'}</p>
-            {isChallenge ? (
-              <button className="primary big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
-                确认承受代价
-              </button>
-            ) : (
-              <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
-                返回主界面
-              </button>
-            )}
+            <button className="big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
+              {isChallenge ? '确认承受代价' : '确认'}
+            </button>
           </div>
         </div>
       )}

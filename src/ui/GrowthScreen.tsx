@@ -32,6 +32,7 @@ export function GrowthScreen({ state, dispatch }: Props) {
   const selectedUnit = roster.find((u) => u.uid === selectedUid);
   const pending = state.specialPending;
   const isShopPending = pending?.kind === 'shopGrantGrowthPoint' || pending?.kind === 'shopStatBoost' || pending?.kind === 'shopSlotUnlock' || pending?.kind === 'shopForget';
+  const isBossNode = state.map.boss[state.currentNodeId] !== undefined;
 
   const handleGrowthChoice = (unit: Unit, choice: GrowthChoice) => {
     // 技能槽解锁：路由到技能选择界面（由 reducer 处理 state 转换）
@@ -136,6 +137,10 @@ export function GrowthScreen({ state, dispatch }: Props) {
         {isShopPending ? (
           <button className="btn" onClick={() => dispatch({ type: 'CANCEL_GROWTH_ITEM' })}>
             取消使用
+          </button>
+        ) : isBossNode ? (
+          <button className="primary btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
+            继续前进 →
           </button>
         ) : (
           <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>

@@ -285,6 +285,8 @@ export interface GameState {
   shopRefreshCount?: number;
   /** 背包使用远征道具时，记录被使用的物品 ID（用于取消时归还） */
   growthItemPending?: string;
+  /** 熟练度远征结算结果 */
+  proficiencyResult?: 'won' | 'lost';
   /** 宝箱/钥匙门开启结果（chest 界面展示的文本列表） */
   chestResult?: string[];
   /** 本幕已访问的瞭望塔节点 ID 列表 */
