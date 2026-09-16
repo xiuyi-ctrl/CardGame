@@ -1860,15 +1860,15 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
       <div className="reward-cards">
         {stock.map((id) => {
           const profShopData: Record<string, { label: string; emoji: string; desc: string; price: number }> = {
-            heal_potion: { label: '生命药水', emoji: '🧪', desc: '全队回复 50% 生命', price: 8 },
+            heal_potion: { label: '治疗圣水', emoji: '🧪', desc: '全队回复 50% 生命', price: 30 },
             gold_bag: { label: '金币袋', emoji: '💰', desc: '获得 25 金币', price: 10 },
-            book_small: { label: '成长之书（小）', emoji: '📖', desc: '选择一只宠物获得 1 成长点', price: 12 },
-            book_large: { label: '成长之书（大）', emoji: '📚', desc: '选择一只宠物获得 2 成长点', price: 20 },
+            book_small: { label: '成长之书（小）', emoji: '📖', desc: '选择一只宠物获得 1 成长点', price: 15 },
+            book_large: { label: '成长之书（大）', emoji: '📚', desc: '选择一只宠物获得 2 成长点', price: 25 },
             growth_stone: { label: '成长之石', emoji: '💎', desc: '选择一只宠物获得 1 成长点', price: 15 },
             stat_boost: { label: '属性强化', emoji: '⚡', desc: '选择一只宠物提升属性', price: 18 },
-            slot_unlock: { label: '技能槽解锁', emoji: '🔓', desc: '选择一只宠物解锁技能槽', price: 25 },
+            slot_unlock: { label: '技能槽解锁', emoji: '🔓', desc: '选择一只宠物解锁技能槽', price: 50 },
             skill_replace: { label: '技能替换', emoji: '🔄', desc: '选择一只宠物替换技能', price: 12 },
-            forget_stone: { label: '遗忘之石', emoji: '🪨', desc: '选择一只宠物重置成长点', price: 10 },
+            forget_stone: { label: '遗忘之石', emoji: '🪨', desc: '选择一只宠物重置成长点', price: 30 },
             pet_recruit: { label: '宠物招募', emoji: '🐾', desc: '招募一只随机宠物', price: 20 },
           };
           const profItem = isProf ? profShopData[id] : undefined;
@@ -2357,11 +2357,40 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
   const foodList = items.filter(([id]) => FOODS[id]);
-  const itemList = items.filter(([id]) => ITEMS[id]).sort((a, b) => (a[0] === 'scout' ? -1 : b[0] === 'scout' ? 1 : 0));
+  const growthItemIds = ['book_small', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion'];
+  const growthList = items.filter(([id]) => growthItemIds.includes(id));
+  const itemList = items.filter(([id]) => ITEMS[id] && !growthItemIds.includes(id)).sort((a, b) => (a[0] === 'scout' ? -1 : b[0] === 'scout' ? 1 : 0));
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">🎒 背包</div>
+
+      {growthList.length > 0 && (
+        <>
+          <div className="section-sub">远征道具</div>
+          <DragScrollRow>
+            {growthList.map(([id, count]) => {
+              const it = ITEMS[id];
+              if (!it) return null;
+              return (
+                <div
+                  key={id}
+                  className="reward-card bag-item"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => dispatch({ type: 'USE_GROWTH_ITEM', itemId: id })}
+                  title={`点击使用（持有 ${count} 个）`}
+                >
+                  <div className="ricon">{it.emoji}</div>
+                  <div className="rtitle">
+                    {it.name} ×{count}
+                  </div>
+                  <div className="rdesc">{it.desc}</div>
+                </div>
+              );
+            })}
+          </DragScrollRow>
+        </>
+      )}
 
       <div className="section-sub">道具</div>
       <DragScrollRow>

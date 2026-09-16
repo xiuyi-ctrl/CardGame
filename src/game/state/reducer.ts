@@ -107,6 +107,8 @@ export type GameAction =
   | { type: 'PROF_SHOP_BUY'; itemId: string }
   | { type: 'PROF_SHOP_REFRESH' }
   | { type: 'PROF_SHOP_EFFECT'; uid: string }
+  | { type: 'USE_GROWTH_ITEM'; itemId: string }
+  | { type: 'CANCEL_GROWTH_ITEM' }
   | { type: 'PROF_SKILL_REPLACE_START'; uid: string }
   | { type: 'PROF_SKILL_REPLACE_SELECT'; replaceIdx: number }
   | { type: 'REST_FUSION_SET_MAIN'; uid: string }
@@ -355,8 +357,8 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     }
     finalRoster = result.roster.map((u) => {
       const inBattle = [...battle.playerUnits, ...(battle.playerDown ?? [])].some((bu) => bu.uid === u.uid);
-      if (!inBattle) return u;
-      const gp = (u.growthPoints ?? 0) + 2 + killGp;
+      const battleGp = inBattle ? 1 + killGp : 0;
+      const gp = (u.growthPoints ?? 0) + 1 + battleGp;
       return { ...u, growthPoints: gp };
     });
   }
@@ -813,19 +815,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           roster: next.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp - Math.round(u.maxHp * (choice.amount ?? 0) / 100)) })),
         };
       } else if (choice.kind === 'battle' && choice.battleEnemies) {
-        // 事件战斗：进入战斗界面
+        // 事件战斗：设置 eventBattle 数据，跳转布阵界面
         const reward = choice.battleReward ?? { kind: 'gold' as const, amount: choice.goldDelta ?? 0 };
         const penalty = choice.battlePenalty ?? { percent: 15 };
-        next = {
+        const maxField = maxFieldForEnemy(choice.battleEnemies.length, state.runMode);
+        const initial = autoPosition(fieldUnits(next, maxField));
+        const options = { untameable: true, act: state.act, nodeType: 'battle' as const, difficulty: state.difficulty };
+        return {
           ...next,
-          screen: 'battle',
-          eventBattle: {
-            enemies: choice.battleEnemies,
-            reward,
-            penalty,
-          },
+          screen: 'formation',
+          eventBattle: { enemies: choice.battleEnemies, reward, penalty },
+          formation: { units: next.roster, initialField: initial, encounter: choice.battleEnemies, nodeId: '', options },
+          log: ['进入事件战斗', ...next.log].slice(0, 20),
         };
-        return { ...next, log: ['进入事件战斗', ...next.log].slice(0, 20) };
       } else if (choice.kind === 'sacrifice' && next.roster.length > 0) {
         // 献祭：随机放生 1 只宠物，全队永久 +N 属性
         const sacrificeIdx = Math.floor(Math.random() * next.roster.length);
@@ -1044,14 +1046,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'EVENT_BATTLE_START': {
       if (state.screen !== 'event') return state;
-      // 创建战斗
-      const enemies = action.enemies.map((e, i) => makeUnit(e.speciesId, false, i as 0 | 1 | 2, false, 'front'));
-      const battle = createBattle(state.roster, enemies, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'battle', difficulty: state.difficulty });
+      // 设置 eventBattle 数据，跳转布阵界面
+      const maxField = maxFieldForEnemy(action.enemies.length, state.runMode);
+      const initial = autoPosition(fieldUnits(state, maxField));
+      const options = { untameable: true, act: state.act, nodeType: 'battle' as const, difficulty: state.difficulty };
       return {
         ...state,
-        screen: 'battle',
-        battle,
+        screen: 'formation',
         eventBattle: { enemies: action.enemies, reward: action.reward, penalty: action.penalty },
+        formation: { units: state.roster, initialField: initial, encounter: action.enemies, nodeId: '', options },
         log: ['进入事件战斗', ...state.log].slice(0, 20),
       };
     }
@@ -1237,7 +1240,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         } else if (extraSlots < 3) {
           nextSlot = 5;
         } else {
-          return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '技能槽已全部解锁', kind: 'warning' } };
+          return { ...state, gold: state.gold + 50, specialPending: undefined, screen: 'map', toast: { msg: '技能槽已全部解锁，已退还50金币', kind: 'warning' } };
         }
         const updatedUnit = { ...target, extraSkillSlots: extraSlots + 1 };
         const rng = createRng(state.seed + hashStr(action.uid) + 600 + (nextSlot === 4 ? 1 : nextSlot === 5 ? 2 : 0));
@@ -1429,7 +1432,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'FORMATION_CONFIRM': {
       const f = state.formation;
       if (!f || action.units.length === 0) return state;
-      const battle = createBattle(action.units, f.encounter, state.seed + state.currentRow * 17, f.options);
+      // 事件战斗：用 eventBattle 的敌人；普通战斗：用 formation 的 encounter
+      const enemySpecies = state.eventBattle ? state.eventBattle.enemies : f.encounter;
+      const battle = createBattle(action.units, enemySpecies, state.seed + state.currentRow * 17, f.options);
       return { ...state, screen: 'battle', battle, formation: undefined };
     }
 
@@ -2143,7 +2148,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'BACK_TO_MAP': {
       const prevRow = state.formation?.prevRow ?? state.gauntletPrevRow;
       const prevNodeId = state.formation?.prevNodeId ?? state.gauntletPrevNodeId;
-      return {
+      let nextState: GameState = {
         ...state,
         screen: 'map',
         currentRow: prevRow ?? state.currentRow,
@@ -2154,6 +2159,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         gauntletPrevRow: undefined,
         gauntletPrevNodeId: undefined,
       };
+      if (state.growthItemPending) {
+        const itemId = state.growthItemPending;
+        nextState = { ...nextState, inventory: { ...nextState.inventory, [itemId]: (nextState.inventory[itemId] ?? 0) + 1 }, growthItemPending: undefined, specialPending: undefined };
+      }
+      return nextState;
     }
 
     case 'RETRY':
@@ -2331,18 +2341,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       let next: GameState = { ...state, gold: state.gold - price, shopBought: true };
       const boughtItems = [...(state.shopBoughtItems ?? []), itemId];
       next = { ...next, shopBoughtItems: boughtItems };
-      if (itemId === 'heal_potion') {
-        next = healRoster(next, 0.5);
-        next = { ...next, toast: { msg: '全队回复 50% 生命', kind: 'success' } };
-      } else if (itemId === 'book_small') {
-        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 1 }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
-      } else if (itemId === 'book_large') {
-        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 2 }, toast: { msg: '选择一只宠物获得 2 成长点', kind: 'info' } };
-      } else if (itemId === 'slot_unlock') {
-        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopSlotUnlock' as const, uid: '', slot: 3 as 3 | 4 | 5 }, toast: { msg: '选择一只宠物解锁技能槽', kind: 'info' } };
-      } else if (itemId === 'forget_stone') {
-        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopForget' as const, uid: '' }, toast: { msg: '选择一只宠物重置成长点', kind: 'info' } };
-      } else if (itemId === 'pet_recruit') {
+      if (itemId === 'pet_recruit') {
         const rng = createRng(state.seed * 1111 + Date.now());
         const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
         const pick = pool[Math.floor(rng() * pool.length)];
@@ -2351,6 +2350,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         } else {
           next = { ...next, toast: { msg: '队伍已满，无法招募', kind: 'warning' } };
         }
+      } else {
+        next = { ...next, inventory: { ...next.inventory, [itemId]: (next.inventory[itemId] ?? 0) + 1 } };
+        const itemNames: Record<string, string> = { book_small: '成长之书（小）', book_large: '成长之书（大）', slot_unlock: '技能槽解锁', forget_stone: '遗忘之石', heal_potion: '治疗圣水' };
+        next = { ...next, toast: { msg: `获得了 ${itemNames[itemId] ?? itemId}，请在背包中使用`, kind: 'info' } };
       }
       return next;
     }
@@ -2381,17 +2384,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!target) return state;
       if (pending.kind === 'shopGrantGrowthPoint') {
         const updated = state.roster.map((u) => u.uid === uid ? { ...u, growthPoints: (u.growthPoints ?? 0) + pending.amount } : u);
-        return { ...state, roster: updated, specialPending: undefined, screen: 'shop', toast: { msg: `${target.name} 获得 ${pending.amount} 成长点`, kind: 'success' } };
+        return { ...state, roster: updated, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `${target.name} 获得 ${pending.amount} 成长点`, kind: 'success' } };
       }
       if (pending.kind === 'shopStatBoost') {
-        return { ...state, specialPending: { kind: 'boost', uid }, screen: 'boost' };
+        return { ...state, specialPending: { kind: 'boost', uid }, growthItemPending: undefined };
       }
       if (pending.kind === 'shopSlotUnlock') {
         // 技能之赐（unlockAll）：解锁所有槽位
         if ((pending as any).unlockAll) {
           const extraSlots = target.extraSkillSlots ?? 0;
           const slotsToAdd = 3 - extraSlots; // 最多解锁到3个额外槽位
-          if (slotsToAdd <= 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁', kind: 'warning' } };
+          if (slotsToAdd <= 0) return { ...state, gold: state.gold + 50, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁，已退还50金币', kind: 'warning' } };
           const updated = { ...target, extraSkillSlots: 3 };
           // 为每个新解锁的槽位选技能
           const rng = createRng(state.seed + hashStr(uid) + 800);
@@ -2400,10 +2403,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             const slotNum = (extraSlots + i + 3) as 3 | 4 | 5;
             const choices = getRandomSkillChoices(current, 3, rng);
             if (choices.length > 0) {
-              return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: slotNum, choices } };
+              return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, growthItemPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: slotNum, choices } };
             }
           }
-          return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, screen: 'shop', toast: { msg: `已为 ${target.name} 解锁所有技能槽`, kind: 'success' } };
+          return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `已为 ${target.name} 解锁所有技能槽`, kind: 'success' } };
         }
         // 普通解锁：自动检测下一个可用槽位
         const extraSlots = target.extraSkillSlots ?? 0;
@@ -2415,30 +2418,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         } else if (extraSlots < 3) {
           nextSlot = 5;
         } else {
-          return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁', kind: 'warning' } };
+          return { ...state, gold: state.gold + 50, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁，已退还50金币', kind: 'warning' } };
         }
         const updated = { ...target, extraSkillSlots: extraSlots + 1 };
         const rng = createRng(state.seed + hashStr(uid) + 900 + (nextSlot === 4 ? 1 : nextSlot === 5 ? 2 : 0));
         const choices = getRandomSkillChoices(updated, 3, rng);
         if (choices.length === 0) {
-          return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'shop' };
+          return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop' };
         }
-        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: nextSlot, choices } };
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: nextSlot, choices } };
       }
       if (pending.kind === 'shopForget') {
         // 重置成长点：返还所有属性加成
         const hpBonus = target.bonusStats?.hp ?? 0;
         const spdBonus = target.bonusStats?.spd ?? 0;
         const returnedPoints = Math.floor(hpBonus / 2) + spdBonus;
-        if (returnedPoints <= 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
+        if (returnedPoints <= 0) return { ...state, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
         const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + returnedPoints, bonusStats: { hp: 0, spd: 0 }, maxHp: target.maxHp - hpBonus, hp: Math.min(target.hp, target.maxHp - hpBonus), spd: target.spd - spdBonus };
-        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'shop', toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
       }
       if (pending.kind === 'legendSkill') {
         // 传奇招募：从传奇技能池随机1个教给选中的宠物
         const rngLeg = createRng(state.seed + hashStr(uid) + 1000);
         const legChoices = getRandomLegendarySkillChoices(target, 1, rngLeg);
-        if (legChoices.length === 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '没有可用的传奇技能', kind: 'warning' } };
+        if (legChoices.length === 0) return { ...state, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '没有可用的传奇技能', kind: 'warning' } };
         const skillId = legChoices[0];
         const skillDef = SKILLS[skillId];
         // 如果技能槽已满，替换最后一个技能
@@ -2450,9 +2453,46 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           newSkills = [...target.skills, skillId];
         }
         const updated = { ...target, skills: newSkills };
-        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'shop', toast: { msg: `${target.name} 学会了 ${skillDef?.name ?? skillId}！`, kind: 'success' } };
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `${target.name} 学会了 ${skillDef?.name ?? skillId}！`, kind: 'success' } };
       }
       return state;
+    }
+
+    case 'USE_GROWTH_ITEM': {
+      const itemId = action.itemId;
+      const count = state.inventory[itemId] ?? 0;
+      if (count <= 0) return state;
+      let next: GameState = { ...state, inventory: { ...state.inventory, [itemId]: count - 1 }, growthItemPending: itemId };
+      if (itemId === 'heal_potion') {
+        next = healRoster(next, 0.5);
+        return { ...next, growthItemPending: undefined, toast: { msg: '全队回复 50% 生命', kind: 'success' } };
+      }
+      if (itemId === 'book_small') {
+        return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 1 }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
+      }
+      if (itemId === 'book_large') {
+        return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 2 }, toast: { msg: '选择一只宠物获得 2 成长点', kind: 'info' } };
+      }
+      if (itemId === 'slot_unlock') {
+        return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopSlotUnlock' as const, uid: '', slot: 3 as 3 | 4 | 5 }, toast: { msg: '选择一只宠物解锁技能槽', kind: 'info' } };
+      }
+      if (itemId === 'forget_stone') {
+        return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopForget' as const, uid: '' }, toast: { msg: '选择一只宠物重置成长点', kind: 'info' } };
+      }
+      return next;
+    }
+
+    case 'CANCEL_GROWTH_ITEM': {
+      const itemId = state.growthItemPending;
+      if (!itemId) return state;
+      return {
+        ...state,
+        inventory: { ...state.inventory, [itemId]: (state.inventory[itemId] ?? 0) + 1 },
+        specialPending: undefined,
+        growthItemPending: undefined,
+        screen: 'backpack',
+        toast: { msg: '已取消使用', kind: 'info' },
+      };
     }
 
     case 'TITLE':

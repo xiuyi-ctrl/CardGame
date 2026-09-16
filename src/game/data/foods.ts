@@ -17,6 +17,10 @@ export const FOODS: Record<string, FoodDef> = {
     id: 'golden_fruit', name: '圣果', emoji: '🍎', desc: '必定驯服一只残血且可驯服的敌人',
     baseTame: 1, price: 9999, hpBonus: 5, guaranteed: true, shop: false,
   },
+  heal_potion: {
+    id: 'heal_potion', name: '治疗圣水', emoji: '🧪', desc: '全队回复50%生命',
+    baseTame: 0, price: 30, hpBonus: 0, shop: false,
+  },
 };
 
 export function getFood(id: string): FoodDef {

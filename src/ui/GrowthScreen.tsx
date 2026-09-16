@@ -133,9 +133,15 @@ export function GrowthScreen({ state, dispatch }: Props) {
       )}
 
       <div className="growth-actions">
-        <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-          返回地图
-        </button>
+        {isShopPending ? (
+          <button className="btn" onClick={() => dispatch({ type: 'CANCEL_GROWTH_ITEM' })}>
+            取消使用
+          </button>
+        ) : (
+          <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
+            返回地图
+          </button>
+        )}
       </div>
     </div>
   );
