@@ -34,7 +34,7 @@
   - `state/game.ts` 地图/奖励/成长/融合；`state/reducer.ts` 全局状态机与所有 GameAction。
 - `src/ui/`：React 界面（App.tsx 全界面 + BattleScreen.tsx + components.tsx + styles.css）。
   - 战斗布局：屏幕左侧居中竖向滚动日志面板（`.log-panel`，敌/我/系统分色）；底部操作面板 `.action-panel` 从左到右依次为捕获区（`.capture-panel`）、道具区（`.items-panel`，食物/战斗药水）、技能区（`.skill-column`，3 列网格、行 22px+58px+58px、宽 540px 居左、最多两行无滚动条，按钮=技能名+数值+描述）、回合区（`.end-panel`，⚡ 行动点 + 结束回合）。
-  - 组件 `components.tsx`：`UnitCard`（`showSkills` 默认 true，出阵我方卡传 false 隐藏技能）、`SkillTag`/`skillBrief`（技能名+金色数值，供敌方卡/队伍界面/预览使用）、`SkillTag` 的 `usesNote` 在 desc 模式显示「每场限 N 次」。`skillFullDesc` 返回技能完整描述：若 `hideEffects: true` 直接返回 `desc`（desc 已自含效果层数等信息），否则自动追加 `（效果文本）`。
+  - 组件 `components.tsx`：`UnitCard`（`showSkills` 默认 true，出阵我方卡传 false 隐藏技能）、`SkillTag`/`skillBrief`（技能名+金色数值，供敌方卡/队伍界面/预览使用）、`SkillTag` 的 `usesNote` 在 desc 模式显示「每场限 N 次」。`skillFullDesc` 返回技能完整描述：若 `hideEffects: true` 直接返回 `desc`（desc 已自含效果层数等信息），否则自动追加 `（效果文本）`。**技能强化标记**：`SkillTag` 支持 `enhanced?: number`（0-3）属性，>=1 时在技能名右侧显示金色加号（+1→`+`、+2→`++`、+3→`+++`，颜色 `#e8c26a`）；强化后数值（伤害/治疗/buff效果值）用金色字体高亮。`skillBrief` 接收 `enhanced?: number` 追加金色加号。
   - 登录界面 `HomeScreen` 主菜单含「📖 生物图鉴」按钮，打开 `CodexScreen` 覆盖层：左侧按 普通/精英/传奇/首领/造物 分组，右侧展示详情（属性/被动/技能/驯服/融合/说明），数据来自 `MONSTERS`+`computeStats`+`getPassive`+`nextStage`（物种 `desc` 为图鉴说明，见 `monsters.ts`）。
 - `electron/`：Electron 主进程/预加载（编译产物到 `dist-electron/`）。
 - `tests/`：vitest 测试（`test.include` 已限定 `tests/**/*.test.ts`，避免误扫 `.agents/skills`）。
@@ -76,8 +76,8 @@
 
 - **熟练度远征模式**：独立 Roguelike 爬塔模式（`runMode: 'proficiency'`），从主菜单「⚔️ 熟练度远征」进入。核心机制：
   - **开局**：3 只宠物（迅迅/泡泡/灼灼，覆盖输出/治疗/坦克），30 金币，无法驯服/融合/招募。
-  - **地图**：线性 50 层，每层 1 个节点（战斗/精英/事件/商店/奇遇/休憩），层15/30为随机Boss，层50为成长之主。
-  - **成长系统**：战斗获得成长点（每场+2参与+2存活），击杀奖励（普通+2/精英+4/Boss+6）。成长点分配属性（HP递增2→10点/次+2HP，SPD递增2→5点/次+1SPD）或解锁技能槽/替换技能。
+  - **地图**：线性 50 层，每层 1 个节点（战斗/精英/事件/商店/奇遇/休憩），层15/30为随机Boss，层50为成长之主。成长系统属性递增消耗（HP: 2→10 点/次，SPD: 2→5 点/次）；强化技能 8/10/12 点（每技能最多3级，攻击+2伤害/治疗+2/buff+1效果值）。
+  - **成长系统**：战斗获得成长点（每场+2参与+2存活），击杀奖励（普通+2/精英+4/Boss+6）。成长点分配属性（HP递增2→10点/次+2HP，SPD递增2→5点/次+1SPD）或解锁技能槽/替换技能/强化技能（8/10/12点，攻击+2伤害/连击+1段数/混合+1伤害+1效果/buff+1效果值，每技能最多3级，连击/速度类最多2级，传奇技能消耗×1.5，还原石重置返还50%）。
   - **敌人缩放**：每层+10%生命、+10%速度；层1-5固定1只，层6-10最多2只，层11-15最多3只；精英全程2只（仅品阶2）；Boss 40HP + 小怪。
   - **回复**：战后回血80%，休息点100%+融合，商店药水50%。
   - **专属数据文件**：`core/growth.ts`（等级/成长点）、`core/growth-map.ts`（地图生成）、`data/growth-events.ts`（10个专属事件）、`data/growth-shop.ts`（6种商店商品）、`data/growth-special.ts`（6种奇遇奖励）、`data/growth-boss.ts`（Boss数据）。

@@ -9,7 +9,8 @@ export type GrowthShopItemType =
   | 'slot_unlock'
   | 'forget_stone'
   | 'pet_recruit'
-  | 'heal_potion';
+  | 'heal_potion'
+  | 'reset_stone';
 
 export interface GrowthShopItem {
   id: GrowthShopItemType;
@@ -61,6 +62,13 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
     desc: '全队回复 50% 生命',
     price: 30,
     emoji: '🧪',
+  },
+  reset_stone: {
+    id: 'reset_stone',
+    label: '还原石',
+    desc: '选择 1 只宠物，重置其指定技能的强化等级（返还 50% 累计消耗）',
+    price: 40,
+    emoji: '💎',
   },
 };
 
