@@ -1227,14 +1227,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.specialPending?.kind === 'shopSlotUnlock') {
         const target = state.roster.find((u) => u.uid === action.uid);
         if (!target) return state;
-        const slotNum = state.specialPending.slot;
+        // 自动检测下一个可用槽位
         const extraSlots = target.extraSkillSlots ?? 0;
-        // 顺序解锁检查
-        if (slotNum === 3 && extraSlots >= 1) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '技能槽已满', kind: 'warning' } };
-        if (slotNum === 4 && (extraSlots < 1 || extraSlots >= 2)) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: extraSlots < 1 ? '请先解锁第3技能槽' : '技能槽已满', kind: 'warning' } };
-        if (slotNum === 5 && (extraSlots < 2 || extraSlots >= 3)) return { ...state, specialPending: undefined, screen: 'map', toast: { msg: extraSlots < 2 ? '请先解锁第4技能槽' : '技能槽已满', kind: 'warning' } };
+        let nextSlot: 3 | 4 | 5;
+        if (extraSlots < 1) {
+          nextSlot = 3;
+        } else if (extraSlots < 2) {
+          nextSlot = 4;
+        } else if (extraSlots < 3) {
+          nextSlot = 5;
+        } else {
+          return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '技能槽已全部解锁', kind: 'warning' } };
+        }
         const updatedUnit = { ...target, extraSkillSlots: extraSlots + 1 };
-        const rng = createRng(state.seed + hashStr(action.uid) + 600 + (slotNum === 4 ? 1 : 0));
+        const rng = createRng(state.seed + hashStr(action.uid) + 600 + (nextSlot === 4 ? 1 : nextSlot === 5 ? 2 : 0));
         const choices = getRandomSkillChoices(updatedUnit, 3, rng);
         if (choices.length === 0) {
           return { ...state, roster: state.roster.map((u) => u.uid === action.uid ? updatedUnit : u), specialPending: undefined, screen: 'map' };
@@ -1244,7 +1250,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           roster: state.roster.map((u) => u.uid === action.uid ? updatedUnit : u),
           specialPending: undefined,
           screen: 'skill-pick',
-          skillPick: { uid: action.uid, slot: slotNum, choices },
+          skillPick: { uid: action.uid, slot: nextSlot, choices },
         };
       }
       if (state.specialPending?.kind === 'arena') {
@@ -2333,7 +2339,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (itemId === 'book_large') {
         next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 2 }, toast: { msg: '选择一只宠物获得 2 成长点', kind: 'info' } };
       } else if (itemId === 'slot_unlock') {
-        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopSlotUnlock' as const, uid: '', slot: 3 as const }, toast: { msg: '选择一只宠物解锁技能槽', kind: 'info' } };
+        next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopSlotUnlock' as const, uid: '', slot: 3 as 3 | 4 | 5 }, toast: { msg: '选择一只宠物解锁技能槽', kind: 'info' } };
       } else if (itemId === 'forget_stone') {
         next = { ...next, screen: 'growth-menu', specialPending: { kind: 'shopForget' as const, uid: '' }, toast: { msg: '选择一只宠物重置成长点', kind: 'info' } };
       } else if (itemId === 'pet_recruit') {
@@ -2399,19 +2405,25 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           }
           return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, screen: 'shop', toast: { msg: `已为 ${target.name} 解锁所有技能槽`, kind: 'success' } };
         }
-        // 普通解锁单个槽位
+        // 普通解锁：自动检测下一个可用槽位
         const extraSlots = target.extraSkillSlots ?? 0;
-        // 顺序解锁检查
-        if (pending.slot === 3 && extraSlots >= 1) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已满', kind: 'warning' } };
-        if (pending.slot === 4 && (extraSlots < 1 || extraSlots >= 2)) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: extraSlots < 1 ? '请先解锁第3技能槽' : '技能槽已满', kind: 'warning' } };
-        if (pending.slot === 5 && (extraSlots < 2 || extraSlots >= 3)) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: extraSlots < 2 ? '请先解锁第4技能槽' : '技能槽已满', kind: 'warning' } };
+        let nextSlot: 3 | 4 | 5;
+        if (extraSlots < 1) {
+          nextSlot = 3;
+        } else if (extraSlots < 2) {
+          nextSlot = 4;
+        } else if (extraSlots < 3) {
+          nextSlot = 5;
+        } else {
+          return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁', kind: 'warning' } };
+        }
         const updated = { ...target, extraSkillSlots: extraSlots + 1 };
-        const rng = createRng(state.seed + hashStr(uid) + 900 + (pending.slot === 4 ? 1 : 0));
+        const rng = createRng(state.seed + hashStr(uid) + 900 + (nextSlot === 4 ? 1 : nextSlot === 5 ? 2 : 0));
         const choices = getRandomSkillChoices(updated, 3, rng);
         if (choices.length === 0) {
           return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'shop' };
         }
-        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: pending.slot, choices } };
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: nextSlot, choices } };
       }
       if (pending.kind === 'shopForget') {
         // 重置成长点：返还所有属性加成
