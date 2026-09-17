@@ -2,7 +2,7 @@
   "name": "pet-card-rogue",
   "version": "0.3.0",
   "private": true,
-  "description": "肉鸽卡牌宠物对战游戏（参照 Decktamer 驯牌师）",
+  "description": "肉鸽卡牌宠物对战游戏",
   "main": "dist-electron/main.js",
   "author": "PetCardRogue",
   "scripts": {

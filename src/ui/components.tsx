@@ -48,6 +48,7 @@ const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
   toxicBurstReady: '💀',
   chainLink: '🔗',
   skillSeal: '🔒',
+  skillSealPending: '⏳',
   fear: '😱',
 };
 
@@ -102,6 +103,12 @@ function effectText(e: StatusEffect): string {
         return `技能封印：${names}${turns}`;
       }
       return `技能封印 封印${e.value}个技能${turns}`;
+    case 'skillSealPending':
+      if (e.sealedSkills && e.sealedSkills.length > 0) {
+        const names = e.sealedSkills.map((s) => getSkill(s)?.name ?? s).join('、');
+        return `封印即将生效：${names}${turns}`;
+      }
+      return `封印即将生效 封印${e.value}个技能${turns}`;
     case 'fear':
       return `恐惧 ${e.value} 层`;
   }
@@ -298,6 +305,7 @@ const STATUS_ICON: Record<string, { icon: string; label: string }> = {
   sporeShield: { icon: '🍄', label: '孢子防护' },
   toxicBurstReady: { icon: '💀', label: '毒性爆发蓄力' },
   chainLink: { icon: '🔗', label: '锁链连接' },
+  skillSealPending: { icon: '⏳', label: '封印即将生效' },
   fear: { icon: '😱', label: '恐惧' },
 };
 

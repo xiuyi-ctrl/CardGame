@@ -500,6 +500,26 @@ function startRound(b: BattleState): BattleState {
       nb = replaceUnit(nb, { ...u, statuses: u.statuses.filter((s) => s.kind !== 'shield') });
     }
   }
+  // skillSealPending → skillSeal 转换：封印在命中后的下回合生效
+  for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (u.hp <= 0) continue;
+    const pending = u.statuses.find((s) => s.kind === 'skillSealPending');
+    if (!pending) continue;
+    // tickStatuses 已递减 turns，直接使用当前值
+    const remainingTurns = pending.turns;
+    if (remainingTurns <= 0) {
+      // pending 已到期，直接移除
+      nb = replaceUnit(nb, { ...u, statuses: u.statuses.filter((s) => s.kind !== 'skillSealPending') });
+    } else {
+      // 转换为正式封印
+      const sealStatus: StatusEffect = { kind: 'skillSeal', value: pending.value, turns: remainingTurns, sealedSkills: pending.sealedSkills };
+      // 移除旧的 skillSeal（如有），添加新的
+      const withoutPending = u.statuses.filter((s) => s.kind !== 'skillSealPending' && s.kind !== 'skillSeal');
+      nb = replaceUnit(nb, { ...u, statuses: [...withoutPending, sealStatus] });
+      const sealedNames = (pending.sealedSkills ?? []).map((s) => getSkill(s)?.name ?? s).join('、');
+      nb = pushLog(nb, `${u.name} 的「${sealedNames}」被封印 ${remainingTurns} 回合`, sideOf(u), u.uid, u.uid, ['skillSeal']);
+    }
+  }
   // DOT结算完毕后重置伤害累计（新回合开始）
   nb = { ...nb, roundDmgMap: {} };
   // 形态切换检查：HP≤50% 且有 altPassive 时切换形态
@@ -850,13 +870,13 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
   }
   switch (skill.target) {
     case 'self':
-      targets = [actor];
+      targets = [actorFromId(nb, actor.uid) ?? actor];
       break;
     case 'ally': {
       if (explicitTarget && allies.some((u) => u.uid === explicitTarget)) {
         targets = [allies.find((u) => u.uid === explicitTarget)!];
       } else {
-        targets = [actor];
+        targets = [actorFromId(nb, actor.uid) ?? actor];
       }
       break;
     }
@@ -1760,7 +1780,7 @@ function resolveAttack(
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, value: effectValue, sourceUid: actor.uid } : { ...e, value: effectValue }, nb.round);
         if (e.kind === 'poison') didPoison = true;
       } else if (e.kind === 'skillSeal') {
-        // 技能封印：随机选择e.value个技能封印
+        // 技能封印：随机选择e.value个技能封印，下一回合生效
         const availableSkills = t2.skills.filter((s) => {
           const sd = getSkill(s);
           return sd && sd.kind === 'attack';
@@ -1771,10 +1791,11 @@ function resolveAttack(
           const shuffled = [...availableSkills].sort(() => Math.abs((nb.rngCount ?? 0)) % 100 / 100 - 0.5);
           nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
           const sealed = shuffled.slice(0, sealCount);
-          t2 = applyStatusTo(t2, { kind: 'skillSeal', value: sealCount, turns: e.turns, sealedSkills: sealed }, nb.round);
+          // 应用 skillSealPending：turns+1，转换时减1
+          t2 = applyStatusTo(t2, { kind: 'skillSealPending', value: sealCount, turns: e.turns + 1, sealedSkills: sealed }, nb.round);
           // 记录封印的技能名
           const sealedNames = sealed.map((s) => getSkill(s)?.name ?? s).join('、');
-          nb = pushLog(nb, `${t2.name} 的「${sealedNames}」被封印 ${e.turns} 回合`, sideOf(t2), actor.uid, t2.uid, ['skillSeal']);
+          nb = pushLog(nb, `${t2.name} 的「${sealedNames}」将在下回合被封印 ${e.turns} 回合`, sideOf(t2), actor.uid, t2.uid, ['skillSeal']);
         }
       }
     }
