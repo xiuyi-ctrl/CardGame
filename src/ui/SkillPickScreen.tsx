@@ -6,6 +6,7 @@
 import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
+import { getSkillEnhanceLevel } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
 import { SkillTag } from './components';
 
@@ -32,6 +33,7 @@ export function SkillPickScreen({ state, dispatch }: Props) {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             {unit.skills.map((skillId, idx) => {
               const sk = getSkill(skillId);
+              const enhanced = getSkillEnhanceLevel(unit, idx);
               return (
                 <div
                   key={`${skillId}-${idx}`}
@@ -40,7 +42,7 @@ export function SkillPickScreen({ state, dispatch }: Props) {
                   onClick={() => dispatch({ type: 'PROF_SKILL_REPLACE_SELECT', replaceIdx: idx })}
                 >
                   <div style={{ fontSize: 16, marginBottom: 4, fontWeight: 'bold' }}>{sk.name}</div>
-                  <SkillTag skill={sk} />
+                  <SkillTag skill={sk} enhanced={enhanced} />
                   <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{sk.desc}</div>
                 </div>
               );

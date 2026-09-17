@@ -43,8 +43,15 @@ export const GROWTH_EVENT_NAMES: Record<GrowthEventType, string> = {
   revive_dead: '灵魂墓园',
 };
 
-export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType): EventNode {
-  const type = eventType ?? pick(rng, GROWTH_EVENT_TYPES);
+export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType, deadPetCount: number = 0): EventNode {
+  let type = eventType;
+  if (!type) {
+    let pool = [...GROWTH_EVENT_TYPES];
+    if (deadPetCount <= 0) {
+      pool = pool.filter((id) => id !== 'revive_dead');
+    }
+    type = pick(rng, pool);
+  }
   return buildGrowthEventByType(type);
 }
 
@@ -156,6 +163,10 @@ function buildGrowthEventByType(type: GrowthEventType): EventNode {
   }
 }
 
-export function getRandomGrowthEventTypes(rng: () => number, count: number): GrowthEventType[] {
-  return shuffle(rng, [...GROWTH_EVENT_TYPES]).slice(0, count);
+export function getRandomGrowthEventTypes(rng: () => number, count: number, deadPetCount: number = 0): GrowthEventType[] {
+  let pool = [...GROWTH_EVENT_TYPES];
+  if (deadPetCount <= 0) {
+    pool = pool.filter((id) => id !== 'revive_dead');
+  }
+  return shuffle(rng, pool).slice(0, count);
 }

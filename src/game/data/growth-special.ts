@@ -59,12 +59,15 @@ export const GROWTH_SPECIAL_REWARDS: Record<GrowthSpecialKind, GrowthSpecialRewa
 
 export const GROWTH_SPECIAL_IDS = Object.keys(GROWTH_SPECIAL_REWARDS) as GrowthSpecialKind[];
 
-/** 获取奇遇关奖励（随机3种展示） */
-export function getGrowthSpecialRewards(rng: () => number): GrowthSpecialKind[] {
-  const shuffled = [...GROWTH_SPECIAL_IDS];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+/** 获取奇遇关奖励（随机3种展示，若无死亡宠物则排除复活） */
+export function getGrowthSpecialRewards(rng: () => number, deadPetCount: number = 0): GrowthSpecialKind[] {
+  let pool = [...GROWTH_SPECIAL_IDS];
+  if (deadPetCount <= 0) {
+    pool = pool.filter((id) => id !== 'revive');
   }
-  return shuffled.slice(0, 3);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 3);
 }

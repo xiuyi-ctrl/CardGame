@@ -274,7 +274,7 @@ export interface GameState {
     | { kind: 'eventBoostSpd'; uid: string; amount?: number }
     | { kind: 'eventResetGrowth'; uid: string }
     | { kind: 'eventSkillReplace'; uid: string }
-    | { kind: 'legendSkill'; uid: string };
+    | { kind: 'legendSkill'; uid: string; skillId?: string };
   /** 本次商人节点是否已购买过食物（买了就不能再立即休整） */
   shopBought?: boolean;
   /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */

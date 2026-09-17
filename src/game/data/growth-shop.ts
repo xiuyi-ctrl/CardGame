@@ -67,7 +67,7 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
     id: 'reset_stone',
     label: '还原石',
     desc: '选择 1 只宠物，重置其指定技能的强化等级（返还 50% 累计消耗）',
-    price: 40,
+    price: 25,
     emoji: '💎',
   },
 };

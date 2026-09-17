@@ -117,6 +117,18 @@ export function cloneUnit(u: Unit): Unit {
   };
 }
 
+/** 更新技能列表并同步 skillUses（新技能补入次数限制） */
+export function updateUnitSkills(unit: Unit, newSkills: string[]): Unit {
+  const newSkillUses = { ...unit.skillUses };
+  for (const id of newSkills) {
+    if (!(id in newSkillUses)) {
+      const def = getSkill(id);
+      if (def.uses !== undefined) newSkillUses[id] = def.uses;
+    }
+  }
+  return { ...unit, skills: newSkills, skillUses: newSkillUses };
+}
+
 /** 获取单位的被动技能定义。当 chainMaster 被链接时，返回链接单位的被动 */
 export function getUnitPassive(u: Unit, b?: BattleState): PassiveDef | undefined {
   const base = getPassive(u.passive);
@@ -443,9 +455,12 @@ function startRound(b: BattleState): BattleState {
       tickStatuses(res.unit, prevRound);
       if (hadSporeShield) {
         const maxHp = getEffectiveMaxHp(res.unit);
-        const healed = { ...res.unit, hp: Math.min(maxHp, res.unit.hp + 8) };
+        const sporeIdx = res.unit.skills.indexOf('spore_shield');
+        const sporeEnhance = sporeIdx >= 0 ? getSkillEnhanceLevel(res.unit, sporeIdx) : 0;
+        const sporeHeal = 8 + sporeEnhance;
+        const healed = { ...res.unit, hp: Math.min(maxHp, res.unit.hp + sporeHeal) };
         nb = replaceUnit(nb, healed);
-        nb = pushLog(nb, `${healed.name} 的「孢子防护」恢复 8 点生命`, sideOf(healed), healed.uid, healed.uid);
+        nb = pushLog(nb, `${healed.name} 的「孢子防护」恢复 ${sporeHeal} 点生命`, sideOf(healed), healed.uid, healed.uid);
       } else {
         nb = replaceUnit(nb, res.unit);
       }
@@ -1735,10 +1750,13 @@ function resolveAttack(
           nb = pushLog(nb, `${shielded.name} 获得 ${shieldValue} 点护盾`, sideOf(shielded), actor.uid, actor.uid);
         }
       } else if (e.kind === 'fear') {
-        nb = applyFear(nb, t2, e.value);
+        const fearValue = e.value + enhanceBonus.effectBonus;
+        nb = applyFear(nb, t2, fearValue);
         t2 = actorFromId(nb, t2.uid) ?? t2;
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
-        const effectValue = e.value + enhanceBonus.effectBonus;
+        // 眩晕/封印/嘲讽固定，不随强化变化；其余效果值叠加强化加成
+        const fixedKinds = ['stun', 'taunt'];
+        const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + enhanceBonus.effectBonus;
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, value: effectValue, sourceUid: actor.uid } : { ...e, value: effectValue }, nb.round);
         if (e.kind === 'poison') didPoison = true;
       } else if (e.kind === 'skillSeal') {
@@ -1766,12 +1784,14 @@ function resolveAttack(
       // 零伤全体 debuff：由 useSkillInner 统一推送合并日志，此处跳过
     } else if (seg === 0 && skill.effects && skill.effects.length > 0) {
       const effectDesc = skill.effects.map((e) => {
-        if (e.kind === 'poison') return `中毒 ${e.value} 层`;
-        if (e.kind === 'burn') return `灼烧 ${e.value} 层`;
-        if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
-        if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
+        const fixedKinds = ['stun', 'skillSeal', 'taunt'];
+        const val = fixedKinds.includes(e.kind) ? e.value : e.value + enhanceBonus.effectBonus;
+        if (e.kind === 'poison') return `中毒 ${val} 层`;
+        if (e.kind === 'burn') return `灼烧 ${val} 层`;
+        if (e.kind === 'atkDown') return `降低攻击 ${val} 层`;
+        if (e.kind === 'spdDown') return `降低速度 ${val} 层`;
         if (e.kind === 'stun') return '眩晕';
-        if (e.kind === 'fear') return `恐惧 ${e.value} 层`;
+        if (e.kind === 'fear') return `恐惧 ${val} 层`;
         return e.kind;
       }).join('，');
       const msg0 = `${actor.name} 使用「${skill.name}」，${target.name} ${effectDesc}`;
@@ -2169,9 +2189,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       let healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
       // 治疗技能也可附带效果（如潮汐领域的水幕）
       for (const e of skill.effects ?? []) {
-        healed = applyStatusTo(healed, { kind: e.kind, value: e.value, turns: e.turns }, r.round);
+        const fixedKinds = ['stun', 'skillSeal', 'taunt'];
+        const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + healEnhanceBonus.effectBonus;
+        healed = applyStatusTo(healed, { kind: e.kind, value: effectValue, turns: e.turns }, r.round);
         if (e.kind === 'shield') {
-          healed = { ...healed, shield: Math.min(99, healed.shield + e.value) };
+          healed = { ...healed, shield: Math.min(99, healed.shield + effectValue) };
         }
       }
       r = replaceUnit(r, healed);
@@ -2194,7 +2216,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           buffed = { ...buffed, hp: Math.min(maxHp, buffed.hp + healAmt) };
         }
         for (const e of skill.effects ?? []) {
-          const effectValue = e.value + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceBonus.effectBonus);
+          // 护盾效果加 effectBonus（level×2），非护盾效果只加 level×1
+          const effectValue = e.value + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceLevel);
           buffed = applyStatusTo(buffed, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
           if (e.kind === 'shield') {
             buffed = { ...buffed, shield: Math.min(99, buffed.shield + effectValue) };
@@ -2427,6 +2450,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   } else if (skill.kind === 'status') {
     // 状态技能：对目标施加 debuff，不触发攻击被动（蛇狩、荆棘、吸血等）
     const addsKinds = (skill.effects ?? []).map((e) => e.kind);
+    // 技能强化：效果值加成
+    const statusEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+    const statusEnhanceBonus = getSkillEnhanceBonus(skill.id, statusEnhanceLevel);
     let weakenAppliedKind: 'atkDown' | 'spdDown' | undefined;
     for (const t of targets) {
       let affected = t;
@@ -2434,7 +2460,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         if (skill.id === 'weaken') {
           const rngKind = (nb.rngCount ?? 0) % 2 === 0 ? 'atkDown' : 'spdDown';
           weakenAppliedKind = rngKind;
-          affected = applyStatusTo(affected, { kind: rngKind, value: e.value, turns: e.turns }, nb.round);
+          affected = applyStatusTo(affected, { kind: rngKind, value: e.value + statusEnhanceBonus.effectBonus, turns: e.turns }, nb.round);
           nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
         } else if (skill.id === 'despair_gaze') {
           // 绝望凝视：若目标恐惧≥3层，使其眩晕1回合，然后清除恐惧
@@ -2444,7 +2470,10 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             affected = { ...affected, statuses: affected.statuses.filter((s) => s.kind !== 'fear') };
           }
         } else {
-          affected = applyStatusTo(affected, { kind: e.kind, value: e.value, turns: e.turns }, nb.round);
+          // 眩晕/封印/嘲讽固定，不随强化变化；其余效果值叠加强化加成
+          const fixedKinds = ['stun', 'skillSeal', 'taunt'];
+          const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + statusEnhanceBonus.effectBonus;
+          affected = applyStatusTo(affected, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
         }
       }
       nb = replaceUnit(nb, affected);
@@ -2452,15 +2481,16 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     // 推送日志
     const effectDesc = (skill.effects ?? []).map((e) => {
       if (skill.id === 'weaken') {
+        const val = e.value + statusEnhanceBonus.effectBonus;
         const label = weakenAppliedKind === 'spdDown' ? '降低速度' : '降低攻击';
-        return `${label} ${e.value} 层`;
+        return `${label} ${val} 层`;
       }
-      if (e.kind === 'poison') return `中毒 ${e.value} 层`;
-      if (e.kind === 'burn') return `灼烧 ${e.value} 层`;
-      if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
-      if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
+      if (e.kind === 'poison') return `中毒 ${e.value + statusEnhanceBonus.effectBonus} 层`;
+      if (e.kind === 'burn') return `灼烧 ${e.value + statusEnhanceBonus.effectBonus} 层`;
+      if (e.kind === 'atkDown') return `降低攻击 ${e.value + statusEnhanceBonus.effectBonus} 层`;
+      if (e.kind === 'spdDown') return `降低速度 ${e.value + statusEnhanceBonus.effectBonus} 层`;
       if (e.kind === 'stun') return '眩晕';
-      if (e.kind === 'fear') return `恐惧 ${e.value} 层`;
+      if (e.kind === 'fear') return `恐惧 ${e.value + statusEnhanceBonus.effectBonus} 层`;
       return e.kind;
     }).join('，');
     const hitAdds = addsKinds.filter((k) => ['burn', 'poison', 'atkDown', 'spdDown', 'stun', 'fear'].includes(k));
@@ -2489,12 +2519,17 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     }
     // 零伤全体 debuff：推送一条合并日志，所有目标通过 burstTargets 同时触发 buff 图标
     if (skill.damage === 0 && skill.effects?.length && skill.target === 'all') {
+      const zeroDmgEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+      const zeroDmgEnhanceBonus = getSkillEnhanceBonus(skill.id, zeroDmgEnhanceLevel);
       const effectDesc = skill.effects.map((e) => {
-        if (e.kind === 'poison') return `中毒 ${e.value} 层`;
-        if (e.kind === 'burn') return `灼烧 ${e.value} 层`;
-        if (e.kind === 'atkDown') return `降低攻击 ${e.value} 层`;
-        if (e.kind === 'spdDown') return `降低速度 ${e.value} 层`;
+        const fixedKinds = ['stun', 'skillSeal', 'taunt'];
+        const val = fixedKinds.includes(e.kind) ? e.value : e.value + zeroDmgEnhanceBonus.effectBonus;
+        if (e.kind === 'poison') return `中毒 ${val} 层`;
+        if (e.kind === 'burn') return `灼烧 ${val} 层`;
+        if (e.kind === 'atkDown') return `降低攻击 ${val} 层`;
+        if (e.kind === 'spdDown') return `降低速度 ${val} 层`;
         if (e.kind === 'stun') return '眩晕';
+        if (e.kind === 'fear') return `恐惧 ${val} 层`;
         return e.kind;
       }).join('，');
       const hitAdds = (skill.effects ?? []).filter((e) => ['burn', 'poison', 'atkDown', 'stun', 'thorns', 'shadowMark'].includes(e.kind)).map((e) => e.kind);

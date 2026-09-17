@@ -39,7 +39,7 @@ export function GrowthScreen({ state, dispatch }: Props) {
   const roster = state.roster;
   const selectedUnit = roster.find((u) => u.uid === selectedUid);
   const pending = state.specialPending;
-  const isShopPending = pending?.kind === 'shopGrantGrowthPoint' || pending?.kind === 'shopStatBoost' || pending?.kind === 'shopSlotUnlock' || pending?.kind === 'shopForget';
+  const isShopPending = pending?.kind === 'shopGrantGrowthPoint' || pending?.kind === 'shopStatBoost' || pending?.kind === 'shopSlotUnlock' || pending?.kind === 'shopForget' || pending?.kind === 'legendSkill';
   const isBossNode = state.map.boss[state.currentNodeId] !== undefined;
 
   const handleGrowthChoice = (unit: Unit, choice: GrowthChoice) => {
@@ -72,11 +72,12 @@ export function GrowthScreen({ state, dispatch }: Props) {
   };
 
   const getHintText = () => {
-    if (isShopPending) {
+    if (isShopPending && pending) {
       if (pending.kind === 'shopGrantGrowthPoint') return `选择一只宠物获得 ${pending.amount} 成长点`;
       if (pending.kind === 'shopStatBoost') return '选择一只宠物永久 +5 生命 或 +2 速度';
       if (pending.kind === 'shopSlotUnlock') return '选择一只宠物解锁技能槽';
       if (pending.kind === 'shopForget') return '选择一只宠物重置成长点';
+      if (pending.kind === 'legendSkill') return '选择一只宠物学习传奇技能';
     }
     return '选择一只宠物，消耗成长点提升其能力';
   };
@@ -132,9 +133,11 @@ export function GrowthScreen({ state, dispatch }: Props) {
                   {level > 0 && (
                     <button
                       className="growth-reset-btn"
+                      disabled={(state.inventory['reset_stone'] ?? 0) <= 0}
+                      title={(state.inventory['reset_stone'] ?? 0) <= 0 ? '需要「还原石」才能重置' : '消耗 1 个还原石重置技能强化'}
                       onClick={() => setResetSlotIndex(idx)}
                     >
-                      重置
+                      重置 {(state.inventory['reset_stone'] ?? 0) > 0 && `×${state.inventory['reset_stone']}`}
                     </button>
                   )}
                 </div>
@@ -186,6 +189,7 @@ export function GrowthScreen({ state, dispatch }: Props) {
               <div className="growth-modal-content">
                 <p>当前等级：+{getSkillEnhanceLevel(selectedUnit, resetSlotIndex)}</p>
                 <p>返还成长点：{Math.ceil(getSkillEnhanceTotalCost(getSkillEnhanceLevel(selectedUnit, resetSlotIndex)) * 0.5)} 点</p>
+                <p>消耗：1 个还原石（剩余 {(state.inventory['reset_stone'] ?? 0) - 1} 个）</p>
               </div>
               <div className="growth-modal-actions">
                 <button

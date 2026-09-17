@@ -3,14 +3,25 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
+import { getSkillEnhanceBonus } from '../game/core/growth';
 import { CURSE_CN } from '../game/state/game';
 
-/** 技能数值简述：仅伤害/治疗数值，如 "5"、"3×2"（buff 效果数值不放这里，见 skillFullDesc） */
-export function skillBrief(s: SkillDef): string {
+/** 技能数值简述：仅伤害/治疗/buff效果数值，如 "5"、"3×2"、"🛡7" */
+export function skillBrief(s: SkillDef, enhanced: number = 0): string {
+  const bonus = getSkillEnhanceBonus(s.id, enhanced);
   if (s.kind === 'attack') {
-    return s.hits && s.hits > 1 ? `${s.damage}×${s.hits}` : String(s.damage);
+    const dmg = (s.damage ?? 0) + bonus.damageBonus;
+    const hits = (s.hits ?? 1) + bonus.hitsBonus;
+    return hits > 1 ? `${dmg}×${hits}` : String(dmg);
   }
-  if (s.kind === 'heal') return `+${s.heal}`;
+  if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}`;
+  if (s.kind === 'buff') {
+    const shieldEffect = s.effects?.find(e => e.kind === 'shield');
+    if (shieldEffect) {
+      const val = shieldEffect.value + bonus.effectBonus;
+      return `🛡${val}`;
+    }
+  }
   return '';
 }
 
@@ -96,12 +107,125 @@ function effectText(e: StatusEffect): string {
   }
 }
 
+/** 计算效果值的正确加成：buff+shield 技能中非 shield 效果只加 level×1 */
+function getDescEffectBonus(s: SkillDef, effectBonus: number, enhanced: number, kind: string): number {
+  const isBuffShield = s.kind === 'buff' && s.effects?.some(e => e.kind === 'shield');
+  if (isBuffShield && kind !== 'shield') return enhanced; // level×1
+  return effectBonus;
+}
+
 /** 技能完整描述：定位标注 + 基础描述 + 具体 buff 效果数值，如 "【前排攻击】攻击单个敌人（灼烧 2/回合，持续 2 回合）" */
-export function skillFullDesc(s: SkillDef): string {
-  if (s.hideEffects) return s.desc;
-  const effects = (s.effects ?? []).map(effectText).join('，');
-  const base = s.desc;
-  return effects ? `${base}（${effects}）` : base;
+export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
+  const bonus = getSkillEnhanceBonus(s.id, enhanced);
+  let desc = s.desc;
+
+  // 连击类：替换命中次数（"两次"→"三次"、"两个"→"三个"，不替换"每场限N次"）
+  if (bonus.hitsBonus > 0) {
+    const hits = (s.hits ?? 1) + bonus.hitsBonus;
+    const hitsCn = ['零', '一', '二', '三', '四', '五', '六'][hits] ?? String(hits);
+    desc = desc.replace(/([两三四五六七八九])[次个]/g, () => `${hitsCn}次`);
+  }
+
+  // 治疗值替换（攻击+治疗混合技能，如潮涌重击、水波冲击）
+  if (bonus.healBonus > 0 && s.heal) {
+    const newHeal = s.heal + bonus.healBonus;
+    desc = desc.replace(new RegExp(`(${s.heal})\\s*点生命`), `${newHeal}点生命`);
+    desc = desc.replace(new RegExp(`回复(\\d+)点`), `回复${newHeal}点`);
+    desc = desc.replace(new RegExp(`恢复自身(\\d+)点`), `恢复自身${newHeal}点`);
+  }
+  // 孢子防护回血特殊处理（heal 不在 skill 定义中）
+  if (s.id === 'spore_shield' && enhanced > 0) {
+    desc = desc.replace(/回复8点/, `回复${8 + enhanced}点`);
+  }
+
+  // 效果值替换
+  const eff = (kind: string) => getDescEffectBonus(s, bonus.effectBonus, enhanced, kind);
+  // 护盾（含"N护盾"无前缀模式，如铸甲）
+  const shieldEffect = s.effects?.find(e => e.kind === 'shield');
+  if (shieldEffect) {
+    const nv = shieldEffect.value + eff('shield');
+    desc = desc.replace(/(\d+)\s*层护盾/g, `${nv}层护盾`);
+    desc = desc.replace(/(\d+)\s*点护盾/g, `${nv}点护盾`);
+    desc = desc.replace(/(\d+)护盾/g, `${nv}护盾`);
+  }
+  // 灼烧/中毒/恐惧
+  const dotEffect = s.effects?.find(e => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'fear');
+  if (dotEffect) {
+    const nv = dotEffect.value + eff(dotEffect.kind);
+    desc = desc.replace(new RegExp(`(${dotEffect.value})\\s*层`, 'g'), `${nv}层`);
+  }
+  // 降攻/减速
+  const debuffEffect = s.effects?.find(e => e.kind === 'atkDown' || e.kind === 'spdDown');
+  if (debuffEffect) {
+    const nv = debuffEffect.value + eff(debuffEffect.kind);
+    desc = desc.replace(new RegExp(`${debuffEffect.value}层`, 'g'), `${nv}层`);
+  }
+  // 荆棘反伤
+  const thornsEffect = s.effects?.find(e => e.kind === 'thorns');
+  if (thornsEffect) {
+    const nv = thornsEffect.value + eff('thorns');
+    desc = desc.replace(new RegExp(`反伤${thornsEffect.value}`), `反伤${nv}`);
+  }
+  // 盾反击伤
+  const shieldCounterEffect = s.effects?.find(e => e.kind === 'shieldCounter');
+  if (shieldCounterEffect) {
+    const nv = shieldCounterEffect.value + eff('shieldCounter');
+    desc = desc.replace(new RegExp(`反击敌人${shieldCounterEffect.value}`), `反击敌人${nv}`);
+  }
+  // 烈焰护盾灼烧
+  const flameShieldEffect = s.effects?.find(e => e.kind === 'flameShield');
+  if (flameShieldEffect) {
+    const nv = flameShieldEffect.value + eff('flameShield');
+    desc = desc.replace(new RegExp(`灼烧攻击者\\s*${flameShieldEffect.value}\\s*层`), `灼烧攻击者 ${nv} 层`);
+  }
+  // 速度增益
+  const windSpdEffect = s.effects?.find(e => e.kind === 'windSpd');
+  if (windSpdEffect) {
+    const nv = windSpdEffect.value + eff('windSpd');
+    desc = desc.replace(new RegExp(`${windSpdEffect.value}\\s*点速度`), `${nv}点速度`);
+  }
+  // 暗影印记
+  const shadowMarkEffect = s.effects?.find(e => e.kind === 'shadowMark');
+  if (shadowMarkEffect) {
+    const nv = shadowMarkEffect.value + eff('shadowMark');
+    desc = desc.replace(new RegExp(`受伤\\+${shadowMarkEffect.value}`), `受伤+${nv}`);
+  }
+  // 孢子防护减伤
+  const sporeShieldEffect = s.effects?.find(e => e.kind === 'sporeShield');
+  if (sporeShieldEffect) {
+    const nv = sporeShieldEffect.value + eff('sporeShield');
+    desc = desc.replace(new RegExp(`伤害-${sporeShieldEffect.value}`), `伤害-${nv}`);
+  }
+  // 波光环连击段数
+  const comboBoostEffect = s.effects?.find(e => e.kind === 'comboBoost');
+  if (comboBoostEffect) {
+    const nv = comboBoostEffect.value + eff('comboBoost');
+    desc = desc.replace(new RegExp(`段数\\+${comboBoostEffect.value}`), `段数+${nv}`);
+  }
+  // 复仇棘甲怒棘
+  const thornSpikesEffect = s.effects?.find(e => e.kind === 'thornSpikes');
+  if (thornSpikesEffect) {
+    const nv = thornSpikesEffect.value + eff('thornSpikes');
+    desc = desc.replace(new RegExp(`攻击\\+${thornSpikesEffect.value}`), `攻击+${nv}`);
+    desc = desc.replace(new RegExp(`反伤\\+${thornSpikesEffect.value}`), `反伤+${nv}`);
+  }
+  // 水幕减伤
+  const waterCurtainEffect = s.effects?.find(e => e.kind === 'waterCurtain');
+  if (waterCurtainEffect) {
+    const nv = waterCurtainEffect.value + eff('waterCurtain');
+    desc = desc.replace(new RegExp(`受伤\\s*-${waterCurtainEffect.value}`), `受伤 -${nv}`);
+  }
+
+  // hideEffects 技能：直接返回替换后的描述
+  if (s.hideEffects) return desc;
+
+  // 非 hideEffects 技能：追加 effects 文本（原有逻辑）
+  const effects = (s.effects ?? []).map((e) => {
+    const eb = eff(e.kind);
+    const adjusted = eb > 0 ? { ...e, value: e.value + eb } : e;
+    return effectText(adjusted);
+  }).join('，');
+  return effects ? `${desc}（${effects}）` : desc;
 }
 
 /** 技能标签：名称 + 效果图标（如 🔥）+ 伤害/治疗数值；desc 模式下追加展示完整描述 */
@@ -110,25 +234,29 @@ export function SkillTag({
   className = '',
   desc = false,
   usesNote = false,
+  enhanced = 0,
 }: {
   skill: SkillDef;
   className?: string;
   desc?: boolean;
   /** 有次数限制的技能追加「每场限 N 次」标注（图鉴用） */
   usesNote?: boolean;
+  /** 强化等级 0-3，>=1 时技能名右侧显示金色加号 */
+  enhanced?: number;
 }) {
-  const full = skillFullDesc(skill);
+  const full = skillFullDesc(skill, enhanced);
   const icons = (skill.effects ?? []).map((e) => EFFECT_ICON[e.kind]).join('');
-  const brief = skillBrief(skill);
+  const brief = skillBrief(skill, enhanced);
   const usesChip = usesNote && skill.uses !== undefined ? (
     <span className="skill-uses-note">每场限 {skill.uses} 次</span>
   ) : null;
+  const enhanceLabel = enhanced >= 3 ? '+++' : enhanced === 2 ? '++' : enhanced === 1 ? '+' : '';
   const head = (
     <span className="skill-head">
-      <span className="skill-name">{skill.name}</span>
+      <span className="skill-name">{skill.name}{enhanceLabel && <span style={{ color: '#e8c26a', marginLeft: 2 }}>{enhanceLabel}</span>}</span>
       <span className="skill-right">
         {icons && <span className="skill-icons">{icons}</span>}
-        {brief && <span className="skill-num">{brief}</span>}
+        {brief && <span className="skill-num" style={enhanced > 0 ? { color: '#e8c26a' } : undefined}>{brief}</span>}
       </span>
     </span>
   );
@@ -314,9 +442,11 @@ export interface UnitCardProps {
   rockShellHitsOverride?: number;
   /** 动画期间覆盖荆棘之躯受击计数（逐段递增） */
   thornsHitCountOverride?: number;
+  /** 技能强化等级映射（slotIndex → level），用于显示强化标记 */
+  skillEnhancements?: Record<number, number>;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -372,8 +502,8 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
       </div>
       {showSkills && !small && (
         <div className="skill-list">
-          {unit.skills.map((sid) => (
-            <SkillTag key={sid} skill={getSkill(sid)} desc={showSkillDesc} />
+          {unit.skills.map((sid, idx) => (
+            <SkillTag key={sid} skill={getSkill(sid)} desc={showSkillDesc} enhanced={skillEnhancements?.[idx] ?? 0} />
           ))}
         </div>
       )}

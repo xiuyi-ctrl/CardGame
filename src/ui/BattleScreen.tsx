@@ -11,11 +11,12 @@ import {
   tameChance,
   TAME_THRESHOLD,
 } from '../game/core/battle';
+import { getSkillEnhanceLevel } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
-import { UnitCard, skillBrief, SkillTag, BuffDetailPanel, PetIcon } from './components';
+import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PetIcon } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 
@@ -556,19 +557,23 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const onCooldown = cd > 0;
                     const isCurrent = selectedOrder?.skillId === s.id;
                     const cannotOrder = selected.acted && !selectedOrder;
+                    const slotIdx = selected.skills.indexOf(s.id);
+                    const enhanced = getSkillEnhanceLevel(selected, slotIdx);
+                    const enhanceLabel = enhanced >= 3 ? '+++' : enhanced === 2 ? '++' : enhanced === 1 ? '+' : '';
+                    const fullDesc = skillFullDesc(s, enhanced);
                     return (
                       <button
                         key={s.id}
                         className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
                         onClick={() => onSkillClick(s)}
                         disabled={!canAct || exhausted || onCooldown || cannotOrder}
-                        title={`${s.desc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}`}
+                        title={`${fullDesc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}`}
                       >
                         <span className="skill-btn-head">
-                        {s.name}
-                        <span className="skill-num">{skillBrief(s)}</span>
+                        {s.name}{enhanceLabel && <span style={{ color: '#e8c26a', marginLeft: 2 }}>{enhanceLabel}</span>}
+                        <span className="skill-num" style={enhanced > 0 ? { color: '#e8c26a' } : undefined}>{skillBrief(s, enhanced)}</span>
                       </span>
-                        <span className="skill-desc">{s.desc}</span>
+                        <span className="skill-desc">{fullDesc}</span>
                       </button>
                     );
                   })}

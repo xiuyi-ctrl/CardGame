@@ -104,31 +104,21 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
   const sk = SKILLS[skillId];
   if (!sk) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
 
-  // 连击类：段数+1/级
+  // 连击类有 effects（铁壁双击/火焰连击/炼狱烈焰/龙息）：段数+1，效果值也加
+  if (isMultiHitSkill(skillId) && sk.effects && sk.effects.length > 0) {
+    const isShield = sk.effects.some(e => e.kind === 'shield');
+    const effectBonus = isShield ? level * 2 : level;
+    return { damageBonus: 0, healBonus: 0, hitsBonus: level, effectBonus };
+  }
+
+  // 连击类无 effects：段数+1
   if (isMultiHitSkill(skillId)) {
     return { damageBonus: 0, healBonus: 0, hitsBonus: level, effectBonus: 0 };
   }
 
-  // 纯攻击：伤害+2/级
-  if (sk.kind === 'attack' && !sk.heal) {
-    return { damageBonus: level * 2, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
-  }
-
-  // 纯治疗：治疗+2/级
-  if (sk.kind === 'heal') {
-    return { damageBonus: 0, healBonus: level * 2, hitsBonus: 0, effectBonus: 0 };
-  }
-
-  // Buff 类：效果值+1/级（护盾类每级+2）
-  if (sk.kind === 'buff') {
-    const isShield = sk.effects?.some(e => e.kind === 'shield');
-    const effectBonusPerLevel = isShield ? 2 : 1;
-    return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level * effectBonusPerLevel };
-  }
-
-  // 状态技能：效果值+1/级
-  if (sk.kind === 'status') {
-    return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level };
+  // 攻击+状态混合：伤害+1 且 效果值+1/级（火花/铁刺/毒刺等，必须在纯攻击之前）
+  if (sk.kind === 'attack' && sk.effects && sk.effects.length > 0) {
+    return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: level };
   }
 
   // 攻击+治疗混合：伤害+1 且 治疗+1/级
@@ -136,9 +126,28 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
     return { damageBonus: level, healBonus: level, hitsBonus: 0, effectBonus: 0 };
   }
 
-  // 攻击+状态混合：伤害+1 且 效果值+1/级
-  if (sk.kind === 'attack' && sk.effects && sk.effects.length > 0) {
-    return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: level };
+  // 纯攻击：伤害+2/级
+  if (sk.kind === 'attack') {
+    return { damageBonus: level * 2, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  }
+
+  // 纯治疗：治疗+2/级；有附带效果时效果值+1/级（如潮汐领域的水幕）
+  if (sk.kind === 'heal') {
+    const effectBonus = (sk.effects && sk.effects.length > 0) ? level : 0;
+    return { damageBonus: 0, healBonus: level * 2, hitsBonus: 0, effectBonus };
+  }
+
+  // Buff 类：效果值+1/级（护盾类每级+2）；有 heal 字段时治疗+1/级
+  if (sk.kind === 'buff') {
+    const isShield = sk.effects?.some(e => e.kind === 'shield');
+    const effectBonusPerLevel = isShield ? 2 : 1;
+    const healBonus = sk.heal ? level : 0;
+    return { damageBonus: 0, healBonus, hitsBonus: 0, effectBonus: level * effectBonusPerLevel };
+  }
+
+  // 状态技能：效果值+1/级
+  if (sk.kind === 'status') {
+    return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level };
   }
 
   return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };

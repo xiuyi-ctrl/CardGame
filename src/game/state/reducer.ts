@@ -1,7 +1,7 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
 import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
-import { createBattle, makeUnit, playerSkill, playerTame } from '../core/battle';
+import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { FOODS } from '../data/foods';
@@ -411,12 +411,12 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     }
     if (node.type === 'event') {
       const rng = createRng(base.seed * 3571 + (base.currentLayer ?? 0) * 9973 + hashStr(node.id));
-      const event = buildGrowthEvent(rng);
+      const event = buildGrowthEvent(rng, undefined, (base.deadPets ?? []).length);
       return { ...base, screen: 'event', map: { ...base.map, events: { ...base.map.events, [node.id]: event } } };
     }
     if (node.type === 'special') {
       const rng = createRng(base.seed * 4919 + (base.currentLayer ?? 0) * 6131 + hashStr(node.id));
-      const specialIds = getGrowthSpecialRewards(rng);
+      const specialIds = getGrowthSpecialRewards(rng, (base.deadPets ?? []).length);
       const rewards = specialIds.map((id) => {
         const baseReward = { ...GROWTH_SPECIAL_REWARDS[id] };
         const kindMap: Record<string, SpecialRewardKind> = {
@@ -1109,7 +1109,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         case 'recruit':
           // 传奇招募：选择1只宠物，从传奇技能池随机1个技能教给它
           if (next.roster.length === 0) return state;
-          next = { ...next, screen: 'roster', specialPending: { kind: 'legendSkill', uid: '' } as any };
+          next = { ...next, screen: 'growth-menu', specialPending: { kind: 'legendSkill', uid: '' } as any };
           break;
         case 'revive': {
           const deadPets = next.deadPets ?? [];
@@ -1282,6 +1282,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (returnedPoints <= 0) return { ...state, specialPending: undefined, screen: 'shop', toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
         const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + returnedPoints, bonusStats: { hp: 0, spd: 0 }, maxHp: target.maxHp - hpBonus, hp: Math.min(target.hp, target.maxHp - hpBonus), spd: target.spd - spdBonus };
         return { ...state, roster: state.roster.map((u) => u.uid === action.uid ? updated : u), specialPending: undefined, screen: 'shop', toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
+      }
+      if (state.specialPending?.kind === 'legendSkill') {
+        const target = state.roster.find((u) => u.uid === action.uid);
+        if (!target) return state;
+        const rngLeg = createRng(state.seed + hashStr(action.uid) + 1000);
+        const legChoices = getRandomLegendarySkillChoices(target, 1, rngLeg);
+        if (legChoices.length === 0) return { ...state, specialPending: undefined, screen: 'growth-menu', toast: { msg: '没有可用的传奇技能', kind: 'warning' } };
+        const skillId = legChoices[0];
+        // 进入技能替换界面，让玩家选择替换哪个技能
+        return {
+          ...state,
+          roster: state.roster.map((u) => u.uid === action.uid ? target : u),
+          specialPending: { kind: 'legendSkill', uid: action.uid, skillId },
+          screen: 'skill-pick',
+          skillReplace: { uid: action.uid, replaceIdx: -1, choices: [skillId] },
+        };
       }
       return state;
     }
@@ -1997,19 +2013,27 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const replaceIdx = action.replaceIdx ?? state.fusionReplaceIdx;
       const maxSlots = getMaxSkillSlots(unit);
       let newSkills: string[];
+      let replacedIdx: number | undefined;
       if (replaceIdx !== undefined && replaceIdx < unit.skills.length) {
         // 替换指定位置
         newSkills = [...unit.skills];
         newSkills[replaceIdx] = learnSkill;
+        replacedIdx = replaceIdx;
       } else if (unit.skills.length >= maxSlots) {
         // 无空槽且未指定替换 → 追加到末尾（替换最后一个）
         newSkills = [...unit.skills];
         newSkills[newSkills.length - 1] = learnSkill;
+        replacedIdx = newSkills.length - 1;
       } else {
         // 有空槽 → 追加
         newSkills = [...unit.skills, learnSkill];
       }
-      const updatedUnit = { ...unit, skills: newSkills };
+      // 清除被替换技能的强化等级
+      let updatedUnit = updateUnitSkills(unit, newSkills);
+      if (replacedIdx !== undefined) {
+        const { [replacedIdx]: _removed, ...restEnhancements } = unit.skillEnhancements ?? {};
+        updatedUnit = { ...updatedUnit, skillEnhancements: Object.keys(restEnhancements).length > 0 ? restEnhancements as Record<number, number> : undefined };
+      }
       return {
         ...state,
         roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
@@ -2078,9 +2102,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'NEXT_NODE': {
       // 熟练度远征模式：层数递增
       if (state.runMode === 'proficiency') {
-        if (bossCleared(state)) {
-          return { ...state, screen: 'proficiency-result', proficiencyResult: 'won' };
-        }
         const nextLayer = (state.currentLayer ?? 1) + 1;
         const nextRow = state.currentRow + 1;
         if (nextRow < state.map.layers.length) {
@@ -2245,7 +2266,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (idx < 0 || idx >= unit.skills.length) return state;
         const newSkills = [...unit.skills];
         newSkills[idx] = action.skillId;
-        const updatedUnit = { ...unit, skills: newSkills };
+        // 清除被替换技能的强化等级
+        const { [idx]: _removed, ...restEnhancements } = unit.skillEnhancements ?? {};
+        const updatedUnit = { ...updateUnitSkills(unit, newSkills), skillEnhancements: Object.keys(restEnhancements).length > 0 ? restEnhancements as Record<number, number> : undefined };
         return {
           ...state,
           roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
@@ -2319,11 +2342,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'PROF_SKILL_ENHANCE_RESET': {
       const unit = state.roster.find((u) => u.uid === action.uid);
       if (!unit) return state;
+      // 检查是否有还原石
+      const resetStoneCount = state.inventory['reset_stone'] ?? 0;
+      if (resetStoneCount <= 0) {
+        return { ...state, toast: { msg: '需要「还原石」才能重置技能强化', kind: 'warning' } };
+      }
       const result = applySkillEnhanceReset(unit, action.slotIndex);
       if (!result) return state;
+      // 消耗还原石
       return {
         ...state,
         roster: state.roster.map((u) => (u.uid === unit.uid ? result.newUnit : u)),
+        inventory: { ...state.inventory, reset_stone: resetStoneCount - 1 },
       };
     }
 
@@ -2409,7 +2439,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!target) return state;
       if (pending.kind === 'shopGrantGrowthPoint') {
         const updated = state.roster.map((u) => u.uid === uid ? { ...u, growthPoints: (u.growthPoints ?? 0) + pending.amount } : u);
-        return { ...state, roster: updated, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `${target.name} 获得 ${pending.amount} 成长点`, kind: 'success' } };
+        const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
+        return { ...state, roster: updated, specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: `${target.name} 获得 ${pending.amount} 成长点`, kind: 'success' } };
       }
       if (pending.kind === 'shopStatBoost') {
         return { ...state, specialPending: { kind: 'boost', uid }, growthItemPending: undefined };
@@ -2419,7 +2450,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if ((pending as any).unlockAll) {
           const extraSlots = target.extraSkillSlots ?? 0;
           const slotsToAdd = 3 - extraSlots; // 最多解锁到3个额外槽位
-          if (slotsToAdd <= 0) return { ...state, gold: state.gold + 50, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁，已退还50金币', kind: 'warning' } };
+          if (slotsToAdd <= 0) {
+            const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
+            return { ...state, gold: state.gold + 50, specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: '技能槽已全部解锁，已退还50金币', kind: 'warning' } };
+          }
           const updated = { ...target, extraSkillSlots: 3 };
           // 为每个新解锁的槽位选技能
           const rng = createRng(state.seed + hashStr(uid) + 800);
@@ -2431,7 +2465,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
               return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, growthItemPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: slotNum, choices } };
             }
           }
-          return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `已为 ${target.name} 解锁所有技能槽`, kind: 'success' } };
+          const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
+          return { ...state, roster: state.roster.map((u) => u.uid === uid ? current : u), specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: `已为 ${target.name} 解锁所有技能槽`, kind: 'success' } };
         }
         // 普通解锁：自动检测下一个可用槽位
         const extraSlots = target.extraSkillSlots ?? 0;
@@ -2443,13 +2478,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         } else if (extraSlots < 3) {
           nextSlot = 5;
         } else {
-          return { ...state, gold: state.gold + 50, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '技能槽已全部解锁，已退还50金币', kind: 'warning' } };
+          const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
+          return { ...state, gold: state.gold + 50, specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: '技能槽已全部解锁，已退还50金币', kind: 'warning' } };
         }
         const updated = { ...target, extraSkillSlots: extraSlots + 1 };
         const rng = createRng(state.seed + hashStr(uid) + 900 + (nextSlot === 4 ? 1 : nextSlot === 5 ? 2 : 0));
         const choices = getRandomSkillChoices(updated, 3, rng);
         if (choices.length === 0) {
-          return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop' };
+          const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
+          return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: returnScreen };
         }
         return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'skill-pick', skillPick: { uid, slot: nextSlot, choices } };
       }
@@ -2458,15 +2495,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const hpBonus = target.bonusStats?.hp ?? 0;
         const spdBonus = target.bonusStats?.spd ?? 0;
         const returnedPoints = Math.floor(hpBonus / 2) + spdBonus;
-        if (returnedPoints <= 0) return { ...state, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
+        if (returnedPoints <= 0) {
+          const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
+          return { ...state, specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
+        }
         const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + returnedPoints, bonusStats: { hp: 0, spd: 0 }, maxHp: target.maxHp - hpBonus, hp: Math.min(target.hp, target.maxHp - hpBonus), spd: target.spd - spdBonus };
-        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
+        const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
       }
       if (pending.kind === 'legendSkill') {
         // 传奇招募：从传奇技能池随机1个教给选中的宠物
         const rngLeg = createRng(state.seed + hashStr(uid) + 1000);
         const legChoices = getRandomLegendarySkillChoices(target, 1, rngLeg);
-        if (legChoices.length === 0) return { ...state, specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: '没有可用的传奇技能', kind: 'warning' } };
+        if (legChoices.length === 0) {
+          const returnScreen = state.growthItemPending ? 'backpack' as const : 'growth-menu' as const;
+          return { ...state, specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: '没有可用的传奇技能', kind: 'warning' } };
+        }
         const skillId = legChoices[0];
         const skillDef = SKILLS[skillId];
         // 如果技能槽已满，替换最后一个技能
@@ -2477,8 +2521,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         } else {
           newSkills = [...target.skills, skillId];
         }
-        const updated = { ...target, skills: newSkills };
-        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: 'shop', toast: { msg: `${target.name} 学会了 ${skillDef?.name ?? skillId}！`, kind: 'success' } };
+        const updated = updateUnitSkills(target, newSkills);
+        const returnScreen = state.growthItemPending ? 'backpack' as const : 'growth-menu' as const;
+        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: `${target.name} 学会了 ${skillDef?.name ?? skillId}！`, kind: 'success' } };
       }
       return state;
     }
