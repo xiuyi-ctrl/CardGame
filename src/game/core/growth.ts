@@ -238,6 +238,39 @@ export type GrowthChoice =
   | { kind: 'slot5' }
   | { kind: 'reroll' };
 
+/** 成长点转移手续费比例（50%，向上取整） */
+export const TRANSFER_FEE_RATIO = 0.5;
+
+/** 计算成长点转移手续费（向上取整） */
+export function getTransferFee(amount: number): number {
+  return Math.ceil(amount * TRANSFER_FEE_RATIO);
+}
+
+/** 成长点转移：从源单位转移指定点数到目标单位（不可变） */
+export function applyTransferGrowthPoints(
+  source: Unit,
+  target: Unit,
+  amount: number,
+): { newSource: Unit; newTarget: Unit } | null {
+  const sourceGp = source.growthPoints ?? 0;
+  if (amount <= 0 || sourceGp < amount) return null;
+  if (source.uid === target.uid) return null; // 不能转移给自己
+
+  const fee = getTransferFee(amount);
+  const actualGain = amount - fee; // 目标实际获得的点数
+
+  return {
+    newSource: {
+      ...source,
+      growthPoints: sourceGp - amount,
+    },
+    newTarget: {
+      ...target,
+      growthPoints: (target.growthPoints ?? 0) + actualGain,
+    },
+  };
+}
+
 /** 获取可用的成长选项 */
 export function getAvailableGrowthChoices(unit: Unit): GrowthChoice[] {
   const choices: GrowthChoice[] = [];

@@ -2891,6 +2891,107 @@ button.primary {
   color: #1a1a2e !important;
 }
 
+/* 成长点转移入口按钮 */
+.growth-transfer-entry-btn {
+  font-weight: bold;
+  border: 1px solid var(--info) !important;
+  color: var(--info) !important;
+}
+.growth-transfer-entry-btn:hover {
+  background: var(--info) !important;
+  color: #1a1a2e !important;
+}
+
+/* 成长点转移界面 */
+.growth-transfer-source {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+}
+.growth-transfer-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.growth-transfer-name {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+.growth-transfer-gp {
+  color: var(--gold);
+  font-weight: bold;
+}
+
+.growth-transfer-targets {
+  margin: 12px 0;
+}
+.growth-transfer-targets h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+.growth-transfer-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.growth-transfer-target:hover {
+  background: rgba(255,255,255,0.05);
+}
+.growth-transfer-target.selected {
+  border-color: var(--info);
+  background: rgba(var(--info-rgb), 0.1);
+}
+.growth-transfer-target-info {
+  flex: 1;
+}
+.growth-transfer-target-name {
+  font-weight: bold;
+}
+.growth-transfer-target-gp {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.growth-transfer-amount {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+}
+.growth-transfer-amount label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+.growth-transfer-slider {
+  width: 100%;
+  margin: 8px 0;
+}
+.growth-transfer-value {
+  display: block;
+  text-align: center;
+  font-size: 1.2em;
+  font-weight: bold;
+  color: var(--gold);
+  margin: 4px 0;
+}
+.growth-transfer-calc {
+  text-align: center;
+  font-size: 0.9em;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
 /* 技能强化列表 */
 .growth-skill-enhance-list {
   display: flex;

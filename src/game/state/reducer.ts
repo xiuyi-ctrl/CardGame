@@ -113,6 +113,7 @@ export type GameAction =
   | { type: 'PROF_SKILL_REPLACE_SELECT'; replaceIdx: number }
   | { type: 'PROF_SKILL_ENHANCE'; uid: string; slotIndex: number }
   | { type: 'PROF_SKILL_ENHANCE_RESET'; uid: string; slotIndex: number }
+  | { type: 'PROF_TRANSFER_GROWTH'; sourceUid: string; targetUid: string; amount: number }
   | { type: 'REST_FUSION_SET_MAIN'; uid: string }
   | { type: 'REST_FUSION_SET_SUB'; uid: string }
   | { type: 'REST_FUSION_CONFIRM' }
@@ -2354,6 +2355,34 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         roster: state.roster.map((u) => (u.uid === unit.uid ? result.newUnit : u)),
         inventory: { ...state.inventory, reset_stone: resetStoneCount - 1 },
+      };
+    }
+
+    case 'PROF_TRANSFER_GROWTH': {
+      const source = state.roster.find((u) => u.uid === action.sourceUid);
+      const target = state.roster.find((u) => u.uid === action.targetUid);
+      if (!source || !target) return state;
+      if (action.amount <= 0) return state;
+      
+      const sourceGp = source.growthPoints ?? 0;
+      if (sourceGp < action.amount) {
+        return { ...state, toast: { msg: '成长点不足', kind: 'warning' } };
+      }
+      
+      const fee = Math.ceil(action.amount * 0.5); // 50% 手续费，向上取整
+      const actualGain = action.amount - fee;
+      
+      const newSource = { ...source, growthPoints: sourceGp - action.amount };
+      const newTarget = { ...target, growthPoints: (target.growthPoints ?? 0) + actualGain };
+      
+      return {
+        ...state,
+        roster: state.roster.map((u) => {
+          if (u.uid === source.uid) return newSource;
+          if (u.uid === target.uid) return newTarget;
+          return u;
+        }),
+        toast: { msg: `成功转移 ${action.amount} 点成长点（手续费 ${fee} 点，目标获得 ${actualGain} 点）`, kind: 'success' },
       };
     }
 

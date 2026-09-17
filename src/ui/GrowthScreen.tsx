@@ -20,6 +20,7 @@ import {
   getSkillEnhanceLevel,
   getSkillEnhanceMaxLevel,
   getSkillEnhanceBonus,
+  getTransferFee,
   type GrowthChoice,
 } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
@@ -35,6 +36,10 @@ export function GrowthScreen({ state, dispatch }: Props) {
   const [showEnhance, setShowEnhance] = useState(false);
   const [enhanceSlotIndex, setEnhanceSlotIndex] = useState<number | null>(null);
   const [resetSlotIndex, setResetSlotIndex] = useState<number | null>(null);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferTargetUid, setTransferTargetUid] = useState<string | null>(null);
+  const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [transferConfirm, setTransferConfirm] = useState(false);
 
   const roster = state.roster;
   const selectedUnit = roster.find((u) => u.uid === selectedUid);
@@ -212,6 +217,118 @@ export function GrowthScreen({ state, dispatch }: Props) {
     );
   }
 
+  // 成长点转移界面
+  if (showTransfer && selectedUnit) {
+    const availableTargets = roster.filter(u => u.uid !== selectedUnit.uid);
+    const fee = transferAmount > 0 ? getTransferFee(transferAmount) : 0;
+    const actualGain = transferAmount - fee;
+    const canTransfer = transferAmount > 0 && 
+                        transferTargetUid !== null && 
+                        (selectedUnit.growthPoints ?? 0) >= transferAmount &&
+                        transferAmount >= 1;
+
+    return (
+      <div className="screen growth-screen">
+        <h2>🔄 成长点转移</h2>
+        <p className="growth-hint">将 {selectedUnit.name} 的成长点转移给其他宠物（手续费 50%，向上取整）</p>
+
+        <div className="growth-transfer-source">
+          <div className="growth-transfer-info">
+            <span className="growth-transfer-name">{selectedUnit.name}</span>
+            <span className="growth-transfer-gp">可用成长点: {selectedUnit.growthPoints ?? 0}</span>
+          </div>
+        </div>
+
+        <div className="growth-transfer-targets">
+          <h4>选择目标宠物：</h4>
+          {availableTargets.map(u => (
+            <div
+              key={u.uid}
+              className={`growth-transfer-target ${transferTargetUid === u.uid ? 'selected' : ''}`}
+              onClick={() => setTransferTargetUid(u.uid)}
+            >
+              <PetIcon image={u.image} emoji={u.emoji} name={u.name} />
+              <div className="growth-transfer-target-info">
+                <div className="growth-transfer-target-name">{u.name}</div>
+                <div className="growth-transfer-target-gp">当前成长点: {u.growthPoints ?? 0}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="growth-transfer-amount">
+          <label>转移数量：</label>
+          <input
+            type="range"
+            min="1"
+            max={selectedUnit.growthPoints ?? 0}
+            value={transferAmount}
+            onChange={(e) => setTransferAmount(parseInt(e.target.value) || 0)}
+            className="growth-transfer-slider"
+          />
+          <span className="growth-transfer-value">{transferAmount}</span>
+          <div className="growth-transfer-calc">
+            手续费: {fee} 点 → 目标获得: {actualGain} 点
+          </div>
+        </div>
+
+        <div className="growth-actions">
+          <button
+            className={`primary btn ${!canTransfer ? 'disabled' : ''}`}
+            disabled={!canTransfer}
+            onClick={() => setTransferConfirm(true)}
+          >
+            确认转移
+          </button>
+          <button className="btn" onClick={() => { 
+            setShowTransfer(false); 
+            setTransferTargetUid(null); 
+            setTransferAmount(0);
+            setTransferConfirm(false);
+          }}>
+            返回
+          </button>
+        </div>
+
+        {/* 转移确认弹窗 */}
+        {transferConfirm && transferTargetUid && (
+          <div className="growth-modal-overlay" onClick={() => setTransferConfirm(false)}>
+            <div className="growth-modal" onClick={(e) => e.stopPropagation()}>
+              <h3>确认转移</h3>
+              <div className="growth-modal-content">
+                <p>从 {selectedUnit.name} 转移 {transferAmount} 点成长点</p>
+                <p>手续费: {fee} 点</p>
+                <p>{roster.find(u => u.uid === transferTargetUid)?.name} 实际获得: {actualGain} 点</p>
+              </div>
+              <div className="growth-modal-actions">
+                <button
+                  className="primary btn"
+                  onClick={() => {
+                    dispatch({ 
+                      type: 'PROF_TRANSFER_GROWTH', 
+                      sourceUid: selectedUnit.uid, 
+                      targetUid: transferTargetUid, 
+                      amount: transferAmount 
+                    });
+                    setShowTransfer(false);
+                    setTransferTargetUid(null);
+                    setTransferAmount(0);
+                    setTransferConfirm(false);
+                  }}
+                >
+                  确认
+                </button>
+                <button className="btn" onClick={() => setTransferConfirm(false)}>
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // 主界面
   return (
     <div className="screen growth-screen">
@@ -274,6 +391,12 @@ export function GrowthScreen({ state, dispatch }: Props) {
               onClick={() => setShowEnhance(true)}
             >
               ⚔️ 技能强化
+            </button>
+            <button
+              className="growth-choice-btn growth-transfer-entry-btn"
+              onClick={() => setShowTransfer(true)}
+            >
+              🔄 成长点转移
             </button>
           </div>
         </div>
