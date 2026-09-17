@@ -121,6 +121,20 @@ export async function deleteSave(slot: number): Promise<boolean> {
   return true;
 }
 
+/** 仅删除指定槽位的某个模式分支（main 或 proficiency），保留另一模式 */
+export async function deleteSaveMode(slot: number, mode: 'main' | 'proficiency'): Promise<boolean> {
+  if (slot < 1 || slot > SAVE_SLOT_COUNT) return false;
+  const existing = await readDualSave(slot);
+  if (!existing) return true;
+  const ds: DualSave = { ...existing, [mode]: null };
+  // 两个分支都为空时等同于删除整个存档
+  if (!ds.main && !ds.proficiency) {
+    return deleteSave(slot);
+  }
+  await writeDualSave(slot, ds);
+  return true;
+}
+
 export function clearDeletedSlot(slot: number): void {
   deletedSlots.delete(slot);
 }

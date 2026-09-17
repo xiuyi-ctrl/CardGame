@@ -20,7 +20,7 @@ import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
-import { persistSave, persistUnlocks, loadUnlocks, quitGame, detectUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
+import { persistSave, persistUnlocks, loadUnlocks, quitGame, detectUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
@@ -691,9 +691,9 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     const slotUnlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks;
     setOverwriteTarget(null);
     if (slotUnlocks) persistUnlocks(slotUnlocks);
-    void deleteSave(slotNum).then(() => {
+    void deleteSaveMode(slotNum, 'main').then(() => {
       setSlots((prev) => {
-        const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null, proficiency: null } : s);
+        const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null } : s);
         setHasSave(next.some((x) => x.main || x.proficiency));
         return next;
       });
