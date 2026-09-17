@@ -10,7 +10,8 @@ export type GrowthShopItemType =
   | 'forget_stone'
   | 'pet_recruit'
   | 'heal_potion'
-  | 'reset_stone';
+  | 'reset_stone'
+  | 'skill_enhance_stone';
 
 export interface GrowthShopItem {
   id: GrowthShopItemType;
@@ -69,6 +70,13 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
     desc: '选择 1 只宠物，重置其指定技能的强化等级（返还 50% 累计消耗）',
     price: 25,
     emoji: '💎',
+  },
+  skill_enhance_stone: {
+    id: 'skill_enhance_stone',
+    label: '技能强化石',
+    desc: '选择 1 只宠物，强化其 1 个技能（无需成长点）',
+    price: 40,
+    emoji: '⚒️',
   },
 };
 

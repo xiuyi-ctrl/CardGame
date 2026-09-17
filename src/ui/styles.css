@@ -2886,20 +2886,12 @@ button.primary {
   border: 1px solid var(--gold) !important;
   color: var(--gold) !important;
 }
-.growth-enhance-entry-btn:hover {
-  background: var(--gold) !important;
-  color: #1a1a2e !important;
-}
 
 /* 成长点转移入口按钮 */
 .growth-transfer-entry-btn {
   font-weight: bold;
   border: 1px solid var(--info) !important;
   color: var(--info) !important;
-}
-.growth-transfer-entry-btn:hover {
-  background: var(--info) !important;
-  color: #1a1a2e !important;
 }
 
 /* 成长点转移界面 */
@@ -3079,6 +3071,20 @@ button.primary {
 .growth-enhance-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+.growth-enhance-stone-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--info);
+  color: var(--info);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.growth-enhance-stone-btn:hover {
+  background: var(--info);
+  color: #1a1a2e;
 }
 .growth-reset-btn {
   padding: 4px 10px;

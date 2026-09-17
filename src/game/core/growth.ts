@@ -171,6 +171,19 @@ export function applySkillEnhance(unit: Unit, slotIndex: number): Unit | null {
   };
 }
 
+/** 应用技能强化石（不消耗成长点，不可变） */
+export function applySkillEnhanceStone(unit: Unit, slotIndex: number): Unit | null {
+  const level = getSkillEnhanceLevel(unit, slotIndex);
+  const maxLevel = getSkillEnhanceMaxLevel(unit.skills[slotIndex]);
+  if (level >= maxLevel) return null;
+
+  const newEnhancements = { ...unit.skillEnhancements, [slotIndex]: level + 1 };
+  return {
+    ...unit,
+    skillEnhancements: newEnhancements,
+  };
+}
+
 /** 重置技能强化（不可变），返回 { newUnit, refundPoints } */
 export function applySkillEnhanceReset(unit: Unit, slotIndex: number): { newUnit: Unit; refundPoints: number } | null {
   const level = getSkillEnhanceLevel(unit, slotIndex);

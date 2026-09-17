@@ -36,6 +36,7 @@ export function GrowthScreen({ state, dispatch }: Props) {
   const [showEnhance, setShowEnhance] = useState(false);
   const [enhanceSlotIndex, setEnhanceSlotIndex] = useState<number | null>(null);
   const [resetSlotIndex, setResetSlotIndex] = useState<number | null>(null);
+  const [enhanceStoneSlotIndex, setEnhanceStoneSlotIndex] = useState<number | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferTargetUid, setTransferTargetUid] = useState<string | null>(null);
   const [transferAmount, setTransferAmount] = useState<number>(0);
@@ -125,13 +126,23 @@ export function GrowthScreen({ state, dispatch }: Props) {
                 </div>
                 <div className="growth-skill-enhance-actions">
                   {level < maxLevel ? (
-                    <button
-                      className={`growth-enhance-btn ${!canEnhance ? 'disabled' : ''}`}
-                      disabled={!canEnhance}
-                      onClick={() => setEnhanceSlotIndex(idx)}
-                    >
-                      强化 ({cost}点)
-                    </button>
+                    <>
+                      <button
+                        className={`growth-enhance-btn ${!canEnhance ? 'disabled' : ''}`}
+                        disabled={!canEnhance}
+                        onClick={() => setEnhanceSlotIndex(idx)}
+                      >
+                        强化 ({cost}点)
+                      </button>
+                      {(state.inventory['skill_enhance_stone'] ?? 0) > 0 && (
+                        <button
+                          className="growth-enhance-stone-btn"
+                          onClick={() => setEnhanceStoneSlotIndex(idx)}
+                        >
+                          强化石 ⚒️×{state.inventory['skill_enhance_stone']}
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <span className="growth-skill-max">已满级</span>
                   )}
@@ -152,7 +163,7 @@ export function GrowthScreen({ state, dispatch }: Props) {
         </div>
 
         <div className="growth-actions">
-          <button className="btn" onClick={() => { setShowEnhance(false); setEnhanceSlotIndex(null); setResetSlotIndex(null); }}>
+          <button className="btn" onClick={() => { setShowEnhance(false); setEnhanceSlotIndex(null); setResetSlotIndex(null); setEnhanceStoneSlotIndex(null); }}>
             返回
           </button>
         </div>
@@ -179,6 +190,35 @@ export function GrowthScreen({ state, dispatch }: Props) {
                   确认
                 </button>
                 <button className="btn" onClick={() => setEnhanceSlotIndex(null)}>
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 技能强化石确认弹窗 */}
+        {enhanceStoneSlotIndex !== null && (
+          <div className="growth-modal-overlay" onClick={() => setEnhanceStoneSlotIndex(null)}>
+            <div className="growth-modal" onClick={(e) => e.stopPropagation()}>
+              <h3>使用技能强化石：{getSkill(selectedUnit.skills[enhanceStoneSlotIndex])?.name}</h3>
+              <div className="growth-modal-content">
+                <p>当前：{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex))}</p>
+                <p>强化后：{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex) + 1)}</p>
+                <p>消耗：1 个技能强化石（剩余 {(state.inventory['skill_enhance_stone'] ?? 0) - 1} 个）</p>
+                <p>无需消耗成长点</p>
+              </div>
+              <div className="growth-modal-actions">
+                <button
+                  className="primary btn"
+                  onClick={() => {
+                    dispatch({ type: 'PROF_SKILL_ENHANCE_STONE', uid: selectedUnit.uid, slotIndex: enhanceStoneSlotIndex });
+                    setEnhanceStoneSlotIndex(null);
+                  }}
+                >
+                  确认
+                </button>
+                <button className="btn" onClick={() => setEnhanceStoneSlotIndex(null)}>
                   取消
                 </button>
               </div>

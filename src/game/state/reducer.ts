@@ -8,7 +8,7 @@ import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
-import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceReset } from '../core/growth';
+import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
 import { buildGrowthEvent } from '../data/growth-events';
 import { getGrowthShopStock } from '../data/growth-shop';
@@ -113,6 +113,7 @@ export type GameAction =
   | { type: 'PROF_SKILL_REPLACE_SELECT'; replaceIdx: number }
   | { type: 'PROF_SKILL_ENHANCE'; uid: string; slotIndex: number }
   | { type: 'PROF_SKILL_ENHANCE_RESET'; uid: string; slotIndex: number }
+  | { type: 'PROF_SKILL_ENHANCE_STONE'; uid: string; slotIndex: number }
   | { type: 'PROF_TRANSFER_GROWTH'; sourceUid: string; targetUid: string; amount: number }
   | { type: 'REST_FUSION_SET_MAIN'; uid: string }
   | { type: 'REST_FUSION_SET_SUB'; uid: string }
@@ -1071,14 +1072,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       let next: GameState = { ...state };
       switch (reward.kind) {
         case 'gold': {
-          // 成长之赐：全队+5成长点
-          if (reward.id === 'growth_blessing') {
-            next = {
-              ...next,
-              roster: next.roster.map((u) => ({ ...u, growthPoints: (u.growthPoints ?? 0) + 5 })),
-            };
-            return { ...next, screen: 'map', postBattle: undefined, log: [`奇遇关：${reward.label}`, ...next.log].slice(0, 20) };
-          }
           // 金币宝藏
           next = { ...next, screen: 'map', postBattle: undefined, gold: next.gold + (reward.amount ?? 0) };
           break;
@@ -1100,6 +1093,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           break;
         case 'growthPoint':
           if (next.roster.length === 0) return state;
+          // 成长之赐：全队+5成长点
+          if (reward.id === 'growth_blessing') {
+            next = {
+              ...next,
+              screen: 'map',
+              postBattle: undefined,
+              roster: next.roster.map((u) => ({ ...u, growthPoints: (u.growthPoints ?? 0) + 5 })),
+              log: [`奇遇关：${reward.label} - 全队各获得 5 成长点`, ...next.log].slice(0, 20),
+            };
+            return next;
+          }
           next = { ...next, screen: 'roster', specialPending: { kind: 'growthPoint', uid: '', amount: reward.amount ?? 3 } };
           break;
         case 'slotUnlock':
@@ -2340,6 +2344,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'PROF_SKILL_ENHANCE_STONE': {
+      const unit = state.roster.find((u) => u.uid === action.uid);
+      if (!unit) return state;
+      // 检查是否有技能强化石
+      const stoneCount = state.inventory['skill_enhance_stone'] ?? 0;
+      if (stoneCount <= 0) {
+        return { ...state, toast: { msg: '需要「技能强化石」才能强化技能', kind: 'warning' } };
+      }
+      const enhanced = applySkillEnhanceStone(unit, action.slotIndex);
+      if (!enhanced) return state;
+      // 消耗技能强化石
+      return {
+        ...state,
+        roster: state.roster.map((u) => (u.uid === unit.uid ? enhanced : u)),
+        inventory: { ...state.inventory, skill_enhance_stone: stoneCount - 1 },
+      };
+    }
+
     case 'PROF_SKILL_ENHANCE_RESET': {
       const unit = state.roster.find((u) => u.uid === action.uid);
       if (!unit) return state;
@@ -2417,7 +2439,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const shopPrices: Record<string, number> = {
         book_small: 15, book_large: 25, slot_unlock: 50,
         forget_stone: 30, pet_recruit: 20, heal_potion: 30,
-        reset_stone: 40,
+        reset_stone: 25, skill_enhance_stone: 40,
       };
       const price = shopPrices[itemId] ?? 0;
       if (price <= 0) return state;
@@ -2436,7 +2458,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       } else {
         next = { ...next, inventory: { ...next.inventory, [itemId]: (next.inventory[itemId] ?? 0) + 1 } };
-        const itemNames: Record<string, string> = { book_small: '成长之书（小）', book_large: '成长之书（大）', slot_unlock: '技能槽解锁', forget_stone: '遗忘之石', heal_potion: '治疗圣水', reset_stone: '还原石' };
+        const itemNames: Record<string, string> = { book_small: '成长之书（小）', book_large: '成长之书（大）', slot_unlock: '技能槽解锁', forget_stone: '遗忘之石', heal_potion: '治疗圣水', reset_stone: '还原石', skill_enhance_stone: '技能强化石' };
         next = { ...next, toast: { msg: `获得了 ${itemNames[itemId] ?? itemId}，请在背包中使用`, kind: 'info' } };
       }
       return next;
@@ -2448,7 +2470,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const cost = [5, 10, 15][refreshCount] ?? 15;
       if (state.gold < cost) return state;
       const rng = createRng(state.seed * 7919 + (state.currentRow) * 104729 + refreshCount * 31337);
-      const allItems = ['heal_potion', 'book_small', 'book_large', 'slot_unlock', 'forget_stone', 'pet_recruit'];
+      const allItems = ['heal_potion', 'book_small', 'book_large', 'slot_unlock', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone'];
       const newStock = shuffle(rng, allItems).slice(0, 4);
       return {
         ...state,

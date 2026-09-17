@@ -388,7 +388,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'allyAll', kind: 'buff',
   },
   spore_shield: {
-    id: 'spore_shield', name: '孢子防护', desc: '本回合受到的所有伤害-2，回合结束时回复8点生命值',
+    id: 'spore_shield', name: '孢子防护', desc: '先手：本回合受到的所有伤害-2，回合结束时回复8点生命值',
     target: 'self', kind: 'buff', priority: 'first', cooldown: 1,
     effects: [{ kind: 'sporeShield', value: 2, turns: 1 }],
     hideEffects: true,
