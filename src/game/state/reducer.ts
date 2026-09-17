@@ -13,7 +13,6 @@ import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '
 import { buildGrowthEvent } from '../data/growth-events';
 import { getGrowthShopStock } from '../data/growth-shop';
 import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-special';
-import { SKILLS } from '../data/skills';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
@@ -2555,7 +2554,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
       }
       if (pending.kind === 'legendSkill') {
-        // 传奇招募：从传奇技能池随机1个教给选中的宠物
+        // 传奇招募：从传奇技能池随机1个，进入技能替换界面让玩家选择替换哪个
         const rngLeg = createRng(state.seed + hashStr(uid) + 1000);
         const legChoices = getRandomLegendarySkillChoices(target, 1, rngLeg);
         if (legChoices.length === 0) {
@@ -2563,18 +2562,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           return { ...state, specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: '没有可用的传奇技能', kind: 'warning' } };
         }
         const skillId = legChoices[0];
-        const skillDef = SKILLS[skillId];
-        // 如果技能槽已满，替换最后一个技能
-        const maxSlots = getMaxSkillSlots(target);
-        let newSkills: string[];
-        if (target.skills.length >= maxSlots) {
-          newSkills = [...target.skills.slice(0, -1), skillId];
-        } else {
-          newSkills = [...target.skills, skillId];
-        }
-        const updated = updateUnitSkills(target, newSkills);
-        const returnScreen = state.growthItemPending ? 'backpack' as const : 'growth-menu' as const;
-        return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: `${target.name} 学会了 ${skillDef?.name ?? skillId}！`, kind: 'success' } };
+        // 跳转 skill-pick 界面，让玩家选择替换哪个技能
+        return {
+          ...state,
+          specialPending: { kind: 'legendSkill', uid, skillId },
+          growthItemPending: undefined,
+          screen: 'skill-pick',
+          skillReplace: { uid, replaceIdx: -1, choices: [skillId] },
+        };
       }
       return state;
     }

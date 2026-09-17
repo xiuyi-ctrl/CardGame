@@ -1844,7 +1844,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const boughtItems = state.shopBoughtItems ?? [];
   const isProf = state.runMode === 'proficiency';
-  const profShopIds = ['heal_potion', 'gold_bag', 'book_small', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit'];
+  const profShopIds = ['heal_potion', 'gold_bag', 'book_small', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone'];
   const stock = (state.shopStock ?? []).filter((id) =>
     isProf ? profShopIds.includes(id) : (!!FOODS[id] || !!ITEMS[id])
   );
@@ -1871,6 +1871,8 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
             skill_replace: { label: '技能替换', emoji: '🔄', desc: '选择一只宠物替换技能', price: 12 },
             forget_stone: { label: '遗忘之石', emoji: '🪨', desc: '选择一只宠物重置成长点', price: 30 },
             pet_recruit: { label: '宠物招募', emoji: '🐾', desc: '招募一只随机宠物', price: 20 },
+            reset_stone: { label: '还原石', emoji: '💎', desc: '重置技能强化等级（返还50%消耗）', price: 25 },
+            skill_enhance_stone: { label: '技能强化石', emoji: '⚒️', desc: '强化1个技能（无需成长点）', price: 40 },
           };
           const profItem = isProf ? profShopData[id] : undefined;
           const f = !isProf ? FOODS[id] : undefined;
