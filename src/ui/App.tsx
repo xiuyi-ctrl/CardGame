@@ -160,27 +160,30 @@ function PetCardFooter({
   state: GameState;
   setConfirm: (c: NonNullable<PetConfirm>) => void;
 }) {
+  const isProf = state.runMode === 'proficiency';
   const stage = nextStage(unit.speciesId);
   const need = stage ? fusionNeedCount(unit.speciesId) : 0;
   const sameCount = state.roster.filter((x) => x.speciesId === unit.speciesId).length;
   const canFuse = stage !== undefined && sameCount >= need;
   return (
     <div className="unit-card-actions">
-      <button
-        title={stage ? `与同物种融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : '该宠物已是最终形态，无法融合'}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!stage) {
-            setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
-          } else if (!canFuse) {
-            setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
-          } else {
-            setConfirm({ kind: 'fuse', uid: unit.uid });
-          }
-        }}
-      >
-        融合
-      </button>
+      {!isProf && (
+        <button
+          title={stage ? `与同物种融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : '该宠物已是最终形态，无法融合'}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!stage) {
+              setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
+            } else if (!canFuse) {
+              setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
+            } else {
+              setConfirm({ kind: 'fuse', uid: unit.uid });
+            }
+          }}
+        >
+          融合
+        </button>
+      )}
       <button
         title="释放后获得金币，宠物被永久移除"
         onClick={(e) => {
@@ -2358,6 +2361,7 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
 
 function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [confirm, setConfirm] = useState<PetConfirm>(null);
+  const isProf = state.runMode === 'proficiency';
   const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
   const foodList = items.filter(([id]) => FOODS[id]);
   const growthItemIds = ['book_small', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion'];
@@ -2373,7 +2377,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
           <div className="section-sub">远征道具</div>
           <DragScrollRow>
             {growthList.map(([id, count]) => {
-              const it = ITEMS[id];
+              const it = ITEMS[id] ?? FOODS[id];
               if (!it) return null;
               return (
                 <div
@@ -2395,49 +2399,53 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
         </>
       )}
 
-      <div className="section-sub">道具</div>
-      <DragScrollRow>
-        {foodList.map(([id, count]) => {
-          const f = FOODS[id];
-          return (
-            <div key={id} className="reward-card bag-item" style={{ cursor: 'default' }}>
-              <div className="ricon">{f.emoji}</div>
-              <div className="rtitle">
-                {f.name} ×{count}
-              </div>
-              <div className="rdesc">
-                {f.desc}（{Math.round(f.baseTame * 100)}% 驯服率）
-              </div>
-            </div>
-          );
-        })}
-        {itemList.map(([id, count]) => {
-          const it = ITEMS[id];
-          const isScout = id === 'scout';
-          const isSkip = id === 'skip';
-          const clickable = isScout || isSkip;
-          return (
-            <div
-              key={id}
-              className="reward-card bag-item"
-              style={{ cursor: clickable ? 'pointer' : 'default' }}
-              onClick={isScout ? () => dispatch({ type: 'OPEN_SCOUT' }) : isSkip ? () => dispatch({ type: 'OPEN_SKIP' }) : undefined}
-              title={isScout ? `点击前往地图选择要侦查的节点（持有 ${count} 个）` : isSkip ? `点击前往地图选择要跳过的战斗节点（持有 ${count} 个）` : undefined}
-            >
-              <div className="ricon">{it.emoji}</div>
-              <div className="rtitle">
-                {it.name} ×{count}
-              </div>
-              <div className="rdesc">{it.desc}</div>
-              {id === 'purify' && (
-                <span className="card-sub" style={{ fontSize: 11 }}>
-                  对有诅咒的宠物使用（见下方宠物区）
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </DragScrollRow>
+      {!isProf && (
+        <>
+          <div className="section-sub">道具</div>
+          <DragScrollRow>
+            {foodList.map(([id, count]) => {
+              const f = FOODS[id];
+              return (
+                <div key={id} className="reward-card bag-item" style={{ cursor: 'default' }}>
+                  <div className="ricon">{f.emoji}</div>
+                  <div className="rtitle">
+                    {f.name} ×{count}
+                  </div>
+                  <div className="rdesc">
+                    {f.desc}（{Math.round(f.baseTame * 100)}% 驯服率）
+                  </div>
+                </div>
+              );
+            })}
+            {itemList.map(([id, count]) => {
+              const it = ITEMS[id];
+              const isScout = id === 'scout';
+              const isSkip = id === 'skip';
+              const clickable = isScout || isSkip;
+              return (
+                <div
+                  key={id}
+                  className="reward-card bag-item"
+                  style={{ cursor: clickable ? 'pointer' : 'default' }}
+                  onClick={isScout ? () => dispatch({ type: 'OPEN_SCOUT' }) : isSkip ? () => dispatch({ type: 'OPEN_SKIP' }) : undefined}
+                  title={isScout ? `点击前往地图选择要侦查的节点（持有 ${count} 个）` : isSkip ? `点击前往地图选择要跳过的战斗节点（持有 ${count} 个）` : undefined}
+                >
+                  <div className="ricon">{it.emoji}</div>
+                  <div className="rtitle">
+                    {it.name} ×{count}
+                  </div>
+                  <div className="rdesc">{it.desc}</div>
+                  {id === 'purify' && (
+                    <span className="card-sub" style={{ fontSize: 11 }}>
+                      对有诅咒的宠物使用（见下方宠物区）
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </DragScrollRow>
+        </>
+      )}
 
       <div className="section-sub" style={{ marginTop: 30 }}>
         宠物（{state.roster.length}/{ROSTER_MAX}）

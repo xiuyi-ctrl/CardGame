@@ -13,6 +13,8 @@ export interface ItemDef {
   battleDesc?: string;
   /** 战斗中是否需要指定目标 */
   needsTarget?: boolean;
+  /** 是否在主模式商店出售（默认 true；远征专属物品设 false） */
+  shop?: boolean;
   /** 远征模式专属物品：成长点数量（growthPoint 类型） */
   growthAmount?: number;
 }
@@ -92,27 +94,27 @@ export const ITEMS: Record<string, ItemDef> = {
   book_small: {
     id: 'book_small', name: '成长之书（小）', emoji: '📖',
     desc: '选择1只宠物，获得1成长点',
-    kind: 'growthPoint', price: 15, growthAmount: 1,
+    kind: 'growthPoint', price: 15, shop: false, growthAmount: 1,
   },
   book_large: {
     id: 'book_large', name: '成长之书（大）', emoji: '📚',
     desc: '选择1只宠物，获得2成长点',
-    kind: 'growthPoint', price: 25, growthAmount: 2,
+    kind: 'growthPoint', price: 25, shop: false, growthAmount: 2,
   },
   slot_unlock: {
     id: 'slot_unlock', name: '技能槽解锁', emoji: '🔓',
     desc: '选择1只宠物，解锁一个技能槽',
-    kind: 'slotUnlock', price: 50,
+    kind: 'slotUnlock', price: 50, shop: false,
   },
   forget_stone: {
     id: 'forget_stone', name: '遗忘之石', emoji: '🪨',
     desc: '选择1只宠物，重置其成长点',
-    kind: 'resetGrowth', price: 30,
+    kind: 'resetGrowth', price: 30, shop: false,
   },
   heal_potion_g: {
     id: 'heal_potion_g', name: '治疗圣水', emoji: '🧪',
     desc: '全队回复50%生命',
-    kind: 'healTeam', price: 30,
+    kind: 'healTeam', price: 30, shop: false,
   },
 };
 

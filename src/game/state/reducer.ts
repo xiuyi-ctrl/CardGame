@@ -459,7 +459,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   if (node.type === 'rest') return { ...base, screen: 'rest' };
   if (node.type === 'shop') {
     const rng = createRng(base.seed * 7919 + (base.currentRow) * 104729 + hashStr(node.id));
-    const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
+    const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0 && ITEMS[id].shop !== false)];
     const stock = shuffle(rng, pool).slice(0, 4);
     const rs = base.runStats ? { ...base.runStats, shopVisits: base.runStats.shopVisits + 1 } : base.runStats;
     return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0, runStats: rs };
@@ -1895,7 +1895,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const currentNode = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
       if (!currentNode) return state;
       const rng = createRng(state.seed * 7919 + state.currentRow * 104729 + hashStr(currentNode.id) + count + 1);
-      const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
+      const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0 && ITEMS[id].shop !== false)];
       const newStock = shuffle(rng, pool).slice(0, 4);
       return {
         ...state,

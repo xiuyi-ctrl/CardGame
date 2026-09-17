@@ -559,7 +559,7 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
       // 与进入商店时的库存生成保持一致（同一 seed 公式），保证侦查/瞭望塔看到的就是实际可购商品
       const row = state.map.layers.findIndex((r) => r.includes(n));
       const rng = createRng(state.seed * 7919 + row * 104729 + hashStr(n.id));
-      const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)];
+      const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0 && ITEMS[id].shop !== false)];
       const stock = shuffle(rng, pool).slice(0, 4);
       const goods = stock
         .map((id) => {
@@ -1174,7 +1174,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
   }
   if (type === 'merchant') {
     const isItem = rng() < 0.5;
-    const shopFoodPool = Object.keys(FOODS).filter((id) => id !== 'golden_fruit');
+    const shopFoodPool = Object.keys(FOODS).filter((id) => FOODS[id].shop !== false);
     const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
     let tradeChoice: EventChoice;
     if (isItem) {
@@ -1259,7 +1259,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
     // 宠物遗迹（幕1-2）
     const explore = Math.floor(rng() * 100);
     if (explore < 30) {
-      const f1 = pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit'));
+      const f1 = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
       return {
         title: '宠物遗迹',
         desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
@@ -1295,7 +1295,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
     // 神秘商人的赌局（赌博，幕2-3）
     const guess = Math.floor(rng() * 100);
     const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
-    const gambleFood = pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit'));
+    const gambleFood = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
     const gambleWin = rng() < 0.5;
     return {
       title: '神秘商人的赌局',
@@ -1343,7 +1343,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
     const enemyCount = rng() < 0.6 ? 1 : 2;
     const actPool = act === 1 ? BASE_POOL : act === 2 ? EVO1_POOL : EVO2_POOL;
     const enemies = Array.from({ length: enemyCount }, () => ({ speciesId: pick(rng, actPool) }));
-    const f1 = pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit'));
+    const f1 = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
     const giftWin = rng() < 0.5;
     return {
       title: '流浪精灵',
@@ -1434,7 +1434,7 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
   const rng = createRng(state.seed * 173 + state.act * 37 + state.currentRow * 59 + (type === 'arena' ? 1 : 2));
   const options: RewardChoice[] = [
     { id: 'ch-gold', label: '冠军赏金', desc: '获得 30 金币', kind: 'gold', amount: 30 },
-    { id: 'ch-food', label: '美味补给', desc: '获得 1 个随机食物', kind: 'food', foodId: pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit')) },
+    { id: 'ch-food', label: '美味补给', desc: '获得 1 个随机食物', kind: 'food', foodId: pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false)) },
     { id: 'ch-heal', label: '庆功宴', desc: '全体恢复 50% 生命', kind: 'heal', amount: 50 },
   ];
   if (state.roster.length < ROSTER_MAX) {
@@ -1882,7 +1882,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
       label: '补给品',
       desc: '获得 1 个随机食物',
       kind: 'food',
-      foodId: pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit')),
+      foodId: pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false)),
     },
     {
       id: 'r-heal',
@@ -1938,7 +1938,7 @@ export function applyCorruptFoodReward(rewards: RewardChoice[], rngSeed: number)
       label: '暗影战利品',
       desc: '获得 2 个随机食物',
       kind: 'food',
-      foodId: pick(rng, Object.keys(FOODS).filter((id) => id !== 'golden_fruit')),
+      foodId: pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false)),
       amount: 2,
     };
   }
