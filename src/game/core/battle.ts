@@ -1053,6 +1053,14 @@ function selectEnemyAction(
     else if (nTypeHeal === 'gauntlet') healThreshold = 0.35;
     else if (nTypeHeal === 'corrupted') healThreshold = 0.30;
     for (const hs of healSkills) {
+      // 终焉成长专属阈值：残血（<60%）且成长值充足时优先使用；不满足则完全不作为治疗候选（避免成长值不足白选）
+      if (hs.id === 'growth_ultimate') {
+        const curGV = actor.growthValue ?? 0;
+        if (curGV >= 10 && hpRatio < 0.6 && (actor.ultimateUsesLeft ?? 3) > 0) {
+          candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 75 });
+        }
+        continue;
+      }
       if (hs.target === 'allyAll') {
         const injuredAllies = allies.filter((u) => u.hp / u.maxHp < 0.8);
         if (injuredAllies.length >= 2) {
@@ -1180,12 +1188,6 @@ function selectEnemyAction(
     if (bs.id === 'growth_roar') {
       if (!actor.statuses.some((s) => s.kind === 'atkUp') && rngVal1 < 0.6) {
         candidates.push({ kind: 'buff', skill: bs, score: 55 });
-      }
-    }
-    if (bs.id === 'growth_ultimate') {
-      const curGV = actor.growthValue ?? 0;
-      if (curGV >= 10 && hpRatio < 0.6 && (actor.ultimateUsesLeft ?? 3) > 0) {
-        candidates.push({ kind: 'heal', skill: bs, targetUid: actor.uid, score: 75 });
       }
     }
     if (bs.id === 'growth_summon') {
@@ -1853,7 +1855,7 @@ function resolveAttack(
         }
       }
     }
-    // 成长值被动：攻击命中 +2 成长值
+    // 成长值被动：主动攻击命中 +2 成长值（成长值消耗与命中加成互相独立，各自生效）
     if (t2.hp <= 0 || seg > 0) {
       const freshActor2 = actorFromId(nb, actor.uid);
       if (freshActor2 && freshActor2.hp > 0) {
@@ -2210,6 +2212,19 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       let healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
       // 治疗技能也可附带效果（如潮汐领域的水幕）
       for (const e of skill.effects ?? []) {
+        if (e.kind === 'atkUp') {
+          // 终焉成长：永久+1伤害每次使用须累加（applyStatusTo 对 atkUp 取最大值，此处绕开以支持叠加）
+          const existing = healed.statuses.find((s) => s.kind === 'atkUp');
+          if (existing) {
+            healed = {
+              ...healed,
+              statuses: healed.statuses.map((s) => (s.kind === 'atkUp' ? { ...s, value: s.value + (e.value ?? 0) } : s)),
+            };
+          } else {
+            healed = { ...healed, statuses: [...healed.statuses, { kind: 'atkUp', value: e.value ?? 0, turns: e.turns, appliedRound: r.round }] };
+          }
+          continue;
+        }
         const fixedKinds = ['stun', 'skillSeal', 'taunt'];
         const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + healEnhanceBonus.effectBonus;
         healed = applyStatusTo(healed, { kind: e.kind, value: effectValue, turns: e.turns }, r.round);
