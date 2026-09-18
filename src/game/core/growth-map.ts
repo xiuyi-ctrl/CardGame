@@ -192,29 +192,66 @@ export function getGrowthEncounter(
   } else {
     maxEnemies = randInt(rng, 2, 3);
   }
-  const ENEMY_POOL = [
-    'momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi',
-    'momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king',
-  ];
+  // 一阶生物（rank 1）
+  const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+  // 二阶生物（rank 2）
+  const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
+  // 传奇生物（rank 3）
+  const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god'];
+
+  // 按层数区间构建加权池
+  let pool: string[];
+  if (layer <= 10) {
+    // 1~10层：纯一阶
+    pool = TIER1;
+  } else if (layer <= 25) {
+    // 11~25层：一阶 60% + 二阶 40%
+    pool = [...TIER1, ...TIER1, ...TIER1, ...TIER2, ...TIER2];
+  } else if (layer <= 40) {
+    // 26~40层：一阶 20% + 二阶 80%
+    pool = [...TIER1, ...TIER2, ...TIER2, ...TIER2, ...TIER2];
+  } else {
+    // 41~50层：二阶 50% + 传奇 50%
+    pool = [...TIER2, ...TIER2, ...LEGENDARY, ...LEGENDARY];
+  }
+
   const enemies: { speciesId: string }[] = [];
   for (let i = 0; i < maxEnemies; i++) {
-    enemies.push({ speciesId: pick(rng, ENEMY_POOL) });
+    enemies.push({ speciesId: pick(rng, pool) });
   }
   return enemies;
 }
 
-/** 精英战斗遭遇（仅品阶2，全程最多2只） */
+/** 精英战斗遭遇（全程最多2只） */
 export function getGrowthEliteEncounter(
-  _layer: number,
+  layer: number,
   rng: () => number,
 ): { speciesId: string }[] {
-  const ELITE_POOL = [
-    'momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king',
-  ];
+  // 二阶生物（rank 2）
+  const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
+  // 传奇生物（rank 3）
+  const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god'];
+
+  // 按层数区间构建加权池
+  let pool: string[];
+  if (layer <= 10) {
+    // 1~10层：纯二阶
+    pool = TIER2;
+  } else if (layer <= 25) {
+    // 11~25层：二阶 60% + 传奇 40%
+    pool = [...TIER2, ...TIER2, ...TIER2, ...LEGENDARY, ...LEGENDARY];
+  } else if (layer <= 40) {
+    // 26~40层：二阶 30% + 传奇 70%
+    pool = [...TIER2, ...LEGENDARY, ...LEGENDARY, ...LEGENDARY, ...LEGENDARY];
+  } else {
+    // 41~50层：双传奇组合（每场2只，均从传奇池抽取）
+    pool = LEGENDARY;
+  }
+
   const count = 2;
   const enemies: { speciesId: string }[] = [];
   for (let i = 0; i < count; i++) {
-    enemies.push({ speciesId: pick(rng, ELITE_POOL) });
+    enemies.push({ speciesId: pick(rng, pool) });
   }
   return enemies;
 }

@@ -193,18 +193,9 @@ describe('敌方AI：被封印的技能不进入候选池', () => {
         enemyUnits: [{ ...boss, skills: ['water_gun', 'water_wave', 'punch'], hp: 100, maxHp: 100 }],
       };
       b = playerSkill(b, b.playerUnits[0].uid, 'growth_bind', b.enemyUnits[0].uid);
-      if (off === 0) {
-        const fs = require('fs');
-        fs.writeFileSync('C:/Users/DELL/AppData/Local/Temp/seal-dbg.txt', JSON.stringify({
-          logs: b.logs.filter((l) => l.text.includes('封印') || l.text.includes('成长束缚') || l.text.includes('束缚')).map((l) => l.text),
-          p1: { name: b.playerUnits[0].name, skills: b.playerUnits[0].skills, hasBind: b.playerUnits[0].skills.includes('growth_bind'), acted: b.playerUnits[0].acted },
-          bossSkills: b.enemyUnits[0].skills,
-          bossSkillsExist: b.enemyUnits[0].skills.map((s) => !!getSkillSafe(s)),
-          bySpecies: (() => { const sd = MONSTERS['lulu_king']; return { id: sd?.id, name: sd?.name, skills: sd?.skills ?? null }; })(),
-        }));
-      }
-      const sealPending = b.enemyUnits[0].statuses.find((s) => s.kind === 'skillSealPending');
-      const sealed: string[] = (sealPending?.sealedSkills ?? []) as string[];
+      b = playerEndTurn(b);
+      const seal = b.enemyUnits[0].statuses.find((s) => s.kind === 'skillSeal');
+      const sealed: string[] = (seal?.sealedSkills ?? []) as string[];
       expect(sealed.length).toBe(2); // growth_bind封印2个技能（现在不限攻击，heal_light治疗也可被封印）
       combos.add([...sealed].sort().join(','));
     }

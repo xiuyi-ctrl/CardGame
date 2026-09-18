@@ -46,7 +46,7 @@ corruptDebuff?: 'spd' | 'dmg' | 'burn';
   nodeType?: string;
   /** 难度等级，影响敌方属性缩放 */
   difficulty?: Difficulty;
-  /** 成长远征：当前层数，每层+10%生命+5%速度 */
+  /** 成长远征：当前层数，普通敌人按区间缩放（1~15层+8%/层，16~30层+10%/层，31~50层+15%/层），Boss不缩放 */
   layer?: number;
 }
 
@@ -222,13 +222,19 @@ function makeEnemy(
     unit.hp = unit.maxHp;
     unit.spd = Math.max(1, unit.spd + cfg.enemySpdBonus);
   }
-  // Boss（rank 4）不随层数缩放
+  // Boss（rank 4）不随层数缩放；普通敌人按层数区间缩放
   if (layer && layer > 1 && s.rank < 4) {
-    const hpMult = 1 + (layer - 1) * 0.10;
-    const spdMult = 1 + (layer - 1) * 0.10;
-    unit.maxHp = Math.round(unit.maxHp * hpMult);
+    let mult: number;
+    if (layer <= 15) {
+      mult = 1 + (layer - 1) * 0.08;       // 1~15层：每层+8%
+    } else if (layer <= 30) {
+      mult = 2.12 + (layer - 15) * 0.10;   // 16~30层：每层+10%（15层基础2.12倍）
+    } else {
+      mult = 3.62 + (layer - 30) * 0.15;   // 31~50层：每层+15%（30层基础3.62倍）
+    }
+    unit.maxHp = Math.round(unit.maxHp * mult);
     unit.hp = unit.maxHp;
-    unit.spd = Math.max(1, Math.round(unit.spd * spdMult));
+    unit.spd = Math.max(1, Math.round(unit.spd * mult));
   }
   return unit;
 }
