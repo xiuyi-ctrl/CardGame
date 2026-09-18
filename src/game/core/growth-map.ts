@@ -17,6 +17,7 @@ interface NodeProb {
   shop: number;
   special: number;
   rest: number;
+  blacksmith: number;
 }
 
 const BASE_PROBS: NodeProb = {
@@ -26,6 +27,7 @@ const BASE_PROBS: NodeProb = {
   shop: 0,
   special: 0,
   rest: 8,
+  blacksmith: 0,
 };
 
 /** 根据层进度微调概率 */
@@ -112,6 +114,14 @@ export function generateGrowthMap(seed: number): RunMap {
   const shopLayers = generateFixedPositions(rng, 6, 8, 6, new Set());
   // 奇遇关：每隔10~20层，最多4个，排除1-5层、Boss层、商店层和保底休憩层
   const specialLayers = generateFixedPositions(rng, 10, 20, 4, shopLayers);
+  // 铁匠铺：每隔6~8层，5~7个，排除1-5层、Boss层、休憩层、商店层
+  let blacksmithLayers = generateFixedPositions(rng, 6, 8, 7, shopLayers);
+  // 确保至少5个铁匠铺（重新生成直到满足）
+  let tries = 0;
+  while (blacksmithLayers.size < 5 && tries < 10) {
+    blacksmithLayers = generateFixedPositions(rng, 6, 8, 7, shopLayers);
+    tries++;
+  }
 
   // 跟踪上次休憩层（5层内不重复）
   let lastRestLayer = -6;
@@ -129,6 +139,8 @@ export function generateGrowthMap(seed: number): RunMap {
       nodeType = 'shop';
     } else if (specialLayers.has(layer)) {
       nodeType = 'special';
+    } else if (blacksmithLayers.has(layer)) {
+      nodeType = 'blacksmith';
     } else {
       const probs = getLayerProbs(layer);
       // 5层内已有休憩则禁用休憩概率

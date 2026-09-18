@@ -16,6 +16,7 @@ import { computeStats, makeUnit } from '../game/core/battle';
 import { getMaxSkillSlots } from '../game/core/growth';
 import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
 import { GrowthScreen } from './GrowthScreen';
+import { BlacksmithScreen } from './BlacksmithScreen';
 import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
@@ -85,6 +86,7 @@ export default function App() {
       {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
       {state.screen === 'achievements' && <AchievementsScreen state={state} dispatch={dispatch} />}
       {state.screen === 'growth-menu' && <GrowthScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'blacksmith' && <BlacksmithScreen state={state} dispatch={dispatch} />}
       {state.screen === 'skill-pick' && <SkillPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'difficulty-select' && <DifficultyScreen state={state} dispatch={dispatch} />}
       {state.screen === 'proficiency-select' && <ProficiencyStarterScreen state={state} dispatch={dispatch} />}
@@ -2364,7 +2366,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const isProf = state.runMode === 'proficiency';
   const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
   const foodList = items.filter(([id]) => FOODS[id]);
-  const growthItemIds = ['book_small', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion'];
+  const growthItemIds = ['book_small', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone'];
   const growthList = items.filter(([id]) => growthItemIds.includes(id));
   const itemList = items.filter(([id]) => ITEMS[id] && !growthItemIds.includes(id)).sort((a, b) => (a[0] === 'scout' ? -1 : b[0] === 'scout' ? 1 : 0));
   return (

@@ -410,6 +410,9 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
       const rs = base.runStats ? { ...base.runStats, shopVisits: base.runStats.shopVisits + 1 } : base.runStats;
       return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0, runStats: rs };
     }
+    if (node.type === 'blacksmith') {
+      return { ...base, screen: 'blacksmith' };
+    }
     if (node.type === 'event') {
       const rng = createRng(base.seed * 3571 + (base.currentLayer ?? 0) * 9973 + hashStr(node.id));
       const event = buildGrowthEvent(rng, undefined, (base.deadPets ?? []).length);
@@ -466,6 +469,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   }
   if (node.type === 'event') return { ...base, screen: 'event' };
   if (node.type === 'special') return { ...base, screen: 'special' };
+  if (node.type === 'blacksmith') return { ...base, screen: 'map' };
   if (node.type === 'watchtower') {
     const visited = base.visitedWatchtowers ?? [];
     if (!visited.includes(node.id)) {
@@ -1236,8 +1240,26 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.specialPending?.kind === 'shopSlotUnlock') {
         const target = state.roster.find((u) => u.uid === action.uid);
         if (!target) return state;
-        // 自动检测下一个可用槽位
         const extraSlots = target.extraSkillSlots ?? 0;
+        const isUnlockAll = !!(state.specialPending as any).unlockAll;
+        // unlockAll 模式：一次性解锁所有剩余槽位，逐个选技能
+        if (isUnlockAll && extraSlots < 3) {
+          const updatedUnit = { ...target, extraSkillSlots: 3 as const };
+          const nextSlot = (extraSlots + 3) as 3 | 4 | 5;
+          const rng = createRng(state.seed + hashStr(action.uid) + 600 + (nextSlot === 4 ? 1 : nextSlot === 5 ? 2 : 0));
+          const choices = getRandomSkillChoices(updatedUnit, 3, rng);
+          if (choices.length === 0) {
+            return { ...state, roster: state.roster.map((u) => u.uid === action.uid ? updatedUnit : u), specialPending: undefined, screen: 'growth-menu' };
+          }
+          return {
+            ...state,
+            roster: state.roster.map((u) => u.uid === action.uid ? updatedUnit : u),
+            specialPending: { kind: 'shopSlotUnlock', uid: action.uid, slot: nextSlot, unlockAll: true } as any,
+            screen: 'skill-pick',
+            skillPick: { uid: action.uid, slot: nextSlot, choices },
+          };
+        }
+        // 单槽解锁模式
         let nextSlot: 3 | 4 | 5;
         if (extraSlots < 1) {
           nextSlot = 3;
@@ -1572,10 +1594,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.testRun) {
         return { ...createInitialState(), screen: 'title', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
       }
-      // 事件战斗：胜负确认后返回地图
+      // 事件战斗：胜负确认后返回地图或成长点分配界面
       if (state.eventBattle) {
         const eb = state.eventBattle;
-        let next: GameState = { ...state, screen: 'map', battle: undefined, eventBattle: undefined, postBattle: undefined };
+        let next: GameState = { ...state, battle: undefined, eventBattle: undefined, postBattle: undefined };
         // 更新事件战斗统计
         if (next.runStats) {
           const rs = { ...next.runStats, lastBattleRound: 0 };
@@ -1600,6 +1622,37 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           if (eb.bonusReward?.kind === 'food' && eb.bonusReward.foodId) {
             next = { ...next, inventory: { ...next.inventory, [eb.bonusReward.foodId]: (next.inventory[eb.bonusReward.foodId] ?? 0) + 1 } };
           }
+          // 事件战斗胜利：同步 roster（HP/SPD/技能），阵亡保底1血不永久删除
+          const battle = state.battle;
+          const syncedRoster = next.roster.map((r) => {
+            const b = [...battle.playerUnits, ...(battle.playerDown ?? [])].find((u) => u.uid === r.uid);
+            if (!b) return r;
+            if (b.hp <= 0) return { ...r, hp: Math.max(1, r.hp), statuses: [] };
+            return { ...r, maxHp: b.maxHp, hp: b.hp, spd: b.spd, skills: b.skills, statuses: [] };
+          });
+          next = { ...next, roster: syncedRoster };
+          // 战后回血 80%
+          const healCfg = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'];
+          const healedRoster = next.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * healCfg.healRatio)) }));
+          next = { ...next, roster: healedRoster };
+          // 成长点结算：远征模式事件战斗同样给成长点
+          if (state.runMode === 'proficiency') {
+            let killGp = 0;
+            for (const eu of battle.enemyUnits) {
+              if (eu.hp > 0) continue;
+              const rank = getMonster(eu.speciesId).rank;
+              killGp += rank === 2 ? 4 : 2;
+            }
+            const finalRoster = next.roster.map((u) => {
+              const inBattle = [...battle.playerUnits, ...(battle.playerDown ?? [])].some((bu) => bu.uid === u.uid);
+              const battleGp = inBattle ? 1 + killGp : 0;
+              const gp = (u.growthPoints ?? 0) + 1 + battleGp;
+              return { ...u, growthPoints: gp };
+            });
+            next = { ...next, roster: finalRoster };
+          }
+          // 跳转成长点分配界面
+          next = { ...next, screen: state.runMode === 'proficiency' ? 'growth-menu' : 'map' };
           // 胜利 toast
           if (eb.reward.kind === 'gold') {
             next = { ...next, toast: { msg: `战斗胜利！获得 ${eb.reward.amount ?? 0} 金币`, kind: 'success' } };
@@ -1611,7 +1664,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           }
           next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
         } else {
-          // 失败：按 penalty 处理
+          // 失败：按 penalty 处理，返回地图
+          next = { ...next, screen: 'map' };
           if (eb.penalty.goldLoss) {
             next = { ...next, gold: Math.max(0, next.gold - eb.penalty.goldLoss) };
           }
@@ -2286,6 +2340,41 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const unit = state.roster.find((u) => u.uid === state.skillPick!.uid);
       if (!unit) return state;
       const updatedUnit = { ...unit, skills: [...unit.skills, action.skillId] };
+      // unlockAll 模式：检查是否还有剩余槽位需要解锁
+      const unlockAllPending = (state.specialPending as any)?.unlockAll && state.specialPending?.kind === 'shopSlotUnlock';
+      if (unlockAllPending) {
+        const curExtra = updatedUnit.extraSkillSlots ?? 0;
+        const curSkillCount = updatedUnit.skills.length;
+        // 已解锁3个额外槽位且技能数=2+3=5，全部完成
+        if (curExtra >= 3 && curSkillCount >= 5) {
+          return {
+            ...state,
+            roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
+            screen: 'growth-menu',
+            skillPick: undefined,
+            specialPending: undefined,
+          };
+        }
+        // 下一个槽位
+        const nextSlot = (curSkillCount - 2 + 3) as 3 | 4 | 5;
+        const rng = createRng(state.seed + hashStr(unit.uid) + 600 + (nextSlot === 4 ? 1 : nextSlot === 5 ? 2 : 0));
+        const choices = getRandomSkillChoices(updatedUnit, 3, rng);
+        if (choices.length === 0) {
+          return {
+            ...state,
+            roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
+            screen: 'growth-menu',
+            skillPick: undefined,
+            specialPending: undefined,
+          };
+        }
+        return {
+          ...state,
+          roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
+          screen: 'skill-pick',
+          skillPick: { uid: unit.uid, slot: nextSlot, choices },
+        };
+      }
       return {
         ...state,
         roster: state.roster.map((u) => (u.uid === unit.uid ? updatedUnit : u)),
@@ -2594,6 +2683,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       if (itemId === 'forget_stone') {
         return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopForget' as const, uid: '' }, toast: { msg: '选择一只宠物重置成长点', kind: 'info' } };
+      }
+      if (itemId === 'reset_stone') {
+        return { ...next, screen: 'blacksmith', toast: { msg: '选择一只宠物重置技能强化', kind: 'info' } };
+      }
+      if (itemId === 'skill_enhance_stone') {
+        return { ...next, screen: 'blacksmith', toast: { msg: '选择一只宠物强化技能', kind: 'info' } };
       }
       return next;
     }

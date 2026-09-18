@@ -27,7 +27,8 @@ export type NodeType =
   | 'watchtower'
   | 'sync'
   | 'guardian'
-  | 'keydoor';
+  | 'keydoor'
+  | 'blacksmith';
 
 export interface MapNode {
   id: string;
@@ -201,6 +202,7 @@ export type Screen =
   | 'proficiency-result'
   | 'skill-pick'
   | 'growth-menu'
+  | 'blacksmith'
   | 'rest-fusion'
   | 'rest-fusion-skill'
   | 'revive-select';
@@ -479,6 +481,7 @@ export const NODE_ICON: Record<NodeType, string> = {
   sync: '🎁',
   guardian: '🛡️',
   keydoor: '🔒',
+  blacksmith: '🔨',
 };
 
 export interface NodeInfo {
@@ -597,6 +600,8 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
       const roll = rollChest(state.seed, row, n.id, false);
       return { icon: NODE_ICON.sync, title: n.label, detail: `宝箱奖励：${roll.text}（与配对宝箱二选一，持双生符可同时开启）` };
     }
+    case 'blacksmith':
+      return { icon: NODE_ICON.blacksmith, title: '铁匠铺', detail: '为宠物强化技能效果（消耗成长点）' };
     default:
       return { icon: NODE_ICON[n.type], title: n.label, detail: '' };
   }
@@ -1770,6 +1775,8 @@ export function labelOf(t: NodeType, row: number): string {
       return '守卫';
     case 'keydoor':
       return '钥匙门';
+    case 'blacksmith':
+      return '铁匠铺';
   }
 }
 

@@ -116,6 +116,16 @@ export const ITEMS: Record<string, ItemDef> = {
     desc: '全队回复50%生命',
     kind: 'healTeam', price: 30, shop: false,
   },
+  reset_stone: {
+    id: 'reset_stone', name: '还原石', emoji: '💎',
+    desc: '选择1只宠物，重置其指定技能的强化等级（返还50%累计消耗）',
+    kind: 'slotUnlock', price: 25, shop: false,
+  },
+  skill_enhance_stone: {
+    id: 'skill_enhance_stone', name: '技能强化石', emoji: '⚒️',
+    desc: '选择1只宠物，强化其1个技能（无需成长点）',
+    kind: 'slotUnlock', price: 40, shop: false,
+  },
 };
 
 export function getItem(id: string): ItemDef {
