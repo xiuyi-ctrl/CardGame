@@ -384,15 +384,15 @@ export function createBattle(
     if (b.enemyUnits.length === 1 && b.enemyUnits[0]) {
       b.enemyUnits = [{ ...b.enemyUnits[0], row: 'front', column: 1 }];
     }
-    // 成长之主Boss：为成长傀儡设置 sacrificeUid 指向Boss
-    const growthMaster = b.enemyUnits.find((u) => u.speciesId === 'growth_master' && u.hp > 0);
+    // 成长之主Boss：为成长傀儡设置 sacrificeUid 指向Boss（成长之主可能在玩家一方，需同时搜索敌我）
+const growthMaster = [...b.enemyUnits, ...b.playerUnits].find((u) => u.speciesId === 'growth_master' && u.hp > 0);
     if (growthMaster) {
-      b.enemyUnits = b.enemyUnits.map((u) => {
-        if (u.speciesId === 'growth_puppet' && u.hp > 0) {
-          return { ...u, sacrificeUid: growthMaster.uid };
-        }
-        return u;
-      });
+      const linkPuppets = (units: Unit[]) =>
+        units.map((u) =>
+          u.speciesId === 'growth_puppet' && u.hp > 0 ? { ...u, sacrificeUid: growthMaster.uid } : u,
+        );
+      b.enemyUnits = linkPuppets(b.enemyUnits);
+      b.playerUnits = linkPuppets(b.playerUnits);
     }
   }
   b.playerAp = b.playerUnits.filter((u) => u.hp > 0).length;

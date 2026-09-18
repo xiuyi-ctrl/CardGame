@@ -88,3 +88,20 @@ describe('成长之主被动：主动攻击命中+2，与成长值消耗互相�
     expect(getBoss(b).growthValue).toBe(11); // 20 - 10 + 1
   });
 });
+
+describe('成长傀儡献祭被动（玩家侧成长之主）', () => {
+  it('初始队伍玩家侧成长之主+1傀儡：回合结束傀儡献祭+1（不依赖敌方侧查找）', () => {
+    let b = createBattle(
+      [makeUnit('growth_master', true, 0, false), makeUnit('growth_puppet', true, 0, false)],
+      [makeUnit('momo', false, 0, false)],
+      3,
+      { enemyExact: true },
+    );
+    const master = b.playerUnits.find((u) => u.speciesId === 'growth_master')!;
+    const puppet = b.playerUnits.find((u) => u.speciesId === 'growth_puppet')!;
+    expect(puppet.sacrificeUid).toBe(master.uid);
+    b = playerEndTurn(b);
+    // 初始5 + 自身被动回合结束+1 + 傀儡献祭+1 = 7
+    expect(b.playerUnits.find((u) => u.speciesId === 'growth_master')!.growthValue).toBe(master.growthValue! + 2);
+  });
+});
