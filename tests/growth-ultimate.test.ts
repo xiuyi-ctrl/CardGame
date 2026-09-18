@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createBattle, makeUnit, playerEndTurn } from '../src/game/core/battle';
+import { createBattle, makeUnit, playerEndTurn, playerSkill } from '../src/game/core/battle';
 
 function getBoss(b: ReturnType<typeof createBattle>) {
   return b.enemyUnits[0];
@@ -103,5 +103,112 @@ describe('成长傀儡献祭被动（玩家侧成长之主）', () => {
     b = playerEndTurn(b);
     // 初始5 + 自身被动回合结束+1 + 傀儡献祭+1 = 7
     expect(b.playerUnits.find((u) => u.speciesId === 'growth_master')!.growthValue).toBe(master.growthValue! + 2);
+  });
+});
+
+describe('敌方AI：被封印的技能不进入候选池', () => {
+  it('成长之主的成长冲击被封印时，改为施放成长束缚（不浪费行动）', () => {
+    let b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('momo', true, 0, false), makeUnit('momo', true, 0, false)],
+      [{ speciesId: 'growth_master' }],
+      13,
+      { enemyExact: true },
+    );
+    b = { ...b, enemyUnits: b.enemyUnits.slice(0, 1) };
+    const boss = getBoss(b);
+    b = {
+      ...b,
+      enemyUnits: [{
+        ...boss,
+        hp: 200,
+        growthValue: 50,
+        skills: ['growth_bind', 'growth_impact'],
+        acted: false,
+        statuses: [{ kind: 'skillSeal', value: 1, turns: 1, sealedSkills: ['growth_impact'] }],
+      }],
+    };
+    b = playerEndTurn(b);
+    // AI 应避开被封印的成长冲击，改用成长束缚
+    expect(getBoss(b).lastSkillId).toBe('growth_bind');
+  });
+
+  it('全部技能被封印时敌方观望（无可用技能），不再尝试被封印技能', () => {
+    let b = createBattle(
+      [makeUnit('momo', true, 0, false)],
+      [{ speciesId: 'growth_master' }],
+      17,
+      { enemyExact: true },
+    );
+    b = { ...b, enemyUnits: b.enemyUnits.slice(0, 1) };
+    const boss = getBoss(b);
+    b = {
+      ...b,
+      enemyUnits: [{
+        ...boss,
+        hp: 200,
+        skills: ['growth_impact'],
+        acted: false,
+        statuses: [{ kind: 'skillSeal', value: 1, turns: 1, sealedSkills: ['growth_impact'] }],
+      }],
+    };
+    b = playerEndTurn(b);
+    // 唯一技能被封印 → 观望（不施放，不消耗成长值）
+    expect(getBoss(b).lastSkillId).toBeUndefined();
+    expect(getBoss(b).hp).toBeGreaterThan(0);
+  });
+
+  it('泡泡将2个攻击技能被封印后仍有可用技能时，兜底施放剩余技能（不提示无技能可用）', () => {
+    let b = createBattle(
+      [makeUnit('momo', true, 0, false), makeUnit('momo', true, 0, false)],
+      [{ speciesId: 'lulu_king' }],
+      23,
+      { enemyExact: true },
+    );
+    b = { ...b, enemyUnits: b.enemyUnits.slice(0, 1) };
+    const boss = getBoss(b);
+    b = {
+      ...b,
+      enemyUnits: [{
+        ...boss,
+        hp: boss.maxHp,
+        acted: false,
+        // 2个攻击技能（水枪弹/水波冲击）被封印，只剩愈光（治疗）
+        statuses: [{ kind: 'skillSeal', value: 2, turns: 1, sealedSkills: ['water_gun', 'water_wave'] }],
+      }],
+    };
+    b = playerEndTurn(b);
+    // 满血时治疗不满足候选条件，但兜底应施放剩余技能（愈光），而非观望
+    expect(getBoss(b).lastSkillId).toBe('heal_light');
+  });
+
+  it('封印技能为真随机洗牌：不同随机状态下封印的攻击技能组合不同（回归：恒定选前 N 个）', () => {
+    const combos = new Set<string>();
+    for (let off = 0; off < 8; off++) {
+      let b = createBattle([makeUnit('growth_master', true, 0, false)], [{ speciesId: 'lulu_king' }], 7, { enemyExact: true });
+      b = { ...b, enemyUnits: b.enemyUnits.slice(0, 1) };
+      const boss = getBoss(b);
+      b = {
+        ...b,
+        rngCount: (b.rngCount ?? 0) + off * 3 + 1,
+        enemyUnits: [{ ...boss, skills: ['water_gun', 'water_wave', 'punch'], hp: 100, maxHp: 100 }],
+      };
+      b = playerSkill(b, b.playerUnits[0].uid, 'growth_bind', b.enemyUnits[0].uid);
+      if (off === 0) {
+        const fs = require('fs');
+        fs.writeFileSync('C:/Users/DELL/AppData/Local/Temp/seal-dbg.txt', JSON.stringify({
+          logs: b.logs.filter((l) => l.text.includes('封印') || l.text.includes('成长束缚') || l.text.includes('束缚')).map((l) => l.text),
+          p1: { name: b.playerUnits[0].name, skills: b.playerUnits[0].skills, hasBind: b.playerUnits[0].skills.includes('growth_bind'), acted: b.playerUnits[0].acted },
+          bossSkills: b.enemyUnits[0].skills,
+          bossSkillsExist: b.enemyUnits[0].skills.map((s) => !!getSkillSafe(s)),
+          bySpecies: (() => { const sd = MONSTERS['lulu_king']; return { id: sd?.id, name: sd?.name, skills: sd?.skills ?? null }; })(),
+        }));
+      }
+      const sealPending = b.enemyUnits[0].statuses.find((s) => s.kind === 'skillSealPending');
+      const sealed: string[] = (sealPending?.sealedSkills ?? []) as string[];
+      expect(sealed.length).toBe(2); // growth_bind封印2个技能（现在不限攻击，heal_light治疗也可被封印）
+      combos.add([...sealed].sort().join(','));
+    }
+    // 修复前 sort 用固定 rngCount 永不改变顺序，恒封前 2 个攻击技能 → 只有 1 种组合
+    expect(combos.size).toBeGreaterThan(1);
   });
 });

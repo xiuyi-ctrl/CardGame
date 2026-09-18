@@ -140,7 +140,8 @@ const RE_FEAR_REACH = /^(.+?) 恐惧达到 (\d+) 层$/;
 function buffText(skillName: string): string {
   const skill = Object.values(SKILLS).find((s) => s.name === skillName);
   if (skill?.kind === 'buff') {
-    if (skill.id === 'spore_summon') return '召唤';
+    // 召唤类技能（孢子/幽灵/成长召唤）飘字统一为「召唤」，而非「强化」
+    if (skill.id.endsWith('_summon')) return '召唤';
     if (skill.id === 'chain_link') return '🔗锁链';
     const e = skill.effects?.[0];
     if (e?.kind === 'atkUp') return '攻击↑';

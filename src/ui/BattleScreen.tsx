@@ -561,13 +561,15 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const enhanced = getSkillEnhanceLevel(selected, slotIdx);
                     const enhanceLabel = enhanced >= 3 ? '+++' : enhanced === 2 ? '++' : enhanced === 1 ? '+' : '';
                     const fullDesc = skillFullDesc(s, enhanced);
+                    const sealStatus = selected.statuses.find((st) => st.kind === 'skillSeal');
+                    const isSealed = !!sealStatus && (sealStatus.sealedSkills ?? []).includes(s.id);
                     return (
                       <button
                         key={s.id}
                         className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
                         onClick={() => onSkillClick(s)}
-                        disabled={!canAct || exhausted || onCooldown || cannotOrder}
-                        title={`${fullDesc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}`}
+                        disabled={!canAct || exhausted || onCooldown || cannotOrder || isSealed}
+                        title={`${fullDesc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}${isSealed ? `，被封印` : ''}`}
                       >
                         <span className="skill-btn-head">
                         {s.name}{enhanceLabel && <span style={{ color: '#e8c26a', marginLeft: 2 }}>{enhanceLabel}</span>}

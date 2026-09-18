@@ -3,7 +3,7 @@ import { getSkill } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
 import { getPassive } from '../data/passives';
-import { createRng } from '../rng';
+import { createRng, shuffle } from '../rng';
 import type { Difficulty } from '../state/game';
 import { DIFFICULTY_CONFIG } from '../state/game';
 import { getSkillEnhanceLevel, getSkillEnhanceBonus } from './growth';
@@ -511,7 +511,9 @@ function startRound(b: BattleState): BattleState {
       // pending 已到期，直接移除
       nb = replaceUnit(nb, { ...u, statuses: u.statuses.filter((s) => s.kind !== 'skillSealPending') });
     } else {
-      // 转换为正式封印
+      // 转换为正式封印。turns 语义：封印禁用 e.turns 个完整回合。
+      // 封印转换发生在 startRound 中 tickStatuses（本回合已跑完）之后，因此本回合内不再递减，
+      // 封印图标持续到「封印禁用的最后回合结束」才由下回合 tickStatuses 递减移除
       const sealStatus: StatusEffect = { kind: 'skillSeal', value: pending.value, turns: remainingTurns, sealedSkills: pending.sealedSkills };
       // 移除旧的 skillSeal（如有），添加新的
       const withoutPending = u.statuses.filter((s) => s.kind !== 'skillSealPending' && s.kind !== 'skillSeal');
@@ -1038,7 +1040,13 @@ function selectEnemyAction(
   b: BattleState, actor: Unit, rngVal1: number, rngVal2: number,
 ): { skillId?: string; targetUid?: string; kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; fallbackSkillId?: string } | undefined {
   if (actor.statuses.some((s) => s.kind === 'stun')) return undefined;
-  const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0 && skillCooldownLeft(actor, s.id) <= 0);
+  // 技能封印：被封印的技能排除出候选池（避免 AI 选到被封印技能导致行动被吞）
+  const sealedSkillIds = actor.statuses
+    .filter((s) => s.kind === 'skillSeal')
+    .flatMap((s) => s.sealedSkills ?? []);
+  const skills = actor.skills
+    .map(getSkill)
+    .filter((s) => skillUsesLeft(actor, s.id) > 0 && skillCooldownLeft(actor, s.id) <= 0 && !sealedSkillIds.includes(s.id));
   if (skills.length === 0) return undefined;
   const candidates: { kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
   const hpRatio = actor.hp / actor.maxHp;
@@ -1381,6 +1389,13 @@ function selectEnemyAction(
     }
   }
   // ─── 6. softmax 选择 ───
+  // 兜底：有可用技能但未产生候选（如封印后只剩治疗/buff且不满足使用条件）时，
+  // 从剩余技能中挑一个执行（优先攻击/状态/增益，治疗垫底），避免 AI 瘫痪无行动
+  if (candidates.length === 0 && skills.length > 0) {
+    const priority: Record<string, number> = { attack: 0, status: 1, buff: 2, heal: 3 };
+    const fallback = [...skills].sort((a, b) => (priority[a.kind] ?? 9) - (priority[b.kind] ?? 9))[0];
+    return { kind: fallback.kind, skillId: fallback.id, targetUid: undefined };
+  }
   if (candidates.length === 0) return undefined;
   const maxScore = Math.max(...candidates.map((c) => c.score));
   const weights = candidates.map((c) => Math.exp((c.score - maxScore) / SOFTMAX_TEMP));
@@ -1782,17 +1797,18 @@ function resolveAttack(
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, value: effectValue, sourceUid: actor.uid } : { ...e, value: effectValue }, nb.round);
         if (e.kind === 'poison') didPoison = true;
       } else if (e.kind === 'skillSeal') {
-        // 技能封印：随机选择e.value个技能封印，下一回合生效
+        // 技能封印：从目标技能中随机选 value 个封印，下一回合生效
+        // （不限定攻击技能——泡泡将的治疗/增益等技能同样可被封印）
         const availableSkills = t2.skills.filter((s) => {
           const sd = getSkill(s);
-          return sd && sd.kind === 'attack';
+          return !!sd;
         });
         const sealCount = Math.min(e.value, availableSkills.length);
         if (sealCount > 0) {
-          // 随机选择技能封印
-          const shuffled = [...availableSkills].sort(() => Math.abs((nb.rngCount ?? 0)) % 100 / 100 - 0.5);
+          // 可播种随机洗牌选技能（Fisher-Yates），保证每次封印选择的技能不同
+          const rng = createRng((nb.seed + (nb.rngCount ?? 0) * 7919) >>> 0);
           nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
-          const sealed = shuffled.slice(0, sealCount);
+          const sealed = shuffle(rng, availableSkills).slice(0, sealCount);
           // 应用 skillSealPending：turns+1，转换时减1
           t2 = applyStatusTo(t2, { kind: 'skillSealPending', value: sealCount, turns: e.turns + 1, sealedSkills: sealed }, nb.round);
           // 记录封印的技能名
