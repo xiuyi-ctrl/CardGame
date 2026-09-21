@@ -47,12 +47,13 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   }
 
   const fieldCount = Object.keys(positions).filter((k) => positions[k]).length;
-  /** 敌方数量 → 我方出战上限（n+1，不超过 FIELD_MAX）；Boss 战固定出战上限 */
+  const forceAll = !!fb.forceAllUnits;
+  /** 敌方数量 → 我方出战上限（n+1，不超过 FIELD_MAX）；Boss 战固定出战上限；强制全上时无上限 */
   const isBoss = !!state.map.boss[state.currentNodeId];
   const enemyCount = fb.encounter?.length ?? 1;
-  const maxField = isBoss ? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX) : maxFieldForEnemy(enemyCount, state.runMode);
-  /** 宠物池 = 全部宠物中未上场的 */
-  const pool = fb.units.filter((u) => !positions[u.uid]);
+  const maxField = forceAll ? fb.units.length : (isBoss ? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX) : maxFieldForEnemy(enemyCount, state.runMode));
+  /** 宠物池 = 全部宠物中未上场的（强制全上时池为空） */
+  const pool = forceAll ? [] : fb.units.filter((u) => !positions[u.uid]);
 
   function moveToSlot(uid: string, row: FormationRow, col: 0 | 1 | 2) {
     const key = `${row}-${col}`;
@@ -81,8 +82,8 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
         moveToSlot(selected, row, col);
       } else if (selected === existing.uid) {
         setSelected(null);
-      } else {
-        // 点击场上宠物 → 放回宠物池（下阵）
+      } else if (!forceAll) {
+        // 点击场上宠物 → 放回宠物池（下阵）；强制全上时不可下阵
         const next = { ...positions };
         delete next[existing.uid];
         setPositions(next);
@@ -97,9 +98,10 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     setSelected(selected === uid ? null : uid);
   }
 
-  /** 拖回宠物池区域：从棋盘下阵 */
+  /** 拖回宠物池区域：从棋盘下阵（强制全上时禁止） */
   function onPoolDrop(e: DragEvent) {
     e.preventDefault();
+    if (forceAll) return;
     const raw = e.dataTransfer.getData('text/plain');
     if (!raw) return;
     const uid = raw.split('|')[0];
@@ -135,8 +137,8 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
 
       <div className="formation-main">
         <div className="formation-left">
-          <div className="side-label">敌方情报：{enemyDesc}（{enemyCount} 只）</div>
-          <div className="side-label">把宠物拖到 6 格中上场（有宠物则交换、空位则移动）；点击场上宠物放回宠物池；敌方 {enemyCount} 只，我方最多 {maxField} 只</div>
+          <div className="side-label">敌方情报：{forceAll ? '同我方生物' : `${enemyDesc}（${enemyCount} 只）`}</div>
+          <div className="side-label">{forceAll ? '模拟战：全部宠物强制上场，拖拽调整站位' : `把宠物拖到 6 格中上场（有宠物则交换、空位则移动）；点击场上宠物放回宠物池；敌方 ${enemyCount} 只，我方最多 ${maxField} 只`}</div>
           <div className="formation-board">
             {ROWS.map(({ row, label }) => (
               <div key={row} className={`formation-row ${row === 'front' ? 'row-front' : 'row-back'}`}>
@@ -177,7 +179,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
         </div>
 
         <div className="formation-list">
-          <div className="side-label">宠物池（拖到棋盘上场，或点击选中后点棋盘放置；已上场的不再显示）</div>
+          <div className="side-label">{forceAll ? '模拟战：全部上场，拖拽棋盘上的宠物调整站位' : '宠物池（拖到棋盘上场，或点击选中后点棋盘放置；已上场的不再显示）'}</div>
           <div className="formation-pets" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
             {pool.map((u) => {
               const isSel = selected === u.uid;
@@ -197,7 +199,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                 </div>
               );
             })}
-            {pool.length === 0 && <span className="formation-empty-slot">宠物已全部上场</span>}
+            {pool.length === 0 && <span className="formation-empty-slot">{forceAll ? '模拟战：全部上场' : '宠物已全部上场'}</span>}
           </div>
         </div>
       </div>

@@ -9,6 +9,14 @@ import { labelOf, ACT_BOSS_POOLS, BOSS_MINIONS } from '../state/game';
 /** 总层数 */
 export const TOTAL_LAYERS = 50;
 
+// ---- 生物池（模块级导出，供 growth-arena.ts 等引用） ----
+/** 一阶生物（rank 1） */
+export const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+/** 二阶生物（rank 2） */
+export const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
+/** 传奇生物（rank 3） */
+export const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god'];
+
 /** 节点类型概率表（按层进度调整） */
 interface NodeProb {
   battle: number;
@@ -18,6 +26,7 @@ interface NodeProb {
   special: number;
   rest: number;
   blacksmith: number;
+  arena: number;
 }
 
 const BASE_PROBS: NodeProb = {
@@ -28,6 +37,7 @@ const BASE_PROBS: NodeProb = {
   special: 0,
   rest: 8,
   blacksmith: 0,
+  arena: 0,
 };
 
 /** 根据层进度微调概率 */
@@ -122,6 +132,9 @@ export function generateGrowthMap(seed: number): RunMap {
     blacksmithLayers = generateFixedPositions(rng, 6, 8, 7, shopLayers);
     tries++;
   }
+  // 竞技场：每隔8~12层，最多4个，排除1-8层、Boss层、休憩层、商店层、铁匠铺层、奇遇关层
+  const fixedExclude = new Set([...shopLayers, ...blacksmithLayers, ...specialLayers, ...GUARANTEED_REST_LAYERS, ...BOSS_LAYERS]);
+  const arenaLayers = generateFixedPositions(rng, 8, 12, 4, fixedExclude);
 
   // 跟踪上次休憩层（5层内不重复）
   let lastRestLayer = -6;
@@ -141,6 +154,8 @@ export function generateGrowthMap(seed: number): RunMap {
       nodeType = 'special';
     } else if (blacksmithLayers.has(layer)) {
       nodeType = 'blacksmith';
+    } else if (arenaLayers.has(layer)) {
+      nodeType = 'arena3';
     } else {
       const probs = getLayerProbs(layer);
       // 5层内已有休憩则禁用休憩概率
@@ -204,13 +219,6 @@ export function getGrowthEncounter(
   } else {
     maxEnemies = randInt(rng, 2, 3);
   }
-  // 一阶生物（rank 1）
-  const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
-  // 二阶生物（rank 2）
-  const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
-  // 传奇生物（rank 3）
-  const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god'];
-
   // 按层数区间构建加权池
   let pool: string[];
   if (layer <= 10) {
@@ -239,11 +247,6 @@ export function getGrowthEliteEncounter(
   layer: number,
   rng: () => number,
 ): { speciesId: string }[] {
-  // 二阶生物（rank 2）
-  const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
-  // 传奇生物（rank 3）
-  const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god'];
-
   // 按层数区间构建加权池
   let pool: string[];
   if (layer <= 10) {

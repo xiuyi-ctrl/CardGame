@@ -28,7 +28,8 @@ export type NodeType =
   | 'sync'
   | 'guardian'
   | 'keydoor'
-  | 'blacksmith';
+  | 'blacksmith'
+  | 'arena3';
 
 export interface MapNode {
   id: string;
@@ -205,7 +206,10 @@ export type Screen =
   | 'blacksmith'
   | 'rest-fusion'
   | 'rest-fusion-skill'
-  | 'revive-select';
+  | 'revive-select'
+  | 'enhance-stone'
+  | 'enhance-reset'
+  | 'arena3';
 
 export interface RunStats {
   battlesWon: number;
@@ -276,7 +280,10 @@ export interface GameState {
     | { kind: 'eventBoostSpd'; uid: string; amount?: number }
     | { kind: 'eventResetGrowth'; uid: string }
     | { kind: 'eventSkillReplace'; uid: string }
-    | { kind: 'legendSkill'; uid: string; skillId?: string };
+    | { kind: 'legendSkill'; uid: string; skillId?: string }
+    | { kind: 'arena3Exhibition'; uid: string };
+  /** 竞技场模式选择 */
+  arena3Pending?: { mode?: 'simulation' | 'challenge' | 'exhibition' };
   /** 本次商人节点是否已购买过食物（买了就不能再立即休整） */
   shopBought?: boolean;
   /** 本次商人节点已购买的物品 id（每种物品每次进入商店限购 1 次） */
@@ -312,6 +319,8 @@ export interface GameState {
     /** 移动前的位置（BACK_TO_MAP 时恢复） */
     prevRow?: number;
     prevNodeId?: string;
+    /** 竞技场模拟战：强制全部宠物上场，不可移除 */
+    forceAllUnits?: boolean;
   };
   /** 车轮战：等待玩家选择出战顺序（GAUNTLET_ORDER_CONFIRM 确认后创建战斗） */
   gauntletOrder?: Unit[];
@@ -460,6 +469,11 @@ export const FIELD_MAX = 5;
 export const PROF_ROSTER_MAX = 5;
 export const PROF_FIELD_MAX = 3;
 
+/** 根据游戏模式返回队伍上限：远征5只，主模式8只 */
+export function getMaxRoster(runMode?: string): number {
+  return runMode === 'proficiency' ? PROF_ROSTER_MAX : ROSTER_MAX;
+}
+
 export function maxFieldForEnemy(enemyCount: number, runMode?: 'main' | 'proficiency'): number {
   const fieldMax = runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX;
   return Math.min(enemyCount + 1, fieldMax);
@@ -482,6 +496,7 @@ export const NODE_ICON: Record<NodeType, string> = {
   guardian: '🛡️',
   keydoor: '🔒',
   blacksmith: '🔨',
+  arena3: '🏟️',
 };
 
 export interface NodeInfo {
@@ -549,6 +564,7 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
     case 'arena':
     case 'gauntlet':
     case 'corrupted':
+    case 'arena3':
       return { icon: NODE_ICON[n.type], title: n.label, detail: encDetail(enc) };
     case 'boss': {
       const e = state.map.boss[n.id]?.[0];
@@ -1442,7 +1458,7 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
     { id: 'ch-food', label: '美味补给', desc: '获得 1 个随机食物', kind: 'food', foodId: pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false)) },
     { id: 'ch-heal', label: '庆功宴', desc: '全体恢复 50% 生命', kind: 'heal', amount: 50 },
   ];
-  if (state.roster.length < ROSTER_MAX) {
+  if (state.roster.length < getMaxRoster(state.runMode)) {
     options.push({
       id: 'ch-recruit',
       label: '斗士招募',
@@ -1777,6 +1793,8 @@ export function labelOf(t: NodeType, row: number): string {
       return '钥匙门';
     case 'blacksmith':
       return '铁匠铺';
+    case 'arena3':
+      return '竞技场';
   }
 }
 
@@ -1899,7 +1917,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
       amount: 30,
     },
   ];
-  const space = state.roster.length < ROSTER_MAX;
+  const space = state.roster.length < getMaxRoster(state.runMode);
   if (space) {
     options.push({
       id: 'r-recruit',

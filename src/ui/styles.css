@@ -3080,11 +3080,6 @@ button.primary {
   color: var(--info);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-.growth-enhance-stone-btn:hover {
-  background: var(--info);
-  color: #1a1a2e;
 }
 .growth-reset-btn {
   padding: 4px 10px;

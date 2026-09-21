@@ -1,10 +1,11 @@
 /**
- * 成长远征模式 - 专属商店商品池（6种）
+ * 成长远征模式 - 专属商店商品池（9种）
  * 围绕成长点成长设计
  */
 
 export type GrowthShopItemType =
   | 'book_small'
+  | 'book_medium'
   | 'book_large'
   | 'slot_unlock'
   | 'forget_stone'
@@ -26,14 +27,21 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
     id: 'book_small',
     label: '成长之书（小）',
     desc: '选择 1 只宠物，+1 成长点',
-    price: 15,
+    price: 12,
     emoji: '📖',
+  },
+  book_medium: {
+    id: 'book_medium',
+    label: '成长之书（中）',
+    desc: '选择 1 只宠物，+2 成长点',
+    price: 22,
+    emoji: '📕',
   },
   book_large: {
     id: 'book_large',
     label: '成长之书（大）',
-    desc: '选择 1 只宠物，+2 成长点',
-    price: 25,
+    desc: '选择 1 只宠物，+3 成长点',
+    price: 30,
     emoji: '📚',
   },
   slot_unlock: {

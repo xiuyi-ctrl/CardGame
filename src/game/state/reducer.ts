@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
-import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, ROSTER_MAX, recomputeStats } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -10,6 +10,7 @@ import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
 import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
+import { getGrowthArenaEncounter } from '../data/growth-arena';
 import { buildGrowthEvent } from '../data/growth-events';
 import { getGrowthShopStock } from '../data/growth-shop';
 import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-special';
@@ -122,7 +123,9 @@ export type GameAction =
   | { type: 'REST_FUSION_SELECT_REPLACE'; replaceIdx: number }
   | { type: 'REST_FUSION_CANCEL' }
   | { type: 'REST_FUSION_MODE' }
-  | { type: 'REVIVE'; uid: string; ratio: number };
+  | { type: 'REVIVE'; uid: string; ratio: number }
+  | { type: 'ARENA3_MODE'; mode: 'simulation' | 'challenge' | 'exhibition' }
+  | { type: 'ARENA3_SELECT'; uid: string };
 
 export function createInitialState(): GameState {
   const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
@@ -237,7 +240,7 @@ function healRoster(state: GameState, pct: number): GameState {
 /** 战斗胜利后：同步存活单位、确认驯服、发放金币与奖励 */
 export function resolveBattle(state: GameState, battle: BattleState): GameState {
   const node = currentNode(state);
-  const challenge = node?.type === 'arena' || node?.type === 'gauntlet';
+  const challenge = node?.type === 'arena' || node?.type === 'gauntlet' || node?.type === 'arena3';
   const bossNode = state.map.boss[state.currentNodeId] !== undefined;
   const eliteNode = state.map.encounter[state.currentNodeId] !== undefined;
   const corruptNode = node?.type === 'corrupted';
@@ -266,25 +269,37 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     ? synced.filter((u): u is Unit => u !== null).map((u) => ({ ...u, hp: Math.max(1, u.hp) }))
     : synced.filter((u): u is Unit => u !== null);
 
+  // 竞技场模拟战：战斗结束后恢复所有宠物至战前HP（不消耗生命）
+  if (node?.type === 'arena3' && state.arena3Pending?.mode === 'simulation') {
+    roster = state.roster.map((u) => {
+      const bUnit = [...battle.playerUnits, ...(battle.playerDown ?? [])].find((bu) => bu.uid === u.uid);
+      if (!bUnit) return u;
+      // 恢复到战前 HP
+      return { ...u, hp: u.hp };
+    });
+  }
+
   // 驯服入库：先填满空位，超出的进入溢出队列（等待玩家处理：替换/融合/放弃）
   let overflow: Unit[] = [];
-  const cap = ROSTER_MAX;
+  const cap = getMaxRoster(state.runMode);
   for (const t of battle.pendingTame) {
     if (roster.length < cap) roster.push(t);
     else overflow.push(t);
   }
 
-  const goldGain = challenge
-    ? 0
-    : bossNode
-      ? 30
-      : eliteNode
-        ? corruptNode && node?.corruptReward === 'gold'
-          ? 32
-          : 16
-        : node?.type === 'guardian'
-          ? 16
-          : 8;
+  const goldGain = node?.type === 'arena3' && state.arena3Pending?.mode === 'challenge'
+    ? 50
+    : challenge
+      ? 0
+      : bossNode
+        ? 30
+        : eliteNode
+          ? corruptNode && node?.corruptReward === 'gold'
+            ? 32
+            : 16
+          : node?.type === 'guardian'
+            ? 16
+            : 8;
   // 守卫：击败后发放对应的专用钥匙（守卫不可驯服）
   let inventory = state.inventory;
   const keyLog: string[] = [];
@@ -342,28 +357,42 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   // 成长点：仅远征模式，参战+2，击杀按敌人等级额外奖励
   let finalRoster = result.roster;
   if (state.runMode === 'proficiency') {
-    // 计算击杀奖励：所有敌人被击败时按rank给成长点
-    let killGp = 0;
-    for (const eu of battle.enemyUnits) {
-      if (eu.hp > 0) continue; // 未击杀的跳过
-      const rank = getMonster(eu.speciesId).rank;
-      if (bossNode && rank === 4) {
-        // Boss小怪 vs Boss本体：小怪物种id不在boss遭遇列表的第一个即为小怪
-        const bossEncounter = state.map.boss[state.currentNodeId];
-        const isMainBoss = bossEncounter && bossEncounter.length > 0 && bossEncounter[0].speciesId === eu.speciesId;
-        killGp += isMainBoss ? 6 : 2;
-      } else if (rank === 2) {
-        killGp += 4;
-      } else {
-        killGp += 2;
+    // 竞技场模拟战：全体存活宠物 +5 成长点
+    if (node?.type === 'arena3' && state.arena3Pending?.mode === 'simulation') {
+      finalRoster = result.roster.map((u) => {
+        const gp = (u.growthPoints ?? 0) + 5;
+        return { ...u, growthPoints: gp };
+      });
+    } else if (node?.type === 'arena3' && state.arena3Pending?.mode === 'challenge') {
+      // 竞技场挑战赛：全体存活宠物 +3 成长点
+      finalRoster = result.roster.map((u) => {
+        const gp = (u.growthPoints ?? 0) + 3;
+        return { ...u, growthPoints: gp };
+      });
+    } else {
+      // 计算击杀奖励：所有敌人被击败时按rank给成长点
+      let killGp = 0;
+      for (const eu of battle.enemyUnits) {
+        if (eu.hp > 0) continue; // 未击杀的跳过
+        const rank = getMonster(eu.speciesId).rank;
+        if (bossNode && rank === 4) {
+          // Boss小怪 vs Boss本体：小怪物种id不在boss遭遇列表的第一个即为小怪
+          const bossEncounter = state.map.boss[state.currentNodeId];
+          const isMainBoss = bossEncounter && bossEncounter.length > 0 && bossEncounter[0].speciesId === eu.speciesId;
+          killGp += isMainBoss ? 6 : 2;
+        } else if (rank === 2) {
+          killGp += 4;
+        } else {
+          killGp += 2;
+        }
       }
+      finalRoster = result.roster.map((u) => {
+        const inBattle = [...battle.playerUnits, ...(battle.playerDown ?? [])].some((bu) => bu.uid === u.uid);
+        const battleGp = inBattle ? 1 + killGp : 0;
+        const gp = (u.growthPoints ?? 0) + 1 + battleGp;
+        return { ...u, growthPoints: gp };
+      });
     }
-    finalRoster = result.roster.map((u) => {
-      const inBattle = [...battle.playerUnits, ...(battle.playerDown ?? [])].some((bu) => bu.uid === u.uid);
-      const battleGp = inBattle ? 1 + killGp : 0;
-      const gp = (u.growthPoints ?? 0) + 1 + battleGp;
-      return { ...u, growthPoints: gp };
-    });
   }
   const withStats = { ...result, runStats, roster: finalRoster };
   // 最后一幕（act 3）首领战胜利：直接进入通关界面，不再弹出战利品/队伍管理等中间界面
@@ -412,6 +441,9 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     }
     if (node.type === 'blacksmith') {
       return { ...base, screen: 'blacksmith' };
+    }
+    if (node.type === 'arena3') {
+      return { ...base, screen: 'arena3', arena3Pending: { mode: undefined } };
     }
     if (node.type === 'event') {
       const rng = createRng(base.seed * 3571 + (base.currentLayer ?? 0) * 9973 + hashStr(node.id));
@@ -814,7 +846,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       } else if (choice.kind === 'item' && choice.itemId) {
         next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
-      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < ROSTER_MAX) {
+      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < getMaxRoster(state.runMode)) {
         next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
       } else if (choice.kind === 'damage') {
         next = {
@@ -966,7 +998,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (choice.kind === 'item' && choice.itemId) {
         const it = ITEMS[choice.itemId];
         next = { ...next, toast: { msg: `${it?.emoji ?? '🎒'} ${it?.name ?? choice.itemId} ×1`, kind: 'success' } };
-      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length <= ROSTER_MAX) {
+      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < getMaxRoster(state.runMode)) {
         const m = getMonster(choice.monsterId);
         next = { ...next, toast: { msg: `招募了 ${m.emoji} ${m.name}！`, kind: 'success' } };
       } else if (choice.kind === 'purify') {
@@ -1029,7 +1061,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const ev = state.map.events[state.currentNodeId];
       const choice = ev?.choices.find((x) => x.id === choiceId);
       if (choice && choice.kind === 'recruit' && choice.monsterId) {
-        if (next.roster.length < ROSTER_MAX) {
+        if (next.roster.length < getMaxRoster(state.runMode)) {
           next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
         } else {
           const hatched = makeUnit(choice.monsterId, true, 0, false);
@@ -1125,7 +1157,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           return { ...next, screen: 'revive-select' };
         }
         case 'custom':
-          if (next.roster.length >= ROSTER_MAX) return state;
+          if (next.roster.length >= getMaxRoster(state.runMode)) return state;
           next = { ...next, screen: 'custom' };
           break;
       }
@@ -1299,6 +1331,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           log: [`${unit.name} 出战斗兽场！`, ...state.log].slice(0, 20),
         };
       }
+      if (state.specialPending?.kind === 'arena3Exhibition') {
+        const target = state.roster.find((u) => u.uid === action.uid);
+        if (!target) return state;
+        if (state.gold < 20) return { ...state, toast: { msg: '金币不足（需要20金币）', kind: 'warning' } };
+        const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + 5 };
+        return {
+          ...state,
+          gold: state.gold - 20,
+          roster: state.roster.map((u) => u.uid === action.uid ? updated : u),
+          specialPending: undefined,
+          arena3Pending: undefined,
+          screen: 'map',
+          toast: { msg: `${target.name} 获得 5 成长点`, kind: 'success' },
+        };
+      }
       if (state.specialPending?.kind === 'shopForget') {
         const target = state.roster.find((u) => u.uid === action.uid);
         if (!target) return state;
@@ -1350,7 +1397,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'PICK_CUSTOM': {
       if (state.screen !== 'custom') return state;
-      if (state.roster.length >= ROSTER_MAX) return state;
+      if (state.roster.length >= getMaxRoster(state.runMode)) return state;
       if (!CUSTOM_PRESETS.some((p) => p === action.presetId)) return state;
       const rng = createRng(state.seed * 7 + state.act * 13 + state.roster.length * 3 + state.currentRow);
       const unit = makeCustomUnit(action.presetId, rng);
@@ -1698,8 +1745,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.battle.phase === 'won') return resolveBattle(state, state.battle);
       if (state.battle.phase === 'lost') {
         const node = currentNode(state);
-        // 斗兽场/车轮战：失败不 Game Over，改为随机坏事件惩罚（宠物不会阵亡）
-        if (node?.type === 'arena' || node?.type === 'gauntlet') {
+        // 斗兽场/车轮战/竞技场：失败不 Game Over，改为随机坏事件惩罚（宠物不会阵亡）
+        if (node?.type === 'arena' || node?.type === 'gauntlet' || node?.type === 'arena3') {
+          // 模拟战失败无惩罚，直接回地图（标记节点已访问不可重试）
+          if (node.type === 'arena3' && state.arena3Pending?.mode === 'simulation') {
+            const roster = state.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp) }));
+            const runStats = state.runStats ? { ...state.runStats, lastBattleRound: 0, battlesLost: state.runStats.battlesLost + 1 } : state.runStats;
+            const visitedNodeIds = [...(state.visitedNodeIds ?? [])];
+            if (!visitedNodeIds.includes(state.currentNodeId)) visitedNodeIds.push(state.currentNodeId);
+            return { ...state, screen: 'map', battle: undefined, roster, runStats, arena3Pending: undefined, visitedNodeIds, toast: { msg: '模拟战挑战失败，未获得奖励', kind: 'warning' } };
+          }
           const rng = createRng(state.seed * 97 + state.act * 29 + state.currentRow * 13 + state.battle.rngCount);
           const event = buildPunishmentEvent(rng);
           const roster = state.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp) }));
@@ -1736,7 +1791,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (reward.kind === 'heal') {
         next = healRoster(next, (reward.amount ?? 30) / 100);
       } else if (reward.kind === 'recruit' && reward.monsterId) {
-        if (next.roster.length < ROSTER_MAX) {
+        if (next.roster.length < getMaxRoster(state.runMode)) {
           const u = makeUnit(reward.monsterId, true, 0, false);
           next = { ...next, roster: [...next.roster, u], toast: { msg: `招募了 ${u.name}！`, kind: 'success' } };
         } else {
@@ -1870,7 +1925,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'TAME_OVERFLOW_JOIN': {
       const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
       if (!tame) return state;
-      if (state.roster.length >= ROSTER_MAX) return state;
+      if (state.roster.length >= getMaxRoster(state.runMode)) return state;
       const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
       const next: GameState = {
         ...state,
@@ -2007,16 +2062,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const main = state.roster.find((u) => u.uid === state.fusionMainUid);
       const sub = state.roster.find((u) => u.uid === state.fusionSubUid);
       if (!main || !sub || main.uid === sub.uid) return state;
-      // 基础属性 50% 继承
+      // 基础属性 50% 继承 + 成长点 30% 继承
       const subBase = getMonster(sub.speciesId);
       const hpGain = Math.round(subBase.baseHp * 0.5);
       const spdGain = Math.round(subBase.baseSpd * 0.5);
+      const gpGain = Math.round((sub.growthPoints ?? 0) * 0.3);
       const newMaxHp = main.maxHp + hpGain;
       const updatedMain = {
         ...main,
         maxHp: newMaxHp,
         hp: Math.min(main.hp + hpGain, newMaxHp),
         spd: main.spd + spdGain,
+        growthPoints: (main.growthPoints ?? 0) + gpGain,
         bonusStats: { hp: (main.bonusStats?.hp ?? 0) + hpGain, spd: (main.bonusStats?.spd ?? 0) + spdGain },
       };
       // 计算副宠可学技能（排除主宠已学）
@@ -2035,7 +2092,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           fusionSubSkills: undefined,
           fusionLearnSkill: undefined,
           fusionReplaceIdx: undefined,
-          toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain}）`, kind: 'success' },
+          toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain} 成长点+${gpGain}）`, kind: 'success' },
         };
       }
       return {
@@ -2045,7 +2102,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         fusionSubSkills: subSkills,
         fusionLearnSkill: undefined,
         fusionReplaceIdx: undefined,
-        toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain}），选择要学习的技能`, kind: 'success' },
+        toast: { msg: `${main.name} 继承了 ${sub.name} 的基础属性（生命+${hpGain} 速度+${spdGain} 成长点+${gpGain}），选择要学习的技能`, kind: 'success' },
       };
     }
 
@@ -2107,7 +2164,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'REST_FUSION_CANCEL': {
       return {
         ...state,
-        screen: 'rest',
+        screen: 'map',
         fusionMainUid: undefined,
         fusionSubUid: undefined,
         fusionSubSkills: undefined,
@@ -2525,7 +2582,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'PROF_SHOP_BUY': {
       const itemId = action.itemId;
       const shopPrices: Record<string, number> = {
-        book_small: 15, book_large: 25, slot_unlock: 50,
+        book_small: 12, book_medium: 22, book_large: 30, slot_unlock: 50,
         forget_stone: 30, pet_recruit: 20, heal_potion: 30,
         reset_stone: 25, skill_enhance_stone: 40,
       };
@@ -2536,14 +2593,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const boughtItems = [...(state.shopBoughtItems ?? []), itemId];
       next = { ...next, shopBoughtItems: boughtItems };
       if (itemId === 'pet_recruit') {
+        // 队伍已满时不扣金币
+        if (next.roster.length >= getMaxRoster(state.runMode)) {
+          return { ...state, toast: { msg: '队伍已满，无法招募', kind: 'warning' } };
+        }
         const rng = createRng(state.seed * 1111 + Date.now());
         const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
         const pick = pool[Math.floor(rng() * pool.length)];
-        if (next.roster.length < ROSTER_MAX) {
-          next = { ...next, roster: [...next.roster, makeUnit(pick, true, 0, false)], toast: { msg: `招募了 ${getMonster(pick).name}！`, kind: 'success' } };
-        } else {
-          next = { ...next, toast: { msg: '队伍已满，无法招募', kind: 'warning' } };
-        }
+        next = { ...next, roster: [...next.roster, makeUnit(pick, true, 0, false)], toast: { msg: `招募了 ${getMonster(pick).name}！`, kind: 'success' } };
       } else {
         next = { ...next, inventory: { ...next.inventory, [itemId]: (next.inventory[itemId] ?? 0) + 1 } };
         const itemNames: Record<string, string> = { book_small: '成长之书（小）', book_large: '成长之书（大）', slot_unlock: '技能槽解锁', forget_stone: '遗忘之石', heal_potion: '治疗圣水', reset_stone: '还原石', skill_enhance_stone: '技能强化石' };
@@ -2558,7 +2615,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const cost = [5, 10, 15][refreshCount] ?? 15;
       if (state.gold < cost) return state;
       const rng = createRng(state.seed * 7919 + (state.currentRow) * 104729 + refreshCount * 31337);
-      const allItems = ['heal_potion', 'book_small', 'book_large', 'slot_unlock', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone'];
+      const allItems = ['heal_potion', 'book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone'];
       const newStock = shuffle(rng, allItems).slice(0, 4);
       return {
         ...state,
@@ -2667,6 +2724,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const itemId = action.itemId;
       const count = state.inventory[itemId] ?? 0;
       if (count <= 0) return state;
+      // 技能强化石：不立即扣库存，由 PROF_SKILL_ENHANCE_STONE 确认时才扣
+      if (itemId === 'skill_enhance_stone') {
+        return { ...state, screen: 'enhance-stone', toast: { msg: '选择一只宠物强化技能', kind: 'info' } };
+      }
       let next: GameState = { ...state, inventory: { ...state.inventory, [itemId]: count - 1 }, growthItemPending: itemId };
       if (itemId === 'heal_potion') {
         next = healRoster(next, 0.5);
@@ -2675,8 +2736,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (itemId === 'book_small') {
         return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 1 }, toast: { msg: '选择一只宠物获得 1 成长点', kind: 'info' } };
       }
-      if (itemId === 'book_large') {
+      if (itemId === 'book_medium') {
         return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 2 }, toast: { msg: '选择一只宠物获得 2 成长点', kind: 'info' } };
+      }
+      if (itemId === 'book_large') {
+        return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopGrantGrowthPoint' as const, uid: '', amount: 3 }, toast: { msg: '选择一只宠物获得 3 成长点', kind: 'info' } };
       }
       if (itemId === 'slot_unlock') {
         return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopSlotUnlock' as const, uid: '', slot: 3 as 3 | 4 | 5 }, toast: { msg: '选择一只宠物解锁技能槽', kind: 'info' } };
@@ -2685,10 +2749,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...next, screen: 'growth-menu', specialPending: { kind: 'shopForget' as const, uid: '' }, toast: { msg: '选择一只宠物重置成长点', kind: 'info' } };
       }
       if (itemId === 'reset_stone') {
-        return { ...next, screen: 'blacksmith', toast: { msg: '选择一只宠物重置技能强化', kind: 'info' } };
-      }
-      if (itemId === 'skill_enhance_stone') {
-        return { ...next, screen: 'blacksmith', toast: { msg: '选择一只宠物强化技能', kind: 'info' } };
+        return { ...state, screen: 'enhance-reset', toast: { msg: '选择一只宠物重置技能强化', kind: 'info' } };
       }
       return next;
     }
@@ -2704,6 +2765,37 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         screen: 'backpack',
         toast: { msg: '已取消使用', kind: 'info' },
       };
+    }
+
+    case 'ARENA3_MODE': {
+      const mode = action.mode;
+      const node = currentNode(state);
+      if (!node) return state;
+      if (mode === 'simulation') {
+        // 模拟战：镜像战斗，用玩家阵容的克隆作为敌人
+        if (state.roster.length === 0) return state;
+        // 模拟战：全部宠物强制上场
+        const allUnits = state.roster.map((u, i) => ({ ...u, row: (i < 3 ? 'front' : 'back') as 'front' | 'back', column: (i % 3) as 0 | 1 | 2 }));
+        const initial = allUnits;
+        const options = { act: 1, nodeType: 'arena3' as const, difficulty: state.difficulty, untameable: true, layer: state.currentLayer ?? 1, mirrorUnits: state.roster };
+        return { ...state, screen: 'formation', arena3Pending: { mode: 'simulation' }, formation: { units: state.roster, initialField: initial, encounter: [{ speciesId: 'momo' }], nodeId: node.id, options, prevRow: state.currentRow, prevNodeId: state.currentNodeId, forceAllUnits: true } };
+      }
+      if (mode === 'challenge') {
+        // 挑战赛：3精英
+        if (state.roster.length === 0) return state;
+        const rng = createRng(state.seed * 3331 + (state.currentLayer ?? 0) * 7919);
+        const encounter = getGrowthArenaEncounter(state.currentLayer ?? 1, rng);
+        const maxField = maxFieldForEnemy(encounter.length, state.runMode);
+        const initial = autoPosition(fieldUnits(state, maxField));
+        const options = { act: 1, nodeType: 'arena3' as const, difficulty: state.difficulty, untameable: true, layer: state.currentLayer ?? 1 };
+        return { ...state, screen: 'formation', arena3Pending: { mode: 'challenge' }, formation: { units: state.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow: state.currentRow, prevNodeId: state.currentNodeId } };
+      }
+      if (mode === 'exhibition') {
+        // 表演赛：选1只宠物+5成长点（需20金币）
+        if (state.gold < 20) return { ...state, toast: { msg: '金币不足（需要20金币）', kind: 'warning' } };
+        return { ...state, screen: 'roster', specialPending: { kind: 'arena3Exhibition', uid: '' } };
+      }
+      return state;
     }
 
     case 'TITLE':

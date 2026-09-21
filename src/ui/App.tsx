@@ -4,7 +4,7 @@ import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, ROSTER_MAX, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, NODE_ICON, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -17,6 +17,9 @@ import { getMaxSkillSlots } from '../game/core/growth';
 import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
 import { GrowthScreen } from './GrowthScreen';
 import { BlacksmithScreen } from './BlacksmithScreen';
+import { EnhanceStoneScreen } from './EnhanceStoneScreen';
+import { EnhanceResetScreen } from './EnhanceResetScreen';
+import { Arena3Screen } from './Arena3Screen';
 import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
@@ -87,6 +90,9 @@ export default function App() {
       {state.screen === 'achievements' && <AchievementsScreen state={state} dispatch={dispatch} />}
       {state.screen === 'growth-menu' && <GrowthScreen state={state} dispatch={dispatch} />}
       {state.screen === 'blacksmith' && <BlacksmithScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'enhance-stone' && <EnhanceStoneScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'enhance-reset' && <EnhanceResetScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'arena3' && <Arena3Screen state={state} dispatch={dispatch} />}
       {state.screen === 'skill-pick' && <SkillPickScreen state={state} dispatch={dispatch} />}
       {state.screen === 'difficulty-select' && <DifficultyScreen state={state} dispatch={dispatch} />}
       {state.screen === 'proficiency-select' && <ProficiencyStarterScreen state={state} dispatch={dispatch} />}
@@ -1744,6 +1750,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const eventBoostMode = pending?.kind === 'eventBoostHp' || pending?.kind === 'eventBoostSpd';
   const eventResetGrowthMode = pending?.kind === 'eventResetGrowth';
   const eventSkillReplaceMode = pending?.kind === 'eventSkillReplace';
+  const arena3ExhibitionMode = pending?.kind === 'arena3Exhibition';
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const title = evolveMode
@@ -1764,15 +1771,17 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                 ? `选择一只宠物解锁第${pending.slot === 4 ? '5' : '4'}技能槽`
                 : arenaMode
                   ? '斗兽场：选择 1 只宠物出战（1v1 单挑，胜利得丰厚奖励）'
-                  : state.postBattle
+                  : arena3ExhibitionMode
+                    ? '表演赛：选择 1 只宠物获得 5 成长点'
+                    : state.postBattle
               ? '战后休整（只能释放或融合宠物）'
-              : `队伍管理（上限 ${ROSTER_MAX} 只）`;
+              : `队伍管理（上限 ${getMaxRoster(state.runMode)} 只）`;
 
   return (
     <div className="screen">
       <HUD state={state} dispatch={dispatch} />
       <div className="section-title">{title}</div>
-      {!evolveMode && !boostMode && !growthPointMode && !shopSlotUnlockMode && !arenaMode && !state.postBattle && (
+      {!evolveMode && !boostMode && !growthPointMode && !shopSlotUnlockMode && !arenaMode && !arena3ExhibitionMode && !state.postBattle && (
         <div className="panel-row" style={{ marginBottom: 10 }}>
           <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
           {state.field.map((uid) => {
@@ -1792,7 +1801,9 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
               ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
               : arenaMode
                 ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
-                : state.postBattle
+                : arena3ExhibitionMode
+                  ? () => dispatch({ type: 'SPECIAL_TARGET', uid: u.uid })
+                  : state.postBattle
                   ? () => setSelectedUid(selectedUid === u.uid ? null : u.uid)
                   : () => toggleField(u.uid);
           const isPostBattleSelected = state.postBattle && selectedUid === u.uid;
@@ -1868,8 +1879,9 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
           const profShopData: Record<string, { label: string; emoji: string; desc: string; price: number }> = {
             heal_potion: { label: '治疗圣水', emoji: '🧪', desc: '全队回复 50% 生命', price: 30 },
             gold_bag: { label: '金币袋', emoji: '💰', desc: '获得 25 金币', price: 10 },
-            book_small: { label: '成长之书（小）', emoji: '📖', desc: '选择一只宠物获得 1 成长点', price: 15 },
-            book_large: { label: '成长之书（大）', emoji: '📚', desc: '选择一只宠物获得 2 成长点', price: 25 },
+            book_small: { label: '成长之书（小）', emoji: '📖', desc: '选择一只宠物获得 1 成长点', price: 12 },
+            book_medium: { label: '成长之书（中）', emoji: '📕', desc: '选择一只宠物获得 2 成长点', price: 22 },
+            book_large: { label: '成长之书（大）', emoji: '📚', desc: '选择一只宠物获得 3 成长点', price: 30 },
             growth_stone: { label: '成长之石', emoji: '💎', desc: '选择一只宠物获得 1 成长点', price: 15 },
             stat_boost: { label: '属性强化', emoji: '⚡', desc: '选择一只宠物提升属性', price: 18 },
             slot_unlock: { label: '技能槽解锁', emoji: '🔓', desc: '选择一只宠物解锁技能槽', price: 50 },
@@ -2366,7 +2378,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const isProf = state.runMode === 'proficiency';
   const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
   const foodList = items.filter(([id]) => FOODS[id]);
-  const growthItemIds = ['book_small', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone'];
+  const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone'];
   const growthList = items.filter(([id]) => growthItemIds.includes(id));
   const itemList = items.filter(([id]) => ITEMS[id] && !growthItemIds.includes(id)).sort((a, b) => (a[0] === 'scout' ? -1 : b[0] === 'scout' ? 1 : 0));
   return (
@@ -2450,7 +2462,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
       )}
 
       <div className="section-sub" style={{ marginTop: 30 }}>
-        宠物（{state.roster.length}/{ROSTER_MAX}）
+        宠物（{state.roster.length}/{getMaxRoster(state.runMode)}）
       </div>
       <DragScrollRow className="bag-pets">
         {state.roster.map((u) => {
@@ -2495,15 +2507,15 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
   const tame = (state.tameOverflow ?? [])[0];
   if (!tame) return null;
   const remaining = state.tameOverflow!.length;
-  const hasSpace = state.roster.length < ROSTER_MAX;
+  const hasSpace = state.roster.length < getMaxRoster(state.runMode);
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   return (
     <div className="screen">
-      <div className="section-title">{hasSpace ? '处理队伍' : '队伍已满'}（队伍 {state.roster.length}/{ROSTER_MAX}）</div>
+      <div className="section-title">{hasSpace ? '处理队伍' : '队伍已满'}（队伍 {state.roster.length}/{getMaxRoster(state.runMode)}）</div>
       <p className="card-sub" style={{ maxWidth: 560, textAlign: 'center', margin: '0 auto 8px' }}>
         你{state.tameOverflowReturn === 'map' ? '孵化了' : state.tameOverflowReturn === 'roster' ? '招募了' : '驯服了'}新的宠物。{hasSpace
           ? '队伍有空位，可直接加入。'
-          : '队伍已满，选择：'}<b>替换</b>（放生一只现有宠物让它加入）／<b>融合</b>（同物种足够可直接进化，待处理宠物也可作为材料）／<b>放生</b>（丢弃）。
+          : '队伍已满，选择：'}<b>替换</b>（放生一只现有宠物让它加入）{state.runMode !== 'proficiency' && '／融合（同物种足够可直接进化，待处理宠物也可作为材料）'}／<b>放生</b>（丢弃）。
       </p>
       <div className="center-col" style={{ flex: '0 0 auto', padding: '8px 0' }}>
         <UnitCard unit={tame} />
@@ -2539,6 +2551,7 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
                   >
                     替换
                   </button>
+                  {state.runMode !== 'proficiency' && (
                   <button
                     title={stage ? (canFuse ? (needTame ? `融合进化为 ${getMonster(stage).name}（含待处理 ${totalCount}/${need}）` : `融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）`) : `同物种不足（${totalCount}/${need}，${tameSame ? '含待处理 1 只' : '不含待处理'}）`) : '该宠物已是最终形态，无法融合'}
                     onClick={(e) => {
@@ -2556,6 +2569,7 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
                   >
                     融合
                   </button>
+                  )}
                 </div>
               }
             />
@@ -2667,7 +2681,7 @@ function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
   const sp = state.map.specials[state.currentNodeId];
   if (!sp) return null;
   const hasEvolvable = state.roster.some((u) => nextStage(u.speciesId));
-  const rosterFull = state.roster.length >= ROSTER_MAX;
+  const rosterFull = state.roster.length >= getMaxRoster(state.runMode);
   const disabled = (r: SpecialReward) =>
     ((r.kind === 'evolve' || r.kind === 'superevolve') && !hasEvolvable) ||
     (r.kind === 'custom' && rosterFull);

@@ -48,6 +48,8 @@ corruptDebuff?: 'spd' | 'dmg' | 'burn';
   difficulty?: Difficulty;
   /** 成长远征：当前层数，普通敌人按区间缩放（1~15层+8%/层，16~30层+10%/层，31~50层+15%/层），Boss不缩放 */
   layer?: number;
+  /** 竞技场模拟战：用这些单位的克隆作为敌人（完整复制属性/技能/被动/强化） */
+  mirrorUnits?: Unit[];
 }
 
 export function computeStats(speciesId: string) {
@@ -366,6 +368,19 @@ export function createBattle(
     b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer), row: 'front', column: 1 }] : [];
     b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
+  } else if (options?.mirrorUnits) {
+    // 竞技场模拟战：用玩家单位的克隆作为敌人，镜像玩家站位
+    b.playerUnits = preparedPlayer;
+    b.enemyUnits = options.mirrorUnits.map((u, i) => {
+      const c = cloneUnit(u);
+      c.uid = nextUid('e');
+      c.isPlayer = false;
+      c.tameable = false;
+      const mirrorPos = preparedPlayer[i];
+      c.row = mirrorPos?.row ?? 'front';
+      c.column = mirrorPos?.column ?? (i as 0 | 1 | 2);
+      return c;
+    });
   } else {
     // 敌方数量固定为 encounter 原始数量（不再复制补齐）；
     // 玩家出战数由布阵界面限制（≤ 敌方数量+1，最多 FIELD_MAX）

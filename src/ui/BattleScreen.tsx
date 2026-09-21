@@ -163,6 +163,17 @@ export function BattleScreen({ state, dispatch }: Props) {
     dispatch({ type: 'GAUNTLET_SWAP' });
   }, [battle?.pendingSwap, battle?.phase, logPending, animating]);
 
+  const nodeType = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.type;
+  const isChallenge = nodeType === 'arena' || nodeType === 'gauntlet';
+  const isSimulation = nodeType === 'arena3' && state.arena3Pending?.mode === 'simulation';
+
+  // 模拟战失败：动画播完后自动回地图（无弹窗、无惩罚）
+  useEffect(() => {
+    if (isSimulation && battle.phase === 'lost' && !animating && !logPending) {
+      dispatch({ type: 'BATTLE_END_CONFIRM' });
+    }
+  }, [isSimulation, battle.phase, animating, logPending]);
+
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
   const selectedSkills: SkillDef[] = useMemo(
     () => (selected && selected.hp > 0 ? selected.skills.map((id) => getSkill(id)) : []),
@@ -172,9 +183,6 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const foods = currentFoodList(state);
   const battleItems = BATTLE_ITEM_IDS.map((id) => getItem(id)).filter((it) => (state.inventory[it.id] ?? 0) > 0);
-
-  const nodeType = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.type;
-  const isChallenge = nodeType === 'arena' || nodeType === 'gauntlet';
 
   const validEnemyTargets = useMemo(() => {
     const targets = new Set<string>();
@@ -716,7 +724,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         </div>
       )}
 
-      {battle.phase === 'lost' && !animating && !logPending && (
+      {battle.phase === 'lost' && !animating && !logPending && !isSimulation && (
         <div className="overlay">
           <div className="overlay-box">
             <div style={{ fontSize: 48 }}>{isChallenge ? '⚠️' : '💀'}</div>

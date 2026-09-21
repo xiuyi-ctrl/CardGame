@@ -94,12 +94,17 @@ export const ITEMS: Record<string, ItemDef> = {
   book_small: {
     id: 'book_small', name: '成长之书（小）', emoji: '📖',
     desc: '选择1只宠物，获得1成长点',
-    kind: 'growthPoint', price: 15, shop: false, growthAmount: 1,
+    kind: 'growthPoint', price: 12, shop: false, growthAmount: 1,
+  },
+  book_medium: {
+    id: 'book_medium', name: '成长之书（中）', emoji: '📕',
+    desc: '选择1只宠物，获得2成长点',
+    kind: 'growthPoint', price: 22, shop: false, growthAmount: 2,
   },
   book_large: {
     id: 'book_large', name: '成长之书（大）', emoji: '📚',
-    desc: '选择1只宠物，获得2成长点',
-    kind: 'growthPoint', price: 25, shop: false, growthAmount: 2,
+    desc: '选择1只宠物，获得3成长点',
+    kind: 'growthPoint', price: 30, shop: false, growthAmount: 3,
   },
   slot_unlock: {
     id: 'slot_unlock', name: '技能槽解锁', emoji: '🔓',
