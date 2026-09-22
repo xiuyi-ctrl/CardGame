@@ -2045,7 +2045,7 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
         <div className="screen">
           <div className="section-title">融合</div>
           <p className="card-sub">找不到目标宠物</p>
-          <button className="btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>返回</button>
+          <button className="btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>返回地图</button>
         </div>
       );
     }
@@ -2124,7 +2124,7 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
             className="big-btn"
             onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}
           >
-            ← 返回
+            ← 返回地图
           </button>
           <button
             className="primary big-btn"
@@ -2294,7 +2294,7 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回</button>
+        <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回地图</button>
       </div>
     </div>
   );
