@@ -165,6 +165,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const nodeType = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.type;
   const isSimulation = nodeType === 'arena3' && state.arena3Pending?.mode === 'simulation';
+  const isArena3Challenge = nodeType === 'arena3' && state.arena3Pending?.mode === 'challenge';
   const isChallenge = (nodeType === 'arena' || nodeType === 'gauntlet' || nodeType === 'arena3') && !isSimulation;
 
   // 模拟战失败：动画播完后自动回地图（无弹窗、无惩罚）
@@ -727,11 +728,11 @@ export function BattleScreen({ state, dispatch }: Props) {
       {battle.phase === 'lost' && !animating && !logPending && !isSimulation && (
         <div className="overlay">
           <div className="overlay-box">
-            <div style={{ fontSize: 48 }}>{isChallenge ? '⚠️' : '💀'}</div>
-            <h2>{isChallenge ? '挑战失败' : '全队阵亡'}</h2>
-            <p>{isChallenge ? '没有宠物阵亡，但需要承受挑战失败的代价' : '阵亡的宠物永久消失，本次远征到此结束'}</p>
+            <div style={{ fontSize: 48 }}>{isArena3Challenge || !isChallenge ? '💀' : '⚠️'}</div>
+            <h2>{isArena3Challenge || !isChallenge ? '全队阵亡' : '挑战失败'}</h2>
+            <p>{isArena3Challenge || !isChallenge ? '阵亡的宠物永久消失，本次远征到此结束' : '没有宠物阵亡，但需要承受挑战失败的代价'}</p>
             <button className="big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
-              {isChallenge ? '确认承受代价' : '确认'}
+              {isArena3Challenge || !isChallenge ? '确认' : '确认承受代价'}
             </button>
           </div>
         </div>

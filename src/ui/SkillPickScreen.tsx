@@ -58,7 +58,8 @@ export function SkillPickScreen({ state, dispatch }: Props) {
 
     // 第二步：从新技能中选1个替换
     const rc = skillReplace.refreshCount ?? 0;
-    const canRefresh = rc < MAX_REFRESH_COUNT && (unit.growthPoints ?? 0) >= REFRESH_COST;
+    const isLegend = state.specialPending?.kind === 'legendSkill';
+    const canRefresh = !isLegend && rc < MAX_REFRESH_COUNT && (unit.growthPoints ?? 0) >= REFRESH_COST;
     return (
       <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24 }}>
         <h2>🔄 替换技能 — 选择新技能</h2>
@@ -83,8 +84,12 @@ export function SkillPickScreen({ state, dispatch }: Props) {
           })}
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
-          {canRefresh && (
-            <button className="btn" onClick={() => dispatch({ type: 'PROF_SKILL_REFRESH' })}>
+          {!isLegend && (
+            <button
+              className="btn"
+              disabled={!canRefresh}
+              onClick={() => dispatch({ type: 'PROF_SKILL_REFRESH' })}
+            >
               🔄 刷新（{REFRESH_COST} 成长点，剩 {MAX_REFRESH_COUNT - rc} 次）
             </button>
           )}

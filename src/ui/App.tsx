@@ -1860,7 +1860,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
 function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const boughtItems = state.shopBoughtItems ?? [];
   const isProf = state.runMode === 'proficiency';
-  const profShopIds = ['heal_potion', 'gold_bag', 'book_small', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone'];
+  const profShopIds = ['heal_potion', 'gold_bag', 'book_small', 'book_medium', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
   const stock = (state.shopStock ?? []).filter((id) =>
     isProf ? profShopIds.includes(id) : (!!FOODS[id] || !!ITEMS[id])
   );

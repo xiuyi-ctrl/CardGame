@@ -1761,26 +1761,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             if (!visitedNodeIds.includes(state.currentNodeId)) visitedNodeIds.push(state.currentNodeId);
             return { ...state, screen: 'map', battle: undefined, roster, runStats, arena3Pending: undefined, visitedNodeIds, toast: { msg: '模拟战挑战失败，未获得奖励', kind: 'warning' } };
           }
-          const rng = createRng(state.seed * 97 + state.act * 29 + state.currentRow * 13 + state.battle.rngCount);
-          const event = buildPunishmentEvent(rng);
-          const roster = state.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp) }));
-          const runStats = state.runStats ? { ...state.runStats, lastBattleRound: 0, battlesLost: state.runStats.battlesLost + 1 } : state.runStats;
-          return {
-            ...state,
-            screen: 'event',
-            battle: undefined,
-            roster,
-            runStats,
-            map: { ...state.map, events: { ...state.map.events, [state.currentNodeId]: event } },
-            log: [`挑战失败：在「${node.label}」失利，承受代价`, ...state.log].slice(0, 20),
-          };
+          // 远征挑战赛失败：不承受代价，落到下方普通失败逻辑（直接结束远征）
+          const isArena3Challenge = node.type === 'arena3' && state.arena3Pending?.mode === 'challenge';
+          if (!isArena3Challenge) {
+            const rng = createRng(state.seed * 97 + state.act * 29 + state.currentRow * 13 + state.battle.rngCount);
+            const event = buildPunishmentEvent(rng);
+            const roster = state.roster.map((u) => ({ ...u, hp: Math.max(1, u.hp) }));
+            const runStats = state.runStats ? { ...state.runStats, lastBattleRound: 0, battlesLost: state.runStats.battlesLost + 1 } : state.runStats;
+            return {
+              ...state,
+              screen: 'event',
+              battle: undefined,
+              roster,
+              runStats,
+              map: { ...state.map, events: { ...state.map.events, [state.currentNodeId]: event } },
+              log: [`挑战失败：在「${node.label}」失利，承受代价`, ...state.log].slice(0, 20),
+            };
+          }
         }
         const rsLoss = state.runStats ? { ...state.runStats, battlesLost: state.runStats.battlesLost + 1 } : state.runStats;
         // 熟练度远征模式：失败进入结算界面
         if (state.runMode === 'proficiency') {
-          return { ...state, screen: 'proficiency-result', battle: undefined, runStats: rsLoss, proficiencyResult: 'lost' };
+          return { ...state, screen: 'proficiency-result', battle: undefined, runStats: rsLoss, proficiencyResult: 'lost', arena3Pending: undefined };
         }
-        return { ...state, screen: 'gameover', battle: undefined, runStats: rsLoss };
+        return { ...state, screen: 'gameover', battle: undefined, runStats: rsLoss, arena3Pending: undefined };
       }
       return state;
     }

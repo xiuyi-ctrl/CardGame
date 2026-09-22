@@ -35,7 +35,8 @@ export function Arena3Screen({ state, dispatch }: Props) {
           <div style={{ fontSize: 13, color: '#ccc', lineHeight: 1.5 }}>
             与 3 只精英级敌人对战。<br/>
             <span style={{ color: '#ff6b6b' }}>正常战斗规则（可死亡）</span>。<br/>
-            胜利 → 获得 <span style={{ color: '#e8c26a' }}>50 金币</span> + 全体 <span style={{ color: '#e8c26a' }}>+3 成长点</span>。
+            胜利 → 获得 <span style={{ color: '#e8c26a' }}>50 金币</span> + 全体 <span style={{ color: '#e8c26a' }}>+3 成长点</span>。<br/>
+            <span style={{ color: '#ff6b6b' }}>失败 → 远征直接结束</span>。
           </div>
         </div>
         {/* 表演赛 */}
