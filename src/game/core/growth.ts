@@ -34,6 +34,10 @@ export const SLOT4_COST = 8;
 export const SLOT5_COST = 10;
 /** 成本：替换技能 */
 export const REROLL_COST = 8;
+/** 成本：刷新技能选项 */
+export const REFRESH_COST = 8;
+/** 刷新技能最大次数 */
+export const MAX_REFRESH_COUNT = 3;
 
 // ─── 技能强化系统 ───
 

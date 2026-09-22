@@ -7,6 +7,7 @@ import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { getSkillEnhanceLevel } from '../game/core/growth';
+import { REFRESH_COST, MAX_REFRESH_COUNT } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
 import { SkillTag } from './components';
 
@@ -56,6 +57,8 @@ export function SkillPickScreen({ state, dispatch }: Props) {
     }
 
     // 第二步：从新技能中选1个替换
+    const rc = skillReplace.refreshCount ?? 0;
+    const canRefresh = rc < MAX_REFRESH_COUNT && (unit.growthPoints ?? 0) >= REFRESH_COST;
     return (
       <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24 }}>
         <h2>🔄 替换技能 — 选择新技能</h2>
@@ -79,9 +82,16 @@ export function SkillPickScreen({ state, dispatch }: Props) {
             );
           })}
         </div>
-        <button className="btn" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>
-          取消
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          {canRefresh && (
+            <button className="btn" onClick={() => dispatch({ type: 'PROF_SKILL_REFRESH' })}>
+              🔄 刷新（{REFRESH_COST} 成长点，剩 {MAX_REFRESH_COUNT - rc} 次）
+            </button>
+          )}
+          <button className="btn" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>
+            取消
+          </button>
+        </div>
       </div>
     );
   }

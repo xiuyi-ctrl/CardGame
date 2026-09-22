@@ -1,5 +1,5 @@
 /**
- * 成长远征模式 - 专属商店商品池（9种）
+ * 成长远征模式 - 专属商店商品池（10种）
  * 围绕成长点成长设计
  */
 
@@ -12,7 +12,8 @@ export type GrowthShopItemType =
   | 'pet_recruit'
   | 'heal_potion'
   | 'reset_stone'
-  | 'skill_enhance_stone';
+  | 'skill_enhance_stone'
+  | 'revival_stone';
 
 export interface GrowthShopItem {
   id: GrowthShopItemType;
@@ -85,6 +86,13 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
     desc: '选择 1 只宠物，强化其 1 个技能（无需成长点）',
     price: 40,
     emoji: '⚒️',
+  },
+  revival_stone: {
+    id: 'revival_stone',
+    label: '复活石',
+    desc: '复活 1 只死亡宠物（保留 50% 属性）',
+    price: 60,
+    emoji: '🪹',
   },
 };
 

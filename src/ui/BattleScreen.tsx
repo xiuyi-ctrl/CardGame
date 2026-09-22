@@ -164,8 +164,8 @@ export function BattleScreen({ state, dispatch }: Props) {
   }, [battle?.pendingSwap, battle?.phase, logPending, animating]);
 
   const nodeType = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId)?.type;
-  const isChallenge = nodeType === 'arena' || nodeType === 'gauntlet';
   const isSimulation = nodeType === 'arena3' && state.arena3Pending?.mode === 'simulation';
+  const isChallenge = (nodeType === 'arena' || nodeType === 'gauntlet' || nodeType === 'arena3') && !isSimulation;
 
   // 模拟战失败：动画播完后自动回地图（无弹窗、无惩罚）
   useEffect(() => {

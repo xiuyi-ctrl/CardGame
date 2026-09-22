@@ -398,6 +398,7 @@ export interface GameState {
     uid: string;
     replaceIdx: number;
     choices: string[];
+    refreshCount?: number;
   };
   /** 替换技能随机种子递增计数器 */
   skillReplaceCount?: number;

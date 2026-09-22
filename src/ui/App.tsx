@@ -1890,6 +1890,7 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
             pet_recruit: { label: '宠物招募', emoji: '🐾', desc: '招募一只随机宠物', price: 20 },
             reset_stone: { label: '还原石', emoji: '💎', desc: '重置技能强化等级（返还50%消耗）', price: 25 },
             skill_enhance_stone: { label: '技能强化石', emoji: '⚒️', desc: '强化1个技能（无需成长点）', price: 40 },
+            revival_stone: { label: '复活石', emoji: '🪹', desc: '复活1只死亡宠物（保留50%属性）', price: 60 },
           };
           const profItem = isProf ? profShopData[id] : undefined;
           const f = !isProf ? FOODS[id] : undefined;
@@ -2177,7 +2178,7 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   return (
     <div className="screen">
       <div className="section-title">宠物融合</div>
-      <p className="card-sub">拖动或点击宠物放入槽位，主宠继承副宠 50% 基础属性并学习一个技能</p>
+      <p className="card-sub">拖动或点击宠物放入槽位，主宠继承副宠 50% 基础属性和 30% 成长点并学习一个技能</p>
 
       {/* 两个槽位 */}
       <div className="fusion-slots">
@@ -2378,7 +2379,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const isProf = state.runMode === 'proficiency';
   const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
   const foodList = items.filter(([id]) => FOODS[id]);
-  const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone'];
+  const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
   const growthList = items.filter(([id]) => growthItemIds.includes(id));
   const itemList = items.filter(([id]) => ITEMS[id] && !growthItemIds.includes(id)).sort((a, b) => (a[0] === 'scout' ? -1 : b[0] === 'scout' ? 1 : 0));
   return (

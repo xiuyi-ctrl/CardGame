@@ -8,7 +8,7 @@ import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getMonster } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
-import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
+import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, REFRESH_COST, MAX_REFRESH_COUNT, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
 import { getGrowthArenaEncounter } from '../data/growth-arena';
 import { buildGrowthEvent } from '../data/growth-events';
@@ -111,6 +111,7 @@ export type GameAction =
   | { type: 'CANCEL_GROWTH_ITEM' }
   | { type: 'PROF_SKILL_REPLACE_START'; uid: string }
   | { type: 'PROF_SKILL_REPLACE_SELECT'; replaceIdx: number }
+  | { type: 'PROF_SKILL_REFRESH' }
   | { type: 'PROF_SKILL_ENHANCE'; uid: string; slotIndex: number }
   | { type: 'PROF_SKILL_ENHANCE_RESET'; uid: string; slotIndex: number }
   | { type: 'PROF_SKILL_ENHANCE_STONE'; uid: string; slotIndex: number }
@@ -893,9 +894,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         } else {
           // 选择1只宠物获得成长点：跳转到选择界面
           // 检查概率（chance 字段）
-          if (choice.chance !== undefined && choice.chance < 1) {
+           if (choice.chance !== undefined && choice.chance < 1) {
             const roll = Math.random();
             if (roll >= choice.chance) {
+              const ev = next.map.events[next.currentNodeId];
+              if (ev) {
+                const updatedChoices = ev.choices.filter((c) => c.id !== choice.id);
+                next = { ...next, map: { ...next.map, events: { ...next.map.events, [next.currentNodeId]: { ...ev, choices: updatedChoices } } } };
+              }
               return { ...next, screen: 'event', toast: { msg: '祈福失败……无事发生', kind: 'warning' }, log: [`${choice.label}（失败）`, ...next.log].slice(0, 20) };
             }
           }
@@ -2390,6 +2396,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           screen: 'growth-menu',
           skillReplace: undefined,
           skillPick: undefined,
+          specialPending: undefined,
         };
       }
       // 技能槽解锁模式：追加新技能
@@ -2475,6 +2482,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         skillReplace: { ...state.skillReplace, replaceIdx },
+      };
+    }
+
+    case 'PROF_SKILL_REFRESH': {
+      if (!state.skillReplace) return state;
+      const sr = state.skillReplace;
+      const rc = sr.refreshCount ?? 0;
+      if (rc >= MAX_REFRESH_COUNT) return state;
+      const target = state.roster.find((u) => u.uid === sr.uid);
+      if (!target) return state;
+      const gp = target.growthPoints ?? 0;
+      if (gp < REFRESH_COST) return state;
+      const updatedUnit = { ...target, growthPoints: gp - REFRESH_COST };
+      const count = state.skillReplaceCount ?? 0;
+      const rng = createRng(state.seed + hashStr(sr.uid) + 700 + (count + rc + 1) * 137);
+      const choices = getRandomSkillChoices(updatedUnit, 3, rng);
+      if (choices.length === 0) return state;
+      return {
+        ...state,
+        roster: state.roster.map((u) => (u.uid === sr.uid ? updatedUnit : u)),
+        skillReplace: { ...sr, choices, refreshCount: rc + 1 },
+        skillReplaceCount: count + 1,
       };
     }
 
@@ -2584,7 +2613,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const shopPrices: Record<string, number> = {
         book_small: 12, book_medium: 22, book_large: 30, slot_unlock: 50,
         forget_stone: 30, pet_recruit: 20, heal_potion: 30,
-        reset_stone: 25, skill_enhance_stone: 40,
+        reset_stone: 25, skill_enhance_stone: 40, revival_stone: 60,
       };
       const price = shopPrices[itemId] ?? 0;
       if (price <= 0) return state;
@@ -2615,7 +2644,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const cost = [5, 10, 15][refreshCount] ?? 15;
       if (state.gold < cost) return state;
       const rng = createRng(state.seed * 7919 + (state.currentRow) * 104729 + refreshCount * 31337);
-      const allItems = ['heal_potion', 'book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone'];
+      const allItems = ['heal_potion', 'book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
       const newStock = shuffle(rng, allItems).slice(0, 4);
       return {
         ...state,
@@ -2750,6 +2779,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       if (itemId === 'reset_stone') {
         return { ...state, screen: 'enhance-reset', toast: { msg: '选择一只宠物重置技能强化', kind: 'info' } };
+      }
+      if (itemId === 'revival_stone') {
+        const deadPets = state.deadPets ?? [];
+        if (deadPets.length === 0) return { ...state, inventory: { ...state.inventory, [itemId]: count }, toast: { msg: '没有死亡宠物可复活', kind: 'warning' } };
+        return { ...next, screen: 'revive-select', reviveRatio: 0.5, toast: { msg: '选择一只死亡宠物复活（保留50%属性）', kind: 'info' } };
       }
       return next;
     }

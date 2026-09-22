@@ -4,7 +4,7 @@ export interface ItemDef {
   emoji: string;
   desc: string;
   kind: 'purify' | 'skip' | 'scout' | 'twin' | 'atk_up' | 'spd_up' | 'hp_up' | 'atk_down' | 'spd_down' | 'hp_down'
-      | 'growthPoint' | 'slotUnlock' | 'resetGrowth' | 'healTeam';
+      | 'growthPoint' | 'slotUnlock' | 'resetGrowth' | 'healTeam' | 'revive';
   /** 商店售价（金币） */
   price: number;
   /** 是否可在战斗中使用 */
@@ -130,6 +130,11 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'skill_enhance_stone', name: '技能强化石', emoji: '⚒️',
     desc: '选择1只宠物，强化其1个技能（无需成长点）',
     kind: 'slotUnlock', price: 40, shop: false,
+  },
+  revival_stone: {
+    id: 'revival_stone', name: '复活石', emoji: '🪹',
+    desc: '复活1只死亡宠物（保留50%属性）',
+    kind: 'revive', price: 60, shop: false,
   },
 };
 
