@@ -539,8 +539,10 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   fear_bolt: {
-    id: 'fear_bolt', name: '恐惧弹', desc: '攻击单个敌人造成6伤害',
-    target: 'single', kind: 'attack', damage: 6,
+    id: 'fear_bolt', name: '恐惧弹', desc: '连续两次攻击随机敌人，附加恐惧1层',
+    target: 'random', kind: 'attack', damage: 3, hits: 2,
+    effects: [{ kind: 'fear', value: 1, turns: 2 }],
+    hideEffects: true,
   },
 
   // —— 地狱犬 ——

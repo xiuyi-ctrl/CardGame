@@ -370,7 +370,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   boss_minion_hellhound: {
     id: 'boss_minion_hellhound', name: '地狱犬', emoji: '🐕', image: '/15-1.png',
     baseHp: 20, baseSpd: 4,
-    skills: ['fear_bite', 'fear_howl', 'roar'],
+    skills: ['fear_bite', 'fear_howl'],
     desc: '坦克型，每回合开始随机恐惧一个敌人，保护Boss。',
     passive: 'fear_on_round_start',
     tame: { difficulty: 0 }, rank: 4,
