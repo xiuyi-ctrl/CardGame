@@ -1,5 +1,4 @@
 import type { GameState, Unlocks } from '../game/state/game';
-import { DEFAULT_UNLOCKS } from '../game/state/game';
 import { isValidGameState } from '../game/state/reducer';
 
 export interface PetCardBridge {
@@ -162,28 +161,6 @@ export function quitGame(): void {
   if (window.petCard) window.petCard.quit();
 }
 
-export function persistUnlocks(unlocks: Unlocks): void {
-  try {
-    localStorage.setItem('petCardUnlocks', JSON.stringify(unlocks));
-  } catch { /* ignore */ }
-}
-
-export function loadUnlocks(): Unlocks {
-  try {
-    const json = localStorage.getItem('petCardUnlocks');
-    if (json) {
-      const parsed = JSON.parse(json) as Partial<Unlocks>;
-      return {
-        difficulties: parsed.difficulties ?? DEFAULT_UNLOCKS.difficulties,
-        relics: parsed.relics ?? [],
-        bestGrade: parsed.bestGrade,
-        proficiencyUnlocked: parsed.proficiencyUnlocked ?? false,
-      };
-    }
-  } catch { /* ignore */ }
-  return { ...DEFAULT_UNLOCKS };
-}
-
 /** 检测通关后的解锁内容，返回新解锁项 */
 export function detectUnlocks(
   currentUnlocks: Unlocks,
@@ -212,6 +189,6 @@ export function detectUnlocks(
     if (countOf(tankTypes) >= 3 && !next.relics.includes('nature_medal')) next.relics.push('nature_medal');
     if (countOf(poisonTypes) >= 3 && !next.relics.includes('shadow_medal')) next.relics.push('shadow_medal');
   }
-  if (rank > (gradeRank[next.bestGrade ?? 'D'] ?? 0)) next.bestGrade = grade;
+  if (next.bestGrade === undefined || rank > (gradeRank[next.bestGrade] ?? 0)) next.bestGrade = grade;
   return next;
 }

@@ -24,7 +24,7 @@ import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
-import { persistSave, persistUnlocks, loadUnlocks, quitGame, detectUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
+import { persistSave, quitGame, detectUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
@@ -682,14 +682,14 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       }
       clearDeletedSlot(selectedSlot);
       selectSlot(selectedSlot);
-      dispatch({ type: 'STARTER', saveSlot: selectedSlot, unlocks: loadUnlocks() });
+      dispatch({ type: 'STARTER', saveSlot: selectedSlot, unlocks: { ...DEFAULT_UNLOCKS } });
       return;
     }
     const empty = slots.find((s) => !s.main && !s.proficiency);
     if (empty) {
       clearDeletedSlot(empty.slot);
       selectSlot(empty.slot);
-      dispatch({ type: 'STARTER', saveSlot: empty.slot, unlocks: loadUnlocks() });
+      dispatch({ type: 'STARTER', saveSlot: empty.slot, unlocks: { ...DEFAULT_UNLOCKS } });
     } else {
       alert('存档已满，请在「存档管理」中删除一个存档');
     }
@@ -698,10 +698,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   function confirmOverwrite() {
     if (overwriteTarget === null) return;
     const slotNum = overwriteTarget;
-    const slotState = slots.find((s) => s.slot === slotNum);
-    const slotUnlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks;
     setOverwriteTarget(null);
-    if (slotUnlocks) persistUnlocks(slotUnlocks);
     void deleteSaveMode(slotNum, 'main').then(() => {
       setSlots((prev) => {
         const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null } : s);
@@ -710,7 +707,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       });
       clearDeletedSlot(slotNum);
       selectSlot(slotNum);
-      dispatch({ type: 'STARTER', saveSlot: slotNum, unlocks: slotUnlocks });
+      dispatch({ type: 'STARTER', saveSlot: slotNum, unlocks: { ...DEFAULT_UNLOCKS } });
     });
   }
 
@@ -834,14 +831,14 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         </button>
         <button className="big-btn" onClick={() => {
           const slotState = slots.find((s) => s.slot === selectedSlot);
-          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? loadUnlocks();
+          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
           dispatch({ type: 'ACHIEVEMENTS', unlocks });
         }}>
           🏆 成就
         </button>
         {(() => {
           const slotState = slots.find((s) => s.slot === selectedSlot);
-          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? loadUnlocks();
+          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
           const profLocked = !unlocks.proficiencyUnlocked;
           return (
             <button
@@ -3047,10 +3044,9 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
     }
     if (nextUnlocks.bestGrade !== currentUnlocks.bestGrade) newItems.push(`最高评级：${nextUnlocks.bestGrade}`);
     setUnlocked(newItems);
-    // 保存 unlocks 到当前存档槽和全局 localStorage
+    // 保存 unlocks 到当前存档槽（成就按存档隔离）
     const updatedState = { ...state, unlocks: nextUnlocks };
     void persistSave(updatedState);
-    persistUnlocks(nextUnlocks);
   }, [rating]);
 
   return (
@@ -3206,7 +3202,7 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
         <div className="achievement-group">
           {grades.map((g) => {
             const rank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[g] ?? 0;
-            const bestRank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[unlocks.bestGrade ?? 'D'] ?? 0;
+            const bestRank = unlocks.bestGrade ? ({ S: 4, A: 3, B: 2, C: 1, D: 0 }[unlocks.bestGrade] ?? -1) : -1;
             const reached = bestRank >= rank;
             return (
               <div key={g} className={`achievement-item ${reached ? 'unlocked' : 'locked'}`}>
