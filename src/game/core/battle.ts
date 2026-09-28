@@ -7,6 +7,7 @@ import { createRng, shuffle } from '../rng';
 import type { Difficulty } from '../state/game';
 import { DIFFICULTY_CONFIG } from '../state/game';
 import { getSkillEnhanceLevel, getSkillEnhanceBonus } from './growth';
+import { applyEnemySkillProgression } from './enemy-progression';
 
 export const TAME_THRESHOLD = 0.4;
 /** 每次驯服失败对该敌人捕捉概率的乘法加成（如 0.25 = +25%） */
@@ -215,6 +216,7 @@ function makeEnemy(
   untameable = false,
   difficulty?: Difficulty,
   layer?: number,
+  eliteBonus = false,
 ): Unit {
   const s = getMonster(e.speciesId);
   const unit = makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
@@ -237,6 +239,10 @@ function makeEnemy(
     unit.maxHp = Math.round(unit.maxHp * mult);
     unit.hp = unit.maxHp;
     unit.spd = Math.max(1, Math.round(unit.spd * mult));
+  }
+  // 熟练度远征：敌人技能随层数强化/替换（rank<4 参与，Boss 与小怪不参与；精英额外+1/+1）
+  if (layer !== undefined && s.rank < 4) {
+    return applyEnemySkillProgression(unit, layer, eliteBonus);
   }
   return unit;
 }
@@ -358,6 +364,7 @@ export function createBattle(
   const untameable = options?.untameable === true;
   const difficulty = options?.difficulty;
   const layer = options?.layer;
+  const eliteBonus = options?.nodeType === 'elite';
   if (options?.gauntlet) {
     const [first, ...playerRest] = preparedPlayer;
     // 车轮战：我方也一次只上一只，其余进入替补席，阵亡后按序顶替
@@ -365,8 +372,8 @@ export function createBattle(
     b.playerBench = playerRest;
     b.playerDown = [];
     const [firstEnemy, ...enemyRest] = enemySpecies;
-    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer), row: 'front', column: 1 }] : [];
-    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer));
+    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer, eliteBonus), row: 'front', column: 1 }] : [];
+    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer, eliteBonus));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else if (options?.mirrorUnits) {
     // 竞技场模拟战：用玩家单位的克隆作为敌人，镜像玩家站位
@@ -388,7 +395,7 @@ export function createBattle(
     const picked = exact ? [...enemySpecies] : [...enemySpecies];
     const layout = planEnemyLayout(picked);
     b.playerUnits = preparedPlayer;
-    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty, layer));
+    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty, layer, eliteBonus));
     // Boss 小怪战：Boss 显示在前排中间（column 1），与两侧小怪互换位置
     if (b.enemyUnits.length >= 2 && b.enemyUnits[0]?.speciesId.startsWith('boss_')) {
       const boss = b.enemyUnits[0];
