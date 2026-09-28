@@ -2,7 +2,7 @@ import type { BattleState, FoodDef, Unit } from '../types';
 import { getMonster, fusionNeed, BASE_POOL, EVO1_POOL, EVO2_POOL } from '../data/monsters';
 export { EVO2_POOL } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
-import { ITEMS } from '../data/items';
+import { ITEMS, mainShopItemPool } from '../data/items';
 import { createRng, pick, randInt, shuffle, weightedPick } from '../rng';
 import { computeStats, makeUnit } from '../core/battle';
 
@@ -1197,7 +1197,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
   if (type === 'merchant') {
     const isItem = rng() < 0.5;
     const shopFoodPool = Object.keys(FOODS).filter((id) => FOODS[id].shop !== false);
-    const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
+    const shopItemPool = mainShopItemPool();
     let tradeChoice: EventChoice;
     if (isItem) {
       const itemId = pick(rng, shopItemPool);
@@ -1307,7 +1307,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
       title: '宠物遗迹',
       desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
       choices: [
-        c(1, '探索', '可能找到宝物或触发陷阱', 'item', { itemId: pick(rng, Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)) }),
+        c(1, '探索', '可能找到宝物或触发陷阱', 'item', { itemId: pick(rng, mainShopItemPool()) }),
         c(2, '带走遗物', '随机 1 只宠物永久 +1 速度', 'boost', { boostStat: 'spd', amount: 1 }),
         c(3, '离开', '谨慎行事', 'none'),
       ],
@@ -1316,7 +1316,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
   if (type === 'gambler') {
     // 神秘商人的赌局（赌博，幕2-3）
     const guess = Math.floor(rng() * 100);
-    const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
+    const shopItemPool = mainShopItemPool();
     const gambleFood = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
     const gambleWin = rng() < 0.5;
     return {
@@ -1346,7 +1346,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
   if (type === 'cursed_chest') {
     // 诅咒宝箱（赌博/联动，幕2-3）
     const open = Math.floor(rng() * 100);
-    const shopItemPool = Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0);
+    const shopItemPool = mainShopItemPool();
     const smashCurse = rng() < 0.5;
     return {
       title: '诅咒宝箱',
@@ -1378,7 +1378,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
           battleReward: { kind: 'gold', amount: 30 },
           battlePenalty: { goldLoss: 20 },
         }),
-        c(2, '赠送食物', '消耗 1 个随机食物，50% 获 20 金，50% 获随机道具', 'food', { foodId: f1, consumeFood: true, goldDelta: giftWin ? 20 : 0, ...(giftWin ? {} : { itemId: pick(rng, Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)) }) }),
+        c(2, '赠送食物', '消耗 1 个随机食物，50% 获 20 金，50% 获随机道具', 'food', { foodId: f1, consumeFood: true, goldDelta: giftWin ? 20 : 0, ...(giftWin ? {} : { itemId: pick(rng, mainShopItemPool()) }) }),
         c(3, '离开', '绕道而行', 'none'),
       ],
     };
@@ -1407,7 +1407,7 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
       title: '冒险者营地',
       desc: '你遇到了一群友善的冒险者，他们愿意分享经验……',
       choices: [
-        c(1, '交流', '获得 1 个随机道具', 'item', { itemId: pick(rng, Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0)) }),
+        c(1, '交流', '获得 1 个随机道具', 'item', { itemId: pick(rng, mainShopItemPool()) }),
         c(2, '训练', '全体回复 50% 生命值', 'heal', { amount: 50 }),
         c(3, '分道扬镳', '+25 金币', 'gold', { amount: 25 }),
       ],

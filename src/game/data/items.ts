@@ -143,3 +143,8 @@ export function getItem(id: string): ItemDef {
   if (!it) throw new Error(`未知道具: ${id}`);
   return it;
 }
+
+/** 主模式随机道具池：有价且非远征专属（shop !== false），排除复活石/成长之书等熟练度道具 */
+export function mainShopItemPool(): string[] {
+  return Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0 && ITEMS[id].shop !== false);
+}
