@@ -59,6 +59,14 @@ export interface NamedMetric {
   survivals: number;
 }
 
+export interface SkillMetric extends NamedMetric {
+  mode: SimulationMode;
+  difficulty: Difficulty;
+  side: 'player' | 'enemy';
+  /** 所有 skill-use 事件解析出的目标数之和。 */
+  hitTargets: number;
+}
+
 export interface BalanceVariantSummary {
   mode: SimulationMode;
   difficulty: Difficulty;
@@ -82,14 +90,14 @@ export interface BalanceVariantSummary {
 }
 
 export interface BalanceReport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
   codeVersion: string;
   botVersion: string;
   seedStart: number;
   seedsPerVariant: number;
   variants: BalanceVariantSummary[];
-  skills: NamedMetric[];
+  skills: SkillMetric[];
   monsters: NamedMetric[];
   passives: NamedMetric[];
   nodeResults: Record<string, { battles: number; wins: number; losses: number }>;

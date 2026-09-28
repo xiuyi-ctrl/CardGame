@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBattle, makeUnit, playerEndTurn, playerSkill } from '../src/game/core/battle';
 import { parseBalanceArgs } from '../src/game/simulation/cli';
-import { buildBalanceReport, compareBaseline, percentile, renderMarkdown, toBaseline } from '../src/game/simulation/report';
+import { buildBalanceReport, compactRunTelemetry, compareBaseline, percentile, renderMarkdown, toBaseline } from '../src/game/simulation/report';
 import { simulateRun, verifyDeterminism } from '../src/game/simulation/runner';
 
 describe('数值平衡工具', () => {
@@ -20,6 +20,10 @@ describe('数值平衡工具', () => {
     expect(() => JSON.stringify(report)).not.toThrow();
     expect(renderMarkdown(report)).toContain('# 数值平衡报告');
     expect(renderMarkdown(report)).toContain('main');
+    expect(report.schemaVersion).toBe(2);
+    expect(report.skills.every((item) => item.mode === 'main' && item.difficulty === 'normal')).toBe(true);
+    expect(report.skills.every((item) => item.side === 'player' || item.side === 'enemy')).toBe(true);
+    expect(report.skills.some((item) => item.hitTargets > 0)).toBe(true);
   });
 
   it('基线比较只产生告警，不写入硬失败', () => {
@@ -30,9 +34,20 @@ describe('数值平衡工具', () => {
     expect(report.hardFailures).toEqual([]);
   });
 
+  it('聚合后可压缩逐事件遥测且保留技能指标', () => {
+    const report = buildBalanceReport([simulateRun({ mode: 'main', difficulty: 'normal', seed: 2001 })], { codeVersion: 'test', seedStart: 2001, seedsPerVariant: 1 });
+    const uses = report.skills.reduce((sum, item) => sum + item.uses, 0);
+    expect(report.runs.some((run) => run.battles.some((battle) => battle.telemetry.length > 0))).toBe(true);
+    compactRunTelemetry(report);
+    expect(report.runs.every((run) => run.battles.every((battle) => battle.telemetry.length === 0))).toBe(true);
+    expect(report.skills.reduce((sum, item) => sum + item.uses, 0)).toBe(uses);
+    expect(() => JSON.stringify(report)).not.toThrow();
+  });
+
   it('相同种子和配置可复现', () => {
     expect(verifyDeterminism([
       { mode: 'main', difficulty: 'normal', seed: 2000, maxSteps: 2500, collectTelemetry: true },
+      { mode: 'main', difficulty: 'normal', seed: 2007, maxSteps: 2500, collectTelemetry: true },
       { mode: 'proficiency', difficulty: 'normal', seed: 2000, maxSteps: 6000, collectTelemetry: true },
     ])).toEqual([]);
   });

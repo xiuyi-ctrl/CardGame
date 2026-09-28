@@ -1,13 +1,16 @@
 import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, getActablePlayerUnits, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
 import { applyGrowthChoice, applySkillEnhance, getSkillEnhanceCost } from '../core/growth';
 import { FOODS } from '../data/foods';
+import { ITEMS } from '../data/items';
 import { getSkill } from '../data/skills';
 import type { BattleState, Unit } from '../types';
 import { createInitialState, gameReducer, type GameAction } from '../state/reducer';
-import { canStepTo, canTameEnemy, nextStage, type GameState, type MapNode } from '../state/game';
+import { canStepTo, canTameEnemy, DIFFICULTY_CONFIG, fusionNeedCount, nextStage, type GameState, type MapNode } from '../state/game';
 import type { BattleSimulationSummary, SimulationConfig, SimulationResult } from './types';
 
 export const DEFAULT_SIMULATION_STEPS = { main: 2500, proficiency: 6000 } as const;
+const PROFICIENCY_STARTERS = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'] as const;
+const MAIN_STARTERS = ['momo', 'lulu', 'fifi'] as const;
 
 function dispatch(state: GameState, action: GameAction): GameState {
   return gameReducer(state, action);
@@ -99,12 +102,16 @@ function mapStep(state: GameState): GameState {
   }
   const nodes = accessibleMainNodes(state);
   if (nodes.length === 0) return dispatch(state, { type: 'NEXT_NODE' });
-  const wounded = state.roster.some((unit) => unit.hp / unit.maxHp < 0.6);
+  const healthRatio = state.roster.reduce((sum, unit) => sum + unit.hp / unit.maxHp, 0) / Math.max(1, state.roster.length);
+  const wounded = healthRatio < 0.7;
   const rest = nodes.find((node) => node.type === 'rest' || node.type === 'shop');
   const special = nodes.find((node) => node.type === 'special');
-  const battle = nodes.find((node) => ['battle', 'elite', 'arena', 'gauntlet', 'corrupted', 'guardian', 'boss'].includes(node.type));
+  const required = nodes.find((node) => node.type === 'boss' || node.type === 'guardian' || node.type === 'keydoor');
+  const safeBattle = nodes.find((node) => node.type === 'battle');
+  const elite = nodes.find((node) => node.type === 'elite' || node.type === 'corrupted');
+  const challenge = healthRatio >= 0.8 ? nodes.find((node) => node.type === 'arena' || node.type === 'gauntlet') : undefined;
   const event = nodes.find((node) => node.type === 'event');
-  const chosen = (wounded && rest) || special || battle || event || nodes[0];
+  const chosen = required || (wounded && rest) || special || event || safeBattle || elite || challenge || rest || nodes[0];
   return dispatch(state, { type: 'MOVE', nodeId: chosen.id });
 }
 
@@ -170,14 +177,25 @@ function specialStep(state: GameState): GameState {
 function shopStep(state: GameState): GameState {
   if (state.runMode !== 'proficiency') {
     if (!state.shopBought && state.gold >= 5 && state.roster.some((unit) => unit.hp / unit.maxHp < 0.5)) return dispatch(state, { type: 'SHOP_REST' });
-    if (state.gold >= 14 && (state.shopStock ?? []).includes('gem') && !(state.shopBoughtItems ?? []).includes('gem')) return dispatch(state, { type: 'SHOP_BUY', foodId: 'gem' });
+    const stock = state.shopStock ?? [];
+    const priorities = ['gem', 'meat', 'berry', ...stock];
+    const item = priorities.find((id) => {
+      if (!stock.includes(id) || (state.shopBoughtItems ?? []).includes(id)) return false;
+      const rawPrice = FOODS[id]?.price ?? ITEMS[id]?.price ?? Infinity;
+      return state.gold >= Math.round(rawPrice * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult);
+    });
+    if (item) return dispatch(state, { type: 'SHOP_BUY', foodId: item });
     return dispatch(state, { type: 'NEXT_NODE' });
   }
   const stock = state.shopStock ?? [];
-  const price: Record<string, number> = { heal_potion: 30, book_large: 30, book_medium: 22, book_small: 12, skill_enhance_stone: 40 };
+  const wounded = state.roster.some((unit) => unit.hp / unit.maxHp < 0.7);
+  if (wounded && (state.inventory.heal_potion ?? 0) > 0) return dispatch(state, { type: 'USE_GROWTH_ITEM', itemId: 'heal_potion' });
+  const ownedGrowthItem = ['book_large', 'book_medium', 'book_small'].find((id) => (state.inventory[id] ?? 0) > 0);
+  if (ownedGrowthItem) return dispatch(state, { type: 'USE_GROWTH_ITEM', itemId: ownedGrowthItem });
+  const price: Record<string, number> = { heal_potion: 30, book_large: 30, book_medium: 22, book_small: 12, pet_recruit: 20 };
   const priorities = state.roster.some((unit) => unit.hp / unit.maxHp < 0.55)
-    ? ['heal_potion', 'book_large', 'book_medium', 'book_small', 'skill_enhance_stone']
-    : ['book_large', 'book_medium', 'book_small', 'skill_enhance_stone', 'heal_potion'];
+    ? ['heal_potion', 'book_large', 'book_medium', 'book_small', 'pet_recruit']
+    : ['book_large', 'book_medium', 'book_small', 'pet_recruit', 'heal_potion'];
   const item = priorities.find((id) => stock.includes(id) && !(state.shopBoughtItems ?? []).includes(id) && state.gold >= (price[id] ?? Infinity));
   return item ? dispatch(state, { type: 'PROF_SHOP_BUY', itemId: item }) : dispatch(state, { type: 'NEXT_NODE' });
 }
@@ -190,6 +208,13 @@ function rosterStep(state: GameState): GameState {
   }
   if (state.specialPending && target) {
     return dispatch(state, { type: 'SPECIAL_TARGET', uid: target.uid });
+  }
+  if (state.runMode !== 'proficiency') {
+    const primary = state.roster.find((unit) => {
+      if (!nextStage(unit.speciesId)) return false;
+      return state.roster.filter((candidate) => candidate.speciesId === unit.speciesId).length >= fusionNeedCount(unit.speciesId);
+    });
+    if (primary) return dispatch(state, { type: 'FUSE', primaryUid: primary.uid });
   }
   return dispatch(state, { type: 'NEXT_NODE' });
 }
@@ -298,9 +323,14 @@ export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationCo
   };
   const startedAt = performance.now();
   resetUidSequenceForSimulation(config.seed);
+  const starter = config.mode === 'main'
+    ? MAIN_STARTERS[config.seed % MAIN_STARTERS.length]
+    : PROFICIENCY_STARTERS[config.seed % PROFICIENCY_STARTERS.length];
+  const companionPool = PROFICIENCY_STARTERS.filter((id) => id !== starter);
+  const companion = companionPool[Math.floor(config.seed / PROFICIENCY_STARTERS.length) % companionPool.length];
   let state = config.mode === 'main'
-    ? dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: config.seed, difficulty: config.difficulty })
-    : dispatch(createInitialState(), { type: 'START_PROFICIENCY_PICKED', seed: config.seed, starterId: 'momo', companionId: 'lulu' });
+    ? dispatch(createInitialState(), { type: 'START_RUN', starterId: starter, companionId: companion, seed: config.seed, difficulty: config.difficulty })
+    : dispatch(createInitialState(), { type: 'START_PROFICIENCY_PICKED', seed: config.seed, starterId: starter, companionId: companion });
   if (config.mode === 'proficiency') {
     state = { ...state, difficulty: config.difficulty, currentNodeId: '', visitedNodeIds: [] };
   }
@@ -308,7 +338,10 @@ export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationCo
   let unchanged = 0;
   let specials = 0;
   let maxAct = state.act;
-  let maxLayer = state.currentLayer ?? 0;
+  const reportedLayer = (value: GameState) => value.runMode === 'proficiency'
+    ? Math.max(value.currentLayer ?? 0, value.currentRow + 1)
+    : (value.currentLayer ?? 0);
+  let maxLayer = reportedLayer(state);
   let activeNodeType: BattleSimulationSummary['nodeType'] = 'unknown';
   const battles: BattleSimulationSummary[] = [];
   let growthEarned = 0;
@@ -367,7 +400,7 @@ export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationCo
       if (afterEnhancements > beforeEnhancements) enhancements += afterEnhancements - beforeEnhancements;
       if (before.screen === 'special' && state.screen !== 'special') specials += 1;
       maxAct = Math.max(maxAct, state.act);
-      maxLayer = Math.max(maxLayer, state.currentLayer ?? 0);
+      maxLayer = Math.max(maxLayer, reportedLayer(state));
       steps += 1;
       unchanged = state === before ? unchanged + 1 : 0;
       if (unchanged >= 5) {

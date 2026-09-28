@@ -19,5 +19,6 @@ export function getGrowthArenaEncounter(layer: number, rng: () => number): { spe
     pool = [...TIER2, ...LEGENDARY, ...LEGENDARY, ...LEGENDARY];
   }
   const shuffled = shuffle(rng, pool);
-  return shuffled.slice(0, 3).map((speciesId) => ({ speciesId }));
+  const count = layer <= 20 ? 2 : 3;
+  return shuffled.slice(0, count).map((speciesId) => ({ speciesId }));
 }

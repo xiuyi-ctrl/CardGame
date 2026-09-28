@@ -6,13 +6,13 @@ import type { BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
-import { getMonster } from '../data/monsters';
+import { getMonster, MONSTERS } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
 import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, REFRESH_COST, MAX_REFRESH_COUNT, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
 import { getGrowthArenaEncounter } from '../data/growth-arena';
 import { buildGrowthEvent } from '../data/growth-events';
-import { getGrowthShopStock } from '../data/growth-shop';
+import { getGrowthShopStock, GROWTH_SHOP_ITEMS } from '../data/growth-shop';
 import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-special';
 
 function getFoodSafe(id: string): boolean {
@@ -23,6 +23,17 @@ function getFoodSafe(id: string): boolean {
 function hasKeyFor(state: GameState, node: MapNode): boolean {
   if (!node.guardianId) return false;
   return (state.inventory[`key_${node.guardianId}`] ?? 0) > 0;
+}
+
+/** 斗兽场对手最多高于出战宠物一个品阶；沿进化链向前回退且不消耗 RNG。 */
+function capArenaOpponent(speciesId: string, maxRank: number): string {
+  let current = speciesId;
+  while (getMonster(current).rank > maxRank) {
+    const previous = Object.values(MONSTERS).find((species) => species.evolutions?.some((evolution) => evolution.to === current));
+    if (!previous) break;
+    current = previous.id;
+  }
+  return current;
 }
 
 /** 自定义测试：需要选择宠物的战斗类关卡（非战斗类直接进入对应内容） */
@@ -255,7 +266,8 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
       case 'legend_seal': inventory.golden_fruit = (inventory.golden_fruit ?? 0) + 1; {
         // 额外1只随机二阶宠物
         if (EVO2_POOL && EVO2_POOL.length > 0) {
-          const pick2 = EVO2_POOL[Math.floor(Math.random() * EVO2_POOL.length)];
+          const relicRng = createRng((seed * 3571 + hashStr(relicId)) >>> 0);
+          const pick2 = EVO2_POOL[Math.floor(relicRng() * EVO2_POOL.length)];
           if (pick2) roster.push(makeUnit(pick2, true, (roster.length % 3) as 0 | 1 | 2, false));
         }
         break;
@@ -455,6 +467,12 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     }
   }
   const withStats = { ...result, runStats, roster: finalRoster };
+  // 同归于尽仍没有可继续远征的宠物，必须立即进入失败结算，不能流入奖励/奇遇界面卡死。
+  if (finalRoster.length === 0) {
+    return state.runMode === 'proficiency'
+      ? { ...withStats, screen: 'proficiency-result', proficiencyResult: 'lost' }
+      : { ...withStats, screen: 'gameover' };
+  }
   // 最后一幕（act 3）首领战胜利：直接进入通关界面，不再弹出战利品/队伍管理等中间界面
   if (bossNode && state.act >= 3) return { ...withStats, screen: 'victory' };
   return withStats;
@@ -490,6 +508,11 @@ function autoPosition(units: Unit[]): Unit[] {
 }
 
 function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?: string): GameState {
+  if (base.roster.length === 0) {
+    return base.runMode === 'proficiency'
+      ? { ...base, screen: 'proficiency-result', proficiencyResult: 'lost' }
+      : { ...base, screen: 'gameover' };
+  }
   // 成长远征模式：专属节点处理
   if (base.runMode === 'proficiency') {
     if (node.type === 'rest') return { ...base, screen: 'rest' };
@@ -545,7 +568,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
       if (!encounter || encounter.length === 0) return { ...base, screen: 'map' };
       const maxField = maxFieldForEnemy(encounter.length, base.runMode);
       const initial = autoPosition(fieldUnits(base, maxField));
-      const options = { act: 1, nodeType: 'boss' as const, difficulty: base.difficulty, untameable: true, layer };
+      const options = { act: 1, nodeType: 'boss' as const, difficulty: base.difficulty, untameable: true, layer, encounterHpMult: layer === 15 ? 0.95 : 1 };
       return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
     }
     return { ...base, screen: 'map' };
@@ -852,6 +875,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!ev) return state;
       const choice = ev.choices.find((x) => x.id === action.choiceId);
       if (!choice) return state;
+      // 事件内所有随机选择均由存档种子与节点/选项派生，保证同一种子复跑一致。
+      const eventRng = createRng((state.seed * 3571 + state.currentRow * 9973 + hashStr(state.currentNodeId) + hashStr(choice.id)) >>> 0);
       // 花费类选项若金币不足则视为无效选择（kind='gold' 的负数扣款选项除外，可直接为负扣款）
       if (choice.kind !== 'gold' && state.gold + (choice.goldDelta ?? 0) < 0) return state;
       // 消耗食物类选项若食物不足则视为无效
@@ -863,8 +888,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         next = { ...next, gold: Math.max(0, next.gold + (choice.amount ?? 0)) };
         if (choice.curseTarget && next.roster.length > 0) {
           const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
-          const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
-          const ri = Math.floor(Math.random() * next.roster.length);
+          const rc = curseKinds[Math.floor(eventRng() * curseKinds.length)];
+          const ri = Math.floor(eventRng() * next.roster.length);
           next = { ...next, roster: next.roster.map((u, i) => i === ri ? applyCurseToUnit(u, rc) : u) };
         }
       } else if (choice.kind === 'food' && choice.foodId) {
@@ -902,7 +927,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         };
       } else if (choice.kind === 'sacrifice' && next.roster.length > 0) {
         // 献祭：随机放生 1 只宠物，全队永久 +N 属性
-        const sacrificeIdx = Math.floor(Math.random() * next.roster.length);
+        const sacrificeIdx = Math.floor(eventRng() * next.roster.length);
         next = {
           ...next,
           roster: next.roster.filter((_, i) => i !== sacrificeIdx).map((u) => {
@@ -927,7 +952,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           // 选择1只宠物获得成长点：跳转到选择界面
           // 检查概率（chance 字段）
           if (choice.chance !== undefined && choice.chance < 1) {
-            const roll = Math.random();
+            const roll = eventRng();
             if (roll >= choice.chance) {
               // 未触发：事件结束返回地图，避免停留在事件界面继续选择其他选项
               return { ...next, screen: 'map', toast: { msg: `${choice.label}失败……无事发生`, kind: 'warning' }, log: [`${choice.label}（失败）`, ...next.log].slice(0, 20) };
@@ -947,7 +972,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...next, screen: 'roster', specialPending: { kind: 'eventSkillReplace', uid: '' }, log: [choice.label, ...next.log].slice(0, 20) };
       } else if (choice.kind === 'boost' && next.roster.length > 0) {
         // 永久属性提升：随机 1 只宠物
-        const boostIdx = Math.floor(Math.random() * next.roster.length);
+        const boostIdx = Math.floor(eventRng() * next.roster.length);
         const boostedPet = next.roster[boostIdx];
         next = {
           ...next,
@@ -977,9 +1002,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       } else if (choice.kind === 'curse' && next.roster.length > 0) {
         // 附加诅咒：随机 1 只宠物
-        const curseIdx = Math.floor(Math.random() * next.roster.length);
+        const curseIdx = Math.floor(eventRng() * next.roster.length);
         const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
-        const randomCurse = curseKinds[Math.floor(Math.random() * curseKinds.length)];
+        const randomCurse = curseKinds[Math.floor(eventRng() * curseKinds.length)];
         next = {
           ...next,
           roster: next.roster.map((u, i) => i === curseIdx ? applyCurseToUnit(u, randomCurse) : u),
@@ -1356,7 +1381,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const node = currentNode(state);
         const encounter = node ? state.map.encounter[node.id] : undefined;
         if (!encounter) return { ...state, screen: 'map', specialPending: undefined };
-        const battle = createBattle([unit], encounter, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'arena', difficulty: state.difficulty });
+        const maxRank = getMonster(unit.speciesId).rank + 1;
+        const cappedEncounter = encounter.map((enemy) => ({ speciesId: capArenaOpponent(enemy.speciesId, maxRank) }));
+        const battle = createBattle([unit], cappedEncounter, state.seed + state.currentRow * 17, { untameable: true, act: state.act, nodeType: 'arena', difficulty: state.difficulty, encounterHpMult: 0.85 });
         return {
           ...state,
           screen: 'battle',
@@ -1370,10 +1397,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (!target) return state;
         if (state.gold < 20) return { ...state, toast: { msg: '金币不足（需要20金币）', kind: 'warning' } };
         const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + 5 };
+        const runStats = state.runStats ? { ...state.runStats, goldSpent: state.runStats.goldSpent + 20 } : state.runStats;
         return {
           ...state,
           gold: state.gold - 20,
           roster: state.roster.map((u) => u.uid === action.uid ? updated : u),
+          runStats,
           specialPending: undefined,
           arena3Pending: undefined,
           screen: 'map',
@@ -1759,8 +1788,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           }
           if (eb.penalty.curseTarget && next.roster.length > 0) {
             const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
-            const rc = curseKinds[Math.floor(Math.random() * curseKinds.length)];
-            const ri = Math.floor(Math.random() * next.roster.length);
+            const penaltyRng = createRng((state.seed * 6151 + state.currentRow * 9973 + hashStr(state.currentNodeId)) >>> 0);
+            const rc = curseKinds[Math.floor(penaltyRng() * curseKinds.length)];
+            const ri = Math.floor(penaltyRng() * next.roster.length);
             next = { ...next, roster: next.roster.map((u, i) => i === ri ? applyCurseToUnit(u, rc) : u) };
           }
           // 失败 toast
@@ -2044,12 +2074,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rng = createRng(state.seed * 7919 + state.currentRow * 104729 + hashStr(currentNode.id) + count + 1);
       const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0 && ITEMS[id].shop !== false)];
       const newStock = shuffle(rng, pool).slice(0, 4);
+      const rs = state.runStats ? { ...state.runStats, goldSpent: state.runStats.goldSpent + cost } : state.runStats;
       return {
         ...state,
         gold: state.gold - cost,
         shopStock: newStock,
         shopRefreshCount: count + 1,
         shopBoughtItems: [],
+        runStats: rs,
         log: [`刷新商店商品（花费 ${cost} 金币）`, ...state.log].slice(0, 20),
       };
     }
@@ -2276,6 +2308,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'INTER_ACT_CONTINUE': {
       const act = state.act + 1;
       const map = generateMap(state.seed, act, state.difficulty);
+      const minHpRatio = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].interActMinHpRatio;
+      const roster = state.roster.map((unit) => ({ ...unit, hp: Math.max(unit.hp, Math.ceil(unit.maxHp * minHpRatio)) }));
       const dep = map.layers[0][0];
       const runStats = state.runStats ? {
         ...state.runStats,
@@ -2303,6 +2337,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         act,
         map,
+        roster,
         currentRow: 0,
         currentNodeId: dep ? dep.id : '',
         screen: 'map',
@@ -2650,7 +2685,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const price = shopPrices[itemId] ?? 0;
       if (price <= 0) return state;
       if (state.gold < price) return state;
-      let next: GameState = { ...state, gold: state.gold - price, shopBought: true };
+      const runStats = state.runStats ? { ...state.runStats, goldSpent: state.runStats.goldSpent + price } : state.runStats;
+      let next: GameState = { ...state, gold: state.gold - price, shopBought: true, runStats };
       const boughtItems = [...(state.shopBoughtItems ?? []), itemId];
       next = { ...next, shopBoughtItems: boughtItems };
       if (itemId === 'pet_recruit') {
@@ -2658,14 +2694,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (next.roster.length >= getMaxRoster(state.runMode)) {
           return { ...state, toast: { msg: '队伍已满，无法招募', kind: 'warning' } };
         }
-        const rng = createRng(state.seed * 1111 + Date.now());
+        const rng = createRng(state.seed * 1111 + state.currentRow * 104729 + hashStr(itemId));
         const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
         const pick = pool[Math.floor(rng() * pool.length)];
         next = { ...next, roster: [...next.roster, makeUnit(pick, true, 0, false)], toast: { msg: `招募了 ${getMonster(pick).name}！`, kind: 'success' } };
       } else {
         next = { ...next, inventory: { ...next.inventory, [itemId]: (next.inventory[itemId] ?? 0) + 1 } };
-        const itemNames: Record<string, string> = { book_small: '成长之书（小）', book_large: '成长之书（大）', slot_unlock: '技能槽解锁', forget_stone: '遗忘之石', heal_potion: '治疗圣水', reset_stone: '还原石', skill_enhance_stone: '技能强化石' };
-        next = { ...next, toast: { msg: `获得了 ${itemNames[itemId] ?? itemId}，请在背包中使用`, kind: 'info' } };
+        const itemName = GROWTH_SHOP_ITEMS[itemId as keyof typeof GROWTH_SHOP_ITEMS]?.label ?? ITEMS[itemId]?.name ?? itemId;
+        next = { ...next, toast: { msg: `获得了 ${itemName}，请在背包中使用`, kind: 'info' } };
       }
       return next;
     }
@@ -2678,12 +2714,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const rng = createRng(state.seed * 7919 + (state.currentRow) * 104729 + refreshCount * 31337);
       const allItems = ['heal_potion', 'book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
       const newStock = shuffle(rng, allItems).slice(0, 4);
+      const runStats = state.runStats ? { ...state.runStats, goldSpent: state.runStats.goldSpent + cost } : state.runStats;
       return {
         ...state,
         gold: state.gold - cost,
         shopStock: newStock,
         shopRefreshCount: refreshCount + 1,
         shopBoughtItems: [],
+        runStats,
         log: [`刷新商店商品（花费 ${cost} 金币）`, ...state.log].slice(0, 20),
       };
     }

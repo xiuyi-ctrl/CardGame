@@ -103,9 +103,11 @@ describe('createBattle 集成', () => {
     expect(b.enemyUnits[0].skills[0]).toBe('claw_smash');
   });
 
-  it('精英节点：额外 +1/+1', () => {
-    const b = createBattle(player(), [{ speciesId: 'momo' }], 42, { layer: 15, nodeType: 'elite' });
-    expect(b.enemyUnits[0].skillEnhancements).toEqual({ 0: 2, 1: 2 });
+  it('精英节点：15层前不追加加成，16层起额外 +1/+1', () => {
+    const early = createBattle(player(), [{ speciesId: 'momo' }], 42, { layer: 15, nodeType: 'elite' });
+    expect(early.enemyUnits[0].skillEnhancements).toEqual({ 0: 1 });
+    const later = createBattle(player(), [{ speciesId: 'momo' }], 42, { layer: 16, nodeType: 'elite' });
+    expect(later.enemyUnits[0].skillEnhancements).toEqual({ 0: 2, 1: 2 });
   });
 
   it('Boss 本体与小怪（rank 4）完全不参与', () => {

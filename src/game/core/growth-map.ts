@@ -90,8 +90,8 @@ function pickNodeType(rng: () => number, probs: NodeProb): NodeType {
 
 /** Boss层 */
 const BOSS_LAYERS = new Set([15, 30, 50]);
-/** 保底休憩层（每10层必有一个，排除Boss层） */
-const GUARANTEED_REST_LAYERS = new Set([10, 20, 40]);
+/** 保底休憩层；14/29 层固定用于 Boss 前整备。 */
+const GUARANTEED_REST_LAYERS = new Set([10, 14, 20, 29, 40]);
 
 /** 随机间隔生成固定节点位置（不与Boss/其他固定节点/排除层重叠） */
 function generateFixedPositions(
@@ -185,7 +185,7 @@ function pregenerateBoss(seed: number): Record<string, { speciesId: string }[]> 
   const bossMap: Record<string, { speciesId: string }[]> = {};
   // 层15: 第一幕Boss随机选一个
   const act1Boss = pick(rng, ACT_BOSS_POOLS[1]);
-  const act1Minions = BOSS_MINIONS[act1Boss] ?? [];
+  const act1Minions = (BOSS_MINIONS[act1Boss] ?? []).slice(0, 1);
   bossMap['pf_15'] = [
     { speciesId: act1Boss },
     ...act1Minions.map((m) => ({ speciesId: m })),
@@ -242,19 +242,19 @@ export function getGrowthEncounter(
   return enemies;
 }
 
-/** 精英战斗遭遇（全程最多2只） */
+/** 精英战斗遭遇：前期单精英，第一 Boss 前不出现传奇。 */
 export function getGrowthEliteEncounter(
   layer: number,
   rng: () => number,
 ): { speciesId: string }[] {
   // 按层数区间构建加权池
   let pool: string[];
-  if (layer <= 10) {
-    // 1~10层：纯二阶
+  if (layer <= 15) {
+    // 1~15层：纯二阶
     pool = TIER2;
   } else if (layer <= 25) {
-    // 11~25层：二阶 60% + 传奇 40%
-    pool = [...TIER2, ...TIER2, ...TIER2, ...LEGENDARY, ...LEGENDARY];
+    // 16~25层：二阶 80% + 传奇 20%
+    pool = [...TIER2, ...TIER2, ...TIER2, ...TIER2, ...LEGENDARY];
   } else if (layer <= 40) {
     // 26~40层：二阶 30% + 传奇 70%
     pool = [...TIER2, ...LEGENDARY, ...LEGENDARY, ...LEGENDARY, ...LEGENDARY];
@@ -263,7 +263,7 @@ export function getGrowthEliteEncounter(
     pool = LEGENDARY;
   }
 
-  const count = 2;
+  const count = layer <= 10 ? 1 : 2;
   const enemies: { speciesId: string }[] = [];
   for (let i = 0; i < count; i++) {
     enemies.push({ speciesId: pick(rng, pool) });

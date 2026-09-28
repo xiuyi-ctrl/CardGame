@@ -425,12 +425,14 @@ export interface DifficultyConfig {
   shopPriceMult: number;
   healRatio: number;
   eliteBoost: number;
+  /** 进入下一幕时，全队至少恢复到该生命比例。 */
+  interActMinHpRatio: number;
 }
 
 export const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
-  normal:    { label: '普通', enemyHpMult: 1.0, enemySpdBonus: 0, shopPriceMult: 1.0, healRatio: 0.6, eliteBoost: 0 },
-  hard:      { label: '困难', enemyHpMult: 1.2, enemySpdBonus: 1, shopPriceMult: 1.2, healRatio: 0.4, eliteBoost: 0.1 },
-  nightmare: { label: '地狱', enemyHpMult: 1.5, enemySpdBonus: 2, shopPriceMult: 1.4, healRatio: 0.2, eliteBoost: 0.15 },
+  normal:    { label: '普通', enemyHpMult: 1.0, enemySpdBonus: 0, shopPriceMult: 1.0, healRatio: 0.65, eliteBoost: 0, interActMinHpRatio: 0.8 },
+  hard:      { label: '困难', enemyHpMult: 1.15, enemySpdBonus: 1, shopPriceMult: 1.1, healRatio: 0.65, eliteBoost: 0.05, interActMinHpRatio: 0.65 },
+  nightmare: { label: '地狱', enemyHpMult: 1.35, enemySpdBonus: 2, shopPriceMult: 1.25, healRatio: 0.5, eliteBoost: 0.1, interActMinHpRatio: 0.5 },
 };
 
 export const DIFFICULTY_ORDER: Difficulty[] = ['normal', 'hard', 'nightmare'];
@@ -562,8 +564,21 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
   switch (n.type) {
     case 'battle':
     case 'elite':
-    case 'arena':
+    case 'arena': {
+      const enemy = enc?.[0];
+      const rank = enemy ? getMonster(enemy.speciesId).rank : undefined;
+      return {
+        icon: NODE_ICON.arena,
+        title: n.label,
+        detail: `${encDetail(enc)}${rank ? `（${rank}阶）` : ''}；1v1高风险挑战，失败将承受惩罚`,
+      };
+    }
     case 'gauntlet':
+      return {
+        icon: NODE_ICON.gauntlet,
+        title: n.label,
+        detail: `${encDetail(enc)}；共 ${n.gauntletSize ?? enc?.length ?? 2} 轮，失败将承受惩罚`,
+      };
     case 'corrupted':
     case 'arena3':
       return { icon: NODE_ICON[n.type], title: n.label, detail: encDetail(enc) };
@@ -1521,7 +1536,7 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty):
     const nodes: MapNode[] = [];
     for (let i = 0; i < count; i++) {
       const n = make(middleNodeType(rng, progress, difficulty), row, i);
-      if (n.type === 'gauntlet') n.gauntletSize = rng() < 0.5 ? 2 : 3;
+      if (n.type === 'gauntlet') n.gauntletSize = act <= 2 ? 2 : (rng() < 0.7 ? 2 : 3);
       nodes.push(n);
     }
     layers.push(nodes);

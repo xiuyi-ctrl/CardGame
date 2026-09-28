@@ -292,6 +292,8 @@ export interface BattleTelemetryEvent {
   passiveId?: string;
   statusKinds?: string[];
   amount?: number;
+  /** 本次技能解析出的目标数量；仅 skill-use 事件填写，用于区分单体与范围收益。 */
+  targetCount?: number;
   result?: 'won' | 'lost';
 }
 

@@ -50,12 +50,24 @@ corruptDebuff?: 'spd' | 'dmg' | 'burn';
   nodeType?: string;
   /** 难度等级，影响敌方属性缩放 */
   difficulty?: Difficulty;
-  /** 成长远征：当前层数，普通敌人按区间缩放（1~15层+8%/层，16~30层+10%/层，31~50层+15%/层），Boss不缩放 */
+  /** 成长远征：当前层数，普通敌人的生命与速度按独立曲线缩放，Boss不缩放 */
   layer?: number;
+  /** 特殊遭遇生命倍率；默认 1，仅用于斗兽场与第一阶段远征 Boss。 */
+  encounterHpMult?: number;
   /** 竞技场模拟战：用这些单位的克隆作为敌人（完整复制属性/技能/被动/强化） */
   mirrorUnits?: Unit[];
   /** 数值平衡模拟专用：收集结构化事件，不影响战斗逻辑与随机序列。 */
   collectTelemetry?: boolean;
+}
+
+/** 熟练度远征敌人缩放：生命连续成长，速度每 10 层离散增加。 */
+export function getProficiencyEnemyScaling(layer: number): { hpMult: number; spdBonus: number } {
+  const safeLayer = Math.max(1, Math.min(50, Math.floor(layer)));
+  let hpMult: number;
+  if (safeLayer <= 15) hpMult = 1 + (safeLayer - 1) * 0.04;
+  else if (safeLayer <= 30) hpMult = 1.56 + (safeLayer - 15) * 0.06;
+  else hpMult = 2.46 + (safeLayer - 30) * 0.08;
+  return { hpMult, spdBonus: Math.min(4, Math.floor((safeLayer - 1) / 10)) };
 }
 
 export function computeStats(speciesId: string) {
@@ -244,6 +256,7 @@ function makeEnemy(
   difficulty?: Difficulty,
   layer?: number,
   eliteBonus = false,
+  encounterHpMult = 1,
 ): Unit {
   const s = getMonster(e.speciesId);
   const unit = makeUnit(e.speciesId, false, col, !untameable && s.rank < 4 && s.tame.difficulty > 0, row);
@@ -253,19 +266,16 @@ function makeEnemy(
     unit.hp = unit.maxHp;
     unit.spd = Math.max(1, unit.spd + cfg.enemySpdBonus);
   }
-  // Boss（rank 4）不随层数缩放；普通敌人按层数区间缩放
+  // Boss（rank 4）不随层数缩放；普通敌人的生命与速度采用彼此独立的成长曲线。
   if (layer && layer > 1 && s.rank < 4) {
-    let mult: number;
-    if (layer <= 15) {
-      mult = 1 + (layer - 1) * 0.08;       // 1~15层：每层+8%
-    } else if (layer <= 30) {
-      mult = 2.12 + (layer - 15) * 0.10;   // 16~30层：每层+10%（15层基础2.12倍）
-    } else {
-      mult = 3.62 + (layer - 30) * 0.15;   // 31~50层：每层+15%（30层基础3.62倍）
-    }
-    unit.maxHp = Math.round(unit.maxHp * mult);
+    const scaling = getProficiencyEnemyScaling(layer);
+    unit.maxHp = Math.round(unit.maxHp * scaling.hpMult);
     unit.hp = unit.maxHp;
-    unit.spd = Math.max(1, Math.round(unit.spd * mult));
+    unit.spd = Math.max(1, unit.spd + scaling.spdBonus);
+  }
+  if (encounterHpMult !== 1) {
+    unit.maxHp = Math.max(1, Math.round(unit.maxHp * encounterHpMult));
+    unit.hp = unit.maxHp;
   }
   // 熟练度远征：敌人技能随层数强化/替换（rank<4 参与，Boss 与小怪不参与；精英额外+1/+1）
   if (layer !== undefined && s.rank < 4) {
@@ -391,7 +401,8 @@ export function createBattle(
   const untameable = options?.untameable === true;
   const difficulty = options?.difficulty;
   const layer = options?.layer;
-  const eliteBonus = options?.nodeType === 'elite';
+  const eliteBonus = options?.nodeType === 'elite' && (layer === undefined || layer >= 16);
+  const encounterHpMult = options?.encounterHpMult ?? 1;
   if (options?.gauntlet) {
     const [first, ...playerRest] = preparedPlayer;
     // 车轮战：我方也一次只上一只，其余进入替补席，阵亡后按序顶替
@@ -399,8 +410,8 @@ export function createBattle(
     b.playerBench = playerRest;
     b.playerDown = [];
     const [firstEnemy, ...enemyRest] = enemySpecies;
-    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer, eliteBonus), row: 'front', column: 1 }] : [];
-    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer, eliteBonus));
+    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer, eliteBonus, encounterHpMult), row: 'front', column: 1 }] : [];
+    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer, eliteBonus, encounterHpMult));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else if (options?.mirrorUnits) {
     // 竞技场模拟战：用玩家单位的克隆作为敌人，镜像玩家站位
@@ -422,7 +433,7 @@ export function createBattle(
     const picked = exact ? [...enemySpecies] : [...enemySpecies];
     const layout = planEnemyLayout(picked);
     b.playerUnits = preparedPlayer;
-    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty, layer, eliteBonus));
+    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty, layer, eliteBonus, encounterHpMult));
     // Boss 小怪战：Boss 显示在前排中间（column 1），与两侧小怪互换位置
     if (b.enemyUnits.length >= 2 && b.enemyUnits[0]?.speciesId.startsWith('boss_')) {
       const boss = b.enemyUnits[0];
@@ -678,10 +689,13 @@ function startRound(b: BattleState): BattleState {
     if (fp?.kind === 'fearOnRoundStart') {
       const enemies = u.isPlayer ? nb.enemyUnits.filter((e) => e.hp > 0) : nb.playerUnits.filter((e) => e.hp > 0);
       if (enemies.length > 0) {
-        const target = enemies[Math.floor(Math.random() * enemies.length)];
-        nb = applyFear(nb, target, 1);
-        nb = pushLog(nb, `${u.name} 的「${fp.name}」触发！${target.name} 恐惧 +1`, sideOf(u), u.uid, target.uid, undefined, undefined,
-          spans(`${u.name} 的「${fp.name}」触发！${target.name} 恐惧 +1`, [['actor', u.name], ['target', target.name], ['status', '恐惧']]));
+        nb = useRng(nb, (value, next) => {
+          const target = enemies[Math.floor(value * enemies.length)];
+          let updated = applyFear(next, target, 1);
+          updated = pushLog(updated, `${u.name} 的「${fp.name}」触发！${target.name} 恐惧 +1`, sideOf(u), u.uid, target.uid, undefined, undefined,
+            spans(`${u.name} 的「${fp.name}」触发！${target.name} 恐惧 +1`, [['actor', u.name], ['target', target.name], ['status', '恐惧']]));
+          return updated;
+        });
       }
     }
   }
@@ -891,11 +905,18 @@ export function performGauntletSwap(b: BattleState): BattleState {
   const wantsEnemy = !!b.pendingSwap?.enemy;
   const wantsPlayer = !!b.pendingSwap?.player;
   if (wantsEnemy && g && b.enemyBench && b.enemyBench.length > 0 && b.enemyUnits.every((u) => u.hp <= 0)) {
+    const recoveredPlayers = nb.playerUnits.map((unit) => unit.hp <= 0 ? unit : {
+      ...unit,
+      hp: Math.min(unit.maxHp, unit.hp + Math.round(unit.maxHp * 0.2)),
+      statuses: [],
+      shield: 0,
+    });
     const next = b.enemyBench[0];
     // 刚切入场的敌方替补本回合不出手（acted=true，回合结算跳过、下回合 startRound 重置）
     const nextUnit = { ...next, acted: true, statuses: [], row: 'front' as const, column: 1 as const };
     nb = {
       ...nb,
+      playerUnits: recoveredPlayers,
       enemyUnits: [nextUnit],
       enemyBench: b.enemyBench.slice(1),
       gauntlet: { total: g.total, current: g.current + 1 },
@@ -2322,6 +2343,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         targetUid: targets[0]?.uid,
         targetSpeciesId: targets[0]?.speciesId,
         skillId: skill.id,
+        targetCount: targets.length,
       }],
     };
   }

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { parseBalanceArgs, type BalanceCliOptions } from '../../src/game/simulation/cli';
-import { buildBalanceReport, compareBaseline, renderMarkdown, toBaseline } from '../../src/game/simulation/report';
+import { buildBalanceReport, compactRunTelemetry, compareBaseline, renderMarkdown, toBaseline } from '../../src/game/simulation/report';
 import { DEFAULT_SIMULATION_STEPS, simulateRun, verifyDeterminism } from '../../src/game/simulation/runner';
 import type { BalanceBaseline, SimulationConfig } from '../../src/game/simulation/types';
 
@@ -53,6 +53,7 @@ export function runCli(args = process.argv.slice(2)): number {
     const determinismConfigs = configs.filter((config) => config.seed < options.seedStart + Math.min(10, options.seeds));
     report.hardFailures.push(...verifyDeterminism(determinismConfigs));
   }
+  compactRunTelemetry(report);
   const outputDir = resolve(options.outputDir);
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(resolve(outputDir, 'balance-report.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
