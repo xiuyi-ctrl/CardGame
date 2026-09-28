@@ -269,6 +269,32 @@ export interface LogEntry {
   spans?: LogSpan[];
 }
 
+export type BattleTelemetryKind =
+  | 'battle-start'
+  | 'skill-use'
+  | 'damage'
+  | 'heal'
+  | 'status'
+  | 'passive-trigger'
+  | 'death'
+  | 'battle-end';
+
+/** 仅供数值模拟使用的结构化战斗事件；正式游戏默认不采集。 */
+export interface BattleTelemetryEvent {
+  kind: BattleTelemetryKind;
+  round: number;
+  side?: 'player' | 'enemy' | 'info';
+  actorUid?: string;
+  actorSpeciesId?: string;
+  targetUid?: string;
+  targetSpeciesId?: string;
+  skillId?: string;
+  passiveId?: string;
+  statusKinds?: string[];
+  amount?: number;
+  result?: 'won' | 'lost';
+}
+
 /** 玩家给某只宠物下达的指令（指令阶段记录，结束回合后按速度统一结算）。`skillId === 'rest'` 表示「休息」（本回合不行动，不消耗 AP，可再次点击取消） */
 export interface PlayerOrder {
   skillId: string;
@@ -293,6 +319,10 @@ export interface BattleState {
   enemyAp: number;
   phase: 'acting' | 'won' | 'lost';
   log: LogEntry[];
+  /** 数值平衡模拟专用；未开启采集时保持 undefined，不进入正常存档。 */
+  telemetry?: BattleTelemetryEvent[];
+  /** 遥测内部使用的上一份生命快照。 */
+  telemetryHp?: Record<string, number>;
   pendingTame: Unit[];
   /** 本场战斗驯服尝试次数（含成功与失败） */
   tameAttempts: number;

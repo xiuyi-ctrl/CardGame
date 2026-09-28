@@ -15,6 +15,10 @@
     "start": "electron .",
     "test": "vitest run",
     "dump-map": "vitest run tests/dump-map.test.ts",
+    "balance": "tsx tools/balance/index.ts",
+    "balance:deep": "tsx tools/balance/index.ts --seeds 1000",
+    "balance:check": "tsx tools/balance/index.ts --check",
+    "balance:baseline": "tsx tools/balance/index.ts --baseline",
     "dist": "npm run build && electron-builder --win portable"
   },
   "dependencies": {
@@ -33,6 +37,7 @@
     "electron-builder": "^24.13.3",
     "jsdom": "^29.1.1",
     "typescript": "^5.5.4",
+    "tsx": "^4.20.6",
     "vite": "^5.4.0",
     "vitest": "^2.1.1",
     "wait-on": "^7.2.0"

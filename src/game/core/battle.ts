@@ -1,8 +1,8 @@
-import type { BattleState, LogSpan, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
-import { getSkill } from '../data/skills';
+import type { BattleState, BattleTelemetryEvent, LogSpan, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
+import { getSkill, SKILLS } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
-import { getPassive } from '../data/passives';
+import { getPassive, PASSIVES } from '../data/passives';
 import { createRng, shuffle } from '../rng';
 import type { Difficulty } from '../state/game';
 import { DIFFICULTY_CONFIG } from '../state/game';
@@ -54,6 +54,8 @@ corruptDebuff?: 'spd' | 'dmg' | 'burn';
   layer?: number;
   /** 竞技场模拟战：用这些单位的克隆作为敌人（完整复制属性/技能/被动/强化） */
   mirrorUnits?: Unit[];
+  /** 数值平衡模拟专用：收集结构化事件，不影响战斗逻辑与随机序列。 */
+  collectTelemetry?: boolean;
 }
 
 export function computeStats(speciesId: string) {
@@ -62,9 +64,17 @@ export function computeStats(speciesId: string) {
 }
 
 let uidCounter = 0;
+let uidSalt: number | undefined;
+
+/** 数值模拟专用：重置 UID 序列并使用固定盐；不调用时仍使用实时时间盐。 */
+export function resetUidSequenceForSimulation(salt: number): void {
+  uidCounter = 0;
+  uidSalt = salt;
+}
+
 export function nextUid(prefix: string): string {
   uidCounter += 1;
-  return `${prefix}${uidCounter}_${Date.now() % 100000}`;
+  return `${prefix}${uidCounter}_${uidSalt ?? Date.now() % 100000}`;
 }
 
 export function makeUnit(
@@ -443,6 +453,16 @@ const growthMaster = [...b.enemyUnits, ...b.playerUnits].find((u) => u.speciesId
   b.playerAp = b.playerUnits.filter((u) => u.hp > 0).length;
   b.playerApMax = b.playerAp;
   b.enemyAp = b.enemyUnits.filter((u) => u.hp > 0).length;
+  if (options?.collectTelemetry) {
+    b.telemetry = [...b.playerUnits, ...b.enemyUnits].map((unit) => ({
+      kind: 'battle-start',
+      round: b.round,
+      side: unit.isPlayer ? 'player' : 'enemy',
+      actorUid: unit.uid,
+      actorSpeciesId: unit.speciesId,
+    }));
+    b.telemetryHp = Object.fromEntries([...b.playerUnits, ...b.enemyUnits].map((u) => [u.uid, u.hp]));
+  }
   b.turnOrder = computeTurnOrder(b);
   // 首回合潮汐节律触发（createBattle 不调用 startRound，需单独处理）
   if (b.round % 3 === 1) {
@@ -760,7 +780,43 @@ export function pushLog(
   // 附加当下全员护盾快照，供 UI 按动画事件逐步更新护盾显示
   const shields: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) shields[u.uid] = u.shield;
-  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus, burstTargets, spans }] };
+  let telemetry = b.telemetry;
+  if (telemetry) {
+    const events: BattleTelemetryEvent[] = [];
+    const previousHp = b.telemetryHp ?? hp;
+    const units = [...b.playerUnits, ...b.enemyUnits];
+    const byUid = new Map(units.map((u) => [u.uid, u]));
+    const actor = actorUid ? byUid.get(actorUid) : undefined;
+    const skillSpan = spans?.find((span) => span.kind === 'skill');
+    const passiveSpan = spans?.find((span) => span.kind === 'passive');
+    const skillName = skillSpan ? msg.slice(skillSpan.from, skillSpan.to) : undefined;
+    const passiveName = passiveSpan
+      ? msg.slice(passiveSpan.from, passiveSpan.to)
+      : Object.values(PASSIVES).find((passive) => msg.includes(`「${passive.name}」`))?.name;
+    const skillId = skillName ? Object.values(SKILLS).find((skill) => skill.name === skillName)?.id : undefined;
+    const passiveId = passiveName ? Object.values(PASSIVES).find((passive) => passive.name === passiveName)?.id : undefined;
+    for (const unit of units) {
+      const before = previousHp[unit.uid] ?? unit.hp;
+      const delta = unit.hp - before;
+      if (delta < 0) {
+        events.push({ kind: 'damage', round: b.round, side, actorUid, actorSpeciesId: actor?.speciesId, targetUid: unit.uid, targetSpeciesId: unit.speciesId, skillId, passiveId, amount: -delta });
+      } else if (delta > 0) {
+        events.push({ kind: 'heal', round: b.round, side, actorUid, actorSpeciesId: actor?.speciesId, targetUid: unit.uid, targetSpeciesId: unit.speciesId, skillId, passiveId, amount: delta });
+      }
+      if (before > 0 && unit.hp <= 0) {
+        events.push({ kind: 'death', round: b.round, side: unit.isPlayer ? 'player' : 'enemy', targetUid: unit.uid, targetSpeciesId: unit.speciesId });
+      }
+    }
+    if (addsStatus?.length) {
+      const target = targetUid ? byUid.get(targetUid) : undefined;
+      events.push({ kind: 'status', round: b.round, side, actorUid, actorSpeciesId: actor?.speciesId, targetUid, targetSpeciesId: target?.speciesId, skillId, passiveId, statusKinds: addsStatus });
+    }
+    if (passiveId) {
+      events.push({ kind: 'passive-trigger', round: b.round, side, actorUid, actorSpeciesId: actor?.speciesId, targetUid, passiveId });
+    }
+    telemetry = [...telemetry, ...events];
+  }
+  return { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus, burstTargets, spans }], telemetry, telemetryHp: telemetry ? hp : undefined };
 }
 
 function sideOf(u: Unit): 'player' | 'enemy' {
@@ -802,23 +858,28 @@ function checkEnd(b: BattleState): BattleState {
   const enemyHasBench = !!b.gauntlet && !!b.enemyBench && b.enemyBench.length > 0;
   if (!enemiesAlive && !playersAlive) {
     // 同回合双方全灭：能换则都换（敌先我后），不能换的一侧直接判胜/负
-    if (!enemyHasBench) return { ...b, phase: 'won' };
-    if (!playerHasBench) return { ...b, phase: 'lost', turnOrder: b.turnOrder, turnIndex: 0 };
+    if (!enemyHasBench) return markBattleEnd({ ...b, phase: 'won' }, 'won');
+    if (!playerHasBench) return markBattleEnd({ ...b, phase: 'lost', turnOrder: b.turnOrder, turnIndex: 0 }, 'lost');
     return { ...b, phase: 'acting', pendingSwap: { player: true, enemy: true } };
   }
   if (!enemiesAlive) {
     if (enemyHasBench) {
       return { ...b, phase: 'acting', pendingSwap: { player: !!b.pendingSwap?.player, enemy: true } };
     }
-    return { ...b, phase: 'won' };
+    return markBattleEnd({ ...b, phase: 'won' }, 'won');
   }
   if (!playersAlive) {
     if (playerHasBench) {
       return { ...b, phase: 'acting', pendingSwap: { player: true, enemy: !!b.pendingSwap?.enemy } };
     }
-    return { ...b, phase: 'lost', turnOrder: b.turnOrder, turnIndex: 0 };
+    return markBattleEnd({ ...b, phase: 'lost', turnOrder: b.turnOrder, turnIndex: 0 }, 'lost');
   }
   return b;
+}
+
+function markBattleEnd(b: BattleState, result: 'won' | 'lost'): BattleState {
+  if (!b.telemetry || b.telemetry.some((event) => event.kind === 'battle-end')) return b;
+  return { ...b, telemetry: [...b.telemetry, { kind: 'battle-end', round: b.round, result }] };
 }
 
 /** 车轮战：场上一方全灭且仍有替补时，由 UI/测试在死亡动画播完后调用——换下阵亡单位、按序顶替替补并写日志。
@@ -2248,6 +2309,21 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   nb = battle;
   if (targets.length === 0) {
     return markActed(pushLog(nb, `${actor.name} 的${skill.name}没有目标`, sideOf(actor)), actor.uid);
+  }
+  if (nb.telemetry) {
+    nb = {
+      ...nb,
+      telemetry: [...nb.telemetry, {
+        kind: 'skill-use',
+        round: nb.round,
+        side: sideOf(actor),
+        actorUid: actor.uid,
+        actorSpeciesId: actor.speciesId,
+        targetUid: targets[0]?.uid,
+        targetSpeciesId: targets[0]?.speciesId,
+        skillId: skill.id,
+      }],
+    };
   }
 
   // 锁链引爆：对所有被锁链连接的敌方单位造成伤害（独立于 kind 判断，避免 attack kind 走入通用攻击分支打自身）

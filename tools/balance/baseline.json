@@ -1,0 +1,1776 @@
+{
+  "schemaVersion": 1,
+  "codeVersion": "f6f2533",
+  "botVersion": "1.0.0",
+  "seedStart": 2000,
+  "seedsPerVariant": 100,
+  "variants": [
+    {
+      "mode": "main",
+      "difficulty": "normal",
+      "runs": 100,
+      "victories": 5,
+      "gameovers": 95,
+      "stuck": 0,
+      "errors": 0,
+      "winRate": 0.05,
+      "bossReachedRate": 0.99,
+      "bossWinRate": 0.7713,
+      "battleRoundsP50": 2,
+      "battleRoundsP95": 7,
+      "fatigueRate": 0.0025,
+      "averageGoldEarned": 240.62,
+      "averageGoldSpent": 5.88,
+      "averagePetsLost": 4.05,
+      "averageGrowthEarned": 0,
+      "averageGrowthSpent": 0,
+      "averageMaxLayer": 0
+    },
+    {
+      "mode": "main",
+      "difficulty": "hard",
+      "runs": 100,
+      "victories": 0,
+      "gameovers": 100,
+      "stuck": 0,
+      "errors": 0,
+      "winRate": 0,
+      "bossReachedRate": 0.97,
+      "bossWinRate": 0.5035,
+      "battleRoundsP50": 2,
+      "battleRoundsP95": 7,
+      "fatigueRate": 0.0036,
+      "averageGoldEarned": 163.36,
+      "averageGoldSpent": 4.59,
+      "averagePetsLost": 3.55,
+      "averageGrowthEarned": 0,
+      "averageGrowthSpent": 0,
+      "averageMaxLayer": 0
+    },
+    {
+      "mode": "main",
+      "difficulty": "nightmare",
+      "runs": 100,
+      "victories": 0,
+      "gameovers": 100,
+      "stuck": 0,
+      "errors": 0,
+      "winRate": 0,
+      "bossReachedRate": 0.87,
+      "bossWinRate": 0.4175,
+      "battleRoundsP50": 2,
+      "battleRoundsP95": 7,
+      "fatigueRate": 0.0012,
+      "averageGoldEarned": 116.1,
+      "averageGoldSpent": 7,
+      "averagePetsLost": 3.2,
+      "averageGrowthEarned": 0,
+      "averageGrowthSpent": 0,
+      "averageMaxLayer": 0
+    },
+    {
+      "mode": "proficiency",
+      "difficulty": "normal",
+      "runs": 100,
+      "victories": 0,
+      "gameovers": 100,
+      "stuck": 0,
+      "errors": 0,
+      "winRate": 0,
+      "bossReachedRate": 0.52,
+      "bossWinRate": 0,
+      "battleRoundsP50": 2,
+      "battleRoundsP95": 8,
+      "fatigueRate": 0.005,
+      "averageGoldEarned": 55.28,
+      "averageGoldSpent": 0,
+      "averagePetsLost": 0.02,
+      "averageGrowthEarned": 61.59,
+      "averageGrowthSpent": 59.81,
+      "averageMaxLayer": 10.59
+    }
+  ],
+  "skills": [
+    {
+      "id": "punch",
+      "uses": 13102,
+      "damage": 55037,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "steel_spike",
+      "uses": 9973,
+      "damage": 21872,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "aqua_shot",
+      "uses": 4656,
+      "damage": 11412,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "bite",
+      "uses": 3481,
+      "damage": 17831,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "ember",
+      "uses": 2401,
+      "damage": 11969,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "provoke",
+      "uses": 2148,
+      "damage": 4761,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "double_hit",
+      "uses": 1102,
+      "damage": 7302,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "water_bath",
+      "uses": 748,
+      "damage": 0,
+      "healing": 3277,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "weaken",
+      "uses": 732,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "poison_sting",
+      "uses": 602,
+      "damage": 2168,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shadow_claw",
+      "uses": 555,
+      "damage": 2786,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shadow_strike",
+      "uses": 522,
+      "damage": 2975,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "water_gun",
+      "uses": 513,
+      "damage": 1468,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shield_counter",
+      "uses": 413,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "leaf_needle",
+      "uses": 401,
+      "damage": 2119,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "water_wave",
+      "uses": 337,
+      "damage": 1327,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "flame_combo",
+      "uses": 331,
+      "damage": 2396,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "roar",
+      "uses": 328,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "water_shot",
+      "uses": 276,
+      "damage": 1173,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shield_quake",
+      "uses": 267,
+      "damage": 2047,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "iron_double",
+      "uses": 249,
+      "damage": 840,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "poison_vine",
+      "uses": 234,
+      "damage": 636,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "wave",
+      "uses": 214,
+      "damage": 2875,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fire_shock",
+      "uses": 201,
+      "damage": 746,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "wind_flash",
+      "uses": 186,
+      "damage": 1566,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shockwave",
+      "uses": 168,
+      "damage": 556,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "wild_leaf",
+      "uses": 161,
+      "damage": 3937,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "thorn_skill",
+      "uses": 156,
+      "damage": 390,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "leech_bite",
+      "uses": 154,
+      "damage": 508,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "snipe",
+      "uses": 154,
+      "damage": 831,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "revenge_thorn",
+      "uses": 150,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "poison_mist",
+      "uses": 145,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "leaf_quake",
+      "uses": 126,
+      "damage": 630,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "heal_light",
+      "uses": 122,
+      "damage": 0,
+      "healing": 929,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "whirlwind",
+      "uses": 107,
+      "damage": 4200,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "flame_shield",
+      "uses": 104,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "burn_burst",
+      "uses": 93,
+      "damage": 3599,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "wave_aura",
+      "uses": 91,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shadow_rift",
+      "uses": 89,
+      "damage": 1387,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shield_skill",
+      "uses": 84,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "swift_strike",
+      "uses": 81,
+      "damage": 528,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "dark_shock",
+      "uses": 80,
+      "damage": 594,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "toxic_bite",
+      "uses": 78,
+      "damage": 600,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "water_cannon",
+      "uses": 76,
+      "damage": 680,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "slime_cover",
+      "uses": 74,
+      "damage": 115,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "tidal_slam",
+      "uses": 72,
+      "damage": 1407,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "claw_smash",
+      "uses": 63,
+      "damage": 330,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "entangle",
+      "uses": 57,
+      "damage": 107,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shadow_flurry",
+      "uses": 54,
+      "damage": 451,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "spore_shield",
+      "uses": 51,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "rock_throw",
+      "uses": 50,
+      "damage": 203,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "rock_reforge",
+      "uses": 47,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "vine_whip",
+      "uses": 45,
+      "damage": 386,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "ghost_burst",
+      "uses": 42,
+      "damage": 743,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "crystal_sting",
+      "uses": 38,
+      "damage": 87,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "flame_slash",
+      "uses": 38,
+      "damage": 238,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "soul_rend",
+      "uses": 37,
+      "damage": 346,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "ghostly_harvest",
+      "uses": 30,
+      "damage": 230,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "group_taunt",
+      "uses": 30,
+      "damage": 247,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "gravel_throw",
+      "uses": 27,
+      "damage": 81,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "spore_burst",
+      "uses": 27,
+      "damage": 328,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "tidal_domain",
+      "uses": 19,
+      "damage": 0,
+      "healing": 364,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "toxic_burst",
+      "uses": 17,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "quake",
+      "uses": 15,
+      "damage": 59,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "spore_summon",
+      "uses": 12,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_howl",
+      "uses": 8,
+      "damage": 60,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_bite",
+      "uses": 6,
+      "damage": 11,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_bolt",
+      "uses": 5,
+      "damage": 25,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_burst",
+      "uses": 5,
+      "damage": 38,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_claw",
+      "uses": 4,
+      "damage": 13,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "soul_echo",
+      "uses": 4,
+      "damage": 48,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "chain_bind",
+      "uses": 3,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_gaze",
+      "uses": 3,
+      "damage": 17,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_harvest",
+      "uses": 3,
+      "damage": 4,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "hell_scream",
+      "uses": 3,
+      "damage": 68,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "despair_gaze",
+      "uses": 2,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "iron_tail",
+      "uses": 2,
+      "damage": 51,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "pierce_strike",
+      "uses": 2,
+      "damage": 8,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "blood_fang",
+      "uses": 1,
+      "damage": 5,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "chain_activate",
+      "uses": 1,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "flame_burst",
+      "uses": 1,
+      "damage": 6,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "inferno",
+      "uses": 1,
+      "damage": 45,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shell_up",
+      "uses": 1,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    }
+  ],
+  "monsters": [
+    {
+      "id": "momo",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 3897,
+      "deaths": 1536,
+      "survivals": 554
+    },
+    {
+      "id": "kiki",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 3421,
+      "deaths": 1089,
+      "survivals": 428
+    },
+    {
+      "id": "lulu",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 2351,
+      "deaths": 902,
+      "survivals": 222
+    },
+    {
+      "id": "mimi",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 1899,
+      "deaths": 638,
+      "survivals": 234
+    },
+    {
+      "id": "fifi",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 1515,
+      "deaths": 758,
+      "survivals": 126
+    },
+    {
+      "id": "pipi",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 1492,
+      "deaths": 641,
+      "survivals": 159
+    },
+    {
+      "id": "gora",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 601,
+      "deaths": 240,
+      "survivals": 44
+    },
+    {
+      "id": "sisi",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 447,
+      "deaths": 310,
+      "survivals": 19
+    },
+    {
+      "id": "momo_queen",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 408,
+      "deaths": 271,
+      "survivals": 21
+    },
+    {
+      "id": "fifi_king",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 402,
+      "deaths": 302,
+      "survivals": 11
+    },
+    {
+      "id": "mimi_king",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 361,
+      "deaths": 207,
+      "survivals": 18
+    },
+    {
+      "id": "lulu_king",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 344,
+      "deaths": 217,
+      "survivals": 13
+    },
+    {
+      "id": "gora_god",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 219,
+      "deaths": 102,
+      "survivals": 23
+    },
+    {
+      "id": "momo_god",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 179,
+      "deaths": 88,
+      "survivals": 9
+    },
+    {
+      "id": "mimi_god",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 173,
+      "deaths": 131,
+      "survivals": 3
+    },
+    {
+      "id": "lulu_god",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 166,
+      "deaths": 95,
+      "survivals": 6
+    },
+    {
+      "id": "fifi_god",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 165,
+      "deaths": 108,
+      "survivals": 3
+    },
+    {
+      "id": "sisi_god",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 153,
+      "deaths": 82,
+      "survivals": 7
+    },
+    {
+      "id": "boss_minion_thorn",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 119,
+      "deaths": 60,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_tree_guard",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 119,
+      "deaths": 104,
+      "survivals": 0
+    },
+    {
+      "id": "boss_vine",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 119,
+      "deaths": 60,
+      "survivals": 0
+    },
+    {
+      "id": "boss_crab",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 111,
+      "deaths": 70,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_hermit",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 111,
+      "deaths": 95,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_shrimp",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 111,
+      "deaths": 69,
+      "survivals": 0
+    },
+    {
+      "id": "boss_dark",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 105,
+      "deaths": 57,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_shadow_bat",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 105,
+      "deaths": 51,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_shadow_servant",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 105,
+      "deaths": 48,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_slug",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 52,
+      "deaths": 51,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_spore_sac",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 52,
+      "deaths": 49,
+      "survivals": 0
+    },
+    {
+      "id": "boss_moss",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 52,
+      "deaths": 49,
+      "survivals": 0
+    },
+    {
+      "id": "boss_golem",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 48,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_crystal",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 48,
+      "deaths": 68,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_rock",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 48,
+      "deaths": 55,
+      "survivals": 0
+    },
+    {
+      "id": "boss_ghost",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 43,
+      "deaths": 41,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_ghost_sailor",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 43,
+      "deaths": 40,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_phantom",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 43,
+      "deaths": 43,
+      "survivals": 0
+    },
+    {
+      "id": "boss_demon",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 4,
+      "deaths": 3,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_demon_imp",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 4,
+      "deaths": 4,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_hellhound",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 4,
+      "deaths": 3,
+      "survivals": 0
+    },
+    {
+      "id": "boss_dragon",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 2,
+      "deaths": 1,
+      "survivals": 0
+    },
+    {
+      "id": "boss_fire",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 2,
+      "deaths": 1,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_chain_guard",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 2,
+      "deaths": 1,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_chain_smith",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 2,
+      "deaths": 1,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_fire_sprite",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 2,
+      "deaths": 1,
+      "survivals": 0
+    },
+    {
+      "id": "boss_minion_lava_golem",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 0,
+      "appearances": 2,
+      "deaths": 1,
+      "survivals": 0
+    }
+  ],
+  "passives": [
+    {
+      "id": "watery_regen",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 3250,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "spike",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 2011,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "hard_armor",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 1318,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "thorn_royal",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 1059,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "tree_speed_up",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 888,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "tidal_regen",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 665,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "corrupt_spread",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 461,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "gale_combo",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 371,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "thorn_slow",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 340,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "life_spring",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 338,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "sticky_body",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 167,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "rock_shard",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 121,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "symbiotic_bark",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 117,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "corrupt_sac",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 90,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shadow_follow",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 87,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "shadow_hunter",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 87,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "tide_echo",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 83,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "tide_rhythm",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 59,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "rock_shell_break",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 56,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "ghost_soul",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 40,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "molten_armor",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 30,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_lord",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 23,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_on_round_start",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 12,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "fear_on_being_hit",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 6,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "soul_siphon",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 4,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "ember_death",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 1,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    },
+    {
+      "id": "flame_aura",
+      "uses": 0,
+      "damage": 0,
+      "healing": 0,
+      "triggers": 1,
+      "appearances": 0,
+      "deaths": 0,
+      "survivals": 0
+    }
+  ],
+  "nodeResults": {
+    "main:normal:battle": {
+      "battles": 797,
+      "wins": 782,
+      "losses": 15
+    },
+    "main:normal:guardian": {
+      "battles": 151,
+      "wins": 144,
+      "losses": 7
+    },
+    "main:normal:arena": {
+      "battles": 103,
+      "wins": 5,
+      "losses": 98
+    },
+    "main:normal:boss": {
+      "battles": 188,
+      "wins": 145,
+      "losses": 43
+    },
+    "main:normal:elite": {
+      "battles": 225,
+      "wins": 200,
+      "losses": 25
+    },
+    "main:normal:corrupted": {
+      "battles": 72,
+      "wins": 67,
+      "losses": 5
+    },
+    "main:normal:gauntlet": {
+      "battles": 91,
+      "wins": 20,
+      "losses": 71
+    },
+    "main:hard:battle": {
+      "battles": 508,
+      "wins": 498,
+      "losses": 10
+    },
+    "main:hard:elite": {
+      "battles": 242,
+      "wins": 228,
+      "losses": 14
+    },
+    "main:hard:gauntlet": {
+      "battles": 42,
+      "wins": 1,
+      "losses": 41
+    },
+    "main:hard:boss": {
+      "battles": 143,
+      "wins": 72,
+      "losses": 71
+    },
+    "main:hard:corrupted": {
+      "battles": 34,
+      "wins": 31,
+      "losses": 3
+    },
+    "main:hard:arena": {
+      "battles": 44,
+      "wins": 1,
+      "losses": 43
+    },
+    "main:hard:guardian": {
+      "battles": 109,
+      "wins": 107,
+      "losses": 2
+    },
+    "main:nightmare:battle": {
+      "battles": 398,
+      "wins": 381,
+      "losses": 17
+    },
+    "main:nightmare:elite": {
+      "battles": 180,
+      "wins": 167,
+      "losses": 13
+    },
+    "main:nightmare:corrupted": {
+      "battles": 19,
+      "wins": 15,
+      "losses": 4
+    },
+    "main:nightmare:boss": {
+      "battles": 103,
+      "wins": 43,
+      "losses": 60
+    },
+    "main:nightmare:arena": {
+      "battles": 32,
+      "wins": 3,
+      "losses": 29
+    },
+    "main:nightmare:gauntlet": {
+      "battles": 15,
+      "wins": 1,
+      "losses": 14
+    },
+    "main:nightmare:guardian": {
+      "battles": 79,
+      "wins": 73,
+      "losses": 6
+    },
+    "proficiency:normal:battle": {
+      "battles": 698,
+      "wins": 690,
+      "losses": 8
+    },
+    "proficiency:normal:elite": {
+      "battles": 30,
+      "wins": 1,
+      "losses": 29
+    },
+    "proficiency:normal:boss": {
+      "battles": 52,
+      "wins": 0,
+      "losses": 52
+    },
+    "proficiency:normal:arena3": {
+      "battles": 27,
+      "wins": 16,
+      "losses": 11
+    }
+  }
+}
