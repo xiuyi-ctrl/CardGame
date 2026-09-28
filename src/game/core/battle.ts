@@ -31,6 +31,9 @@ const BACK_PASSIVES: PassiveKind[] = [
 /** AI 选择行动时 softmax 温度：越小越趋向最高分，越大越随机（默认 12） */
 const SOFTMAX_TEMP = 12;
 
+/** 防止低伤、减伤、护盾与回复组合形成无限战斗：超过该回合后攻击逐回合获得疲劳增伤。 */
+export const BATTLE_FATIGUE_START_ROUND = 30;
+
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
 /** 被侵蚀 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 */
@@ -164,6 +167,20 @@ export function skillCooldownLeft(u: Unit, skillId: string): number {
   return u.skillCooldowns?.[skillId] ?? 0;
 }
 
+/**
+ * 单位当前是否可以选择指定技能。
+ * 集中校验次数、冷却、封印与成长值，供玩家入口、AI 和自动模拟共用。
+ */
+export function canUnitUseSkill(u: Unit, skillId: string): boolean {
+  if (skillUsesLeft(u, skillId) <= 0 || skillCooldownLeft(u, skillId) > 0) return false;
+  const sealed = u.statuses.some(
+    (status) => status.kind === 'skillSeal' && (status.sealedSkills ?? []).includes(skillId),
+  );
+  if (sealed) return false;
+  const skill = getSkill(skillId);
+  return !skill.growthCost || (u.growthValue ?? 0) >= skill.growthCost;
+}
+
 /** 设置技能冷却（使用后调用） */
 function applySkillCooldown(b: BattleState, actor: Unit, skill: SkillDef): BattleState {
   if (!skill.cooldown) return b;
@@ -196,11 +213,11 @@ export function computeTurnOrder(b: BattleState): string[] {
       let cFirst = cSkill?.priority === 'first' ? 1 : 0;
       // 若无显式 orders，检查单位技能列表中是否有可用的先手技能（用于显示预测）
       if (!aFirst && !aOrder) {
-        const avail = a.skills.map(getSkill).find((s) => s.priority === 'first' && skillUsesLeft(a, s.id) > 0 && skillCooldownLeft(a, s.id) <= 0);
+        const avail = a.skills.map(getSkill).find((s) => s.priority === 'first' && canUnitUseSkill(a, s.id));
         if (avail) aFirst = 1;
       }
       if (!cFirst && !cOrder) {
-        const avail = c.skills.map(getSkill).find((s) => s.priority === 'first' && skillUsesLeft(c, s.id) > 0 && skillCooldownLeft(c, s.id) <= 0);
+        const avail = c.skills.map(getSkill).find((s) => s.priority === 'first' && canUnitUseSkill(c, s.id));
         if (avail) cFirst = 1;
       }
       if (aFirst !== cFirst) return cFirst - aFirst;
@@ -1069,12 +1086,9 @@ function selectEnemyAction(
 ): { skillId?: string; targetUid?: string; kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; fallbackSkillId?: string } | undefined {
   if (actor.statuses.some((s) => s.kind === 'stun')) return undefined;
   // 技能封印：被封印的技能排除出候选池（避免 AI 选到被封印技能导致行动被吞）
-  const sealedSkillIds = actor.statuses
-    .filter((s) => s.kind === 'skillSeal')
-    .flatMap((s) => s.sealedSkills ?? []);
   const skills = actor.skills
     .map(getSkill)
-    .filter((s) => skillUsesLeft(actor, s.id) > 0 && skillCooldownLeft(actor, s.id) <= 0 && !sealedSkillIds.includes(s.id));
+    .filter((s) => canUnitUseSkill(actor, s.id));
   if (skills.length === 0) return undefined;
   const candidates: { kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
   const hpRatio = actor.hp / actor.maxHp;
@@ -1160,7 +1174,7 @@ function selectEnemyAction(
         candidates.push({ kind: 'buff', skill: bs, score: 55 });
       }
     }
-    if (bs.priority === 'first' && skillUsesLeft(actor, bs.id) > 0 && skillCooldownLeft(actor, bs.id) <= 0) {
+    if (bs.priority === 'first' && canUnitUseSkill(actor, bs.id)) {
       if (!actor.statuses.some((s) => s.kind === 'shield' || s.kind === 'shieldCounter' || s.kind === 'atkUp' || s.kind === 'comboBoost')) {
         let firstChance = b.round <= 1 ? 0.8 : 0.5;
         if (hpRatio < 0.4) firstChance = Math.max(firstChance, 0.7);
@@ -1376,14 +1390,14 @@ function selectEnemyAction(
     if (st.target === 'all') {
       // 全体 debuff：对多个目标施加状态，价值随目标数提升
       const aliveEnemies = targetPool.length;
-      if (aliveEnemies >= 2 && skillUsesLeft(actor, st.id) > 0 && skillCooldownLeft(actor, st.id) <= 0) {
+      if (aliveEnemies >= 2 && canUnitUseSkill(actor, st.id)) {
         candidates.push({ kind: 'status', skill: st, score: 40 + aliveEnemies * 5 });
       }
     } else {
       // 绝望凝视：仅对恐惧≥3层目标使用，50%概率
       if (st.id === 'despair_gaze') {
         const validTargets = targetPool.filter((t) => getFearStacks(t) >= 3);
-        if (validTargets.length > 0 && rngVal1 < 0.5 && skillUsesLeft(actor, st.id) > 0 && skillCooldownLeft(actor, st.id) <= 0) {
+        if (validTargets.length > 0 && rngVal1 < 0.5 && canUnitUseSkill(actor, st.id)) {
           const best = validTargets.sort((a, b) => b.hp - a.hp)[0];
           candidates.push({ kind: 'status', skill: st, targetUid: best.uid, score: 30 });
         }
@@ -1399,7 +1413,7 @@ function selectEnemyAction(
       });
       scoredTargets.sort((a, c) => c.score - a.score);
       const best = scoredTargets[0];
-      if (best && skillUsesLeft(actor, st.id) > 0 && skillCooldownLeft(actor, st.id) <= 0) {
+      if (best && canUnitUseSkill(actor, st.id)) {
         candidates.push({ kind: 'status', skill: st, targetUid: best.target.uid, score: best.score + 5 });
       }
     }
@@ -1447,7 +1461,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     return markActed(pushLog(nb, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
   return useRng(nb, (rngVal, b2) => {
-    const skills = actor.skills.map(getSkill).filter((s) => skillUsesLeft(actor, s.id) > 0 && skillCooldownLeft(actor, s.id) <= 0);
+    const skills = actor.skills.map(getSkill).filter((s) => canUnitUseSkill(actor, s.id));
     if (skills.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
@@ -1736,6 +1750,13 @@ function resolveAttack(
   if (shadowMark) {
     perHitDmg += shadowMark.value;
   }
+  // 战斗疲劳：第 31 回合起，所有攻击每段获得递增伤害，打破护盾/回复形成的永久僵局。
+  if (skill.kind === 'attack' && nb.round > BATTLE_FATIGUE_START_ROUND) {
+    perHitDmg += nb.round - BATTLE_FATIGUE_START_ROUND;
+  }
+  // 原本带伤害的攻击每段至少造成 1 点，避免降攻与减伤叠加后出现 0/负伤害软锁。
+  const isDamagingAttack = skill.kind === 'attack' && ((skill.damage ?? 0) > 0 || base > 0 || perHitDmg > 0);
+  if (isDamagingAttack) perHitDmg = Math.max(1, perHitDmg);
   const finalDmg = perHitDmg * count;
   const segments = splitDamage(finalDmg, count);
   let t2 = tWithPassive;
@@ -2874,10 +2895,8 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
   if (!actor || actor.hp <= 0) return b;
   if (actor.statuses.some((s) => s.kind === 'stun')) return b;
+  if (!canUnitUseSkill(actor, skillId)) return b;
   const skill = getSkill(skillId);
-  if (!skill) return b;
-  if (skillUsesLeft(actor, skillId) <= 0) return b;
-  if (skillCooldownLeft(actor, skillId) > 0) return b;
   // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝（不扣 AP），避免结算时静默回退成治疗自己
   if (skill.target === 'ally' && targetUid && !b.playerUnits.some((u) => u.uid === targetUid)) return b;
   // allyAll 不需要选择目标，跳过 targetUid 校验

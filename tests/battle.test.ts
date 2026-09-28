@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   createBattle,
+  canUnitUseSkill,
+  BATTLE_FATIGUE_START_ROUND,
   currentPlayerUnit,
   getActablePlayerUnits,
   isTameable,
@@ -1019,6 +1021,73 @@ describe('战斗日志与动画时序', () => {
       const extraLogs = after.log.filter(l => l.text.includes('暗影追猎'));
       expect(extraLogs.length).toBeGreaterThanOrEqual(1);
     });
+  });
+});
+
+describe('技能可用性统一校验', () => {
+  it('拒绝次数耗尽、冷却中和已封印的技能', () => {
+    const base = makeUnit('gora', true, 0, false);
+    const ownedSkill = base.skills[0];
+
+    expect(canUnitUseSkill(base, ownedSkill)).toBe(true);
+    expect(canUnitUseSkill({ ...base, skillUses: { [ownedSkill]: 0 } }, ownedSkill)).toBe(false);
+    expect(canUnitUseSkill({ ...base, skillCooldowns: { [ownedSkill]: 1 } }, ownedSkill)).toBe(false);
+    expect(canUnitUseSkill({
+      ...base,
+      statuses: [{ kind: 'skillSeal', value: 1, turns: 1, sealedSkills: [ownedSkill] }],
+    }, ownedSkill)).toBe(false);
+  });
+
+  it('不可用技能指令不消耗行动点且不写入指令', () => {
+    const player = makeUnit('gora', true, 0, false);
+    const raw = createBattle([player], [{ speciesId: 'kiki' }], 1);
+    const skillId = raw.playerUnits[0].skills[0];
+    const battle = {
+      ...raw,
+      playerUnits: raw.playerUnits.map((u) => ({ ...u, skillCooldowns: { [skillId]: 1 } })),
+    };
+    const beforeAp = battle.playerAp;
+    const after = playerSkill(battle, battle.playerUnits[0].uid, skillId);
+
+    expect(after.playerAp).toBe(beforeAp);
+    expect(after.orders).toEqual(battle.orders);
+  });
+});
+
+describe('战斗防软锁', () => {
+  it('有基础伤害的攻击在降攻后仍至少造成 1 点伤害', () => {
+    const raw = createBattle([makeUnit('kiki', true, 0, false)], [{ speciesId: 'lulu' }], 19);
+    const actorUid = raw.playerUnits[0].uid;
+    const targetUid = raw.enemyUnits[0].uid;
+    const battle: BattleState = {
+      ...raw,
+      playerUnits: raw.playerUnits.map((u) => ({
+        ...u,
+        curse: 'atkDown',
+        statuses: [{ kind: 'atkDown', value: 2, turns: 2 }],
+      })),
+      enemyUnits: raw.enemyUnits.map((u) => ({ ...u, hp: 100, maxHp: 100, passive: undefined, acted: true })),
+    };
+
+    const after = playerEndTurn(playerSkill(battle, actorUid, 'steel_spike', targetUid));
+    expect(after.log.some((entry) => entry.actorUid === actorUid && entry.text.includes('造成 1 伤害'))).toBe(true);
+  });
+
+  it('第 31 回合起攻击获得逐回合递增的疲劳伤害', () => {
+    const damageAt = (round: number): number => {
+      const raw = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu' }], 23);
+      const actorUid = raw.playerUnits[0].uid;
+      const targetUid = raw.enemyUnits[0].uid;
+      const battle: BattleState = {
+        ...raw,
+        round,
+        enemyUnits: raw.enemyUnits.map((u) => ({ ...u, hp: 100, maxHp: 100, passive: undefined, acted: true })),
+      };
+      const after = playerEndTurn(playerSkill(battle, actorUid, 'punch', targetUid));
+      return 100 - after.enemyUnits[0].hp;
+    };
+
+    expect(damageAt(BATTLE_FATIGUE_START_ROUND + 1)).toBe(damageAt(BATTLE_FATIGUE_START_ROUND) + 1);
   });
 });
 

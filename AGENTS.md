@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（347 个，含整局模拟）。
+- `npm test` / `npx vitest run`：单元测试（370 个，含 100 种子整局模拟）。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
 - `npm run dist`：build 后 electron-builder 打包 `--win portable`。
@@ -67,7 +67,8 @@
 - 侦查符/跳关道具均为背包中使用：背包点击 → 返回地图进入选择模式 → 点击目标节点执行。侦查符可看任意一关情报（含钥匙门/双生宝箱的确定奖励内容）；跳关道具仅对可达的战斗类节点（battle/elite/arena/gauntlet/corrupted）直接获得奖励，boss/guardian 不可跳。双生宝箱双开仅由双生符触发。
 - 背包界面：HUD 右侧「🎒 背包」可随时打开（查看宠物/道具，使用侦查符/跳关道具/净化药水）。熟练度远征模式下，商店购买的道具（除生物招募外）先存入背包，点击即可使用。
 - 所有随机必须经 `useRng`/`createRng`（seed + rngCount），保证确定性、可复现、可单测。
-- 平衡靠 `tests/simulation.test.ts` 的自动玩家整局模拟回归（当前 20 种子中至少 1 局通关、0 卡死）。
+- 平衡与流程稳定性靠 `tests/simulation.test.ts` 的自动玩家整局模拟回归：100 个固定种子必须全部正常结束、0 卡死；其中前 20 个固定样本持续检查至少有胜利、失败与奇遇覆盖。连续 5 步状态引用不变化判定为真实停滞，总流程设 2000 步保险上限。
+- **存档版本迁移**：`DualSave.saveVersion` 当前为 1；`parseDualSave` 兼容旧版单模式 `GameState`、无版本号双模式存档和当前版本存档，统一通过 `migrateGameState` 补齐 `runStats/difficulty/unlocks/relics/map events/map specials/visited*` 等字段；损坏 JSON 与高于当前程序版本的存档会被拒绝，避免按错误结构继续运行。
 - **事件系统升级**：事件模板从 6 个扩展到 13 个，新增幕次分层机制（幕1 池 7 个、幕2-3 池 12 个）。新增 EventChoice 类型：`battle`（触发战斗）、`sacrifice`（献祭宠物）、`boost`（永久属性提升）、`purify`（清除诅咒）、`curse`（附加诅咒）、`status`（附加状态）。赌博类事件结果在生成时用种子预掷，可复现，按钮不提前显示结果。战斗交互事件使用当前幕怪物池生成敌人，胜利获奖励，失败按惩罚处理（失金/诅咒/扣血）。新增 `consumeFood`（消耗食物）机制。
 - **幕间统计与评级系统**：`RunStats`（`game.ts`）跟踪全局累计数据：`battlesWon/battlesLost/goldEarned/goldSpent/petsTamed/petsLost/turnsPlayed/tameAttempts/圣果Used/fusions/shopVisits` + `lastBattleRound`（按回合计数）+ `actSnapshot`（幕开始时快照）。每次战斗胜利后 `resolveBattle` 更新 `battlesWon/goldEarned/petsTamed/petsLost/tameAttempts/圣果Used`；失败时更新 `battlesLost`；`PLAYER_SKILL` 按 `battle.round` 变化增量更新 `turnsPlayed`；事件战斗胜利/失败同样更新。商店购买更新 `goldSpent/shopVisits`；融合更新 `fusions`。击败首领后进入 `inter_act` 幕间结算界面（三幕各有主题文案），显示本幕增量（当前累计 - 快照）、高光时刻、队伍快照和评级。`INTER_ACT_CONTINUE` 快照当前累计值并重置 `lastBattleRound`。通关/失败时 `computeRating` 按 5 维度评分（征服者 30% / 驯兽师 25% / 经济大师 20% / 战斗效率 15% / 队伍完整性 10%），乘以**通关进度系数**（1幕→0.65、2幕→0.82、3幕→1.0），输出 S/A/B/C/D 评级（传奇远征者/精锐指挥官/可靠旅人/初生牛犊/幸存者）。1幕通关最高 B 级，2幕最高 A 级，3幕可达 S 级。`createInitialState` 包含默认 `runStats`（防止 `DEBUG_JUMP` 等路径丢失）；`LOAD_GAME` 对旧存档补全缺失 `runStats` 字段；`isValidGameState` 包含 `inter_act` 屏幕。
 - **难度系统**：`Difficulty` 类型（`'normal'|'hard'|'nightmare'`）+ `DIFFICULTY_CONFIG`（普通/困难/地狱），影响敌方 HP 缩放 + SPD 加成（`makeEnemy`）、战后回血比例（`resolveBattle`）、商店价格倍率（`SHOP_BUY`/`SHOP_REFRESH`）、精英节点额外加成（`middleNodeType` eliteBoost）。开局在 `StarterScreen` 选择难度，存入 `GameState.difficulty`，传递至 `freshRun`/`generateMap`/`createBattle`。

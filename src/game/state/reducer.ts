@@ -31,7 +31,7 @@ const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrup
 export type GameAction =
   | { type: 'START_RUN'; starterId: string; companionId: string; seed: number; difficulty?: Difficulty; relic?: string }
   | { type: 'STARTER'; saveSlot?: number; unlocks?: Unlocks }
-  | { type: 'LOAD_GAME'; state: GameState }
+  | { type: 'LOAD_GAME'; state: unknown }
   | { type: 'DELETE_SAVE'; slot: number }
   | { type: 'MOVE'; nodeId: string }
   | { type: 'EVENT_CHOICE'; choiceId: string }
@@ -173,6 +173,65 @@ export function isValidGameState(s: unknown): s is GameState {
     typeof o.screen === 'string' &&
     screens.includes(o.screen)
   );
+}
+
+function emptyRunStats(): RunStats {
+  const actSnapshot = {
+    battlesWon: 0,
+    battlesLost: 0,
+    goldEarned: 0,
+    goldSpent: 0,
+    petsTamed: 0,
+    petsLost: 0,
+    turnsPlayed: 0,
+    tameAttempts: 0,
+    圣果Used: 0,
+    fusions: 0,
+    shopVisits: 0,
+  };
+  return { ...actSnapshot, lastBattleRound: 0, actSnapshot };
+}
+
+/** 将旧版或字段不完整的存档迁移为当前 GameState；结构损坏时返回 null。 */
+export function migrateGameState(value: unknown): GameState | null {
+  if (!isValidGameState(value)) return null;
+  const saved = value.runStats;
+  const defaults = emptyRunStats();
+  const runStats: RunStats = {
+    battlesWon: saved?.battlesWon ?? defaults.battlesWon,
+    battlesLost: saved?.battlesLost ?? defaults.battlesLost,
+    goldEarned: saved?.goldEarned ?? defaults.goldEarned,
+    goldSpent: saved?.goldSpent ?? defaults.goldSpent,
+    petsTamed: saved?.petsTamed ?? defaults.petsTamed,
+    petsLost: saved?.petsLost ?? defaults.petsLost,
+    turnsPlayed: saved?.turnsPlayed ?? defaults.turnsPlayed,
+    tameAttempts: saved?.tameAttempts ?? defaults.tameAttempts,
+    圣果Used: saved?.圣果Used ?? defaults.圣果Used,
+    fusions: saved?.fusions ?? defaults.fusions,
+    shopVisits: saved?.shopVisits ?? defaults.shopVisits,
+    lastBattleRound: saved?.lastBattleRound ?? defaults.lastBattleRound,
+    actSnapshot: { ...defaults.actSnapshot, ...(saved?.actSnapshot ?? {}) },
+  };
+  return {
+    ...value,
+    runStats,
+    difficulty: value.difficulty ?? 'normal',
+    unlocks: value.unlocks
+      ? {
+          difficulties: [...(value.unlocks.difficulties ?? DEFAULT_UNLOCKS.difficulties)],
+          relics: [...(value.unlocks.relics ?? DEFAULT_UNLOCKS.relics)],
+          bestGrade: value.unlocks.bestGrade,
+          proficiencyUnlocked: value.unlocks.proficiencyUnlocked ?? false,
+        }
+      : { ...DEFAULT_UNLOCKS, difficulties: [...DEFAULT_UNLOCKS.difficulties], relics: [...DEFAULT_UNLOCKS.relics] },
+    relics: [...(value.relics ?? [])],
+    map: { ...value.map, events: value.map.events ?? {}, specials: value.map.specials ?? {} },
+    visitedWatchtowers: [...(value.visitedWatchtowers ?? [])],
+    visitedNodeIds: [...(value.visitedNodeIds ?? [])],
+    skipSelecting: false,
+    scoutSelecting: false,
+    scoutResult: undefined,
+  };
 }
 
 export function newSeed(): number {
@@ -603,38 +662,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'STARTER':
       return { ...createInitialState(), screen: 'difficulty-select', saveSlot: action.saveSlot, unlocks: action.unlocks ?? { ...DEFAULT_UNLOCKS } };
 
-    case 'LOAD_GAME':
-      if (!isValidGameState(action.state)) return { ...createInitialState(), screen: 'title', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
-      {
-  const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
-        const saved = action.state.runStats;
-        const runStats: RunStats = {
-          battlesWon: saved?.battlesWon ?? 0,
-          battlesLost: saved?.battlesLost ?? 0,
-          goldEarned: saved?.goldEarned ?? 0,
-          goldSpent: saved?.goldSpent ?? 0,
-          petsTamed: saved?.petsTamed ?? 0,
-          petsLost: saved?.petsLost ?? 0,
-          turnsPlayed: saved?.turnsPlayed ?? 0,
-          tameAttempts: saved?.tameAttempts ?? 0,
-          圣果Used: saved?.圣果Used ?? 0,
-          fusions: saved?.fusions ?? 0,
-          shopVisits: saved?.shopVisits ?? 0,
-          lastBattleRound: saved?.lastBattleRound ?? 0,
-          actSnapshot: saved?.actSnapshot ?? { ...zeroSnap },
-        };
-        return {
-          ...action.state,
-          runStats,
-          difficulty: action.state.difficulty ?? 'normal',
-          unlocks: action.state.unlocks ?? { ...DEFAULT_UNLOCKS },
-          map: { ...action.state.map, events: action.state.map.events ?? {}, specials: action.state.map.specials ?? {} },
-          skipSelecting: false,
-          scoutSelecting: false,
-          scoutResult: undefined,
-          saveSlot: action.state.saveSlot,
-        };
-      }
+    case 'LOAD_GAME': {
+      const migrated = migrateGameState(action.state);
+      if (!migrated) return { ...createInitialState(), screen: 'title', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
+      return migrated;
+    }
 
     case 'MOVE': {
       const isFirst = state.currentNodeId === '';

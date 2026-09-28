@@ -1,5 +1,5 @@
 import type { GameState, Unlocks } from '../game/state/game';
-import { isValidGameState } from '../game/state/reducer';
+import { migrateGameState } from '../game/state/reducer';
 
 export interface PetCardBridge {
   platform: string;
@@ -16,6 +16,7 @@ declare global {
 }
 
 export const SAVE_SLOT_COUNT = 6;
+export const CURRENT_SAVE_VERSION = 1;
 
 const deletedSlots = new Set<number>();
 
@@ -25,6 +26,7 @@ function slotKey(slot: number): string {
 
 /** 双模式存档：每个槽位同时保存主模式和熟练度远征 */
 export interface DualSave {
+  saveVersion: number;
   main?: GameState | null;
   proficiency?: GameState | null;
 }
@@ -36,23 +38,31 @@ function isLegacySave(obj: unknown): obj is GameState {
   return typeof o.seed === 'number' && typeof o.screen === 'string' && Array.isArray(o.roster);
 }
 
-/** 从 localStorage 原始 JSON 解析为 DualSave（含旧格式迁移） */
-function parseDualSave(json: string): DualSave | null {
+/** 解析并迁移存档；兼容旧版单模式 GameState 与无版本号的双模式存档。 */
+export function parseDualSave(json: string): DualSave | null {
   try {
     const parsed = JSON.parse(json) as unknown;
     if (!parsed || typeof parsed !== 'object') return null;
+    const record = parsed as Record<string, unknown>;
     // 新格式：已有 main/proficiency 字段
-    if ('main' in (parsed as Record<string, unknown>) || 'proficiency' in (parsed as Record<string, unknown>)) {
-      const ds = parsed as DualSave;
+    if ('main' in record || 'proficiency' in record) {
+      const rawVersion = record.saveVersion;
+      if (rawVersion !== undefined && (!Number.isInteger(rawVersion) || (rawVersion as number) < 1 || (rawVersion as number) > CURRENT_SAVE_VERSION)) {
+        return null;
+      }
       return {
-        main: isValidGameState(ds.main) ? ds.main : null,
-        proficiency: isValidGameState(ds.proficiency) ? ds.proficiency : null,
+        saveVersion: CURRENT_SAVE_VERSION,
+        main: migrateGameState(record.main),
+        proficiency: migrateGameState(record.proficiency),
       };
     }
     // 旧格式：直接是 GameState
     if (isLegacySave(parsed)) {
-      const key = parsed.runMode === 'proficiency' ? 'proficiency' : 'main';
-      return { [key]: parsed } as DualSave;
+      const migrated = migrateGameState(parsed);
+      if (!migrated) return null;
+      return migrated.runMode === 'proficiency'
+        ? { saveVersion: CURRENT_SAVE_VERSION, proficiency: migrated, main: null }
+        : { saveVersion: CURRENT_SAVE_VERSION, main: migrated, proficiency: null };
     }
     return null;
   } catch {
@@ -76,7 +86,7 @@ async function readDualSave(slot: number): Promise<DualSave | null> {
 /** 写入 DualSave 到槽位 */
 async function writeDualSave(slot: number, ds: DualSave): Promise<void> {
   if (deletedSlots.has(slot)) return;
-  const json = JSON.stringify(ds);
+  const json = JSON.stringify({ ...ds, saveVersion: CURRENT_SAVE_VERSION });
   if (window.petCard) {
     try { await window.petCard.saveGame(slot, json); } catch { /* ignore */ }
   } else {
@@ -91,7 +101,7 @@ export async function persistSave(state: GameState): Promise<void> {
   if (deletedSlots.has(slot)) return;
   const mode = state.runMode === 'proficiency' ? 'proficiency' : 'main';
   const existing = await readDualSave(slot);
-  const ds: DualSave = { ...existing, [mode]: state };
+  const ds: DualSave = { saveVersion: CURRENT_SAVE_VERSION, ...existing, [mode]: state };
   await writeDualSave(slot, ds);
 }
 
@@ -103,8 +113,7 @@ export async function loadSave(slot: number): Promise<DualSave | null> {
 /** 从 DualSave 中取指定模式的 GameState */
 export function loadSlotMode(ds: DualSave | null, mode: 'main' | 'proficiency'): GameState | null {
   if (!ds) return null;
-  const s = ds[mode];
-  return isValidGameState(s) ? s : null;
+  return migrateGameState(ds[mode]);
 }
 
 export async function deleteSave(slot: number): Promise<boolean> {

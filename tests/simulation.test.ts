@@ -2,7 +2,7 @@
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import type { GameAction } from '../src/game/state/reducer';
 import type { GameState } from '../src/game/state/game';
-import { getActablePlayerUnits, isTameable, playerHasMove, skillUsesLeft } from '../src/game/core/battle';
+import { canUnitUseSkill, getActablePlayerUnits, isTameable, playerHasMove } from '../src/game/core/battle';
 import { canStepTo, canTameEnemy, nextStage, ROSTER_MAX, type MapNode } from '../src/game/state/game';
 import { getSkill } from '../src/game/data/skills';
 import { FOODS } from '../src/game/data/foods';
@@ -34,7 +34,12 @@ function botBattleStep(s: GameState): GameState {
     return dispatch(s, { type: 'PLAYER_TAME', foodId, enemyUid: tameTarget.uid });
   }
 
-  const heal = cur.skills.map(getSkill).find((x) => x.kind === 'heal' && skillUsesLeft(cur, x.id) > 0);
+  const usableSkills = cur.skills.filter((id) => canUnitUseSkill(cur, id)).map(getSkill);
+  if (usableSkills.length === 0) {
+    return dispatch(s, { type: 'PLAYER_REST', actorUid: cur.uid });
+  }
+
+  const heal = usableSkills.find((x) => x.kind === 'heal');
   if (heal) {
     const ally = [...b.playerUnits]
       .filter((u) => u.hp > 0)
@@ -44,16 +49,18 @@ function botBattleStep(s: GameState): GameState {
     }
   }
 
-  const skillIds = cur.skills
-    .map((id) => ({ id, def: getSkill(id) }))
-    .filter((x) => x.def.target !== 'self' && skillUsesLeft(cur, x.id) > 0)
+  const skillIds = usableSkills
+    .map((def) => ({ id: def.id, def }))
+    .filter((x) => x.def.kind !== 'heal' && x.def.target !== 'ally' && x.def.target !== 'allyAll')
     .sort((a, c) => (c.def.damage ?? 0) - (a.def.damage ?? 0));
-  const usableFallback = cur.skills.find((id) => skillUsesLeft(cur, id) > 0);
-  const chosen =
-    skillIds[0] ??
-    (usableFallback ? { id: usableFallback, def: getSkill(usableFallback) } : { id: cur.skills[0], def: getSkill(cur.skills[0]) });
-  if (chosen.def.target === 'all') {
+  const fallback = usableSkills[0];
+  const chosen = skillIds[0] ?? { id: fallback.id, def: fallback };
+  if (chosen.def.target === 'all' || chosen.def.target === 'random' || chosen.def.target === 'self' || chosen.def.target === 'allyAll') {
     return dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: chosen.id });
+  }
+  if (chosen.def.target === 'ally') {
+    const ally = [...b.playerUnits].filter((u) => u.hp > 0).sort((a, c) => a.hp / a.maxHp - c.hp / c.maxHp)[0];
+    return dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: chosen.id, targetUid: ally?.uid });
   }
   // 閫夋嫨鍙揪鐩爣锛堣€冭檻鍓嶅悗鎺掍繚鎶や笌瀹氫綅鎶€鑳斤級
   const enemies = b.enemyUnits.filter((u) => u.hp > 0);
@@ -76,16 +83,28 @@ function botBattleStep(s: GameState): GameState {
   return dispatch(s, { type: 'PLAYER_SKILL', actorUid: cur.uid, skillId: chosen.id, targetUid: victim?.uid });
 }
 
+function simulationDetail(s: GameState): string {
+  return `screen=${s.screen} act=${s.act} row=${s.currentRow} roster=${s.roster.length} battlePhase=${s.battle?.phase}` +
+    (s.battle
+      ? ` round=${s.battle.round} ap=${s.battle.playerAp}/${s.battle.playerApMax} orders=${Object.keys(s.battle.orders ?? {}).length}` +
+        ` players=${s.battle.playerUnits.map((u) => `${u.speciesId}:${u.hp}:${u.acted ? 1 : 0}`).join('|')}` +
+        ` enemies=${s.battle.enemyUnits.map((u) => `${u.speciesId}:${u.hp}:${u.acted ? 1 : 0}`).join('|')}` +
+        ` logs=${s.battle.log.slice(-4).map((entry) => entry.text).join(' / ')}`
+      : '');
+}
+
 function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; detail: string; specials: number } {
   let s: GameState = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed });
   let steps = 0;
   let specials = 0;
-  while (steps < 600) {
+  let unchangedSteps = 0;
+  while (steps < 2000) {
     steps += 1;
     if (s.screen === 'victory') return { result: 'victory', detail: '', specials };
     if (s.screen === 'gameover')
       return { result: 'gameover', detail: `act=${s.act} row=${s.currentRow} roster=${s.roster.length} hp=${s.roster.map((u) => u.hp).join(',')}`, specials };
 
+    const before = s;
     switch (s.screen) {
       case 'inter_act': {
         s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
@@ -264,32 +283,57 @@ function simulate(seed: number): { result: 'victory' | 'gameover' | 'stuck'; det
       default:
         return { result: 'stuck', detail: `unknown screen ${s.screen}`, specials };
     }
+    unchangedSteps = s === before ? unchangedSteps + 1 : 0;
+    if (unchangedSteps >= 5) {
+      return { result: 'stuck', detail: `连续 ${unchangedSteps} 步无状态变化；${simulationDetail(s)}`, specials };
+    }
   }
+  if (s.screen === 'battle' && (s.battle?.phase === 'won' || s.battle?.phase === 'lost')) {
+    s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
+  }
+  if (s.screen === 'victory') return { result: 'victory', detail: '', specials };
+  if (s.screen === 'gameover') return { result: 'gameover', detail: simulationDetail(s), specials };
   return {
     result: 'stuck',
-    detail: `screen=${s.screen} act=${s.act} row=${s.currentRow} roster=${s.roster.length} battlePhase=${s.battle?.phase}`,
+    detail: `超过 2000 步保险上限；${simulationDetail(s)}`,
     specials,
   };
 }
 
-describe('鏁村眬妯℃嫙锛堣嚜鍔ㄧ帺瀹讹級', () => {
-  it('澶氬眬涓嶅穿婧冦€佹棤姝诲惊鐜紝涓斿瓨鍦ㄩ€氬叧', () => {
-    const results = { victory: 0, gameover: 0, stuck: 0 };
-    let specials = 0;
-    for (let seed = 2000; seed < 2020; seed++) {
-      const r = simulate(seed);
-      specials += r.specials;
-      if (r.result !== 'victory') {
-        // eslint-disable-next-line no-console
-        console.log(`[${r.result} seed=${seed}] ${r.detail}`);
-      }
-      results[r.result] += 1;
+const ROBUSTNESS_SEEDS = Array.from({ length: 100 }, (_, i) => 2000 + i);
+let cachedResults: Array<{ seed: number; result: ReturnType<typeof simulate> }> | undefined;
+
+function runRobustnessSample(): Array<{ seed: number; result: ReturnType<typeof simulate> }> {
+  cachedResults ??= ROBUSTNESS_SEEDS.map((seed) => ({ seed, result: simulate(seed) }));
+  return cachedResults;
+}
+
+describe('整局模拟（自动玩家）', () => {
+  it('100 个固定种子都能结束，不出现未知界面或流程停滞', () => {
+    const results = runRobustnessSample();
+    const stuck = results.filter((entry) => entry.result.result === 'stuck');
+    if (stuck.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(stuck.map((entry) => `[stuck seed=${entry.seed}] ${entry.result.detail}`).join('\n'));
     }
+    expect(stuck).toEqual([]);
+  });
+
+  it('固定 20 种子样本持续产出胜利、失败与奇遇覆盖', () => {
+    const sample = runRobustnessSample().slice(0, 20);
+    const totals = sample.reduce(
+      (acc, entry) => {
+        acc[entry.result.result] += 1;
+        acc.specials += entry.result.specials;
+        return acc;
+      },
+      { victory: 0, gameover: 0, stuck: 0, specials: 0 },
+    );
     // eslint-disable-next-line no-console
-    console.log(`STAT: victory=${results.victory} gameover=${results.gameover} stuck=${results.stuck} specials=${specials}`);
-    expect(results.stuck).toBeLessThanOrEqual(5);
-    expect(results.victory).toBeGreaterThan(0);
-    expect(specials).toBeGreaterThan(0);
+    console.log(`BALANCE(20): victory=${totals.victory} gameover=${totals.gameover} stuck=${totals.stuck} specials=${totals.specials}`);
+    expect(totals.victory).toBeGreaterThan(0);
+    expect(totals.gameover).toBeGreaterThan(0);
+    expect(totals.specials).toBeGreaterThan(0);
   });
 });
 

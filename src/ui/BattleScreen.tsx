@@ -5,6 +5,7 @@ import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
 import {
   REST_SKILL_ID,
+  canUnitUseSkill,
   isTameable,
   skillUsesLeft,
   skillCooldownLeft,
@@ -562,7 +563,6 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const left = skillUsesLeft(selected, s.id);
                     const cd = skillCooldownLeft(selected, s.id);
                     const limited = Number.isFinite(left);
-                    const exhausted = limited && left <= 0;
                     const onCooldown = cd > 0;
                     const isCurrent = selectedOrder?.skillId === s.id;
                     const cannotOrder = selected.acted && !selectedOrder;
@@ -572,12 +572,13 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const fullDesc = skillFullDesc(s, enhanced);
                     const sealStatus = selected.statuses.find((st) => st.kind === 'skillSeal');
                     const isSealed = !!sealStatus && (sealStatus.sealedSkills ?? []).includes(s.id);
+                    const unavailable = !canUnitUseSkill(selected, s.id);
                     return (
                       <button
                         key={s.id}
                         className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
                         onClick={() => onSkillClick(s)}
-                        disabled={!canAct || exhausted || onCooldown || cannotOrder || isSealed}
+                        disabled={!canAct || unavailable || cannotOrder}
                         title={`${fullDesc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}${isSealed ? `，被封印` : ''}`}
                       >
                         <span className="skill-btn-head">
