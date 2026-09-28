@@ -894,15 +894,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         } else {
           // 选择1只宠物获得成长点：跳转到选择界面
           // 检查概率（chance 字段）
-           if (choice.chance !== undefined && choice.chance < 1) {
+          if (choice.chance !== undefined && choice.chance < 1) {
             const roll = Math.random();
             if (roll >= choice.chance) {
-              const ev = next.map.events[next.currentNodeId];
-              if (ev) {
-                const updatedChoices = ev.choices.filter((c) => c.id !== choice.id);
-                next = { ...next, map: { ...next.map, events: { ...next.map.events, [next.currentNodeId]: { ...ev, choices: updatedChoices } } } };
-              }
-              return { ...next, screen: 'event', toast: { msg: '祈福失败……无事发生', kind: 'warning' }, log: [`${choice.label}（失败）`, ...next.log].slice(0, 20) };
+              // 未触发：事件结束返回地图，避免停留在事件界面继续选择其他选项
+              return { ...next, screen: 'map', toast: { msg: `${choice.label}失败……无事发生`, kind: 'warning' }, log: [`${choice.label}（失败）`, ...next.log].slice(0, 20) };
             }
           }
           return { ...next, screen: 'roster', specialPending: { kind: 'growthPoint', uid: '', amount: choice.amount ?? 1 }, log: [choice.label, ...next.log].slice(0, 20) };

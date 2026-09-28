@@ -252,6 +252,27 @@ describe('地图生成', () => {
     s.roster.forEach((u) => expect(u.hp).toBeGreaterThanOrEqual(1));
     expect(s.roster.some((u, i) => u.hp < hpBefore[i])).toBe(true);
   });
+
+  it('概率选项未触发时事件结束返回地图，不可再选其他选项', () => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 13 });
+    const evNode = s.map.layers.flat().find((n) => n.type === 'event');
+    expect(evNode).toBeDefined();
+    s = { ...s, screen: 'event', currentRow: 0, currentNodeId: evNode!.id, gold: 100 };
+    const failEv = {
+      title: '神秘祭坛',
+      desc: '',
+      choices: [
+        { id: 'ma-bless', label: '祈福', desc: '', kind: 'growthPoint' as const, amount: 3, chance: 0 },
+        { id: 'ma-leave', label: '离开', desc: '', kind: 'none' as const },
+      ],
+    };
+    s = { ...s, map: { ...s.map, events: { ...s.map.events, [evNode!.id]: failEv } } };
+    s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: 'ma-bless' });
+    // chance: 0 必然失败，事件应直接结束返回地图
+    expect(s.screen).toBe('map');
+    expect(s.toast?.kind).toBe('warning');
+    expect(s.specialPending).toBeUndefined();
+  });
 });
 
 describe('完整肉鸽流程', () => {
