@@ -108,7 +108,7 @@ export type GameAction =
   | { type: 'SELECT_DIFFICULTY' }
   | { type: 'SELECT_DIFFICULTY_BACK' }
   | { type: 'SET_PRERUN_CONFIG'; difficulty: Difficulty; relic?: string }
-  | { type: 'START_PROFICIENCY'; seed: number; saveSlot?: number }
+  | { type: 'START_PROFICIENCY'; seed: number; saveSlot?: number; unlocks?: Unlocks }
   | { type: 'START_PROFICIENCY_PICKED'; seed: number; saveSlot?: number; starterId: string; companionId: string }
   | { type: 'PROF_GROWTH_APPLY'; uid: string; updatedUnit: Unit }
   | { type: 'PROF_GROWTH_MENU' }
@@ -2399,7 +2399,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, difficulty: action.difficulty, relics: action.relic ? [action.relic] : [], screen: 'starter' };
 
     case 'START_PROFICIENCY': {
-      return { ...state, screen: 'proficiency-select', seed: action.seed, saveSlot: action.saveSlot, runMode: 'proficiency' };
+      return { ...state, screen: 'proficiency-select', seed: action.seed, saveSlot: action.saveSlot, runMode: 'proficiency', unlocks: action.unlocks ?? state.unlocks };
     }
 
     case 'START_PROFICIENCY_PICKED': {
@@ -2428,7 +2428,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         proficiencyStats: { totalProficiency: 0, totalGrowthPoints: 0, battlesWon: 0, battlesLost: 0, kills: 0 },
         runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 } },
         difficulty: 'normal',
-        unlocks: { ...DEFAULT_UNLOCKS },
+        unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS },
         relics: [],
         saveSlot: action.saveSlot,
       } as GameState;

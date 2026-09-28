@@ -24,7 +24,7 @@ import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
-import { persistSave, quitGame, detectUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
+import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
@@ -682,14 +682,14 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       }
       clearDeletedSlot(selectedSlot);
       selectSlot(selectedSlot);
-      dispatch({ type: 'STARTER', saveSlot: selectedSlot, unlocks: { ...DEFAULT_UNLOCKS } });
+      dispatch({ type: 'STARTER', saveSlot: selectedSlot, unlocks: getSlotUnlocks(target) });
       return;
     }
     const empty = slots.find((s) => !s.main && !s.proficiency);
     if (empty) {
       clearDeletedSlot(empty.slot);
       selectSlot(empty.slot);
-      dispatch({ type: 'STARTER', saveSlot: empty.slot, unlocks: { ...DEFAULT_UNLOCKS } });
+      dispatch({ type: 'STARTER', saveSlot: empty.slot, unlocks: getSlotUnlocks(empty) });
     } else {
       alert('存档已满，请在「存档管理」中删除一个存档');
     }
@@ -698,6 +698,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   function confirmOverwrite() {
     if (overwriteTarget === null) return;
     const slotNum = overwriteTarget;
+    const unlocks = getSlotUnlocks(slots.find((slot) => slot.slot === slotNum));
     setOverwriteTarget(null);
     void deleteSaveMode(slotNum, 'main').then(() => {
       setSlots((prev) => {
@@ -707,7 +708,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       });
       clearDeletedSlot(slotNum);
       selectSlot(slotNum);
-      dispatch({ type: 'STARTER', saveSlot: slotNum, unlocks: { ...DEFAULT_UNLOCKS } });
+      dispatch({ type: 'STARTER', saveSlot: slotNum, unlocks });
     });
   }
 
@@ -723,10 +724,11 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   function profConfirmRestart() {
     if (profConfirmSlot === null) return;
     const slot = profConfirmSlot;
+    const unlocks = getSlotUnlocks(slots.find((slotState) => slotState.slot === slot));
     setProfConfirmSlot(null);
     clearDeletedSlot(slot);
     selectSlot(slot);
-    dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
+    dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot, unlocks });
   }
 
   function onContinue() {
@@ -864,7 +866,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                 // 无远征记录 → 新开
                 clearDeletedSlot(slot);
                 selectSlot(slot);
-                dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot });
+                dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot, unlocks: getSlotUnlocks(slotState2) });
               }}
             >
               ⚔️ 熟练度远征

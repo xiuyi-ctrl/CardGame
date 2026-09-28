@@ -1,4 +1,4 @@
-import type { GameState, Unlocks } from '../game/state/game';
+import { DEFAULT_UNLOCKS, type GameState, type Unlocks } from '../game/state/game';
 import { migrateGameState } from '../game/state/reducer';
 
 export interface PetCardBridge {
@@ -151,6 +151,16 @@ export interface SaveSlotInfo {
   slot: number;
   main: GameState | null;
   proficiency: GameState | null;
+}
+
+/** 取得槽位已有成就；主模式优先，空槽返回全新的默认解锁。 */
+export function getSlotUnlocks(slot?: Pick<SaveSlotInfo, 'main' | 'proficiency'>): Unlocks {
+  const source = slot?.main?.unlocks ?? slot?.proficiency?.unlocks ?? DEFAULT_UNLOCKS;
+  return {
+    ...source,
+    difficulties: [...source.difficulties],
+    relics: [...source.relics],
+  };
 }
 
 export async function listSaves(): Promise<SaveSlotInfo[]> {

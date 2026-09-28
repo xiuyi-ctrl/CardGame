@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState } from '../src/game/state/reducer';
-import { CURRENT_SAVE_VERSION, loadSlotMode, parseDualSave } from '../src/ui/persistence';
+import { createInitialState, gameReducer } from '../src/game/state/reducer';
+import { CURRENT_SAVE_VERSION, getSlotUnlocks, loadSlotMode, parseDualSave } from '../src/ui/persistence';
 
 function legacyState(mode: 'main' | 'proficiency' = 'main'): Record<string, unknown> {
   const state = createInitialState() as unknown as Record<string, unknown>;
@@ -54,5 +54,25 @@ describe('存档版本迁移', () => {
       saveVersion: CURRENT_SAVE_VERSION + 1,
       main: createInitialState(),
     }))).toBeNull();
+  });
+
+  it('覆盖主线存档开始新游戏时保留该槽位成就', () => {
+    const unlocks = { difficulties: ['normal', 'hard'] as const, relics: ['elite_badge'], bestGrade: 'A', proficiencyUnlocked: true };
+    const savedMain = { ...createInitialState(), unlocks: { ...unlocks, difficulties: [...unlocks.difficulties] } };
+    const retained = getSlotUnlocks({ main: savedMain, proficiency: null });
+    let next = gameReducer(createInitialState(), { type: 'STARTER', saveSlot: 2, unlocks: retained });
+    next = gameReducer(next, { type: 'START_RUN', starterId: 'momo', companionId: 'lulu', seed: 42 });
+
+    expect(next.saveSlot).toBe(2);
+    expect(next.unlocks).toEqual(retained);
+  });
+
+  it('重新开始熟练度远征时保留槽位成就', () => {
+    const unlocks = { difficulties: ['normal', 'hard'], relics: ['elite_badge'], bestGrade: 'A', proficiencyUnlocked: true };
+    let next = gameReducer(createInitialState(), { type: 'START_PROFICIENCY', seed: 43, saveSlot: 3, unlocks });
+    next = gameReducer(next, { type: 'START_PROFICIENCY_PICKED', seed: 43, saveSlot: 3, starterId: 'momo', companionId: 'lulu' });
+
+    expect(next.saveSlot).toBe(3);
+    expect(next.unlocks).toEqual(unlocks);
   });
 });
