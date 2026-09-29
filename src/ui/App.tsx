@@ -25,6 +25,7 @@ import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
+import titleEmblem from './assets/title-emblem.svg';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
@@ -60,7 +61,7 @@ export default function App() {
   }, [state.toast]);
 
   return (
-    <div className="screen">
+    <div className={state.screen === 'title' ? 'screen screen-title' : 'screen'}>
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
@@ -812,74 +813,76 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   const rowTypes = new Set(dbgMap.layers[dbgRowClamped].map((n) => n.type));
   const DEBUG_TYPES = DEBUG_TYPES_ALL.filter((t) => t.value === 'all' || rowTypes.has(t.value as MapNode['type']));
   const dbgTypeEff = rowTypes.has(dbgType as MapNode['type']) ? dbgType : 'all';
+  const selectedSave = slots.find((s) => s.slot === selectedSlot);
+  const canContinue = Boolean(selectedSave?.main || selectedSave?.proficiency);
 
   return (
-    <div className="center-col">
-      <div className="title-logo">🐉</div>
-      <div className="title-name">驯牌远征</div>
-      <div className="title-sub">肉鸽卡牌 · 宠物对战 · 生死相随</div>
-      <div className="home-menu">
-        <button className="primary big-btn" onClick={onNewGame}>
-          新游戏
-        </button>
-        <button className="big-btn" onClick={onContinue} disabled={!selectedSlot || !(slots.find((s) => s.slot === selectedSlot)?.main || slots.find((s) => s.slot === selectedSlot)?.proficiency)}>
-          {hasSave === null ? '检查存档…' : selectedSlot ? '继续游戏' : '请先选择存档'}
-        </button>
-        <button className="big-btn" onClick={openSaveMgmt}>
-          💾 存档管理
-        </button>
-        <button className="big-btn" onClick={() => setShowCodex(true)}>
-          📖 生物图鉴
-        </button>
-        <button className="big-btn" onClick={() => {
-          const slotState = slots.find((s) => s.slot === selectedSlot);
-          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
-          dispatch({ type: 'ACHIEVEMENTS', unlocks });
-        }}>
-          🏆 成就
-        </button>
-        {(() => {
-          const slotState = slots.find((s) => s.slot === selectedSlot);
-          const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
-          const profLocked = !unlocks.proficiencyUnlocked;
-          return (
-            <button
-              className={`big-btn${profLocked ? ' locked-btn' : ''}`}
-              disabled={profLocked}
-              onClick={() => {
-                if (profLocked) return;
-                // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
-                let slot = selectedSlot;
-                if (!slot) {
-                  const occupied = slots.find(s => s.main || s.proficiency);
-                  slot = occupied ? occupied.slot : slots.find(s => !s.main && !s.proficiency)?.slot;
-                }
-                if (!slot) { alert('存档已满，请在「存档管理」中删除一个存档'); return; }
+    <div className="center-col home-screen">
+      <div className="home-content">
+        <header className="home-brand">
+          <img className="home-emblem" src={titleEmblem} alt="" />
+          <h1 className="home-title">驯牌远征</h1>
+          <p className="home-subtitle">肉鸽卡牌 · 宠物对战 · 生死相随</p>
+        </header>
+        <nav className="home-menu" aria-label="主菜单">
+          <button className={`home-action${canContinue ? ' home-action-primary' : ''}`} onClick={onContinue} disabled={!canContinue}>
+            {hasSave === null ? '检查存档…' : selectedSlot ? '继续游戏' : '请先选择存档'}
+          </button>
+          <button className={`home-action${canContinue ? '' : ' home-action-primary'}`} onClick={onNewGame}>
+            新游戏
+          </button>
+          {(() => {
+            const slotState = slots.find((s) => s.slot === selectedSlot);
+            const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
+            const profLocked = !unlocks.proficiencyUnlocked;
+            return (
+              <button
+                className={`home-action home-action-proficiency${profLocked ? ' is-locked' : ''}`}
+                disabled={profLocked}
+                onClick={() => {
+                  if (profLocked) return;
+                  // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
+                  let slot = selectedSlot;
+                  if (!slot) {
+                    const occupied = slots.find(s => s.main || s.proficiency);
+                    slot = occupied ? occupied.slot : slots.find(s => !s.main && !s.proficiency)?.slot;
+                  }
+                  if (!slot) { alert('存档已满，请在「存档管理」中删除一个存档'); return; }
 
-                // 检查该槽是否有未完成的熟练度远征
-                const slotState2 = slots.find(s => s.slot === slot);
-                if (slotState2?.proficiency) {
-                  setProfConfirmSlot(slot);
-                  return;
-                }
+                  // 检查该槽是否有未完成的熟练度远征
+                  const slotState2 = slots.find(s => s.slot === slot);
+                  if (slotState2?.proficiency) {
+                    setProfConfirmSlot(slot);
+                    return;
+                  }
 
-                // 无远征记录 → 新开
-                clearDeletedSlot(slot);
-                selectSlot(slot);
-                dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot, unlocks: getSlotUnlocks(slotState2) });
-              }}
-            >
-              ⚔️ 熟练度远征
-              {profLocked && <span className="locked-hint">🔒 通关第 1 幕后解锁</span>}
+                  // 无远征记录 → 新开
+                  clearDeletedSlot(slot);
+                  selectSlot(slot);
+                  dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot, unlocks: getSlotUnlocks(slotState2) });
+                }}
+              >
+                熟练度远征
+                {profLocked && <span className="locked-hint">通关第 1 幕后解锁</span>}
+              </button>
+            );
+          })()}
+          <div className="home-menu-secondary">
+            <button onClick={openSaveMgmt}>存档管理</button>
+            <button onClick={() => setShowCodex(true)}>生物图鉴</button>
+            <button onClick={() => {
+              const slotState = slots.find((s) => s.slot === selectedSlot);
+              const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
+              dispatch({ type: 'ACHIEVEMENTS', unlocks });
+            }}>成就</button>
+          </div>
+          <div className="home-menu-footer">
+            <button onClick={() => setShowDebug((v) => !v)}>
+              {showDebug ? '收起测试面板' : '测试关卡'}
             </button>
-          );
-        })()}
-        <button className="big-btn" onClick={() => setShowDebug((v) => !v)}>
-          {showDebug ? '收起测试面板' : '🔬 测试关卡'}
-        </button>
-        <button className="big-btn" onClick={quitGame}>
-          退出游戏
-        </button>
+            <button onClick={quitGame}>退出游戏</button>
+          </div>
+        </nav>
       </div>
       {showSaveMgmt && (
         <div className="save-mgmt-overlay" onClick={() => setShowSaveMgmt(false)}>
