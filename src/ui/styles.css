@@ -1624,20 +1624,82 @@ button.primary {
 }
 
 /* 地图 */
+.map-screen {
+  gap: 10px;
+  padding: 12px;
+  overflow: hidden;
+  background: #14101f;
+  font-family: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+}
+
+.map-screen .hud {
+  flex: none;
+  min-height: 54px;
+  border: 2px solid #42645e;
+  border-radius: 0;
+  background: #111624;
+  box-shadow: inset 0 0 0 2px #202b36;
+}
+
+.map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 248px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
 .map-canvas {
   position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: safe center;
-  gap: 18px;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
-  padding: 10px 0;
+  border: 2px solid #36544e;
+  background-color: #14101f;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
   scrollbar-width: none;
+}
+
+.map-act-1 .map-canvas {
+  background-image: linear-gradient(rgba(12, 13, 27, 0.18), rgba(12, 13, 27, 0.28)), url('./assets/map-act1.png');
+}
+
+.map-act-2 .map-canvas {
+  background-image: linear-gradient(rgba(12, 13, 27, 0.18), rgba(12, 13, 27, 0.28)), url('./assets/map-act2.png');
+}
+
+.map-act-3 .map-canvas {
+  background-image: linear-gradient(rgba(12, 13, 27, 0.18), rgba(12, 13, 27, 0.28)), url('./assets/map-act3.png');
+}
+
+.map-proficiency .map-canvas {
+  background-image: linear-gradient(rgba(12, 13, 27, 0.24), rgba(12, 13, 27, 0.38)), url('./assets/map-proficiency.png');
 }
 
 .map-canvas::-webkit-scrollbar {
   display: none;
+}
+
+.map-track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  gap: 40px;
+  width: 100%;
+  min-width: 730px;
+  min-height: 100%;
+  padding: 48px 32px;
+}
+
+.map-proficiency .map-track {
+  gap: 22px;
+  min-width: 0;
+  padding: 48px 36px;
+  background-image: repeating-linear-gradient(180deg, transparent 0 122px, rgba(112, 216, 189, 0.035) 122px 124px);
 }
 
 .map-lines {
@@ -1645,118 +1707,185 @@ button.primary {
   top: 0;
   left: 0;
   pointer-events: none;
+  z-index: 0;
+}
+
+.ln-base {
+  stroke: #82969b;
+  stroke-width: 2;
+  opacity: 0.36;
 }
 
 .ln-near {
-  stroke: #4fc3f7;
-  stroke-width: 2;
-  opacity: 0.75;
+  stroke: #70d8bd;
+  stroke-width: 3;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 4px #70d8bd);
 }
 
 .ln-far {
-  stroke: #7be06a;
+  stroke: #70d8bd;
   stroke-width: 2;
   stroke-dasharray: 6 5;
-  opacity: 0.65;
-}
-
-.ln-pair {
-  stroke: #e8c26a;
-  stroke-width: 2;
-  stroke-dasharray: 3 6;
-  opacity: 0.7;
+  opacity: 0.78;
 }
 
 .ln-path {
   stroke: #e8c26a;
-  stroke-width: 3;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 3px #e8c26a);
+  stroke-width: 4;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px #e8c26a);
 }
 
 .map-row {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: center;
-  gap: 26px;
-  min-height: 52px;
+  align-items: center;
+  gap: 18px;
+  min-height: 72px;
+}
+
+.map-row-index {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 7px;
+  border: 1px solid #52776e;
+  background: rgba(13, 20, 31, 0.88);
+  color: #b8d5cd;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.map-row-index.milestone {
+  border-color: #e8c26a;
+  color: #e8c26a;
 }
 
 .node {
   position: relative;
-  padding: 10px 18px;
-  border-radius: 10px;
-  border: 2px solid var(--border);
-  background: var(--bg-panel);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 70px;
+  min-width: 70px;
+  height: 70px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #d6e5e4;
   text-align: center;
-  min-width: 96px;
-  font-size: 13px;
+  font-family: inherit;
+  transition: transform 0.12s steps(3, end), filter 0.12s;
 }
 
-.node.current {
-  border-color: var(--gold);
-  box-shadow: 0 0 12px rgba(232, 194, 106, 0.4);
+.node[data-type='elite'],
+.node[data-type='boss'],
+.node[data-type='arena'],
+.node[data-type='gauntlet'],
+.node[data-type='corrupted'],
+.node[data-type='guardian'],
+.node[data-type='arena3'] {
+  color: #c87872;
+}
+
+.node[data-type='rest'],
+.node[data-type='shop'],
+.node[data-type='special'],
+.node[data-type='watchtower'],
+.node[data-type='sync'],
+.node[data-type='blacksmith'] {
+  color: #e8c26a;
+}
+
+.node:hover,
+.node:focus-visible {
+  z-index: 3;
+  transform: translateY(-2px) scale(1.08);
+}
+
+.node:focus-visible {
+  outline: 2px solid #e8c26a;
+  outline-offset: 2px;
+}
+
+.node.current .nicon {
+  filter: drop-shadow(0 0 3px #70d8bd) drop-shadow(0 0 7px #70d8bd);
+}
+
+.node.current .nlabel {
+  border-color: #70d8bd;
+  box-shadow: 0 0 6px rgba(112, 216, 189, 0.7);
+}
+
+.node.visited .nicon {
+  filter: drop-shadow(0 0 4px rgba(232, 194, 106, 0.7));
+}
+
+.node.visited .nlabel {
+  border-color: #b99958;
+}
+
+.node.dim {
+  opacity: 0.76;
 }
 
 .node.option {
   cursor: pointer;
-  background: var(--bg-card);
 }
 
-.node.option:hover {
-  border-color: var(--gold);
+.node.option .nicon {
+  filter: drop-shadow(0 0 3px rgba(112, 216, 189, 0.65));
 }
 
 .node.reach-1 {
-  border-color: #4fc3f7;
-  box-shadow: 0 0 8px rgba(79, 195, 247, 0.35);
+  opacity: 1;
 }
 
-.node.reach-2 {
-  border-style: dashed;
-  border-color: #7be06a;
-  box-shadow: 0 0 8px rgba(123, 224, 106, 0.3);
+.node.reach-2 .nicon {
+  filter: drop-shadow(0 0 5px rgba(112, 216, 189, 0.6));
 }
 
 /* 侦查模式：任意节点可点击查看情报 */
 .node.node-scoutable {
   cursor: pointer;
-  border-color: #ffd166;
-  box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.55), 0 0 12px rgba(255, 209, 102, 0.4);
 }
 
-.node.node-scoutable:hover {
-  background: var(--bg-card);
+.node.node-scoutable .nicon {
+  filter: drop-shadow(0 0 5px #e8c26a);
 }
 
 /* 跳关模式：可达的战斗类节点可点击直接获得奖励 */
 .node.node-skipable {
   cursor: pointer;
-  border-color: #7be06a;
-  box-shadow: 0 0 0 2px rgba(123, 224, 106, 0.55), 0 0 12px rgba(123, 224, 106, 0.45);
 }
 
-.node.node-skipable:hover {
-  background: var(--bg-card);
+.node.node-skipable .nicon {
+  filter: drop-shadow(0 0 5px #70d8bd);
 }
 
 /* 已失效节点（被开启的双生宝箱配对节点 / 已开启的钥匙门）：灰显 */
 .node.node-off {
-  opacity: 0.35;
+  opacity: 0.28;
   filter: grayscale(1);
-  border-style: dashed;
 }
 
 /* 钥匙门未持钥匙：半透明 + 锁标记 */
 .node.node-locked {
-  opacity: 0.55;
+  opacity: 0.6;
   filter: saturate(0.6);
 }
 
 /* 已访问的瞭望塔：金色高亮边框 + 发光 */
-.node.visited-watchtower {
-  border-color: var(--gold);
-  box-shadow: 0 0 14px rgba(232, 194, 106, 0.6);
-  background: linear-gradient(180deg, rgba(232, 194, 106, 0.15), var(--bg-panel));
+.node.visited-watchtower .nicon {
+  filter: drop-shadow(0 0 5px #e8c26a);
 }
 .node.visited-watchtower::after {
   content: '★';
@@ -1768,15 +1897,187 @@ button.primary {
   filter: drop-shadow(0 0 3px var(--gold));
 }
 
+.node[aria-disabled='true'] {
+  cursor: default;
+}
+
+.node .nicon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 52px;
+  isolation: isolate;
+  filter: drop-shadow(0 3px 0 #070c14);
+}
+
+.node .nicon::before,
+.node .nicon::after {
+  content: '';
+  position: absolute;
+  clip-path: polygon(13% 7%, 32% 2%, 73% 3%, 91% 14%, 98% 36%, 94% 72%, 80% 91%, 19% 91%, 3% 73%, 2% 32%);
+}
+
+.node .nicon::before {
+  inset: 0;
+  background: #0a1119;
+  box-shadow: inset 0 0 0 2px #65757c;
+}
+
+.node .nicon::after {
+  inset: 3px;
+  z-index: 0;
+  background: linear-gradient(155deg, #4a5961 0 18%, #293842 19% 55%, #17232d 56% 100%);
+  border: 2px solid #526269;
+}
+
+.map-node-icon {
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(1px 2px 0 #0a1119);
+}
+
+.node .nlabel {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 66px;
+  min-height: 18px;
+  margin-top: -5px;
+  padding: 1px 2px;
+  border: 1px solid #566c70;
+  background: #0b151e;
+  box-shadow: 0 3px 0 #060a10;
+  color: #f1ede7;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.map-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 22px 16px;
+  border: 2px solid #42645e;
+  background: #111624;
+  box-shadow: inset 0 0 0 2px #202b36;
+  text-align: center;
+}
+
+.map-info-heading {
+  align-self: stretch;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #42645e;
+  color: #f1ede7;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.map-info-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-top: 14px;
+  border: 2px solid #52646d;
+  background: #25303e;
+  color: #e8c26a;
+  box-shadow: 0 5px 0 #0b111d;
+}
+
+.map-info-icon .map-node-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.map-info-icon[data-type='elite'],
+.map-info-icon[data-type='boss'],
+.map-info-icon[data-type='arena'],
+.map-info-icon[data-type='gauntlet'],
+.map-info-icon[data-type='corrupted'],
+.map-info-icon[data-type='guardian'],
+.map-info-icon[data-type='arena3'] {
+  color: #c87872;
+}
+
+.map-info-name {
+  color: #f1ede7;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.map-info-status {
+  width: 100%;
+  padding: 7px;
+  border: 1px solid #586a71;
+  color: #c7d6d6;
+  font-size: 13px;
+}
+
+.map-info-status.available {
+  border-color: #70d8bd;
+  color: #70d8bd;
+}
+
+.map-info p {
+  align-self: stretch;
+  margin: 4px 0;
+  color: #c9d4d3;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.map-milestones {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid #42645e;
+  color: #c9d4d3;
+  font-size: 12px;
+}
+
+.map-milestones span {
+  padding: 3px 6px;
+  border: 1px solid #826b49;
+  color: #e8c26a;
+}
+
+.map-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  min-height: 34px;
+  padding: 4px 10px;
+  border: 1px solid #42645e;
+  background: #111624;
+  color: #c9d4d3;
+  font-size: 12px;
+}
+
 .route-legend {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-left: 14px;
+  gap: 7px;
   font-size: 12px;
-  color: var(--text-dim);
+  color: #c9d4d3;
+  white-space: nowrap;
 }
 
+.legend-path,
 .legend-near,
 .legend-far {
   display: inline-block;
@@ -1787,23 +2088,87 @@ button.primary {
   margin-right: 2px;
 }
 
+.legend-path {
+  border-top-color: #e8c26a;
+}
+
 .legend-near {
-  border-top-color: #4fc3f7;
+  border-top-color: #70d8bd;
 }
 
 .legend-far {
   border-top-style: dashed;
-  border-top-color: #7be06a;
+  border-top-color: #70d8bd;
 }
 
-.node .nicon {
-  font-size: 22px;
-  display: block;
+@media (max-width: 1100px), (max-height: 700px) {
+  .map-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map-canvas {
+    flex: 1;
+  }
+
+  .map-track {
+    gap: 28px;
+    padding: 32px 22px;
+  }
+
+  .map-proficiency .map-track {
+    gap: 16px;
+  }
+
+  .map-info {
+    display: grid;
+    grid-template-columns: auto auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    min-height: 68px;
+    padding: 8px 12px;
+    text-align: left;
+  }
+
+  .map-info-heading {
+    display: none;
+  }
+
+  .map-info-icon {
+    width: 38px;
+    height: 38px;
+    margin: 0;
+  }
+
+  .map-info-icon .map-node-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .map-info-name {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .map-info-status {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .map-info p {
+    margin: 0;
+  }
+
+  .map-milestones {
+    display: none;
+  }
 }
 
-.node .nlabel {
-  color: var(--text-dim);
-  font-size: 11px;
+@media (prefers-reduced-motion: reduce) {
+  .map-screen .node {
+    transition: none;
+  }
 }
 
 /* 队伍 / 奖励 / 商店 */

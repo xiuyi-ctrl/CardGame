@@ -4,7 +4,7 @@ import type { Dispatch, DragEvent } from 'react';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, NODE_ICON, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -24,12 +24,15 @@ import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
+import { MapNodeIcon } from './MapNodeIcon';
+import { getMapRouteEdges } from './mapRoutes';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import titleEmblem from './assets/title-emblem.svg';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
 const EMPTY_ROW: MapNode[] = [];
+const MAP_ACT_NAMES = ['', '翠绿之径', '暗影沼泽', '余烬险地'];
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
@@ -125,7 +128,13 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
   };
   return (
     <div className="hud">
-      <span className="act">第 {state.act} 层</span>
+      <span className="act">
+        {state.screen === 'map'
+          ? state.runMode === 'proficiency'
+            ? `熟练度远征 · 第${Math.max(1, state.currentRow + 1)}/50层`
+            : `第${state.act}幕 · ${MAP_ACT_NAMES[state.act] ?? '远征之路'}`
+          : `第 ${state.act} 层`}
+      </span>
       <span>
         <span className="chip">👥 {state.field.length}/{FIELD_MAX}</span>
         <span className="chip">💰 {state.gold}</span>
@@ -1425,7 +1434,27 @@ function ProficiencyStarterScreen({ state, dispatch }: { state: GameState; dispa
   );
 }
 
-function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+const MAP_KNOWN_HINTS: Record<MapNode['type'], string> = {
+  battle: '常规战斗，胜利后可获得奖励。',
+  elite: '高风险战斗，对手更强。',
+  rest: '恢复队伍状态，整备下一段旅程。',
+  shop: '可以购买补给；具体货物需侦查。',
+  event: '未知事件；具体选项需侦查。',
+  special: '稀有奇遇；具体奖励需侦查。',
+  boss: '幕末首领，击败后完成当前幕。',
+  arena: '单宠高风险挑战；失败将承受惩罚。',
+  gauntlet: '连续战斗；失败将承受惩罚。',
+  corrupted: '带有侵蚀效果的战斗。',
+  watchtower: '可瞭望其他地点的情报。',
+  sync: '双生宝箱二选一；持双生符可同时开启。',
+  guardian: '击败守卫可获得对应钥匙。',
+  keydoor: '需要击败对应守卫，取得钥匙。',
+  blacksmith: '为宠物强化技能效果。',
+  arena3: '从三种竞技场模式中选择一项。',
+};
+
+export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const isProficiency = state.runMode === 'proficiency';
   const isFirst = state.currentNodeId === '';
   const optionsRow = isFirst ? state.currentRow : state.currentRow + 1;
   const currentCol = isFirst
@@ -1447,11 +1476,11 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
     () =>
       new Set(
         nextRow
-          .filter((n) => canStepTo(state.currentRow, currentCol, n, state.map))
+          .filter((n) => !isDisabled(n) && !isLocked(n) && canStepTo(state.currentRow, currentCol, n, state.map))
           .filter((n) => lockedNodeId == null || n.id === lockedNodeId)
           .map((n) => n.id),
       ),
-    [nextRow, state.currentRow, currentCol, lockedNodeId],
+    [nextRow, state.currentRow, currentCol, lockedNodeId, state.map, state.inventory],
   );
   const [hoverId, setHoverId] = useState<string | null>(null);
   const hoverRow = hoverId ? state.map.layers.findIndex((r) => r.some((n) => n.id === hoverId)) : -1;
@@ -1461,86 +1490,75 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   const hoverReachIds = useMemo(
     () =>
       hoverNode
-        ? new Set(hoverNextRow.filter((m) => canStepTo(hoverRow, hoverNode.col, m, state.map)).map((m) => m.id))
+        ? new Set(hoverNextRow.filter((m) => !isDisabled(m) && !isLocked(m) && canStepTo(hoverRow, hoverNode.col, m, state.map)).map((m) => m.id))
         : new Set<string>(),
-    [hoverNode, hoverRow, hoverNextRow],
+    [hoverNode, hoverRow, hoverNextRow, state.map, state.inventory],
   );
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const nodeEls = useRef<Record<string, HTMLDivElement | null>>({});
+  const trackRef = useRef<HTMLDivElement>(null);
+  const nodeEls = useRef<Record<string, HTMLButtonElement | null>>({});
   const [svgSize, setSvgSize] = useState({ w: 0, h: 0 });
-  const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number; kind: 'near' | 'far' | 'pair' | 'path' }[]>([]);
+  const [lines, setLines] = useState<{ from: string; to: string; x1: number; y1: number; x2: number; y2: number; kind: 'base' | 'near' | 'far' | 'path' }[]>([]);
+  const routeEdges = useMemo(() => getMapRouteEdges(state.map), [state.map]);
+  const routeKey = (from: string, to: string) => `${from}->${to}`;
+  const visitedIds = state.visitedNodeIds ?? [];
+  const visitedPairs = new Set(visitedIds.slice(1).map((id, index) => routeKey(visitedIds[index], id)));
+
+  const infoNode = hoverNode ?? nextRow.find((n) => canSelect(n)) ?? state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
+  const infoRow = infoNode ? state.map.layers.findIndex((row) => row.some((n) => n.id === infoNode.id)) : -1;
+  let infoStatus = '选择路线';
+  if (infoNode) {
+    if (isDisabled(infoNode)) infoStatus = '已失效';
+    else if (isLocked(infoNode)) infoStatus = '需要钥匙';
+    else if (infoNode.id === state.currentNodeId) infoStatus = '当前位置';
+    else if (infoRow === optionsRow && canSelect(infoNode)) infoStatus = '可进入';
+    else if (infoRow < optionsRow) infoStatus = visitedIds.includes(infoNode.id) ? '已走过' : '错过的分支';
+    else infoStatus = '尚不可达';
+  }
 
   useLayoutEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const track = trackRef.current;
+    if (!track) return;
     const update = () => {
-      const w = canvas.scrollWidth;
-      const h = canvas.scrollHeight;
+      const w = track.scrollWidth;
+      const h = track.scrollHeight;
       setSvgSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
     update();
     const ro = new ResizeObserver(update);
-    ro.observe(canvas);
+    ro.observe(track);
     window.addEventListener('resize', update);
-    canvas.addEventListener('scroll', update);
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', update);
-      canvas.removeEventListener('scroll', update);
     };
   }, []);
 
   useLayoutEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const track = trackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
     const center = (id: string): { x: number; y: number } | null => {
       const el = nodeEls.current[id];
       if (!el) return null;
       const r = el.getBoundingClientRect();
-      return { x: r.left - rect.left + canvas.scrollLeft + r.width / 2, y: r.top - rect.top + canvas.scrollTop + r.height / 2 };
+      return { x: r.left - rect.left + r.width / 2, y: r.top - rect.top + r.height / 2 };
     };
     const result: typeof lines = [];
-    if (!isFirst) {
-      const src = center(state.currentNodeId);
-      if (src) {
-        for (const n of nextRow) {
-          if (!nearIds.has(n.id)) continue;
-          const t = center(n.id);
-          if (t) result.push({ x1: src.x, y1: src.y, x2: t.x, y2: t.y, kind: 'near' });
-        }
-      }
-    }
-    if (hoverNode) {
-      const a = center(hoverNode.id);
-      if (a) {
-        for (const m of hoverNextRow) {
-          if (!hoverReachIds.has(m.id)) continue;
-          const b = center(m.id);
-          if (b) result.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind: 'far' });
-        }
-      }
-    }
-    // 同步双节点：虚线连接配对的两个宝箱（二选一，任一开启后连线消失）
-    for (const row of state.map.layers) {
-      for (const n of row) {
-        if (n.type !== 'sync' || !n.pairedId) continue;
-        if (isDisabled(n) || isDisabled({ id: n.pairedId, type: 'sync' } as MapNode)) continue;
-        const a = center(n.id);
-        const b = center(n.pairedId);
-        if (a && b) result.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind: 'pair' });
-      }
-    }
-    // 已走路径：连接所有 visitedNodeIds（按访问顺序），金色高亮
-    const visitedNodeIds = state.visitedNodeIds ?? [];
-    for (let i = 1; i < visitedNodeIds.length; i++) {
-      const a = center(visitedNodeIds[i - 1]);
-      const b = center(visitedNodeIds[i]);
-      if (a && b) result.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind: 'path' });
+    for (const edge of routeEdges) {
+      const a = center(edge.from);
+      const b = center(edge.to);
+      if (!a || !b) continue;
+      const key = routeKey(edge.from, edge.to);
+      const kind = visitedPairs.has(key) ? 'path'
+        : !isFirst && edge.from === state.currentNodeId && nearIds.has(edge.to) ? 'near'
+        : hoverNode && edge.from === hoverNode.id && hoverReachIds.has(edge.to) ? 'far'
+        : 'base';
+      result.push({ ...edge, x1: a.x, y1: a.y, x2: b.x, y2: b.y, kind });
     }
     setLines(result);
-  }, [isFirst, state.currentNodeId, optionsRow, nearIds, hoverNode, hoverNextRow, hoverReachIds, svgSize, state.map, state.inventory, state.visitedNodeIds]);
+  }, [isFirst, state.currentNodeId, nearIds, hoverNode, hoverReachIds, svgSize, routeEdges, state.visitedNodeIds]);
 
   // 每次进入地图，滚动定位到当前所在节点（居中）
   useLayoutEffect(() => {
@@ -1557,7 +1575,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
   }, [state.currentNodeId]);
 
   return (
-    <div className="screen">
+    <div className={`screen map-screen ${isProficiency ? 'map-proficiency' : `map-act-${state.act}`}`}>
       <HUD state={state} dispatch={dispatch} />
       {state.scoutSelecting && (
         <div className="panel-row" style={{ justifyContent: 'center', marginBottom: 8 }}>
@@ -1575,34 +1593,33 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
           <button onClick={() => dispatch({ type: 'CANCEL_SKIP' })}>✕ 取消</button>
         </div>
       )}
-      <div className="map-canvas" ref={canvasRef}>
-        <svg className="map-lines" width={svgSize.w} height={svgSize.h}>
-          {lines.map((l, i) => (
-            <line
-              key={i}
-              className={
-                l.kind === 'near'
-                  ? 'ln-near'
-                  : l.kind === 'far'
-                  ? 'ln-far'
-                  : l.kind === 'pair'
-                  ? 'ln-pair'
-                  : 'ln-path'
-              }
-              x1={l.x1}
-              y1={l.y1}
-              x2={l.x2}
-              y2={l.y2}
-            />
-          ))}
-        </svg>
-{state.map.layers.map((row, ri) => {
+      <div className="map-layout">
+        <div className="map-canvas" ref={canvasRef}>
+          <div className="map-track" ref={trackRef}>
+            <svg className="map-lines" width={svgSize.w} height={svgSize.h} aria-hidden="true">
+              {lines.map((l, i) => (
+                <line
+                  key={i}
+                  className={`ln-${l.kind}`}
+                  data-from={l.from}
+                  data-to={l.to}
+                  data-route-kind={l.kind}
+                  x1={l.x1}
+                  y1={l.y1}
+                  x2={l.x2}
+                  y2={l.y2}
+                />
+              ))}
+            </svg>
+            {state.map.layers.map((row, ri) => {
           const isOptionRow = ri === optionsRow;
           const isPast = ri < optionsRow;
           return (
-            <div className="map-row" key={ri}>
+            <div className={`map-row ${isProficiency ? 'map-row-proficiency' : ''}`} key={ri}>
+              <span className={`map-row-index ${isProficiency && [14, 29, 49].includes(ri) ? 'milestone' : ''}`}>第{ri + 1}层</span>
               {row.map((n) => {
                 const isCurrent = n.id === state.currentNodeId;
+                const isVisited = (state.visitedNodeIds ?? []).includes(n.id);
                 const scoutable = state.scoutSelecting === true && !isDisabled(n);
                 const selectable = isOptionRow && canSelect(n);
                 const skipable =
@@ -1617,7 +1634,7 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                 const visitedWatchtowers = state.visitedWatchtowers ?? [];
                 const isVisitedWatchtower = n.type === 'watchtower' && visitedWatchtowers.includes(n.id);
                 const cls = [
-                  isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast ? '' : 'dim',
+                  isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast && isVisited ? 'visited' : 'dim',
                   reachCls,
                   isDisabled(n) ? 'node-off' : '',
                   isLocked(n) ? 'node-locked' : '',
@@ -1637,16 +1654,26 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                     : n.type === 'guardian'
                     ? '守卫：强力怪物，击败获得专用钥匙'
                     : undefined;
+                const watchtowerAction = n.type === 'watchtower' && (isCurrent || (isVisitedWatchtower && isPast));
+                const actionable = skipable || scoutable || selectable || watchtowerAction;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={n.id}
                     ref={(el) => {
                       nodeEls.current[n.id] = el;
                     }}
                     className={`node ${cls}`}
+                    data-node-id={n.id}
+                    data-type={n.type}
+                    aria-label={`第${ri + 1}层 ${n.label}${isLocked(n) ? '，需要钥匙' : ''}`}
+                    aria-disabled={!actionable}
+                    tabIndex={actionable ? 0 : -1}
                     title={nodeHint}
                     onMouseEnter={() => setHoverId(n.id)}
                     onMouseLeave={() => setHoverId(null)}
+                    onFocus={() => setHoverId(n.id)}
+                    onBlur={() => setHoverId(null)}
                     onClick={
                       skipable
                         ? () => dispatch({ type: 'USE_SKIP', nodeId: n.id })
@@ -1661,21 +1688,35 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
                                 : undefined
                     }
                   >
-                    <span className="nicon">{NODE_ICON[n.type]}</span>
+                    <span className="nicon"><MapNodeIcon type={n.type} /></span>
                     <span className="nlabel">{n.label}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           );
-        })}
+            })}
+          </div>
+        </div>
+        <aside className="map-info" aria-live="polite">
+          <div className="map-info-heading">{infoRow === optionsRow ? '下一处地点' : '地点情报'}</div>
+          {infoNode ? (
+            <>
+              <div className="map-info-icon" data-type={infoNode.type}><MapNodeIcon type={infoNode.type} /></div>
+              <div className="map-info-name">{isProficiency ? `第${infoRow + 1}层 · ` : ''}{infoNode.label}</div>
+              <div className={`map-info-status ${infoStatus === '可进入' ? 'available' : ''}`}>{infoStatus}</div>
+              <p>{infoNode.type === 'gauntlet' ? `共${infoNode.gauntletSize ?? 2}轮，失败将承受惩罚。` : MAP_KNOWN_HINTS[infoNode.type]}</p>
+            </>
+          ) : <p>选择下一处地点继续远征。</p>}
+          {isProficiency && <div className="map-milestones">首领层 <span>15</span><span>30</span><span>50</span></div>}
+        </aside>
       </div>
       {state.scoutResult && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}>
           <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">侦查结果 🔍</div>
             <div className="scout-result">
-              <div className="ricon">{NODE_ICON[state.map.layers.flat().find((n) => n.id === state.scoutResult!.nodeId)?.type ?? 'battle']}</div>
+              <div className="ricon"><MapNodeIcon type={state.map.layers.flat().find((n) => n.id === state.scoutResult!.nodeId)?.type ?? 'battle'} /></div>
               <div className="rtitle">{state.scoutResult.title}</div>
               <div className="rdesc">{state.scoutResult.detail}</div>
             </div>
@@ -1687,11 +1728,12 @@ function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<G
           </div>
         </div>
       )}
-      <div className="card-sub" style={{ textAlign: 'center' }}>
-        选择下一处地点（出发后需走相邻路线；消灭首领后可进入下一层）
+      <div className="map-footer">
+        <span>从上到下选择路线；同层节点不可横向移动。</span>
         <span className="route-legend">
+          <span className="legend-path" /> 已走路线
           <span className="legend-near" /> 下一步可达
-          <span className="legend-far" /> 悬停查看再下一步
+          <span className="legend-far" /> 后续路线预览
         </span>
       </div>
     </div>
