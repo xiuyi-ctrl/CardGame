@@ -434,6 +434,8 @@ export interface UnitCardProps {
   className?: string;
   onClick?: () => void;
   small?: boolean;
+  /** 战场中只显示生物图像、底座和生命/速度 */
+  battleDisplay?: boolean;
   /** 是否在卡片上列出技能（出阵的我方卡隐藏，见底部技能面板） */
   showSkills?: boolean;
   /** 是否在卡片上展示每个技能的完整描述（队伍管理界面用） */
@@ -454,7 +456,23 @@ export interface UnitCardProps {
   skillEnhancements?: Record<number, number>;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
+function BattlePixelSprite({ src, name }: { src: string; name: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const image = new Image();
+    image.onload = () => {
+      const context = canvasRef.current?.getContext('2d');
+      if (!context) return;
+      context.clearRect(0, 0, 64, 64);
+      context.drawImage(image, 0, 0, 64, 64);
+    };
+    image.src = src;
+    return () => { image.onload = null; };
+  }, [src]);
+  return <canvas ref={canvasRef} width={64} height={64} role="img" aria-label={name} />;
+}
+
+export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -468,6 +486,30 @@ export function UnitCard({ unit, className = '', onClick, small = false, showSki
   const passiveSpd = unit.passiveSpdBonus ?? 0;
   const totalDelta = passiveSpd + buffSpd + skillSpd + statusSpd + windSpd;
   const spdColor = totalDelta > 0 ? 'var(--hp-good)' : totalDelta < 0 ? 'var(--hp-low)' : undefined;
+  if (battleDisplay) {
+    const battleImage = unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image;
+    return (
+      <div
+        className={`unit-card battle-display ${className} ${dead ? 'dead' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
+        onClick={onClick}
+      >
+        <span className="battle-sprite">
+          {battleImage ? <BattlePixelSprite src={battleImage} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>}
+        </span>
+        <span className="battle-plinth" aria-hidden="true" />
+        <span className="battle-creature-stats">
+          <span className="battle-stat battle-stat-spd" title="速度">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1h4v2h-2v2H8v2h5v2h-2v2H9v2H7v2H5v-5H3V8h2V6h1V4h1V2h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
+            {effectiveSpd}
+          </span>
+          <span className="battle-stat battle-stat-hp" title="生命">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h4v1h2v1h1V3h2V2h3v1h1v6h-1v2h-2v2h-2v2H6v-2H4v-2H2V9H1V3h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
+            {unit.hp}/{unit.maxHp}
+          </span>
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       className={`unit-card ${small ? 'small' : ''} ${className} ${dead ? 'dead' : ''} ${onClick ? 'clickable' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
@@ -610,7 +652,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   toxicBurstReady: () => '死亡时对全体敌人造成 4 伤害 + 中毒 3 层',
 };
 
-export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, thornsHitCountOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number; thornsHitCountOverride?: number }) {
+export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, hideTitle = false }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number; thornsHitCountOverride?: number; hideTitle?: boolean }) {
   const passive = getPassive(unit.passive);
   const buffs = unit.battleBuffs;
   const battleBuffEntries = buffs
@@ -667,9 +709,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
 
   return (
     <div className="buff-detail-panel">
-      <div className="buff-detail-title">
-        <PetIcon image={unit.image} emoji={unit.emoji} name={unit.name} /> {unit.name}
-      </div>
+      {!hideTitle && <div className="buff-detail-title"><PetIcon image={unit.image} emoji={unit.emoji} name={unit.name} /> {unit.name}</div>}
       {hasPassive && (
         <div className="buff-section">
           <div className="buff-section-label">被动</div>

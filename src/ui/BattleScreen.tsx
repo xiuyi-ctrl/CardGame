@@ -177,6 +177,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   }, [isSimulation, battle.phase, animating, logPending]);
 
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
+  const inspectedEnemy = inspectEnemy ? battle.enemyUnits.find((u) => u.uid === inspectEnemy && u.hp > 0) : undefined;
   const selectedSkills: SkillDef[] = useMemo(
     () => (selected && selected.hp > 0 ? selected.skills.map((id) => getSkill(id)) : []),
     [selected],
@@ -380,7 +381,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const enemySlot = (u: Unit | undefined, key: string, topRow: boolean) => {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
-    if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
+    if (!u) return <div key={key} className={`${extra} empty`} aria-hidden="true" />;
     const isTarget = validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u));
     const isInspect = !pendingSkill && !pendingBattleItem && !pendingTame && !swapFrom;
     const inspected = inspectEnemy === u.uid;
@@ -392,7 +393,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${isInspect ? 'inspectable' : ''} ${inspected ? 'inspected' : ''}`}
         onClick={isTarget || isInspect ? () => onEnemyClick(u.uid) : undefined}
       >
-        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small topStats skillEnhancements={u.skillEnhancements} className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay skillEnhancements={u.skillEnhancements} className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
         {popOverlay(u.uid)}
       </div>
@@ -401,7 +402,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const playerSlot = (u: Unit | undefined, key: string, topRow: boolean) => {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
-    if (!u) return <div key={key} className={`${extra} empty`}><span className="formation-empty-slot">空</span></div>;
+    if (!u) return <div key={key} className={`${extra} empty`} aria-hidden="true" />;
     const sel = selectedUid === u.uid;
     const clickable = validAllyTargets.has(u.uid) || u.hp > 0;
     const fxInfo = fx[u.uid];
@@ -411,7 +412,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
       >
-        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} small showSkills={false} topStats className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
         {popOverlay(u.uid)}
       </div>
     );
@@ -452,7 +453,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                   : '敌方行动中…';
 
   return (
-    <div className="screen">
+    <div className="screen battle-screen">
       <div className="hud">
         <span className="act">第 {state.act} 层 · 回合 {battle.round}</span>
         {battle.gauntlet && (
@@ -469,20 +470,6 @@ export function BattleScreen({ state, dispatch }: Props) {
           💰 {state.gold} · 食物 {foods.reduce((s, f) => s + (state.inventory[f.id] ?? 0), 0)}
         </span>
         <button
-          className={`hud-action-btn ${foodOverlayOpen ? 'active' : ''}`}
-          onClick={() => { setFoodOverlayOpen((v) => !v); setItemOverlayOpen(false); }}
-          disabled={!canAct}
-        >
-          🍖 捕获
-        </button>
-        <button
-          className={`hud-action-btn ${itemOverlayOpen ? 'active' : ''}`}
-          onClick={() => { setItemOverlayOpen((v) => !v); setFoodOverlayOpen(false); }}
-          disabled={!canAct}
-        >
-          🧪 道具
-        </button>
-        <button
           className="home-btn"
           onClick={() => {
             void persistSave(state);
@@ -496,42 +483,32 @@ export function BattleScreen({ state, dispatch }: Props) {
       <div className="battle-main">
         <div className="battle-field">
           <div className="enemy-area">
-            <div className="formation-row row-front">
-              {enemyBack.map((u, i) => enemySlot(u, `eb${i}`, true))}
-            </div>
             <div className="formation-row row-back">
-              {enemyFront.map((u, i) => enemySlot(u, `ef${i}`, false))}
+              {enemyBack.map((u, i) => enemySlot(u, `eb${i}`, false))}
             </div>
-            {inspectEnemy && (() => {
-              const eu = b.enemyUnits.find((x) => x.uid === inspectEnemy);
-              return eu && eu.hp > 0 ? (
-                <>
-                  <div className="enemy-left-panels">
-                    <EnemySkillPanel unit={eu} />
-                  </div>
-                  <BuffDetailPanel unit={shownUnit(eu)} stacksOverride={passiveSpdMap?.[eu.uid]} rockShellHitsOverride={rockShellHitsMap?.[eu.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[eu.uid]} />
-                </>
-              ) : null;
-            })()}
+            <div className="formation-row row-front">
+              {enemyFront.map((u, i) => enemySlot(u, `ef${i}`, true))}
+            </div>
           </div>
           <div className="battle-divider" />
           <div className="player-area">
             <div className="formation-row row-front">{playerFront.map((u, i) => playerSlot(u, `pf${i}`, true))}</div>
             <div className="formation-row row-back">{playerBack.map((u, i) => playerSlot(u, `pb${i}`, false))}</div>
-            {selectedUid && (() => {
-              const su = b.playerUnits.find((x) => x.uid === selectedUid);
-              return su && su.hp > 0 ? <BuffDetailPanel unit={shownUnit(su)} stacksOverride={passiveSpdMap?.[su.uid]} rockShellHitsOverride={rockShellHitsMap?.[su.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[su.uid]} /> : null;
-            })()}
           </div>
         </div>
 
         <div className="battle-sidebar">
           <div className="log-panel">
-            <div className="log-title" onClick={() => setLogExpanded((v) => !v)} style={{ cursor: 'pointer' }}>
-              ⚔️ 战斗记录 {logExpanded ? '▼' : '▲'}
+            <div className="log-title" onClick={() => inspectedEnemy ? setInspectEnemy(null) : setLogExpanded((v) => !v)} style={{ cursor: 'pointer' }}>
+              {inspectedEnemy ? '← 返回战斗记录' : `⚔️ 战斗记录 ${logExpanded ? '▼' : '▲'}`}
             </div>
             <div className="log-box">
-              {logItems.map((l, i) => (
+              {inspectedEnemy ? (
+                <div className="enemy-inspect-details">
+                  <EnemySkillPanel unit={shownUnit(inspectedEnemy)} />
+                  <BuffDetailPanel unit={shownUnit(inspectedEnemy)} stacksOverride={passiveSpdMap?.[inspectedEnemy.uid]} rockShellHitsOverride={rockShellHitsMap?.[inspectedEnemy.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[inspectedEnemy.uid]} hideTitle />
+                </div>
+              ) : logItems.map((l, i) => (
                 <div key={i} className={`log-line ${l.side} ${i === logItems.length - 1 ? 'recent' : ''}`}>
                   {renderLogText(l.text, l.spans)}
                 </div>
@@ -541,8 +518,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
           <div className="skill-drawer">
             {selected && selected.hp > 0 ? (
-              <>
-                <div className="skill-drawer-scroll">
+              <div className="skill-drawer-scroll">
                   <span className="who">
                     {selected.name}
                     {(() => {
@@ -559,6 +535,8 @@ export function BattleScreen({ state, dispatch }: Props) {
                       <span className="order-badge">已行动</span>
                     ) : null}
                   </span>
+                  <BuffDetailPanel unit={shownUnit(selected)} stacksOverride={passiveSpdMap?.[selected.uid]} rockShellHitsOverride={rockShellHitsMap?.[selected.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[selected.uid]} hideTitle />
+                  <div className="battle-skill-grid">
                   {selectedSkills.map((s) => {
                     const left = skillUsesLeft(selected, s.id);
                     const cd = skillCooldownLeft(selected, s.id);
@@ -590,20 +568,6 @@ export function BattleScreen({ state, dispatch }: Props) {
                     );
                   })}
                   <button
-                    className="skill-btn"
-                    onClick={() => {
-                      setPendingSkill(null);
-                      setPendingTame(null);
-                      setPendingBattleItem(null);
-                      setInspectEnemy(null);
-                      setSwapFrom(selected.uid);
-                    }}
-                    disabled={alivePlayers.length < 2 || selected.acted || animating}
-                    title="与另一只己方宠物交换位置（1 行动点）"
-                  >
-                    <span>↔ 换位</span>
-                  </button>
-                  <button
                     className={`skill-btn ${selectedOrder?.skillId === REST_SKILL_ID ? 'skill-btn-current' : ''}`}
                     onClick={() => {
                       setPendingSkill(null);
@@ -624,37 +588,48 @@ export function BattleScreen({ state, dispatch }: Props) {
                       {selectedOrder?.skillId === 'rest' ? '已选择' : '0 AP'}
                     </span>
                   </button>
-                </div>
-                <div className="skill-drawer-bottom">
-                  <div className="hint-text">{hint}</div>
-                  <div className="end-row">
-                    <span className="end-ap">⚡ {battle.playerAp}/{battle.playerApMax}</span>
-                    <div className="anim-controls">
-                      {animating && (
-                        <button className="anim-skip-btn" onClick={skipAnim}>⏭️</button>
-                      )}
-                      <button
-                        className="anim-speed-btn"
-                        onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
-                      >
-                        ⏩ {animSpeed}x
-                      </button>
-                    </div>
-                    <button
-                      className="end-turn-btn"
-                      onClick={() => dispatch({ type: 'END_TURN' })}
-                      disabled={!canAct}
-                    >
-                      结束回合
-                    </button>
                   </div>
-                </div>
-              </>
+              </div>
             ) : (
               <div className="empty-hint">
                 {battle.phase === 'won' ? '战斗胜利！' : battle.phase === 'lost' ? '全队阵亡…' : animating ? '结算中…' : canAct ? '点击己方宠物查看技能' : '敌方行动中…'}
               </div>
             )}
+            <div className="skill-drawer-bottom">
+              <div className="battle-utility-row">
+                <button className={`hud-action-btn ${foodOverlayOpen ? 'active' : ''}`} onClick={() => { setFoodOverlayOpen((v) => !v); setItemOverlayOpen(false); }} disabled={!canAct}>🍖 捕获</button>
+                <button className={`hud-action-btn ${itemOverlayOpen ? 'active' : ''}`} onClick={() => { setItemOverlayOpen((v) => !v); setFoodOverlayOpen(false); }} disabled={!canAct}>🧪 道具</button>
+                <button
+                  className="hud-action-btn"
+                  onClick={() => {
+                    if (!selected) return;
+                    setPendingSkill(null);
+                    setPendingTame(null);
+                    setPendingBattleItem(null);
+                    setInspectEnemy(null);
+                    setSwapFrom(selected.uid);
+                  }}
+                  disabled={!selected || alivePlayers.length < 2 || selected.acted || animating}
+                  title="与另一只己方宠物交换位置（1 行动点）"
+                >↔ 换位</button>
+              </div>
+              <div className="hint-text">{hint}</div>
+              <div className="end-row">
+                <span className="end-ap">⚡ {battle.playerAp}/{battle.playerApMax}</span>
+                <div className="anim-controls">
+                  {animating && <button className="anim-skip-btn" onClick={skipAnim}>⏭️</button>}
+                  <button
+                    className="anim-speed-btn"
+                    onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
+                  >
+                    ⏩ {animSpeed}x
+                  </button>
+                </div>
+                <button className="end-turn-btn" onClick={() => dispatch({ type: 'END_TURN' })} disabled={!canAct}>
+                  结束回合
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
