@@ -472,6 +472,11 @@ function BattlePixelSprite({ src, name }: { src: string; name: string }) {
   return <canvas ref={canvasRef} width={64} height={64} role="img" aria-label={name} />;
 }
 
+export function PixelCreature({ unit }: { unit: Unit }) {
+  const image = unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image;
+  return image ? <BattlePixelSprite src={image} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>;
+}
+
 export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
@@ -487,14 +492,13 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
   const totalDelta = passiveSpd + buffSpd + skillSpd + statusSpd + windSpd;
   const spdColor = totalDelta > 0 ? 'var(--hp-good)' : totalDelta < 0 ? 'var(--hp-low)' : undefined;
   if (battleDisplay) {
-    const battleImage = unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image;
     return (
       <div
         className={`unit-card battle-display ${className} ${dead ? 'dead' : ''} ${unit.isPlayer ? 'is-player' : ''}`}
         onClick={onClick}
       >
         <span className="battle-sprite">
-          {battleImage ? <BattlePixelSprite src={battleImage} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>}
+          <PixelCreature unit={unit} />
         </span>
         <span className="battle-plinth" aria-hidden="true" />
         <span className="battle-creature-stats">

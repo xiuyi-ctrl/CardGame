@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（400 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
+- `npm test` / `npx vitest run`：单元测试（402 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
 - `npm run balance` / `npm run balance:check`：生成双模式数值报告 / 执行固定基线与确定性门禁；报告位于 `balance-output/`。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
@@ -35,6 +35,7 @@
   - `state/game.ts` 地图/奖励/成长/融合；`state/reducer.ts` 全局状态机与所有 GameAction。
 - `src/ui/`：React 界面（App.tsx 全界面 + BattleScreen.tsx + components.tsx + styles.css）。
   - 战斗布局：`BattleScreen` 左侧为上下分区的紫色像素地面战场，敌我前后排按约 27% 卡位宽横向、12% 卡位高纵向错位；战场 `UnitCard` 的 `battleDisplay` 只绘制 64×64 像素采样的生物、独立草石底座，以及底座下方依次排列的速度与生命图标/奶白色黑描边像素数字。迅迅有独立像素立绘，其他生物使用原图采样；战场使用四行等高网格，卡位按每行高度缩放，无纵向滚动条。右侧上方显示最近战斗记录（点击敌人时切换为其技能/状态详情），右下为选中我方详情、技能、捕获/道具/换位及固定的结束回合区；战场范围以外的队伍/背包等仍使用常规 `UnitCard`。
+  - 战前布阵 `FormationScreen` 使用独立夜色营地背景、两行三列战斗同款底座，右侧为两列紧凑候选肖像、聚焦详情和固定确认按钮。`PixelCreature` 复用战场像素采样；模拟战强制全上时右侧显示只读队伍总览。站位点击/拖拽与 `placeUnit` 规则不变；视觉参考位于 `design/previews/`，其中宠物与数值仅为示意。
   - 组件 `components.tsx`：`UnitCard`（`showSkills` 默认 true，出阵我方卡传 false 隐藏技能）、`SkillTag`/`skillBrief`（技能名+金色数值，供敌方卡/队伍界面/预览使用）、`SkillTag` 的 `usesNote` 在 desc 模式显示「每场限 N 次」。`skillFullDesc` 返回技能完整描述：若 `hideEffects: true` 直接返回 `desc`（desc 已自含效果层数等信息），否则自动追加 `（效果文本）`。**技能强化标记**：`SkillTag` 支持 `enhanced?: number`（0-3）属性，>=1 时在技能名右侧显示金色加号（+1→`+`、+2→`++`、+3→`+++`，颜色 `#e8c26a`）；强化后数值（伤害/治疗/buff效果值）用金色字体高亮。`skillBrief` 接收 `enhanced?: number` 追加金色加号。
   - 标题界面 `HomeScreen` 使用独立像素营地背景、SVG「叠放卡牌—山林道路—爪印」横向徽记；仅大标题用离线 Fusion Pixel Font，其他文字用系统字体。继续/新游戏/熟练度远征为主按钮，存档管理/生物图鉴/成就为次级入口，测试关卡/退出游戏在底部。生物图鉴打开 `CodexScreen` 覆盖层：左侧按 普通/精英/传奇/首领/造物 分组，右侧展示详情（属性/被动/技能/驯服/融合/说明），数据来自 `MONSTERS`+`computeStats`+`getPassive`+`nextStage`（物种 `desc` 为图鉴说明，见 `monsters.ts`）。
   - 地图界面 `MapScreen` 使用四张像素地形背景；节点由不规则石质底座、彩色 SVG 像素图标和独立铭牌组成，所有文字仍用系统字体。`mapRoutes.ts` 复用 `canStepTo` 只连接相邻上下层，禁用节点无连线，已走/可达/悬停预览分别着色。悬停与键盘聚焦只展示已知信息，不调用 `nodeInfo` 泄露侦查内容；熟练度 50 层采用紧凑单列，窄窗口把信息栏移至底部。
