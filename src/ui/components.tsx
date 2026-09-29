@@ -456,7 +456,7 @@ export interface UnitCardProps {
   skillEnhancements?: Record<number, number>;
 }
 
-function BattlePixelSprite({ src, name }: { src: string; name: string }) {
+export function BattlePixelSprite({ src, name }: { src: string; name: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const image = new Image();
