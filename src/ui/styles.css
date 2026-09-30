@@ -2597,6 +2597,242 @@ button.primary {
 }
 
 /* 队伍 / 奖励 / 商店 */
+.postbattle-screen {
+  height: 100%;
+  min-height: 0;
+  padding: 18px 20px 20px;
+  display: grid;
+  grid-template-rows: 78px minmax(0, 1fr);
+  gap: 14px;
+  overflow: hidden;
+  background: linear-gradient(rgba(9, 14, 31, .34), rgba(7, 13, 29, .62)), url('/roster-camp-background.png') center / cover no-repeat;
+}
+.postbattle-header, .postbattle-roster-panel, .postbattle-detail {
+  min-width: 0;
+  min-height: 0;
+  border: 4px solid #46536e;
+  background: rgba(11, 23, 41, .9);
+  box-shadow: inset 0 0 0 7px rgba(38, 60, 84, .58);
+}
+.postbattle-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 17px; }
+.postbattle-heading, .postbattle-header-actions { display: flex; align-items: center; gap: 13px; }
+.postbattle-heading > span { color: #e8c26a; font-size: 29px; }
+.postbattle-heading h1, .postbattle-roster-heading h2, .postbattle-detail h2, .postbattle-skills h3 { margin: 0; }
+.postbattle-heading h1 { color: #fff1d0; font-size: 27px; line-height: 1.2; }
+.postbattle-heading p { margin: 3px 0 0; color: #b9cad4; font-size: 12px; }
+.postbattle-header-actions > span, .postbattle-header-actions > button { min-width: 128px; padding: 10px 12px; border: 2px solid #6d7d86; border-radius: 0; background: #172a39; color: #bde9dc; font-size: 15px; font-weight: 700; text-align: center; }
+.postbattle-header-actions > button { color: #eae4f5; }
+.postbattle-layout { display: grid; grid-template-columns: minmax(0, 2.14fr) minmax(320px, 1fr); gap: 16px; min-height: 0; }
+.postbattle-roster-panel { display: grid; grid-template-rows: 100px 31px minmax(0, 1fr); gap: 14px; padding: 20px 21px 25px; }
+.postbattle-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 20px; border: 2px solid #5a7975; background: rgba(19, 43, 55, .93); }
+.postbattle-result strong { color: #e8c26a; font-size: 22px; }
+.postbattle-result p { margin: 7px 0 0; color: #bcd0cf; font-size: 13px; }
+.postbattle-rule { flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px; padding: 11px 15px; border: 1px solid #6b7789; background: #19263a; }
+.postbattle-rule small { color: #aebcc9; font-size: 12px; }
+.postbattle-rule span { color: #d7e6e3; font-size: 13px; font-weight: 700; }
+.postbattle-roster-heading { display: flex; align-items: end; justify-content: space-between; gap: 10px; }
+.postbattle-roster-heading h2 { color: #fff1d0; font-size: 19px; }
+.postbattle-roster-heading span { color: #b4c6cd; font-size: 13px; }
+.postbattle-roster-grid { min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 16px 13px; }
+.postbattle-pet, .postbattle-empty { min-width: 0; min-height: 0; border: 3px solid #4c5c70; border-radius: 0; background: rgba(16, 29, 46, .94); }
+.postbattle-pet { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto auto auto; gap: 7px; padding: 11px 13px; text-align: left; }
+.postbattle-pet.selected { border-color: #e8c26a; box-shadow: 0 0 0 1px #f4d890, inset 0 0 0 4px #2d4555; }
+.postbattle-pet-portrait { min-height: 0; display: grid; place-items: center; border: 2px solid #3f5f69; background: #142337; }
+.postbattle-pet-portrait canvas { display: block; width: min(100%, 116px); max-height: 100%; aspect-ratio: 1; image-rendering: pixelated; }
+.postbattle-pet-portrait .battle-sprite-emoji { font-size: 62px; }
+.postbattle-pet strong { color: #fff1d0; font-size: 17px; }
+.postbattle-pet-stats { display: flex; gap: 10px; color: #f1e4da; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.postbattle-pet-stats span:first-child { color: #f5b4b9; }
+.postbattle-pet-stats span:last-child { color: #f5d681; }
+.postbattle-pet > small { padding-top: 8px; border-top: 1px solid #304353; color: #a7bdc7; font-size: 11px; white-space: nowrap; }
+.postbattle-current { position: absolute; z-index: 1; top: 8px; left: 8px; padding: 3px 9px; border: 1px solid #e8c26a; background: #59492c; color: #fff0c3; font-size: 12px; font-weight: 700; }
+.postbattle-empty { display: grid; place-content: center; gap: 9px; color: #7f99a7; text-align: center; }
+.postbattle-empty span { color: #466b71; font-size: 37px; line-height: 1; }
+.postbattle-empty small { font-size: 13px; }
+.postbattle-detail { display: flex; flex-direction: column; gap: 13px; padding: 20px 21px 25px; }
+.postbattle-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.postbattle-detail-heading small { color: #9db8be; font-size: 13px; }
+.postbattle-detail h2 { color: #fff1d0; font-size: 26px; }
+.postbattle-detail-heading > span { padding: 5px 9px; border: 1px solid #a37b80; background: #3a313b; color: #ead0d0; font-size: 12px; white-space: nowrap; }
+.postbattle-detail-portrait { flex: 1 1 174px; min-height: 100px; display: grid; place-items: center; border: 2px solid #44616b; background: #142337; }
+.postbattle-detail-portrait canvas { display: block; width: min(100%, 210px); max-height: 100%; aspect-ratio: 1; image-rendering: pixelated; }
+.postbattle-detail-portrait .battle-sprite-emoji { font-size: 100px; }
+.postbattle-detail-stats { display: flex; gap: 19px; padding: 2px 7px 9px; border-bottom: 1px solid #425365; color: #f1e4da; font-size: 18px; font-weight: 700; }
+.postbattle-detail-stats span:first-child { color: #f5b4b9; }
+.postbattle-detail-stats span:last-child { color: #f5d681; }
+.postbattle-passive strong { color: #e8c26a; font-size: 15px; }
+.postbattle-passive p { margin: 6px 0 0; color: #bdccd1; font-size: 12px; line-height: 1.4; }
+.postbattle-skills h3 { color: #fff1d0; font-size: 16px; }
+.postbattle-skills > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+.postbattle-skills span { flex: 1 1 70px; padding: 7px 10px; border: 1px solid #527d7d; background: #1b3444; color: #e5ebdf; font-size: 13px; font-weight: 700; }
+.postbattle-detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.postbattle-detail-actions p { grid-column: 1 / -1; margin: 0; color: #b4c6cd; font-size: 12px; }
+.postbattle-detail-actions button, .postbattle-continue { min-height: 42px; border-radius: 0; font-size: 15px; font-weight: 700; }
+.postbattle-fuse { border: 2px solid #70d8bd; background: #244c54; color: #e4f5e9; }
+.postbattle-fuse.unavailable { border-color: #536176; background: #1a2b40; color: #a7bac2; }
+.postbattle-release { border: 2px solid #9f6670; background: #35222f; color: #edc6cc; }
+.postbattle-purify { grid-column: 1 / -1; border: 2px solid #70d8bd; background: #244c54; }
+.postbattle-continue { width: 100%; margin-top: auto; border: 2px solid #fff0ae; background: #e8c26a; color: #172136; }
+.postbattle-curse, .postbattle-bonus { margin: 0; font-size: 12px; }
+.postbattle-curse { color: #edb9bf; }
+.postbattle-bonus { color: #a7dfcb; }
+.postbattle-no-pets { color: #b4c6cd; }
+.postbattle-screen button:focus-visible { outline: 3px solid #fff1d0; outline-offset: 2px; }
+
+@media (max-width: 1100px), (max-height: 700px) {
+  .postbattle-screen { padding: 10px; grid-template-rows: 66px minmax(0, 1fr); gap: 10px; }
+  .postbattle-header { padding: 5px 11px; }
+  .postbattle-heading h1 { font-size: 22px; }
+  .postbattle-heading p { font-size: 11px; }
+  .postbattle-heading > span { font-size: 23px; }
+  .postbattle-header-actions > span, .postbattle-header-actions > button { min-width: 100px; padding: 7px 8px; font-size: 12px; }
+  .postbattle-layout { grid-template-columns: minmax(0, 2.15fr) minmax(265px, 1fr); gap: 10px; }
+  .postbattle-roster-panel { grid-template-rows: 73px 25px minmax(0, 1fr); gap: 8px; padding: 11px 12px 14px; }
+  .postbattle-result { padding: 8px 10px; }
+  .postbattle-result strong { font-size: 17px; }
+  .postbattle-result p, .postbattle-rule span { font-size: 10px; }
+  .postbattle-rule { padding: 6px 8px; }
+  .postbattle-rule small { font-size: 10px; }
+  .postbattle-roster-heading h2 { font-size: 16px; }
+  .postbattle-roster-heading span { font-size: 11px; }
+  .postbattle-roster-grid { gap: 8px; }
+  .postbattle-pet { gap: 4px; padding: 6px 7px; }
+  .postbattle-pet strong { font-size: 14px; }
+  .postbattle-pet-stats { gap: 6px; font-size: 11px; }
+  .postbattle-pet > small { padding-top: 4px; font-size: 9px; }
+  .postbattle-current { top: 5px; left: 5px; padding: 2px 5px; font-size: 10px; }
+  .postbattle-detail { gap: 7px; padding: 10px 12px 13px; }
+  .postbattle-detail h2 { font-size: 20px; }
+  .postbattle-detail-heading small, .postbattle-detail-heading > span { font-size: 10px; }
+  .postbattle-detail-portrait { flex-basis: 115px; min-height: 70px; }
+  .postbattle-detail-portrait canvas { width: min(100%, 145px); }
+  .postbattle-detail-stats { font-size: 14px; padding-bottom: 5px; }
+  .postbattle-passive strong, .postbattle-skills h3 { font-size: 13px; }
+  .postbattle-passive p, .postbattle-detail-actions p { font-size: 10px; }
+  .postbattle-skills span { padding: 4px 6px; font-size: 11px; }
+  .postbattle-detail-actions { gap: 5px; }
+  .postbattle-detail-actions button, .postbattle-continue { min-height: 32px; padding: 4px; font-size: 12px; }
+}
+
+.shop-screen {
+  position: relative;
+  height: 100%;
+  padding: 16px;
+  display: grid;
+  grid-template-rows: 82px minmax(0, 1fr);
+  gap: 14px;
+  overflow: hidden;
+  background: linear-gradient(90deg, transparent 20%, rgba(7, 13, 27, .28) 50%, rgba(7, 13, 27, .65) 100%), url('/shop-stall-background.png') left center / cover no-repeat;
+}
+
+.shop-header, .shop-catalog {
+  position: relative;
+  border: 3px solid #38455e;
+  background: rgba(10, 19, 38, .94);
+  box-shadow: inset 0 0 0 5px rgba(25, 44, 64, .75), 0 5px 0 rgba(5, 9, 20, .7);
+}
+
+.shop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 18px;
+}
+
+.shop-heading, .shop-header-actions { display: flex; align-items: center; gap: 14px; }
+.shop-heading-mark { color: #e8c26a; font-size: 31px; line-height: 1; }
+.shop-heading h1, .shop-catalog h2, .shop-product h3, .shop-utility h3 { margin: 0; }
+.shop-heading h1 { color: #fff1d0; font-size: 27px; line-height: 1.2; }
+.shop-heading p { margin: 4px 0 0; color: #b7cad3; font-size: 13px; }
+.shop-header-chip, .shop-leave {
+  min-width: 116px;
+  padding: 10px 14px;
+  border: 2px solid #53647b;
+  border-radius: 0;
+  background: #14243a;
+  color: #c6dae1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+.shop-header-chip strong { color: #bde9dc; }
+.shop-header-chip.shop-gold strong { color: #f4d47f; }
+.shop-leave { min-width: 126px; background: #1b2941; color: #eae4f5; }
+
+.shop-catalog {
+  min-width: 0;
+  min-height: 0;
+  margin-left: 42%;
+  padding: 24px 18px 18px;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr) 89px;
+  gap: 18px;
+  background: rgba(12, 23, 39, .94);
+}
+.shop-catalog-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.shop-catalog h2 { color: #fff1d0; font-size: 23px; }
+.shop-catalog-heading span { color: #a6c6c8; font-size: 13px; white-space: nowrap; }
+.shop-stock, .shop-utilities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; min-height: 0; }
+.shop-stock { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.shop-product {
+  position: relative;
+  min-width: 0;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 36px;
+  column-gap: 12px;
+  align-items: start;
+  border: 3px solid #70d8bd;
+  background: rgba(16, 37, 54, .96);
+  box-shadow: inset 0 0 0 4px #315c65;
+}
+.shop-product.is-sold, .shop-product.is-unaffordable { border-color: #43566b; background: rgba(16, 24, 39, .94); box-shadow: inset 0 0 0 4px #26354a; }
+.shop-product-icon { width: 66px; height: 66px; padding: 5px; border: 2px solid #3e6370; background: #122336; }
+.shop-item-icon { width: 100%; height: 100%; image-rendering: pixelated; }
+.shop-product.is-sold .shop-product-icon, .shop-product.is-unaffordable .shop-product-icon { opacity: .7; }
+.shop-product-copy { min-width: 0; }
+.shop-product h3 { color: #fff1d0; font-size: 18px; line-height: 1.3; }
+.shop-product.is-sold h3, .shop-product.is-unaffordable h3 { color: #b6c1cf; }
+.shop-product p { margin: 8px 0 0; color: #b7c8d1; font-size: 13px; line-height: 1.45; }
+.shop-price { align-self: center; padding: 4px 8px; border: 1px solid #74633f; background: #172d37; color: #f5d681; font-weight: 700; white-space: nowrap; }
+.shop-buy { justify-self: end; min-width: 99px; height: 34px; padding: 3px 8px; border: 2px solid #fff0af; border-radius: 0; background: #e8c26a; color: #172133; font-weight: 700; }
+.shop-buy:disabled { opacity: 1; border-color: #626778; background: #3b4152; color: #a9b0bd; }
+.shop-sold-badge { position: absolute; z-index: 1; top: 0; left: 0; padding: 3px 12px; background: #5d3f59; color: #e8d0dc; font-size: 12px; font-weight: 700; }
+.shop-utilities-single { grid-template-columns: 1fr; }
+.shop-utility { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px; border: 2px solid #44636d; background: rgba(16, 29, 45, .94); }
+.shop-utility h3 { color: #e8c26a; font-size: 16px; }
+.shop-utility p { margin: 6px 0 0; color: #b5c6d0; font-size: 12px; line-height: 1.3; }
+.shop-utility button { flex: 0 0 94px; border: 2px solid #70d8bd; border-radius: 0; background: #244b58; color: #e6f7ec; font-weight: 700; }
+.shop-utility button:disabled { opacity: .6; }
+.shop-screen button:focus-visible { outline: 3px solid #fff1d0; outline-offset: 3px; }
+
+@media (max-width: 1100px), (max-height: 700px) {
+  .shop-screen { padding: 10px; grid-template-rows: 66px minmax(0, 1fr); gap: 12px; }
+  .shop-header { padding: 6px 12px; }
+  .shop-heading h1 { font-size: 22px; }
+  .shop-heading p { font-size: 11px; }
+  .shop-heading-mark { font-size: 24px; }
+  .shop-header-actions { gap: 7px; }
+  .shop-header-chip, .shop-leave { min-width: 96px; padding: 7px; font-size: 13px; }
+  .shop-leave { min-width: 85px; }
+  .shop-catalog { margin-left: 36%; padding: 16px 12px 12px; grid-template-rows: 32px minmax(0, 1fr) 73px; gap: 10px; }
+  .shop-catalog h2 { font-size: 19px; }
+  .shop-catalog-heading span { font-size: 11px; }
+  .shop-stock, .shop-utilities { gap: 10px; }
+  .shop-product { padding: 9px; grid-template-columns: 50px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 30px; column-gap: 8px; }
+  .shop-product-icon { width: 50px; height: 50px; padding: 2px; }
+  .shop-product h3 { font-size: 15px; }
+  .shop-product p { margin-top: 4px; font-size: 11px; }
+  .shop-price { font-size: 12px; padding: 3px 6px; }
+  .shop-buy { min-width: 76px; height: 28px; font-size: 11px; padding: 2px 4px; }
+  .shop-utility { padding: 8px; }
+  .shop-utility h3 { font-size: 14px; }
+  .shop-utility p { font-size: 10px; }
+  .shop-utility button { flex-basis: 65px; font-size: 11px; padding: 5px; }
+}
+
 .roster-list {
   flex: 1;
   display: flex;

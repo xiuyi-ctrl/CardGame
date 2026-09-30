@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（402 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
+- `npm test` / `npx vitest run`：单元测试（406 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
 - `npm run balance` / `npm run balance:check`：生成双模式数值报告 / 执行固定基线与确定性门禁；报告位于 `balance-output/`。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
@@ -39,8 +39,10 @@
   - 组件 `components.tsx`：`UnitCard`（`showSkills` 默认 true，出阵我方卡传 false 隐藏技能）、`SkillTag`/`skillBrief`（技能名+金色数值，供敌方卡/队伍界面/预览使用）、`SkillTag` 的 `usesNote` 在 desc 模式显示「每场限 N 次」。`skillFullDesc` 返回技能完整描述：若 `hideEffects: true` 直接返回 `desc`（desc 已自含效果层数等信息），否则自动追加 `（效果文本）`。**技能强化标记**：`SkillTag` 支持 `enhanced?: number`（0-3）属性，>=1 时在技能名右侧显示金色加号（+1→`+`、+2→`++`、+3→`+++`，颜色 `#e8c26a`）；强化后数值（伤害/治疗/buff效果值）用金色字体高亮。`skillBrief` 接收 `enhanced?: number` 追加金色加号。
   - 标题界面 `HomeScreen` 使用独立像素营地背景、SVG「叠放卡牌—山林道路—爪印」横向徽记；仅大标题用离线 Fusion Pixel Font，其他文字用系统字体。继续/新游戏/熟练度远征为主按钮，存档管理/生物图鉴/成就为次级入口，测试关卡/退出游戏在底部。生物图鉴打开 `CodexScreen` 覆盖层：左侧按 普通/精英/传奇/首领/造物 分组，右侧展示详情（属性/被动/技能/驯服/融合/说明），数据来自 `MONSTERS`+`computeStats`+`getPassive`+`nextStage`（物种 `desc` 为图鉴说明，见 `monsters.ts`）。
   - 地图界面 `MapScreen` 使用四张像素地形背景；节点由不规则石质底座、彩色 SVG 像素图标和独立铭牌组成，所有文字仍用系统字体。`mapRoutes.ts` 复用 `canStepTo` 只连接相邻上下层，禁用节点无连线，已走/可达/悬停预览分别着色。悬停与键盘聚焦只展示已知信息，不调用 `nodeInfo` 泄露侦查内容；熟练度 50 层采用紧凑单列，窄窗口把信息栏移至底部。
+  - 商店界面 `ShopScreen` 共用林间流动商棚背景，顶部显示地点、金币、出战数量和离开入口；右侧两列货架用 `ShopItemIcon` 的像素 SVG 图标展示实际四件商品，标明已购买与金币不足。主线保留免费休整、熟练度仅有刷新；主线价格显示与难度倍率后的实付价格一致。所有文字仍使用系统字体。
+  - `RosterScreen` 在 `postBattle` 状态使用 `PostBattleRosterScreen`：独立营地背景、八格存活伙伴肖像及右侧详情，选中只改变查看对象；融合、释放、净化和继续前进沿用原有状态动作，普通队伍管理与满员处理新伙伴界面不变。
 - `electron/`：Electron 主进程/预加载（编译产物到 `dist-electron/`）。
-- `美术素材/`：当前实际使用的 57 个图像文件的集中合集；运行时副本仍位于 `public/` 和 `src/ui/assets/`，修改素材时需同步两处，勿直接改动旧存档使用的图片路径。
+- `美术素材/`：当前实际使用的 60 个图像文件的集中合集；运行时副本仍位于 `public/` 和 `src/ui/assets/`，修改素材时需同步两处，勿直接改动旧存档使用的图片路径。
 - `tests/`：vitest 测试（`test.include` 已限定 `tests/**/*.test.ts`，避免误扫 `.agents/skills`）。
 
 ## 核心设计约定

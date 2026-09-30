@@ -14,7 +14,7 @@ import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
 import { getMaxSkillSlots } from '../game/core/growth';
-import { UnitCard, SkillTag, DragScrollRow, PetIcon } from './components';
+import { UnitCard, SkillTag, DragScrollRow, PetIcon, PixelCreature } from './components';
 import { GrowthScreen } from './GrowthScreen';
 import { BlacksmithScreen } from './BlacksmithScreen';
 import { EnhanceStoneScreen } from './EnhanceStoneScreen';
@@ -25,6 +25,7 @@ import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { MapNodeIcon } from './MapNodeIcon';
+import { ShopItemIcon } from './ShopItemIcon';
 import { getMapRouteEdges } from './mapRoutes';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import titleEmblem from './assets/title-emblem.svg';
@@ -1797,6 +1798,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const arena3ExhibitionMode = pending?.kind === 'arena3Exhibition';
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  if (state.postBattle) return <PostBattleRosterScreen state={state} dispatch={dispatch} />;
   const title = evolveMode
     ? pending.super
       ? '超进化：选择要进化的宠物（会附带随机负面诅咒）'
@@ -1901,7 +1903,82 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   );
 }
 
-function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<PetConfirm>(null);
+  const focused = state.roster.find((u) => u.uid === selectedUid) ?? state.roster[0];
+  const stage = focused ? nextStage(focused.speciesId) : undefined;
+  const need = stage ? fusionNeedCount(focused.speciesId) : 0;
+  const sameCount = focused ? state.roster.filter((u) => u.speciesId === focused.speciesId).length : 0;
+  const canFuse = !!stage && sameCount >= need;
+  const passive = focused ? getPassive(focused.passive) : undefined;
+  const isProf = state.runMode === 'proficiency';
+
+  return <div className="postbattle-screen">
+    <header className="postbattle-header">
+      <div className="postbattle-heading"><span aria-hidden="true">✦</span><div><h1>战后休整</h1><p>奖励已领取；整理伙伴后继续远征。</p></div></div>
+      <div className="postbattle-header-actions">
+        <span>队伍 {state.roster.length}/{getMaxRoster(state.runMode)}</span>
+        <button type="button" onClick={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }}>返回首页</button>
+      </div>
+    </header>
+    <main className="postbattle-layout">
+      <section className="postbattle-roster-panel" aria-label="存活伙伴">
+        <div className="postbattle-result">
+          <div><strong>战斗胜利</strong><p>奖励已领取，以下仅展示仍在队伍中的伙伴。</p></div>
+          <div className="postbattle-rule"><small>战后可执行</small><span>{isProf ? '释放 · 暂不换阵' : '融合或释放 · 暂不换阵'}</span></div>
+        </div>
+        <div className="postbattle-roster-heading"><h2>存活伙伴</h2><span>队伍 {state.roster.length} / {getMaxRoster(state.runMode)}</span></div>
+        <div className="postbattle-roster-grid">
+          {Array.from({ length: getMaxRoster(state.runMode) }, (_, index) => {
+            const u = state.roster[index];
+            if (!u) return <div key={`empty-${index}`} className="postbattle-empty"><span aria-hidden="true">＋</span><small>空位</small></div>;
+            return <button key={u.uid} type="button" className={`postbattle-pet ${focused?.uid === u.uid ? 'selected' : ''}`}
+              aria-label={`查看${u.name}，生命${u.hp}/${u.maxHp}，速度${u.spd}`}
+              aria-pressed={focused?.uid === u.uid}
+              onClick={() => setSelectedUid(u.uid)} onFocus={() => setSelectedUid(u.uid)}>
+              {focused?.uid === u.uid && <span className="postbattle-current">当前</span>}
+              <span className="postbattle-pet-portrait"><PixelCreature unit={u} /></span>
+              <strong>{u.name}</strong>
+              <span className="postbattle-pet-stats"><span>♥ {u.hp}/{u.maxHp}</span><span>ϟ {u.spd}</span></span>
+              <small>点击查看战后状态</small>
+            </button>;
+          })}
+        </div>
+      </section>
+      <aside className="postbattle-detail" aria-label="伙伴详情">
+        {focused ? <>
+          <div className="postbattle-detail-heading"><div><small>战后查看</small><h2>{focused.name}</h2></div><span>{focused.hp < focused.maxHp ? '生命未满' : '状态良好'}</span></div>
+          <div className="postbattle-detail-portrait"><PixelCreature unit={focused} /></div>
+          <div className="postbattle-detail-stats"><span>♥ {focused.hp}/{focused.maxHp}</span><span>ϟ {focused.spd}</span></div>
+          {focused.curse && <p className="postbattle-curse">⚠️ {CURSE_CN[focused.curse]}</p>}
+          {focused.bonusStats && (focused.bonusStats.hp || focused.bonusStats.spd) &&
+            <p className="postbattle-bonus">属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}
+          <div className="postbattle-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
+          <div className="postbattle-skills"><h3>技能</h3><div>{focused.skills.map((sid, index) => {
+            const skill = getSkill(sid);
+            return <span key={`${sid}-${index}`} title={skill.desc}>{skill.name}</span>;
+          })}</div></div>
+          <div className="postbattle-detail-actions">
+            {!isProf && <><p>融合条件：{stage ? `同物种 ${sameCount} / ${need}` : '已是最终形态'}</p>
+              <button type="button" className={`postbattle-fuse ${canFuse ? '' : 'unavailable'}`} onClick={() => {
+                if (!stage) setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
+                else if (!canFuse) setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
+                else setConfirm({ kind: 'fuse', uid: focused.uid });
+              }}>融合进化</button></>}
+            <button type="button" className="postbattle-release" onClick={() => setConfirm({ kind: 'discard', uid: focused.uid })}>释放</button>
+            {focused.curse && (state.inventory.purify ?? 0) > 0 &&
+              <button type="button" className="postbattle-purify" onClick={() => dispatch({ type: 'USE_PURIFY', uid: focused.uid })}>净化（{state.inventory.purify}）</button>}
+          </div>
+        </> : <p className="postbattle-no-pets">没有存活伙伴。</p>}
+        <button type="button" className="postbattle-continue" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 →</button>
+      </aside>
+    </main>
+    {confirm && <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />}
+  </div>;
+}
+
+export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const boughtItems = state.shopBoughtItems ?? [];
   const isProf = state.runMode === 'proficiency';
   const profShopIds = ['heal_potion', 'gold_bag', 'book_small', 'book_medium', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
@@ -1909,96 +1986,81 @@ function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<
     isProf ? profShopIds.includes(id) : (!!FOODS[id] || !!ITEMS[id])
   );
   const refreshCount = state.shopRefreshCount ?? 0;
-  const refreshCost = 5 + refreshCount * 5;
+  const refreshCost = Math.round((5 + refreshCount * 5) * (isProf ? 1 : DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult));
   const canRefresh = refreshCount < 3 && state.gold >= refreshCost;
+  const canRest = state.roster.some((u) => u.hp < u.maxHp);
   return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="section-title">商人 🏪</div>
-      <p className="card-sub" style={{ textAlign: 'center' }}>
-        本店随机出售 4 种商品。
-      </p>
-      <div className="reward-cards">
+    <div className="shop-screen">
+      <header className="shop-header">
+        <div className="shop-heading"><span className="shop-heading-mark" aria-hidden="true">✦</span><div>
+          <h1>{isProf ? '远征补给站' : '林间商铺'}</h1>
+          <p>{isProf ? `熟练度远征 · 第 ${state.currentLayer ?? state.currentRow + 1} 层` : `第 ${state.act} 幕 · 旅途补给`}</p>
+        </div></div>
+        <div className="shop-header-actions">
+          <span className="shop-header-chip shop-gold">金币 <strong>{state.gold}</strong></span>
+          <span className="shop-header-chip">队伍 <strong>{state.field.length}/{isProf ? PROF_FIELD_MAX : FIELD_MAX}</strong></span>
+          <button type="button" className="shop-leave" onClick={() => dispatch({ type: 'NEXT_NODE' })}>离开 →</button>
+        </div>
+      </header>
+      <main className="shop-catalog">
+        <div className="shop-catalog-heading"><h2>今日货架</h2><span>随机上架 · {stock.length} 件</span></div>
+        <div className="shop-stock">
         {stock.map((id) => {
-          const profShopData: Record<string, { label: string; emoji: string; desc: string; price: number }> = {
-            heal_potion: { label: '治疗圣水', emoji: '🧪', desc: '全队回复 50% 生命', price: 30 },
-            gold_bag: { label: '金币袋', emoji: '💰', desc: '获得 25 金币', price: 10 },
-            book_small: { label: '成长之书（小）', emoji: '📖', desc: '选择一只宠物获得 1 成长点', price: 12 },
-            book_medium: { label: '成长之书（中）', emoji: '📕', desc: '选择一只宠物获得 2 成长点', price: 22 },
-            book_large: { label: '成长之书（大）', emoji: '📚', desc: '选择一只宠物获得 3 成长点', price: 30 },
-            growth_stone: { label: '成长之石', emoji: '💎', desc: '选择一只宠物获得 1 成长点', price: 15 },
-            stat_boost: { label: '属性强化', emoji: '⚡', desc: '选择一只宠物提升属性', price: 18 },
-            slot_unlock: { label: '技能槽解锁', emoji: '🔓', desc: '选择一只宠物解锁技能槽', price: 50 },
-            skill_replace: { label: '技能替换', emoji: '🔄', desc: '选择一只宠物替换技能', price: 12 },
-            forget_stone: { label: '遗忘之石', emoji: '🪨', desc: '选择一只宠物重置成长点', price: 30 },
-            pet_recruit: { label: '宠物招募', emoji: '🐾', desc: '招募一只随机宠物', price: 20 },
-            reset_stone: { label: '还原石', emoji: '💎', desc: '重置技能强化等级（返还50%消耗）', price: 25 },
-            skill_enhance_stone: { label: '技能强化石', emoji: '⚒️', desc: '强化1个技能（无需成长点）', price: 40 },
-            revival_stone: { label: '复活石', emoji: '🪹', desc: '复活1只死亡宠物（保留50%属性）', price: 60 },
+          const profShopData: Record<string, { label: string; desc: string; price: number }> = {
+            heal_potion: { label: '治疗圣水', desc: '全队回复 50% 生命', price: 30 },
+            gold_bag: { label: '金币袋', desc: '获得 25 金币', price: 10 },
+            book_small: { label: '成长之书（小）', desc: '选择一只宠物获得 1 成长点', price: 12 },
+            book_medium: { label: '成长之书（中）', desc: '选择一只宠物获得 2 成长点', price: 22 },
+            book_large: { label: '成长之书（大）', desc: '选择一只宠物获得 3 成长点', price: 30 },
+            growth_stone: { label: '成长之石', desc: '选择一只宠物获得 1 成长点', price: 15 },
+            stat_boost: { label: '属性强化', desc: '选择一只宠物提升属性', price: 18 },
+            slot_unlock: { label: '技能槽解锁', desc: '选择一只宠物解锁技能槽', price: 50 },
+            skill_replace: { label: '技能替换', desc: '选择一只宠物替换技能', price: 12 },
+            forget_stone: { label: '遗忘之石', desc: '选择一只宠物重置成长点', price: 30 },
+            pet_recruit: { label: '宠物招募', desc: '招募一只随机宠物', price: 20 },
+            reset_stone: { label: '还原石', desc: '重置技能强化等级（返还50%消耗）', price: 25 },
+            skill_enhance_stone: { label: '技能强化石', desc: '强化1个技能（无需成长点）', price: 40 },
+            revival_stone: { label: '复活石', desc: '复活1只死亡宠物（保留50%属性）', price: 60 },
           };
           const profItem = isProf ? profShopData[id] : undefined;
           const f = !isProf ? FOODS[id] : undefined;
           const it = !isProf ? ITEMS[id] : undefined;
           const name = profItem?.label ?? f?.name ?? it?.name ?? id;
-          const emoji = profItem?.emoji ?? f?.emoji ?? it?.emoji ?? '🎁';
           const desc = profItem?.desc ?? f?.desc ?? it?.desc ?? '';
-          const price = profItem?.price ?? f?.price ?? it?.price ?? 0;
+          const rawPrice = profItem?.price ?? f?.price ?? it?.price ?? 0;
+          const price = isProf ? rawPrice : Math.round(rawPrice * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult);
           const soldOut = boughtItems.includes(id);
+          const affordable = state.gold >= price;
           return (
-            <div key={id} className={`reward-card ${soldOut ? 'dim' : ''}`}>
-              <div className="ricon">{emoji}</div>
-              <div className="rtitle">{name}</div>
-              <div className="rdesc">{desc}</div>
-              <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-                <span className="chip">💰 {price}</span>
-                <button
-                  className="primary"
-                  disabled={soldOut || state.gold < price}
+            <article key={id} className={`shop-product ${soldOut ? 'is-sold' : ''} ${!soldOut && !affordable ? 'is-unaffordable' : ''}`}>
+              {soldOut && <span className="shop-sold-badge">已售</span>}
+              <div className="shop-product-icon"><ShopItemIcon itemId={id} /></div>
+              <div className="shop-product-copy"><h3>{name}</h3><p>{desc}</p></div>
+              <span className="shop-price">● {price}</span>
+              <button
+                  type="button"
+                  className="shop-buy"
+                  aria-label={`${soldOut ? '已购买' : affordable ? '购买' : '金币不足'} ${name}`}
+                  disabled={soldOut || !affordable}
                   onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_BUY', itemId: id } : { type: 'SHOP_BUY', foodId: id })}
                 >
-                  {soldOut ? '已购买' : '购买'}
+                  {soldOut ? '已购买' : affordable ? '购买' : '金币不足'}
                 </button>
-              </div>
-            </div>
+            </article>
           );
         })}
+        </div>
+        <div className={`shop-utilities ${isProf ? 'shop-utilities-single' : ''}`}>
         {!isProf && (
-        <div className="reward-card">
-          <div className="ricon">🛌</div>
-          <div className="rtitle">立即休整</div>
-          <div className="rdesc">免费让全队回满血（不解超进化诅咒）</div>
-          <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-            <button
-              className="primary"
-              disabled={state.roster.every((u) => u.hp >= u.maxHp)}
-              onClick={() => dispatch({ type: 'SHOP_REST' })}
-            >
-              {state.roster.every((u) => u.hp >= u.maxHp) ? '已满血' : '休整'}
-            </button>
+          <div className="shop-utility"><div><h3>立即休整</h3><p>免费让全队回满血，不解除诅咒</p></div>
+            <button type="button" disabled={!canRest} onClick={() => dispatch({ type: 'SHOP_REST' })}>{canRest ? '休整' : '已满血'}</button>
           </div>
-        </div>
         )}
-        <div className="reward-card">
-          <div className="ricon">🔄</div>
-          <div className="rtitle">刷新商品</div>
-          <div className="rdesc">{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币刷新全部商品（剩余 ${3 - refreshCount} 次）`}</div>
-          <div className="panel-row" style={{ justifyContent: 'center', marginTop: 8 }}>
-            {refreshCount < 3 && <span className="chip">💰 {refreshCost}</span>}
-            <button
-              className="primary"
-              disabled={!canRefresh}
-              onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_REFRESH' } : { type: 'SHOP_REFRESH' })}
-            >
-              {refreshCount >= 3 ? '已用完' : '刷新'}
-            </button>
-          </div>
+        <div className="shop-utility"><div><h3>刷新货架</h3><p>{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币 · 剩余 ${3 - refreshCount} 次`}</p></div>
+          <button type="button" disabled={!canRefresh} onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_REFRESH' } : { type: 'SHOP_REFRESH' })}>{refreshCount >= 3 ? '已用完' : '刷新'}</button>
         </div>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
-          离开 →
-        </button>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

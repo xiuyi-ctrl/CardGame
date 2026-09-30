@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640" viewBox="0 0 960 640">
+    <defs><linearGradient id="sceneFade"><stop offset="0" stop-color="#101325" stop-opacity="0"/><stop offset="0.75" stop-color="#0b1020" stop-opacity=".38"/><stop offset="1" stop-color="#0b1020" stop-opacity=".7"/></linearGradient></defs>
+    <style>text{font-family:'Microsoft YaHei','PingFang SC',system-ui,sans-serif;letter-spacing:.2px}</style>
+    <image href="shop-stall-background.png" x="0" y="0" width="960" height="640" preserveAspectRatio="xMinYMid slice"/>
+    <rect x="304" y="0" width="656" height="640" fill="url(#sceneFade)" stroke="none" stroke-width="0"/>
+    <rect x="10" y="10" width="940" height="66" fill="#0b1429ef" stroke="#47526a" stroke-width="3"/>
+    <rect x="17" y="17" width="926" height="52" fill="none" stroke="#263b54" stroke-width="1"/>
+    <text x="35" y="40" fill="#e8c26a" font-size="24" font-weight="700" >✦</text>
+    <text x="70" y="41" fill="#fff1d0" font-size="23" font-weight="800" >林间商铺</text>
+    <text x="72" y="62" fill="#b7cad3" font-size="12" font-weight="400" >第一幕 · 翠绿之径</text>
+    <rect x="620" y="23" width="105" height="41" fill="#14243a" stroke="#53647b" stroke-width="2"/>
+    <text x="635" y="49" fill="#f4d47f" font-size="15" font-weight="700" >金币  12</text>
+    <rect x="737" y="23" width="100" height="41" fill="#14243a" stroke="#53647b" stroke-width="2"/>
+    <text x="754" y="49" fill="#bde9dc" font-size="14" font-weight="700" >队伍 2/5</text>
+    <rect x="846" y="23" width="90" height="41" fill="#1b2941" stroke="#7a88a6" stroke-width="2"/>
+    <text x="891" y="49" fill="#eae4f5" font-size="15" font-weight="700" text-anchor="middle">离开 →</text>
+    <rect x="354" y="88" width="596" height="542" fill="#0c1727eb" stroke="#37475f" stroke-width="4"/>
+    <rect x="360" y="94" width="584" height="530" fill="none" stroke="#223c52" stroke-width="1"/>
+    <text x="367" y="121" fill="#fff1d0" font-size="20" font-weight="800" >今日货架</text>
+    <text x="937" y="120" fill="#a6c6c8" font-size="12" font-weight="500" text-anchor="end">随机上架 · 4 件</text>
+    <g>
+    <rect x="367" y="145" width="280" height="151" fill="#102536f2" stroke="#70d8bd" stroke-width="3"/>
+    <rect x="372" y="150" width="270" height="141" fill="none" stroke="#315c65" stroke-width="1"/>
+    <rect x="377" y="169" width="59" height="59" fill="#122336" stroke="#3e6370" stroke-width="2"/>
+    <g transform="translate(381 173) scale(1.02)" shape-rendering="crispEdges" opacity="1"><rect x="14" y="9" width="20" height="7" fill="#51b879"/><rect x="21" y="4" width="7" height="10" fill="#82d690"/><rect x="11" y="17" width="28" height="21" fill="#581c36"/><rect x="15" y="17" width="20" height="21" fill="#de5274"/><rect x="18" y="22" width="5" height="5" fill="#ff9da3"/><rect x="29" y="28" width="5" height="5" fill="#ff9da3"/><rect x="21" y="39" width="9" height="5" fill="#7a213d"/></g>
+    <text x="444" y="179" fill="#fff1d0" font-size="17" font-weight="700" >浆果</text>
+    <text x="444" y="205" fill="#b7c8d1" font-size="12" font-weight="400" >驯服成功率一般，生命加成低</text>
+    <rect x="380" y="251" width="76" height="29" fill="#172d37" stroke="#74633f" stroke-width="1"/>
+    <text x="390" y="271" fill="#f5d681" font-size="14" font-weight="700" >● 5</text>
+    <rect x="551" y="254" width="82" height="30" fill="#e8c26a" stroke="#fff0af" stroke-width="2"/>
+    <text x="592" y="275" fill="#172133" font-size="13" font-weight="700" text-anchor="middle">购买</text>
+    
+  </g><g>
+    <rect x="657" y="145" width="280" height="151" fill="#101827ed" stroke="#43566b" stroke-width="3"/>
+    <rect x="662" y="150" width="270" height="141" fill="none" stroke="#26354a" stroke-width="1"/>
+    <rect x="667" y="169" width="59" height="59" fill="#122336" stroke="#3e6370" stroke-width="2"/>
+    <g transform="translate(671 173) scale(1.02)" shape-rendering="crispEdges" opacity="0.68"><rect x="5" y="27" width="16" height="8" fill="#efe2ba"/><rect x="6" y="22" width="7" height="7" fill="#efe2ba"/><rect x="7" y="35" width="7" height="6" fill="#efe2ba"/><rect x="18" y="12" width="27" height="27" fill="#57202e"/><rect x="21" y="15" width="21" height="21" fill="#d36a67"/><rect x="25" y="17" width="10" height="8" fill="#f09b8b"/></g>
+    <text x="734" y="179" fill="#aeb9c9" font-size="17" font-weight="700" >鲜肉</text>
+    <text x="734" y="205" fill="#b7c8d1" font-size="12" font-weight="400" >驯服成功率较高</text>
+    <rect x="670" y="251" width="76" height="29" fill="#172d37" stroke="#74633f" stroke-width="1"/>
+    <text x="680" y="271" fill="#f5d681" font-size="14" font-weight="700" >● 9</text>
+    <rect x="841" y="254" width="82" height="30" fill="#3b4152" stroke="#626778" stroke-width="2"/>
+    <text x="882" y="275" fill="#a9b0bd" font-size="13" font-weight="700" text-anchor="middle">已购买</text>
+    <path d="M660 148h77v22h-77z" fill="#5d3f59"/><text x="670" y="165" fill="#e8d0dc" font-size="13" font-weight="700" >已售</text>
+  </g><g>
+    <rect x="367" y="306" width="280" height="151" fill="#101827ed" stroke="#43566b" stroke-width="3"/>
+    <rect x="372" y="311" width="270" height="141" fill="none" stroke="#26354a" stroke-width="1"/>
+    <rect x="377" y="330" width="59" height="59" fill="#122336" stroke="#3e6370" stroke-width="2"/>
+    <g transform="translate(381 334) scale(1.02)" shape-rendering="crispEdges" opacity="0.68"><path d="M15 7h22l10 13-21 25L5 20z" fill="#132535"/><path d="M17 11h18l7 9-16 19L10 20z" fill="#44bdd0"/><path d="M17 11h18l-9 10H10z" fill="#95f4df"/><path d="M26 21h16L26 39z" fill="#258da9"/></g>
+    <text x="444" y="340" fill="#aeb9c9" font-size="17" font-weight="700" >秘晶</text>
+    <text x="444" y="366" fill="#b7c8d1" font-size="12" font-weight="400" >驯服成功率最高，大幅提升生命</text>
+    <rect x="380" y="412" width="76" height="29" fill="#172d37" stroke="#74633f" stroke-width="1"/>
+    <text x="390" y="432" fill="#f5d681" font-size="14" font-weight="700" >● 14</text>
+    <rect x="551" y="415" width="82" height="30" fill="#3b4152" stroke="#626778" stroke-width="2"/>
+    <text x="592" y="436" fill="#a9b0bd" font-size="13" font-weight="700" text-anchor="middle">金币不足</text>
+    
+  </g><g>
+    <rect x="657" y="306" width="280" height="151" fill="#101827ed" stroke="#43566b" stroke-width="3"/>
+    <rect x="662" y="311" width="270" height="141" fill="none" stroke="#26354a" stroke-width="1"/>
+    <rect x="667" y="330" width="59" height="59" fill="#122336" stroke="#3e6370" stroke-width="2"/>
+    <g transform="translate(671 334) scale(1.02)" shape-rendering="crispEdges" opacity="0.68"><rect x="13" y="8" width="27" height="33" fill="#4a3453"/><rect x="17" y="11" width="20" height="27" fill="#d8bf83"/><rect x="22" y="17" width="13" height="3" fill="#7a6156"/><rect x="22" y="23" width="9" height="3" fill="#7a6156"/><rect x="30" y="29" width="12" height="12" fill="#112435"/><rect x="32" y="31" width="8" height="8" fill="#70d8bd"/><rect x="39" y="39" width="8" height="4" fill="#70d8bd"/></g>
+    <text x="734" y="340" fill="#aeb9c9" font-size="17" font-weight="700" >侦察符</text>
+    <text x="734" y="366" fill="#b7c8d1" font-size="12" font-weight="400" >查看指定一关的全部节点情报</text>
+    <rect x="670" y="412" width="76" height="29" fill="#172d37" stroke="#74633f" stroke-width="1"/>
+    <text x="680" y="432" fill="#f5d681" font-size="14" font-weight="700" >● 16</text>
+    <rect x="841" y="415" width="82" height="30" fill="#3b4152" stroke="#626778" stroke-width="2"/>
+    <text x="882" y="436" fill="#a9b0bd" font-size="13" font-weight="700" text-anchor="middle">金币不足</text>
+    
+  </g>
+    <g>
+    <rect x="367" y="470" width="280" height="73" fill="#101d2ded" stroke="#44636d" stroke-width="2"/>
+    <text x="382" y="491" fill="#e8c26a" font-size="15" font-weight="700" >立即休整</text>
+    <text x="382" y="511" fill="#b5c6d0" font-size="11" font-weight="400" >免费为全队恢复生命</text>
+    <rect x="547" y="506" width="86" height="27" fill="#41625d" stroke="#87cdb3" stroke-width="2"/>
+    <text x="590" y="526" fill="#e6f7ec" font-size="13" font-weight="700" text-anchor="middle">休整</text>
+  </g><g>
+    <rect x="657" y="470" width="280" height="73" fill="#101d2ded" stroke="#44636d" stroke-width="2"/>
+    <text x="672" y="491" fill="#e8c26a" font-size="15" font-weight="700" >刷新货架</text>
+    <text x="672" y="511" fill="#b5c6d0" font-size="11" font-weight="400" >花费 10 金币 · 剩余 2 次</text>
+    <rect x="837" y="506" width="86" height="27" fill="#244b58" stroke="#70d8bd" stroke-width="2"/>
+    <text x="880" y="526" fill="#e6f7ec" font-size="13" font-weight="700" text-anchor="middle">刷新</text>
+  </g>
+  </svg>
