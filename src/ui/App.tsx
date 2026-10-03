@@ -237,7 +237,7 @@ function FuseDiscardConfirm({
   const tameTarget = isTameFuse ? state.tameOverflow?.[0] : undefined;
   return (
     <div className="confirm-overlay" onClick={() => setConfirm(null)}>
-      <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+      <div className={`confirm-box${isDiscard || isReplace ? ' popup-danger' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : isReplace ? '确认替换' : isTameFuse ? '确认融合' : '提示'}</div>
         {isFuse && target && (
           <p>
@@ -910,6 +910,15 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                       key={s.slot}
                       className={`save-slot ${info.cls}${isActive ? ' active' : ''}`}
                       onClick={() => onSlotClick(s)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSlotClick(s);
+                        }
+                      }}
                     >
                       <div className="save-slot-num">存档 {s.slot}{isActive ? '（当前）' : ''}</div>
                       <div className="save-slot-text">{info.text}</div>
@@ -928,8 +937,8 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       )}
       {deleteTarget !== null && (
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setDeleteTarget(null)}>
-          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">⚠️ 删除存档</div>
+          <div className="confirm-box popup-danger" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">删除存档</div>
             <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
               确定要删除存档 <b style={{ color: 'var(--gold)' }}>{deleteTarget}</b> 吗？
             </p>
@@ -945,8 +954,8 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       )}
       {overwriteTarget !== null && (
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setOverwriteTarget(null)}>
-          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">⚠️ 覆盖存档</div>
+          <div className="confirm-box popup-danger" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">覆盖存档</div>
             <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
               存档 <b style={{ color: 'var(--gold)' }}>{overwriteTarget}</b> 已有游戏，确定覆盖？
             </p>
@@ -963,7 +972,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       {profConfirmSlot !== null && (
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setProfConfirmSlot(null)}>
           <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">⚔️ 熟练度远征</div>
+            <div className="section-title">熟练度远征</div>
             <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
               存档 <b style={{ color: 'var(--gold)' }}>{profConfirmSlot}</b> 有未完成的熟练度远征
             </p>
@@ -1687,7 +1696,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
       {state.scoutResult && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}>
           <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
-            <div className="section-title">侦查结果 🔍</div>
+            <div className="section-title">侦查结果</div>
             <div className="scout-result">
               <div className="ricon"><MapNodeIcon type={state.map.layers.flat().find((n) => n.id === state.scoutResult!.nodeId)?.type ?? 'battle'} /></div>
               <div className="rtitle">{state.scoutResult.title}</div>
@@ -2747,8 +2756,9 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
       {hatch && hatchMonster && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'EVENT_HATCH_CANCEL' })}>
           <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">孵化结果</div>
             <div style={{ fontSize: 48, marginBottom: 8 }}>{hatchMonster.image ? <img src={hatchMonster.image} className="pet-image" style={{ width: 48, height: 48 }} alt={hatchMonster.name} /> : hatchMonster.emoji}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>孵化出了 {hatchMonster.name}！</div>
+            <div>孵化出了 <b>{hatchMonster.name}</b>！</div>
             <div className="card-sub" style={{ marginBottom: 4, justifyContent: 'center' }}>
               ❤️ {hatchMonster.baseHp} &nbsp; ⚡ {hatchMonster.baseSpd}
             </div>

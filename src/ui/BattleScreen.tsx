@@ -20,6 +20,7 @@ import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
 import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PetIcon } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
+import { ShopItemIcon } from './ShopItemIcon';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
 
@@ -637,7 +638,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       {foodOverlayOpen && (
         <div className="battle-overlay-mask" onClick={() => setFoodOverlayOpen(false)}>
           <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="battle-overlay-title">🍖 捕获食物</div>
+            <div className="battle-overlay-title">捕获食物</div>
             <div className="battle-overlay-grid">
               {foods.length === 0 ? (
                 <div className="overlay-empty">没有食物</div>
@@ -649,7 +650,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     onClick={() => { onFoodClick(f.id); setFoodOverlayOpen(false); }}
                     disabled={count <= 0 || battle.phase !== 'acting' || !aliveEnemies.some((u) => isTameable(u))}
                   >
-                    <span>{f.emoji} {f.name}</span>
+                    <span className="battle-overlay-item-name"><ShopItemIcon itemId={f.id} />{f.name}</span>
                     <span>×{count}</span>
                   </button>
                 );
@@ -662,7 +663,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       {itemOverlayOpen && (
         <div className="battle-overlay-mask" onClick={() => setItemOverlayOpen(false)}>
           <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="battle-overlay-title">🧪 战斗道具</div>
+            <div className="battle-overlay-title">战斗道具</div>
             <div className="battle-overlay-grid">
               {battleItems.length === 0 ? (
                 <div className="overlay-empty">没有战斗道具</div>
@@ -674,7 +675,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     onClick={() => { onBattleItemClick(it.id); setItemOverlayOpen(false); }}
                     disabled={!canAct}
                   >
-                    <span>{it.emoji} {it.name}</span>
+                    <span className="battle-overlay-item-name"><ShopItemIcon itemId={it.id} />{it.name}</span>
                     <span>×{count}</span>
                   </button>
                 );
@@ -686,8 +687,8 @@ export function BattleScreen({ state, dispatch }: Props) {
 
       {battle.phase === 'won' && !animating && !logPending && (
         <div className="overlay">
-          <div className="overlay-box">
-            <div style={{ fontSize: 48 }}>🏆</div>
+          <div className="overlay-box popup-victory">
+            <div className="popup-result-mark" aria-hidden="true">⚔</div>
             <h2>{isChallenge ? '挑战胜利' : '战斗胜利'}</h2>
             <p>
               {isChallenge
@@ -703,8 +704,8 @@ export function BattleScreen({ state, dispatch }: Props) {
 
       {battle.phase === 'lost' && !animating && !logPending && !isSimulation && (
         <div className="overlay">
-          <div className="overlay-box">
-            <div style={{ fontSize: 48 }}>{isArena3Challenge || !isChallenge ? '💀' : '⚠️'}</div>
+          <div className="overlay-box popup-defeat">
+            <div className="popup-result-mark" aria-hidden="true">✕</div>
             <h2>{isArena3Challenge || !isChallenge ? '全队阵亡' : '挑战失败'}</h2>
             <p>{isArena3Challenge || !isChallenge ? '阵亡的宠物永久消失，本次远征到此结束' : '没有宠物阵亡，但需要承受挑战失败的代价'}</p>
             <button className="big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
