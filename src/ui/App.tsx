@@ -14,7 +14,7 @@ import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
 import { getMaxSkillSlots } from '../game/core/growth';
-import { UnitCard, SkillTag, DragScrollRow, PetIcon, PixelCreature } from './components';
+import { UnitCard, SkillTag, DragScrollRow, PetIcon, PixelCreature, BattlePixelSprite } from './components';
 import { GrowthScreen } from './GrowthScreen';
 import { BlacksmithScreen } from './BlacksmithScreen';
 import { EnhanceStoneScreen } from './EnhanceStoneScreen';
@@ -65,7 +65,7 @@ export default function App() {
   }, [state.toast]);
 
   return (
-    <div className={state.screen === 'title' ? 'screen screen-title' : 'screen'}>
+    <div className={state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : 'screen'}>
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
@@ -1296,141 +1296,121 @@ function DifficultyScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   );
 }
 
-function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
-  const [firstPick, setFirstPick] = useState<string | null>(null);
+const STARTER_ROLES: Record<string, string> = {
+  momo: '灵巧', lulu: '治愈', fifi: '进攻',
+  kiki: '防护', mimi: '剧毒', pipi: '控制',
+};
 
-  const startRun = (starterId: string, companionId: string) => {
-    dispatch({ type: 'START_RUN', starterId, companionId, seed: newSeed() });
+function StarterChoiceCard({ id, selected, order, compact = false, onClick }: {
+  id: string; selected: boolean; order?: number; compact?: boolean; onClick: () => void;
+}) {
+  const species = getMonster(id);
+  const stats = computeStats(id);
+  return (
+    <button type="button" className={`starter-choice ${compact ? 'compact' : 'main-choice'} ${selected ? 'selected' : ''}`}
+      aria-pressed={selected} title={`技能：${species.skills.map((skill) => getSkill(skill).name).join('、')}`} onClick={onClick}>
+      {order && <span className="starter-choice-order">{order}</span>}
+      <span className="starter-choice-art">
+        <span className="starter-choice-sprite"><BattlePixelSprite src={id === 'momo' ? '/battle-momo.png' : species.image!} name={species.name} /></span>
+        <span className="starter-choice-plinth" aria-hidden="true" />
+      </span>
+      <span className="starter-choice-info">
+        <span className="starter-choice-name">{species.name}<small>{STARTER_ROLES[id]}</small></span>
+        <span className="starter-choice-stats"><span title="速度">⚡ {!compact && <small>速度</small>} {stats.spd}</span><span title="生命">♥ {!compact && <small>生命</small>} {stats.maxHp}</span></span>
+        {!compact && <span className="starter-choice-skills">{species.skills.map((skill) => getSkill(skill).name).join(' · ')}</span>}
+      </span>
+      {!compact && selected && <span className="starter-choice-selected-note" aria-hidden="true">◇ 已选择 ◇</span>}
+    </button>
+  );
+}
+
+export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+  const [firstPick, setFirstPick] = useState<string | null>(null);
+  const [candidate, setCandidate] = useState<string | null>(null);
+  const isCompanion = firstPick !== null;
+  const choices = isCompanion ? STARTER_GROUP_2 : STARTER_GROUP_1;
+
+  const confirm = () => {
+    if (!candidate) return;
+    if (!firstPick) {
+      setFirstPick(candidate);
+      setCandidate(null);
+    } else {
+      dispatch({ type: 'START_RUN', starterId: firstPick, companionId: candidate, seed: newSeed() });
+    }
   };
 
-  if (firstPick) {
-    return (
-      <div className="center-col">
-        <div className="section-title">选择你的初始伙伴</div>
-        <div className="starter-hint">
-          <span className="chosen-one">{getMonster(firstPick).emoji} {getMonster(firstPick).name} ×2</span> 已选择
-        </div>
-        <div className="section-sub">再选一只同伴（获得 1 只）</div>
-        <div className="starter-grid">
-          {STARTER_GROUP_2.map((id) => {
-            const sp = getMonster(id);
-            const stats = computeStats(id);
-            return (
-              <div key={id} className="unit-card clickable" onClick={() => startRun(firstPick, id)}>
-                <div className="card-top">
-                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
-                </div>
-                <div className="card-name">{sp.name}</div>
-                <div className="card-sub">
-                  生命 {stats.maxHp} · 速度 {stats.spd}
-                </div>
-                <div className="skill-list">
-                  {sp.skills.map((s) => (
-                    <SkillTag key={s} skill={getSkill(s)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <button className="big-btn" style={{ marginTop: 12 }} onClick={() => setFirstPick(null)}>返回重选</button>
-      </div>
-    );
-  }
-
   return (
-    <div className="center-col">
-      <div className="section-title">选择你的初始伙伴</div>
-      <div className="section-sub">选一只主力（获得 2 只）</div>
-      <div className="starter-grid">
-        {STARTER_GROUP_1.map((id) => {
-          const sp = getMonster(id);
-          const stats = computeStats(id);
-          return (
-            <div key={id} className="unit-card clickable" onClick={() => setFirstPick(id)}>
-              <div className="card-top">
-                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
-                </div>
-                <div className="card-name">{sp.name}</div>
-                <div className="card-sub">
-                  生命 {stats.maxHp} · 速度 {stats.spd}
-              </div>
-              <div className="skill-list">
-                {sp.skills.map((s) => (
-                  <SkillTag key={s} skill={getSkill(s)} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <button className="big-btn" style={{ marginTop: 12 }} onClick={() => dispatch({ type: 'SELECT_DIFFICULTY_BACK' })}>返回：重新选择难度</button>
+    <div className={`starter-screen ${isCompanion ? 'starter-passage' : 'starter-grove'}`}>
+      <header className="starter-header">
+        <div className="starter-heading"><span className="starter-mark" aria-hidden="true">✦</span><div>
+          <h1>{isCompanion ? '选择同行伙伴' : '选择初始伙伴'}</h1>
+          <p>主线远征 · 第{isCompanion ? '二' : '一'}步</p>
+        </div></div>
+        <button className="starter-back" onClick={() => {
+          if (isCompanion) { setFirstPick(null); setCandidate(null); }
+          else dispatch({ type: 'SELECT_DIFFICULTY_BACK' });
+        }}>← {isCompanion ? '返回重选' : '返回难度'}</button>
+      </header>
+      <main className="starter-main">
+        {firstPick && <div className="starter-progress">已选主力：{getMonster(firstPick).name} ×2</div>}
+        <div className="starter-choice-grid main-choices">
+          {choices.map((id) => <StarterChoiceCard key={id} id={id} selected={candidate === id} onClick={() => setCandidate(id)} />)}
+        </div>
+      </main>
+      <footer className="starter-footer">
+        <div className="starter-footer-copy">
+          <strong>{isCompanion ? '再选一只同伴，获得 1 只' : '选择一只主力，获得同种生物 2 只'}</strong>
+          <span>{candidate ? `当前选择：${getMonster(candidate).name}` : '点击生物查看选择'}</span>
+        </div>
+        <button className="starter-confirm" disabled={!candidate} onClick={confirm}>
+          {isCompanion ? '开始远征' : '下一步：选择同伴'}
+        </button>
+      </footer>
     </div>
   );
 }
 
-function ProficiencyStarterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function ProficiencyStarterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selected, setSelected] = useState<string[]>([]);
-
-  const toggle = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length < 2 ? [...prev, id] : prev
-    );
-  };
-
-  const confirmed = selected.length === 2;
+  const toggle = (id: string) => setSelected((prev) =>
+    prev.includes(id) ? prev.filter((value) => value !== id) : prev.length < 2 ? [...prev, id] : prev
+  );
 
   return (
-    <div className="center-col">
-      <div className="section-title">⚔️ 熟练度远征</div>
-      <div className="section-sub">从 6 只基础生物中选择 2 只出征</div>
-      <div className="starter-grid">
-        {BASE_POOL.map((id) => {
-          const sp = getMonster(id);
-          const stats = computeStats(id);
-          const isSel = selected.includes(id);
-          return (
-            <div
-              key={id}
-              className={`unit-card clickable ${isSel ? 'selected' : ''}`}
-              onClick={() => toggle(id)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <div className="card-top" style={{ margin: 0 }}>
-                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
-                </div>
-                <div className="card-name" style={{ margin: 0 }}>{sp.name}</div>
-              </div>
-              <div className="card-sub">
-                生命 {stats.maxHp} · 速度 {stats.spd}
-              </div>
-              <div className="skill-list">
-                {sp.skills.map((s) => (
-                  <SkillTag key={s} skill={getSkill(s)} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <p style={{ color: 'var(--text-dim)', fontSize: 13, marginTop: 8 }}>
-        已选 {selected.length}/2{confirmed ? ' — 点击「出发」开始远征' : ' — 点击卡片选择或取消'}
-      </p>
-      <button
-        className="primary big-btn"
-        disabled={!confirmed}
-        onClick={() => {
-          dispatch({
-            type: 'START_PROFICIENCY_PICKED',
-            seed: state.seed ?? Date.now(),
-            saveSlot: state.saveSlot,
-            starterId: selected[0],
-            companionId: selected[1],
-          });
-        }}
-      >
-        {confirmed ? '出发 →' : '请选择 2 只'}
-      </button>
+    <div className="starter-screen starter-observatory">
+      <header className="starter-header">
+        <div className="starter-heading"><span className="starter-mark" aria-hidden="true">✦</span><div>
+          <h1>熟练度远征</h1><p>从六只生物中选择两只，开启 50 层远征</p>
+        </div></div>
+        <button className="starter-back" onClick={() => dispatch({ type: 'TITLE' })}>← 返回首页</button>
+      </header>
+      <main className="starter-proficiency-main">
+        <div className="starter-choice-grid proficiency">
+          {BASE_POOL.map((id) => <StarterChoiceCard key={id} id={id} compact selected={selected.includes(id)}
+            order={selected.indexOf(id) + 1 || undefined} onClick={() => toggle(id)} />)}
+        </div>
+        <aside className="starter-summary">
+          <h2>已选 <span>{selected.length}/2</span></h2>
+          <div className="starter-selected-list">
+            {[0, 1].map((index) => {
+              const id = selected[index];
+              return <div key={index} className={`starter-selected-slot ${id ? 'filled' : ''}`}>
+                <span className="starter-selected-number">{index + 1}</span>
+                {id ? <><img src={getMonster(id).image} alt="" /><strong>{getMonster(id).name}</strong></> : <span>选择伙伴</span>}
+              </div>;
+            })}
+          </div>
+          <p>点击卡片选择或取消</p>
+          <div className="starter-milestones" aria-label="远征里程碑：15 层、30 层、50 层">
+            <span>15 层</span><span>30 层</span><span>50 层</span>
+          </div>
+          <button className="starter-confirm" disabled={selected.length !== 2} onClick={() => {
+            dispatch({ type: 'START_PROFICIENCY_PICKED', seed: state.seed ?? Date.now(), saveSlot: state.saveSlot,
+              starterId: selected[0], companionId: selected[1] });
+          }}>出发远征</button>
+        </aside>
+      </main>
     </div>
   );
 }
@@ -1742,29 +1722,36 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
 }
 
 function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const currentNode = state.map.layers[state.currentRow]?.find((node) => node.id === state.currentNodeId);
+  const skipped = state.log[0]?.startsWith('使用跳关道具');
   return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="section-title">战利品</div>
-      <div className="log-history">
-        {state.log.slice(0, 8).map((l, i) => (
-          <div key={i}>{l}</div>
-        ))}
-      </div>
-      <div className="reward-cards">
-        {state.rewards.map((r) => (
-          <div key={r.id} className="reward-card" onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: r.id })}>
-            <div className="ricon">
-              {r.kind === 'food' && FOODS[r.foodId ?? 'berry'].emoji}
-              {r.kind === 'heal' && '❤️'}
-              {r.kind === 'recruit' && getMonster(r.monsterId!).emoji}
-              {r.kind === 'gold' && '💰'}
-            </div>
-            <div className="rtitle">{r.label}</div>
-            <div className="rdesc">{r.desc}</div>
+    <div className="reward-screen">
+      <header className="reward-header">
+        <div className="reward-heading"><svg className="reward-swords" viewBox="0 0 48 48" aria-hidden="true" shapeRendering="crispEdges"><path d="M7 6h7l28 28-5 5L9 11zM34 5h8v8l-4 4v-5h-5zM7 34l28-28 5 5L12 39H7zM4 38h9v6H4z" fill="#70d8bd"/><path d="M8 7h5l27 27-3 3L8 11zM35 7h5v5l-3 3v-5h-5z" fill="#b9fff0"/></svg><h1>{skipped ? '跳关奖励' : '战斗胜利'}</h1></div>
+        <div className="reward-header-info">
+          <span className="reward-location">{currentNode?.label ?? '远征战斗'} · 第 {state.act} 幕</span>
+          <span className="reward-gold"><ShopItemIcon itemId="gold_bag" />金币 <strong>{state.gold}</strong></span>
+        </div>
+      </header>
+      <main className="reward-content">
+        <section className="reward-scene" aria-label="战斗胜利后的营地" />
+        <section className="reward-choice-panel" aria-labelledby="reward-choice-title">
+          <div className="reward-panel-heading"><h2 id="reward-choice-title">选择一份战利品</h2></div>
+          <div className="reward-choice-list" style={{ gridTemplateRows: `repeat(${Math.max(1, state.rewards.length)}, minmax(0, 1fr))` }}>
+            {state.rewards.map((reward) => {
+              const recruit = reward.kind === 'recruit' && reward.monsterId ? getMonster(reward.monsterId) : undefined;
+              return <button key={reward.id} type="button" className={`reward-choice reward-choice-${reward.kind}`} aria-label={`领取：${reward.label}，${reward.desc}`} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id })}>
+                <span className={`reward-choice-icon reward-choice-icon-${reward.kind}`} aria-hidden="true">
+                  {recruit && <PetIcon image={recruit.image} emoji={recruit.emoji} name={recruit.name} />}
+                </span>
+                <span className="reward-choice-copy"><strong>{reward.label}</strong><small>{reward.desc}</small></span>
+                <span className="reward-claim"><span aria-hidden="true">◆</span>领取<span aria-hidden="true">◆</span></span>
+              </button>;
+            })}
           </div>
-        ))}
-      </div>
+          <div className="reward-panel-footer"><span className="reward-footer-sigil" aria-hidden="true">✦</span><span>选择后进入战后休整</span><span className="reward-footer-sigil" aria-hidden="true">✦</span></div>
+        </section>
+      </main>
     </div>
   );
 }

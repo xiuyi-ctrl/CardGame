@@ -6,7 +6,7 @@ import type { GameAction } from '../game/state/reducer';
 import { getMonster } from '../game/data/monsters';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
-import { placeUnit } from '../game/state/formation';
+import { firstEmptyFormationSlot, placeUnit } from '../game/state/formation';
 import type { FormationPosition, FormationRow } from '../game/state/formation';
 import { BattlePixelSprite, PixelCreature, UnitCard } from './components';
 import type { Unit } from '../game/types';
@@ -34,7 +34,6 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     for (const u of fb.initialField) p[u.uid] = { row: u.row, column: u.column };
     return p;
   });
-  const [selected, setSelected] = useState<string | null>(null);
   const [focusedUid, setFocusedUid] = useState<string | null>(null);
   /** 拖拽标记：区分「点击」与「拖拽后松手」（拖拽结束不应触发 click） */
   const dragMoved = useRef(false);
@@ -64,7 +63,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   /** 宠物池 = 全部宠物中未上场的（强制全上时池为空） */
   const pool = forceAll ? [] : fb.units.filter((u) => !positions[u.uid]);
   const visiblePool = forceAll ? fb.units : pool;
-  const focusedUnit = fb.units.find((u) => u.uid === (focusedUid ?? selected)) ?? visiblePool[0] ?? fb.units[0];
+  const focusedUnit = fb.units.find((u) => u.uid === focusedUid) ?? visiblePool[0] ?? fb.units[0];
   const emptyRosterSlots = Math.max(0, getMaxRoster(state.runMode) - visiblePool.length);
 
   function moveToSlot(uid: string, row: FormationRow, col: 0 | 1 | 2) {
@@ -72,7 +71,6 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     const existing = bySlot[key];
     if (!existing && !positions[uid] && fieldCount >= maxField) return;
     setPositions(placeUnit(positions, uid, { row, column: col }));
-    setSelected(null);
   }
 
   /** 拖到棋盘格子：目标有宠物则交换，空位则移动（出战已满时空位拒绝） */
@@ -85,29 +83,24 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     moveToSlot(uid, row, col);
   }
 
+  /** 点击场上宠物：下阵放回宠物池（模拟战强制全上时禁止） */
   function onSlotClick(row: FormationRow, col: 0 | 1 | 2) {
     if (dragMoved.current) return;
-    const key = `${row}-${col}`;
-    const existing = bySlot[key];
-    if (existing) {
-      if (selected && selected !== existing.uid) {
-        moveToSlot(selected, row, col);
-      } else if (selected === existing.uid) {
-        setSelected(null);
-      } else if (!forceAll) {
-        // 点击场上宠物 → 放回宠物池（下阵）；强制全上时不可下阵
-        const next = { ...positions };
-        delete next[existing.uid];
-        setPositions(next);
-      }
-    } else if (selected) {
-      moveToSlot(selected, row, col);
-    }
+    const existing = bySlot[`${row}-${col}`];
+    if (!existing || forceAll) return;
+    const next = { ...positions };
+    delete next[existing.uid];
+    setPositions(next);
   }
 
+  /** 点击候选宠物：按从左到右、从上到下 的顺序自动上阵 */
   function onListClick(uid: string) {
-    if (dragMoved.current) return;
-    setSelected(selected === uid ? null : uid);
+    if (dragMoved.current || forceAll) return;
+    if (positions[uid] || fieldCount >= maxField) return;
+    const slot = firstEmptyFormationSlot(positions);
+    if (!slot) return;
+    setPositions(placeUnit(positions, uid, slot));
+    setFocusedUid(uid);
   }
 
   /** 拖回宠物池区域：从棋盘下阵（强制全上时禁止） */
@@ -177,12 +170,11 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                 <span className="formation-row-label">{label}</span>
                 {COLS.map((col) => {
                   const u = bySlot[`${row}-${col}`];
-                  const isSel = u ? selected === u.uid || focusedUid === u.uid : false;
-                  const canPlace = !!selected && (!!u || !!positions[selected] || fieldCount < maxField);
+                  const isSel = u ? focusedUid === u.uid : false;
                   return (
                     <div
                       key={`${row}-${col}`}
-                      className={`formation-slot ${isSel ? 'selected' : ''} ${canPlace ? 'can-place' : ''} ${u ? '' : 'empty'}`}
+                      className={`formation-slot ${isSel ? 'selected' : ''} ${u ? '' : 'empty'}`}
                       role="button"
                       tabIndex={0}
                       aria-label={`${label.replace(/\s/g, '')}第 ${col + 1} 位：${u ? u.name : '空位'}`}
@@ -216,7 +208,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
             ))}
           </div>
           <div className="formation-tip">
-            {forceAll ? '模拟战：全员上场，拖动生物交换站位' : fieldCount >= maxField ? '出战名额已满，可拖到已上场位置交换' : '拖动或点选候选生物布阵；点击场上生物可下阵'}
+            {forceAll ? '模拟战：全员上场，拖动生物交换站位' : fieldCount >= maxField ? '出战名额已满，点击场上生物可下阵，或拖到已上场位置交换' : '点击或拖拽生物进行布阵'}
           </div>
         </div>
 
@@ -227,11 +219,10 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
           </div>
           <div className="formation-pets" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
             {visiblePool.map((u) => {
-              const isSel = selected === u.uid;
               return (
                 <div
                   key={u.uid}
-                  className={`formation-pet-tile ${isSel ? 'selected' : ''} ${forceAll ? 'read-only' : ''}`}
+                  className={`formation-pet-tile ${forceAll ? 'read-only' : ''}`}
                   draggable={!forceAll}
                   role={forceAll ? 'listitem' : 'button'}
                   tabIndex={0}

@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（406 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
+- `npm test` / `npx vitest run`：单元测试（412 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
 - `npm run balance` / `npm run balance:check`：生成双模式数值报告 / 执行固定基线与确定性门禁；报告位于 `balance-output/`。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
@@ -35,14 +35,15 @@
   - `state/game.ts` 地图/奖励/成长/融合；`state/reducer.ts` 全局状态机与所有 GameAction。
 - `src/ui/`：React 界面（App.tsx 全界面 + BattleScreen.tsx + components.tsx + styles.css）。
   - 战斗布局：`BattleScreen` 左侧为上下分区的紫色像素地面战场，敌我前后排按约 27% 卡位宽横向、12% 卡位高纵向错位；战场 `UnitCard` 的 `battleDisplay` 只绘制 64×64 像素采样的生物、独立草石底座，以及底座下方依次排列的速度与生命图标/奶白色黑描边像素数字。迅迅有独立像素立绘，其他生物使用原图采样；战场使用四行等高网格，卡位按每行高度缩放，无纵向滚动条。右侧上方显示最近战斗记录（点击敌人时切换为其技能/状态详情），右下为选中我方详情、技能、捕获/道具/换位及固定的结束回合区；战场范围以外的队伍/背包等仍使用常规 `UnitCard`。
-  - 战前布阵 `FormationScreen` 使用独立夜色营地背景（完整铺入左侧战场，不以 `cover` 裁切）、水平和垂直方向都向中间聚拢的两行三列动态站位；前后排标签是青绿描边深色铭牌。已上阵生物使用独立草石底座，悬停/聚焦光圈贴在底座表面，空位使用青绿符文底座。顶部为标题、当前地点/敌方生物头像、出战数量和返回地图，不显示推荐战力。右侧石框为两列紧凑候选肖像、不可点击空队伍位、聚焦资料卡和金色确认按钮。`PixelCreature`/`BattlePixelSprite` 复用战场像素采样；未操作时资料卡默认预览首只待命宠物，模拟战强制全上时右侧为只读总览。站位点击/拖拽与 `placeUnit` 规则不变；视觉参考位于 `design/previews/`，其中宠物与数值仅为示意。
+  - 战前布阵 `FormationScreen` 使用独立夜色营地背景（完整铺入左侧战场，不以 `cover` 裁切）、水平和垂直方向都向中间聚拢的两行三列动态站位；前后排标签是青绿描边深色铭牌。已上阵生物使用独立草石底座，悬停/聚焦光圈贴在底座表面，空位使用青绿符文底座。顶部为标题、当前地点/敌方生物头像、出战数量和返回地图，不显示推荐战力。右侧石框为两列紧凑候选肖像、不可点击空队伍位、聚焦资料卡和金色确认按钮。`PixelCreature`/`BattlePixelSprite` 复用战场像素采样；未操作时资料卡默认预览首只待命宠物，模拟战强制全上时右侧为只读总览。点击候选宠物按 从左到右、从上到下 顺序自动上阵（`firstEmptyFormationSlot`），点击场上宠物下阵；拖拽与 `placeUnit` 交换规则不变；视觉参考位于 `design/previews/`，其中宠物与数值仅为示意。
   - 组件 `components.tsx`：`UnitCard`（`showSkills` 默认 true，出阵我方卡传 false 隐藏技能）、`SkillTag`/`skillBrief`（技能名+金色数值，供敌方卡/队伍界面/预览使用）、`SkillTag` 的 `usesNote` 在 desc 模式显示「每场限 N 次」。`skillFullDesc` 返回技能完整描述：若 `hideEffects: true` 直接返回 `desc`（desc 已自含效果层数等信息），否则自动追加 `（效果文本）`。**技能强化标记**：`SkillTag` 支持 `enhanced?: number`（0-3）属性，>=1 时在技能名右侧显示金色加号（+1→`+`、+2→`++`、+3→`+++`，颜色 `#e8c26a`）；强化后数值（伤害/治疗/buff效果值）用金色字体高亮。`skillBrief` 接收 `enhanced?: number` 追加金色加号。
   - 标题界面 `HomeScreen` 使用独立像素营地背景、SVG「叠放卡牌—山林道路—爪印」横向徽记；仅大标题用离线 Fusion Pixel Font，其他文字用系统字体。继续/新游戏/熟练度远征为主按钮，存档管理/生物图鉴/成就为次级入口，测试关卡/退出游戏在底部。生物图鉴打开 `CodexScreen` 覆盖层：左侧按 普通/精英/传奇/首领/造物 分组，右侧展示详情（属性/被动/技能/驯服/融合/说明），数据来自 `MONSTERS`+`computeStats`+`getPassive`+`nextStage`（物种 `desc` 为图鉴说明，见 `monsters.ts`）。
   - 地图界面 `MapScreen` 使用四张像素地形背景；节点由不规则石质底座、彩色 SVG 像素图标和独立铭牌组成，所有文字仍用系统字体。`mapRoutes.ts` 复用 `canStepTo` 只连接相邻上下层，禁用节点无连线，已走/可达/悬停预览分别着色。悬停与键盘聚焦只展示已知信息，不调用 `nodeInfo` 泄露侦查内容；熟练度 50 层采用紧凑单列，窄窗口把信息栏移至底部。
   - 商店界面 `ShopScreen` 共用林间流动商棚背景，顶部显示地点、金币、出战数量和离开入口；右侧两列货架用 `ShopItemIcon` 的像素 SVG 图标展示实际四件商品，标明已购买与金币不足。主线保留免费休整、熟练度仅有刷新；主线价格显示与难度倍率后的实付价格一致。所有文字仍使用系统字体。
+  - 战后奖励 `RewardScreen` 使用像素营地战利品背景；顶部显示地点与金币，右侧石框从 `state.rewards` 绘制两项或三项奖励，金币/食物/治疗使用预览图中的像素图标，招募使用真实生物图片。整张卡片是按钮，悬停/聚焦青绿描边；领取仍派发 `PICK_REWARD`。跳关进入此页时标题显示「跳关奖励」。
   - `RosterScreen` 在 `postBattle` 状态使用 `PostBattleRosterScreen`：独立营地背景、八格存活伙伴肖像及右侧详情，选中只改变查看对象；融合、释放、净化和继续前进沿用原有状态动作，普通队伍管理与满员处理新伙伴界面不变。
 - `electron/`：Electron 主进程/预加载（编译产物到 `dist-electron/`）。
-- `美术素材/`：当前实际使用的 60 个图像文件的集中合集；运行时副本仍位于 `public/` 和 `src/ui/assets/`，修改素材时需同步两处，勿直接改动旧存档使用的图片路径。
+- `美术素材/`：当前实际使用的 61 个图像文件的集中合集；运行时副本仍位于 `public/` 和 `src/ui/assets/`，修改素材时需同步两处，勿直接改动旧存档使用的图片路径。
 - `tests/`：vitest 测试（`test.include` 已限定 `tests/**/*.test.ts`，避免误扫 `.agents/skills`）。
 
 ## 核心设计约定

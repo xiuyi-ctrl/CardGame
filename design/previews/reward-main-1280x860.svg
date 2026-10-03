@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="860" viewBox="0 0 1280 860">
+  <defs>
+    <linearGradient id="shade" x2="0" y2="1"><stop stop-color="#0b1025" stop-opacity=".73"/><stop offset=".48" stop-color="#111027" stop-opacity=".52"/><stop offset="1" stop-color="#090f20" stop-opacity=".9"/></linearGradient>
+    <linearGradient id="gold" x2="0" y2="1"><stop stop-color="#ffe49a"/><stop offset="1" stop-color="#dcae50"/></linearGradient>
+    <linearGradient id="teal" x2="0" y2="1"><stop stop-color="#82ead0"/><stop offset="1" stop-color="#3b9e99"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="stipple" width="12" height="12" patternUnits="userSpaceOnUse"><rect x="2" y="2" width="2" height="2" fill="#89e9d3" opacity=".3"/><rect x="8" y="7" width="2" height="2" fill="#e8c26a" opacity=".25"/></pattern>
+  </defs>
+  <image href="roster-camp-background.png" width="1280" height="860" preserveAspectRatio="xMidYMid slice"/>
+  <rect width="1280" height="860" fill="url(#shade)"/>
+  <rect x="25" y="22" width="1230" height="76" fill="#0a1428" fill-opacity=".94" stroke="#485875" stroke-width="4"/>
+  <rect x="31" y="28" width="1218" height="64" fill="none" stroke="#263d53" stroke-width="2"/>
+  <path d="M62 41h6v6h6v6h-6v6h-6v-6h-6v-6h6z" fill="#e8c26a"/>
+  <text x="91" y="61" fill="#fff1d0" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="27" font-weight="750">战利品</text>
+  <text x="91" y="82" fill="#adc0ce" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="13">挑战胜利 · 丰厚奖励任选一份</text>
+  <g font-family="Segoe UI, Microsoft YaHei, sans-serif">
+    <rect x="758" y="39" width="178" height="42" fill="#17283b" stroke="#54657b" stroke-width="2"/>
+    <text x="777" y="66" fill="#bbcbd1" font-size="14">第 1 幕 · 第 4 层</text>
+    <rect x="949" y="39" width="136" height="42" fill="#17283b" stroke="#74633f" stroke-width="2"/>
+    <path d="M968 52h14v14h-14zM972 48h14v14h-14z" fill="#e8c26a" stroke="#fff0b8" stroke-width="2"/>
+    <text x="994" y="66" fill="#f6d98f" font-size="14" font-weight="700">金币  45</text>
+    <rect x="1098" y="39" width="135" height="42" fill="#17283b" stroke="#54657b" stroke-width="2"/>
+    <text x="1165" y="66" text-anchor="middle" fill="#d8e6e4" font-size="14" font-weight="700">队伍  4 / 8</text>
+  </g>
+
+  <g text-anchor="middle" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+    <circle cx="640" cy="190" r="42" fill="#17273a" stroke="#e8c26a" stroke-width="3"/>
+    <path d="M620 193l10 10 29-33 8 7-37 42-18-18z" fill="url(#gold)" stroke="#fff1c3" stroke-width="3"/>
+    <text x="640" y="263" fill="#fff1d0" font-size="31" font-weight="800">战斗胜利</text>
+    <text x="640" y="293" fill="#b8c9cf" font-size="15">迷雾散去，带一份战利品继续前行</text>
+    <path d="M451 313h116M713 313h116" stroke="#59727a" stroke-width="2"/>
+    <path d="M576 313h128" stroke="#e8c26a" stroke-width="3"/>
+  </g>
+
+  <!-- Prize plinths: each card is a direct, one-click claim target. -->
+  <g font-family="Segoe UI, Microsoft YaHei, sans-serif">
+    <!-- Gold -->
+    <g transform="translate(67 352)">
+      <ellipse cx="178" cy="355" rx="174" ry="22" fill="#040817" opacity=".5"/>
+      <path d="M26 286l24-22h256l24 22v37l-24 22H50l-24-22z" fill="#26344c" stroke="#76829a" stroke-width="4"/>
+      <path d="M50 265h256l24 21H26z" fill="#546478" stroke="#9aa3aa" stroke-width="3"/>
+      <path d="M50 264h256l-18-10H68z" fill="#e8c26a"/>
+      <path d="M50 300h256v21H50z" fill="#334257" opacity=".9"/>
+      <rect x="34" y="318" width="34" height="14" fill="#46566d"/><rect x="98" y="326" width="42" height="12" fill="#53627a"/><rect x="240" y="324" width="49" height="14" fill="#46566d"/>
+      <circle cx="178" cy="131" r="91" fill="#e8c26a" opacity=".1" filter="url(#glow)"/>
+      <path d="M120 177V86h22V64h72v22h22v91l-58 37z" fill="#714f2a" stroke="#171726" stroke-width="12" stroke-linejoin="round"/>
+      <path d="M130 171V91h20V75h56v16h20v80l-48 29z" fill="url(#gold)" stroke="#fff0b4" stroke-width="4"/>
+      <path d="M142 92h18v15h-18zM190 92h19v15h-19zM145 124h68v9h-68zM156 147h47v11h-47z" fill="#f9e6a9" opacity=".85"/>
+      <path d="M168 116h20v32h-20zM160 124h36v16h-36z" fill="#9b6335" stroke="#553b2a" stroke-width="3"/>
+      <text x="178" y="54" text-anchor="middle" fill="#e8c26a" font-size="12" font-weight="800" letter-spacing="2">金币</text>
+      <rect x="23" y="-7" width="310" height="394" fill="#0c192a" fill-opacity=".96" stroke="#b99452" stroke-width="3"/>
+      <rect x="30" y="0" width="296" height="380" fill="url(#stipple)" opacity=".32"/>
+      <path d="M178 44v8M178 236v8" stroke="#e8c26a" stroke-width="2"/>
+      <circle cx="178" cy="145" r="88" fill="#e8c26a" opacity=".07"/>
+      <path d="M118 184V92h21V72h78v20h21v92l-60 36z" fill="#d3a246" stroke="#221c27" stroke-width="10" stroke-linejoin="round"/>
+      <path d="M130 178V96h17V82h62v14h17v82l-48 31z" fill="url(#gold)" stroke="#fff0ad" stroke-width="3"/>
+      <path d="M142 101h20v14h-20zM194 101h20v14h-20zM145 130h69v8h-69zM156 151h47v10h-47z" fill="#fff1c0"/>
+      <path d="M169 122h18v29h-18zM162 128h32v14h-32z" fill="#a8703b"/>
+      <text x="178" y="257" text-anchor="middle" fill="#fff1d0" font-size="23" font-weight="800">冠军赏金</text>
+      <text x="178" y="285" text-anchor="middle" fill="#f3d787" font-size="17" font-weight="700">获得 30 金币</text>
+      <path d="M54 306h248" stroke="#4f5d6e" stroke-width="1"/>
+      <path d="M88 324h180v38H88z" fill="#382f28" stroke="#e8c26a" stroke-width="2"/>
+      <text x="178" y="349" text-anchor="middle" fill="#ffe6a3" font-size="14" font-weight="800">领取这份战利品 →</text>
+    </g>
+    <!-- Food -->
+    <g transform="translate(485 352)">
+      <rect x="0" y="-7" width="310" height="394" fill="#0c192a" fill-opacity=".96" stroke="#4b7c78" stroke-width="3"/>
+      <rect x="7" y="0" width="296" height="380" fill="url(#stipple)" opacity=".25"/>
+      <path d="M155 44v8M155 236v8" stroke="#70d8bd" stroke-width="2"/>
+      <circle cx="155" cy="143" r="83" fill="#70d8bd" opacity=".07"/>
+      <path d="M104 166c-22-35 1-81 49-81s70 46 49 81l-14 18h-70z" fill="#775344" stroke="#17202a" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M116 162c-15-27 5-62 37-62s52 35 37 62l-12 14h-50z" fill="#d98a59" stroke="#f6c185" stroke-width="3"/>
+      <path d="M145 95c-2-17 5-26 14-32M154 99c10-18 22-22 34-20" fill="none" stroke="#70d8bd" stroke-width="7" stroke-linecap="square"/>
+      <path d="M121 126h11v10h-11zM170 119h12v11h-12zM144 145h14v12h-14z" fill="#ffd98b"/>
+      <text x="155" y="257" text-anchor="middle" fill="#fff1d0" font-size="23" font-weight="800">美味补给</text>
+      <text x="155" y="285" text-anchor="middle" fill="#b7e7d8" font-size="17" font-weight="700">获得 1 个随机食物</text>
+      <path d="M31 306h248" stroke="#4f5d6e" stroke-width="1"/>
+      <path d="M65 324h180v38H65z" fill="#183a42" stroke="#70d8bd" stroke-width="2"/>
+      <text x="155" y="349" text-anchor="middle" fill="#d9fff2" font-size="14" font-weight="800">领取这份战利品 →</text>
+    </g>
+    <!-- Heal -->
+    <g transform="translate(903 352)">
+      <rect x="0" y="-7" width="310" height="394" fill="#0c192a" fill-opacity=".96" stroke="#53657b" stroke-width="3"/>
+      <rect x="7" y="0" width="296" height="380" fill="url(#stipple)" opacity=".18"/>
+      <path d="M155 44v8M155 236v8" stroke="#c87872" stroke-width="2"/>
+      <circle cx="155" cy="143" r="83" fill="#c87872" opacity=".07"/>
+      <path d="M112 116c0-21 29-29 43-8 14-21 43-13 43 8 0 26-43 54-43 54s-43-28-43-54z" fill="#d55f68" stroke="#311c2a" stroke-width="11" stroke-linejoin="round"/>
+      <path d="M125 116c0-11 15-17 25-4 10-13 25-7 25 4 0 14-25 32-25 32s-25-18-25-32z" fill="#fa8c91"/>
+      <path d="M149 75h12v28h-12zM141 83h28v12h-28z" fill="#f7d98e" stroke="#423126" stroke-width="3"/>
+      <text x="155" y="257" text-anchor="middle" fill="#fff1d0" font-size="23" font-weight="800">庆功宴</text>
+      <text x="155" y="285" text-anchor="middle" fill="#f4c7c6" font-size="17" font-weight="700">全体恢复 50% 生命</text>
+      <path d="M31 306h248" stroke="#4f5d6e" stroke-width="1"/>
+      <path d="M65 324h180v38H65z" fill="#352531" stroke="#c87872" stroke-width="2"/>
+      <text x="155" y="349" text-anchor="middle" fill="#ffe2df" font-size="14" font-weight="800">领取这份战利品 →</text>
+    </g>
+  </g>
+  <rect x="254" y="803" width="772" height="35" fill="#0a1428" fill-opacity=".88" stroke="#425267" stroke-width="1"/>
+  <text x="640" y="826" text-anchor="middle" fill="#bdcbd2" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="13">选择后立即领取 · 随后进入战后休整</text>
+</svg>

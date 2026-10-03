@@ -1,8 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { placeUnit } from '../src/game/state/formation';
+import { firstEmptyFormationSlot, placeUnit } from '../src/game/state/formation';
 import type { FormationPosition } from '../src/game/state/formation';
 
 const pos = (row: 'front' | 'back', column: 0 | 1 | 2): FormationPosition => ({ row, column });
+
+describe('firstEmptyFormationSlot 自动上阵顺序', () => {
+  it('空棋盘：从前排第 1 位开始', () => {
+    expect(firstEmptyFormationSlot({})).toEqual(pos('front', 0));
+  });
+
+  it('按 从左到右、从上到下 跳过已占用站位', () => {
+    expect(firstEmptyFormationSlot({ A: pos('front', 0), B: pos('front', 1) })).toEqual(pos('front', 2));
+    expect(firstEmptyFormationSlot({ A: pos('front', 0), B: pos('front', 2) })).toEqual(pos('front', 1));
+    expect(firstEmptyFormationSlot({ A: pos('front', 0), B: pos('front', 1), C: pos('front', 2) })).toEqual(pos('back', 0));
+    expect(firstEmptyFormationSlot({
+      A: pos('front', 0), B: pos('front', 1), C: pos('front', 2), D: pos('back', 0), E: pos('back', 2),
+    })).toEqual(pos('back', 1));
+  });
+
+  it('六格全满返回 null', () => {
+    expect(firstEmptyFormationSlot({
+      A: pos('front', 0), B: pos('front', 1), C: pos('front', 2),
+      D: pos('back', 0), E: pos('back', 1), F: pos('back', 2),
+    })).toBeNull();
+  });
+});
 
 describe('placeUnit 布阵站位逻辑', () => {
   it('空位放置：从宠物池上场', () => {

@@ -3,6 +3,20 @@
 export type FormationRow = 'front' | 'back';
 export type FormationPosition = { row: FormationRow; column: 0 | 1 | 2 };
 
+/** 自动上阵顺序：从左到右、从上到下（前排 → 后排） */
+export const SLOT_ORDER: FormationPosition[] = [
+  ...([0, 1, 2] as const).map((column) => ({ row: 'front' as const, column })),
+  ...([0, 1, 2] as const).map((column) => ({ row: 'back' as const, column })),
+];
+
+/** 按自动上阵顺序找第一个空位；六个站位全满时返回 null */
+export function firstEmptyFormationSlot(
+  positions: Record<string, FormationPosition>,
+): FormationPosition | null {
+  const occupied = new Set(Object.values(positions).map((p) => `${p.row}-${p.column}`));
+  return SLOT_ORDER.find((s) => !occupied.has(`${s.row}-${s.column}`)) ?? null;
+}
+
 /**
  * 把 uid 单位放置到目标格子：
  * - 目标为空位：直接放置（上场或挪位，由调用方决定是否受 FIELD_MAX 限制）

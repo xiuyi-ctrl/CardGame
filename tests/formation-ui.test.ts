@@ -53,11 +53,18 @@ describe('战前布阵界面', () => {
     expect(screen.getByText('待命伙伴')).toBeTruthy();
     expect(document.querySelectorAll('.formation-pet-empty')).toHaveLength(7);
     fireEvent.click(screen.getByRole('button', { name: /灼灼，速度/ }));
+    // 点击候选宠物：按 从左到右、从上到下 自动上阵（空位首位 = 前排第 3 位）
+    expect(screen.getByRole('button', { name: '前排第 3 位：灼灼' })).toBeTruthy();
     expect(document.querySelector('.formation-detail-head strong')?.textContent).toBe('灼灼');
-    fireEvent.click(screen.getByRole('button', { name: '后排第 1 位：空位' }));
-
-    expect(screen.getByRole('button', { name: '后排第 1 位：灼灼' })).toBeTruthy();
+    expect(screen.getByLabelText('出战 3/3')).toBeTruthy();
     expect(screen.getByRole('button', { name: /确认出战，当前 3 只/ })).toBeTruthy();
+
+    // 点击场上宠物：下阵放回宠物池
+    fireEvent.click(screen.getByRole('button', { name: '前排第 3 位：灼灼' }));
+    expect(screen.getByRole('button', { name: '前排第 3 位：空位' })).toBeTruthy();
+    expect(screen.getByLabelText('出战 2/3')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /确认出战，当前 2 只/ })).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: '返回地图' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'BACK_TO_MAP' });
   });
