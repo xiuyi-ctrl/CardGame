@@ -3786,25 +3786,93 @@ button.primary {
   color: var(--text-dim);
 }
 
-/* 难度/遗物选择（StarterScreen） */
-.config-section { margin-bottom: 12px; }
-.config-label { font-size: 13px; color: var(--gold); margin-bottom: 6px; font-weight: bold; }
-.config-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.config-btn {
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 13px;
-  transition: border-color 0.15s, background 0.15s;
+/* 开局难度与遗物 */
+.screen-difficulty { padding: 0; overflow: hidden; }
+.difficulty-screen {
+  position: relative; width: 100%; height: 100%; min-height: 0;
+  color: #f2eedf; font-family: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  background: url('/difficulty-relic-ui-skin.png') center / 100% 100% no-repeat;
 }
-.config-btn:hover:not(:disabled) { border-color: var(--gold); }
-.config-btn.selected { border-color: var(--gold); background: rgba(255, 215, 0, 0.15); color: var(--gold); }
-.config-btn.locked { opacity: 0.4; cursor: not-allowed; }
-.config-hint { font-size: 12px; color: var(--text-dim); }
-.config-effect { font-size: 13px; color: var(--gold); margin-top: 6px; text-align: center; min-height: 20px; }
+.difficulty-header, .difficulty-main, .difficulty-footer { position: absolute; inset: 0; pointer-events: none; }
+.difficulty-header h1 {
+  position: absolute; left: 11.4%; top: 4.2%; width: 31%; margin: 0;
+  color: #ffe6a3; font: clamp(29px, 3.3vw, 55px)/1.1 'Fusion Pixel 12px Proportional Simplified Chinese', 'Microsoft YaHei', sans-serif;
+  text-align: center; white-space: nowrap; text-shadow: 3px 4px #412c26;
+}
+.difficulty-back {
+  position: absolute; right: 2.5%; top: 2.9%; width: 9.8%; height: 5%;
+  padding: 0; border: 0; border-radius: 0; background: transparent; color: #f2eedf;
+  font-size: clamp(12px, 1.4vw, 21px); font-weight: 800; pointer-events: auto;
+}
+.difficulty-choices {
+  position: absolute; left: 2.45%; top: 35.3%; width: 63%; height: 48.9%;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8%; pointer-events: auto;
+}
+.difficulty-tablet {
+  position: relative; width: 100%; height: 100%; padding: 0; border: 0;
+  border-radius: 21% 21% 3% 3% / 14% 14% 2% 2%; background: transparent;
+  color: #e7eee9; text-align: center; box-shadow: inset 0 0 0 0 transparent;
+}
+.difficulty-tablet:hover:not(:disabled), .difficulty-tablet.selected { box-shadow: inset 0 0 0 3px #70d8bd, 0 0 17px #4ce8cb; }
+.difficulty-tablet:disabled { opacity: 1; filter: none; }
+.difficulty-crest { position: absolute; left: 34%; top: 4.3%; width: 32%; height: 20%; display: grid; place-items: center; }
+.difficulty-crest svg { width: 78%; height: 78%; filter: drop-shadow(2px 3px 1px #071116); }
+.difficulty-tablet:disabled .difficulty-crest { filter: grayscale(.45); opacity: .68; }
+.difficulty-tablet strong { position: absolute; top: 28.5%; left: 0; width: 100%; color: #f7e2b2; font-size: clamp(19px, 2.1vw, 33px); letter-spacing: .12em; }
+.difficulty-normal strong { color: #9ff6df; }
+.difficulty-nightmare strong, .difficulty-nightmare .difficulty-stats b { color: #e48582; }
+.difficulty-stats { position: absolute; left: 13%; top: 39%; width: 74%; height: 35%; display: flex; flex-direction: column; justify-content: space-between; }
+.difficulty-stats > span { height: 23%; display: flex; align-items: center; gap: 3%; padding: 0 4%; background: rgba(3, 15, 23, .6); text-align: left; font-size: clamp(10px, 1.3vw, 20px); white-space: nowrap; }
+.difficulty-stats i { width: 15%; font-size: 1.15em; font-style: normal; text-align: center; text-shadow: 2px 2px #06131c; }
+.difficulty-stat-hp { color: #f25c67; }.difficulty-stat-spd { color: #e6ca7b; }.difficulty-stat-shop { color: #f1c65d; }.difficulty-stat-heal { color: #70d8bd; }
+.difficulty-stats b { margin-left: auto; color: #f6e8ca; font-size: 1.03em; }
+.difficulty-tablet em { position: absolute; left: 17%; bottom: 6%; width: 66%; height: 11%; display: flex; align-items: center; justify-content: center; gap: 7%; color: #a6f6e5; font-size: clamp(12px, 1.65vw, 25px); font-style: normal; font-weight: 700; }
+.difficulty-tablet:disabled em { color: #c2c1c3; }
+.stone-lock { position: relative; display: inline-block; width: .8em; height: .65em; margin-top: .35em; border: 2px solid #8b9aa9; border-radius: 2px; background: #798799; }
+.stone-lock::before { content: ''; position: absolute; left: 18%; bottom: 80%; width: 54%; height: 70%; border: 2px solid #8b9aa9; border-bottom: 0; border-radius: 50% 50% 0 0; }
+.relic-cabinet {
+  position: absolute; left: 66.7%; top: 13.7%; width: 32%; height: 71.5%; pointer-events: auto;
+}
+.relic-cabinet-heading { position: absolute; left: 4%; top: 2%; width: 92%; height: 9%; display: grid; place-items: center; }
+.relic-cabinet h2 { margin: 0; color: #ffe39c; font-size: clamp(15px, 1.8vw, 27px); white-space: nowrap; }
+.relic-none {
+  position: absolute; left: 10%; top: 12%; width: 81%; height: 15%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3%; padding: 0; border: 0; border-radius: 5px;
+  background: transparent; color: #c7f3eb; font-weight: 700; font-size: clamp(14px, 1.65vw, 25px);
+}
+.relic-none:hover, .relic-none.selected { box-shadow: inset 0 0 0 3px #70d8bd, 0 0 14px #70d8bd; }
+.relic-none-icon { position: relative; width: 1.25em; height: 1.25em; border: 3px solid #70d8bd; border-radius: 50%; }
+.relic-none-icon::after { content: ''; position: absolute; top: 45%; left: 7%; width: 86%; height: 3px; background: #70d8bd; transform: rotate(-45deg); }
+.relic-grid { position: absolute; left: 10%; right: 6.5%; top: 28%; bottom: 2.4%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 2%; }
+.relic-tile {
+  position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2%; padding: 2%; border: 0; border-radius: 3px; background: transparent;
+}
+.relic-tile:hover:not(:disabled), .relic-tile.selected { box-shadow: inset 0 0 0 3px #70d8bd, 0 0 12px #70d8bd; }
+.relic-tile:disabled { opacity: 1; filter: none; }
+.relic-tile:disabled .relic-symbol { filter: grayscale(.75); opacity: .7; }
+.relic-symbol { display: block; width: 60%; height: 45%; background-image: url('/difficulty-relic-icons.png'); background-size: 200% 300%; background-repeat: no-repeat; image-rendering: pixelated; }
+.relic-symbol-traveler_charm { background-position: 0 0; }
+.relic-symbol-elite_badge { background-position: 100% 0; }
+.relic-symbol-legend_seal { background-position: 0 50%; }
+.relic-symbol-flame_medal { background-position: 100% 50%; }
+.relic-symbol-nature_medal { background-position: 0 100%; }
+.relic-symbol-shadow_medal { background-position: 100% 100%; }
+.relic-tile strong { color: #e9e5d9; font-size: clamp(12px, 1.3vw, 20px); white-space: nowrap; }
+.relic-tile small { max-width: 95%; color: #b2bac4; font-size: clamp(9px, .89vw, 14px); line-height: 1.15; text-align: center; }
+.relic-lock { position: absolute; top: 8%; right: 9%; font-size: clamp(11px, 1.3vw, 20px); }
+.difficulty-summary { position: absolute; left: 6%; top: 90.1%; width: 57%; height: 7%; display: grid; grid-template-columns: 9% 1fr; grid-template-rows: 1fr 1fr; align-items: center; column-gap: 1%; }
+.difficulty-summary-emblem { grid-row: 1 / 3; display: grid; place-items: center; width: 100%; height: 100%; }
+.difficulty-summary-emblem svg { width: 100%; height: 100%; }
+.difficulty-summary strong { color: #f8e3b2; font-size: clamp(14px, 1.8vw, 27px); white-space: nowrap; }
+.difficulty-summary > span:last-child { color: #b9c9d2; font-size: clamp(10px, 1.15vw, 17px); white-space: nowrap; }
+.difficulty-next {
+  position: absolute; right: 3.1%; top: 89%; width: 25.2%; height: 7.2%; padding: 0;
+  border: 0; border-radius: 0; background: transparent; color: #1e1b18;
+  font-size: clamp(14px, 2.15vw, 33px); font-weight: 800; pointer-events: auto;
+}
+.difficulty-next:hover { filter: brightness(1.12); }
+.difficulty-screen button:focus-visible { outline: 3px solid #fff4bb; outline-offset: 3px; }
 
 /* 解锁通知（VictoryScreen） */
 .unlock-notify {

@@ -65,7 +65,7 @@ export default function App() {
   }, [state.toast]);
 
   return (
-    <div className={state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : 'screen'}>
+    <div className={state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : state.screen === 'difficulty-select' ? 'screen screen-difficulty' : 'screen'}>
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
@@ -1206,92 +1206,84 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DifficultyScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+function DifficultyEmblem({ difficulty }: { difficulty: Difficulty }) {
+  return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+    {difficulty === 'normal' && <><path d="M1 26 11 8l5 8 5-12 10 22Z" fill="#66d3c7"/><path d="m11 8 3 7-3-2-4 7Zm10-4 4 12-4-3-4 8Z" fill="#b4f4dc"/></>}
+    {difficulty === 'hard' && <><path d="M14 1h4v5h-4ZM14 26h4v5h-4ZM1 14h5v4H1Zm25 0h5v4h-5ZM5 5l4 4-3 3-4-4Zm18 18 3-3 4 4-3 3ZM26 5l4 3-4 4-3-3ZM2 24l4-4 3 3-4 4Z" fill="#e8c26a"/><path d="M10 10h12v12H10Z" fill="#f5d98f"/></>}
+    {difficulty === 'nightmare' && <><path d="M1 27 10 11l4 7 5-14 12 23Z" fill="#c87872"/><path d="m19 4 4 14-5-4-4 5-4-8-5 13 8-8 5 7 5-6 4 10h4Z" fill="#ed9b79"/></>}
+  </svg>;
+}
+
+export function DifficultyScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('normal');
   const [selectedRelic, setSelectedRelic] = useState<string>('');
   const unlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
-  const diffCfg = DIFFICULTY_CONFIG[selectedDifficulty];
 
   const handleNext = () => {
     dispatch({ type: 'SET_PRERUN_CONFIG', difficulty: selectedDifficulty, relic: selectedRelic || undefined });
   };
 
-  const diffEffects: string[] = [];
-  if (diffCfg.enemyHpMult !== 1) diffEffects.push(`敌方生命 ×${diffCfg.enemyHpMult}`);
-  if (diffCfg.enemySpdBonus !== 0) diffEffects.push(`敌方速度 +${diffCfg.enemySpdBonus}`);
-  if (diffCfg.shopPriceMult !== 1) diffEffects.push(`商品价格 ×${diffCfg.shopPriceMult}`);
-  if (diffCfg.healRatio !== 0.6) diffEffects.push(`战后回血 ${Math.round(diffCfg.healRatio * 100)}%`);
-  if (diffCfg.eliteBoost !== 0) diffEffects.push(`精英额外加成`);
-
   const relicDef = selectedRelic ? RELIC_DEFS[selectedRelic] : null;
 
   return (
-    <div className="center-col">
-      <div className="section-title">选择难度与遗物</div>
-      {/* 难度选择 */}
-      <div className="config-section">
-        <div className="config-label">难度</div>
-        <div className="config-row">
+    <div className="difficulty-screen">
+      <header className="difficulty-header">
+        <div>
+          <h1>选择难度与遗物</h1>
+        </div>
+        <button className="difficulty-back" onClick={() => dispatch({ type: 'TITLE' })}>← 返回首页</button>
+      </header>
+      <main className="difficulty-main">
+        <section className="difficulty-choices" aria-label="选择难度">
           {DIFFICULTY_ORDER.map((d) => {
             const cfg = DIFFICULTY_CONFIG[d];
             const locked = !unlocks.difficulties.includes(d);
-            return (
-              <button
-                key={d}
-                className={`config-btn ${selectedDifficulty === d ? 'selected' : ''} ${locked ? 'locked' : ''}`}
-                disabled={locked}
-                onClick={() => setSelectedDifficulty(d)}
-                title={locked ? '未解锁' : cfg.label}
-              >
-                {locked ? '🔒' : ''} {cfg.label}
-              </button>
-            );
+            return <button key={d} className={`difficulty-tablet difficulty-${d} ${selectedDifficulty === d ? 'selected' : ''}`}
+              disabled={locked} aria-pressed={selectedDifficulty === d} onClick={() => setSelectedDifficulty(d)}>
+              <span className="difficulty-crest"><DifficultyEmblem difficulty={d} /></span>
+              <strong>{cfg.label}</strong>
+              <span className="difficulty-stats">
+                <span><i className="difficulty-stat-hp" aria-hidden="true">♥</i>敌方生命 <b>×{cfg.enemyHpMult.toFixed(2)}</b></span>
+                <span><i className="difficulty-stat-spd" aria-hidden="true">◆</i>速度 <b>+{cfg.enemySpdBonus}</b></span>
+                <span><i className="difficulty-stat-shop" aria-hidden="true">●</i>商店 <b>×{cfg.shopPriceMult.toFixed(2)}</b></span>
+                <span><i className="difficulty-stat-heal" aria-hidden="true">✚</i>战后恢复 <b>{Math.round(cfg.healRatio * 100)}%</b></span>
+              </span>
+              <em>{locked && <span className="stone-lock" aria-hidden="true" />}{locked ? '未解锁' : selectedDifficulty === d ? '已选择' : '选择'}</em>
+            </button>;
           })}
-        </div>
-        {diffEffects.length > 0 && (
-          <div className="config-effect">{diffEffects.join(' · ')}</div>
-        )}
-        {diffEffects.length === 0 && (
-          <div className="config-effect">标准难度，无额外修正</div>
-        )}
-      </div>
-      {/* 遗物选择 */}
-      <div className="config-section">
-        <div className="config-label">初始遗物（可选）</div>
-        <div className="config-row">
-          <button
-            className={`config-btn ${selectedRelic === '' ? 'selected' : ''}`}
-            onClick={() => setSelectedRelic('')}
-          >
-            无
+        </section>
+        <section className="relic-cabinet" aria-label="选择初始遗物">
+          <div className="relic-cabinet-heading"><h2>初始遗物 · 可选一件</h2></div>
+          <button className={`relic-none ${selectedRelic === '' ? 'selected' : ''}`}
+            aria-pressed={selectedRelic === ''} onClick={() => setSelectedRelic('')}>
+            <span className="relic-none-icon" aria-hidden="true" /><span>不携带遗物</span>
           </button>
-          {RELIC_ORDER.filter((id) => unlocks.relics.includes(id)).map((id) => {
-            const def = RELIC_DEFS[id];
-            return (
-              <button
-                key={id}
-                className={`config-btn ${selectedRelic === id ? 'selected' : ''}`}
-                onClick={() => setSelectedRelic(id)}
-              >
-                {def.emoji} {def.name}
-              </button>
-            );
-          })}
-          {RELIC_ORDER.every((id) => !unlocks.relics.includes(id)) && (
-            <span className="config-hint">通关后解锁遗物</span>
-          )}
-        </div>
-        {relicDef && (
-          <div className="config-effect">{relicDef.emoji} {relicDef.name}：{relicDef.desc}</div>
-        )}
-        {!relicDef && (
-          <div className="config-effect">未选择遗物</div>
-        )}
-      </div>
-      <div className="panel-row" style={{ gap: 12, marginTop: 16 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>返回</button>
-        <button className="primary big-btn" onClick={handleNext}>下一步：选择伙伴</button>
-      </div>
+          <div className="relic-grid">
+            {RELIC_ORDER.map((id) => {
+              const def = RELIC_DEFS[id];
+              const locked = !unlocks.relics.includes(id);
+              const unlockNote = def.style === 'scorch' ? 'S 级通关 + 3 只灼烧系宠物'
+                : def.style === 'tank' ? 'S 级通关 + 3 只坦克系宠物'
+                : def.style === 'poison' ? 'S 级通关 + 3 只毒系宠物'
+                : `${def.unlockGrade} 级通关解锁`;
+              return <button key={id} className={`relic-tile ${selectedRelic === id ? 'selected' : ''}`}
+                disabled={locked} aria-pressed={selectedRelic === id} title={locked ? unlockNote : def.desc}
+                onClick={() => setSelectedRelic(id)}>
+                <span className={`relic-symbol relic-symbol-${id}`} aria-hidden="true" />
+                <strong>{def.name}</strong>
+                <small>{locked ? unlockNote : selectedRelic === id ? '已选择' : def.desc}</small>
+                {locked && <span className="stone-lock relic-lock" aria-hidden="true" />}
+              </button>;
+            })}
+          </div>
+        </section>
+      </main>
+      <footer className="difficulty-footer">
+        <div className="difficulty-summary"><span className="difficulty-summary-emblem"><DifficultyEmblem difficulty={selectedDifficulty} /></span>
+          <strong>{DIFFICULTY_CONFIG[selectedDifficulty].label} · {relicDef?.name ?? '无遗物'}</strong>
+          <span>{relicDef?.desc ?? '通关后解锁更多难度与遗物'}</span></div>
+        <button className="difficulty-next" onClick={handleNext}>下一步：选择伙伴 →</button>
+      </footer>
     </div>
   );
 }
