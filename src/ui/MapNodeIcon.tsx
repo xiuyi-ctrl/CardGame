@@ -3,7 +3,7 @@ import type { NodeType } from '../game/state/game';
 
 const sword = (
   <>
-    <path d="M3 2h3l12 12-3 3L3 5z" fill="#d7e6df" stroke="#25394a" strokeWidth="1.5" />
+    <path d="M3 2h3l12 12-3 3L3 5z" fill="#d7e6df" stroke="#25394a" strokeWidth="2" />
     <path d="M3 2h3l8 8-2 2z" fill="#fff5db" />
     <path d="m15 15 4 4m-5-1 4-4" stroke="#d69e52" strokeWidth="2.5" />
   </>
@@ -18,7 +18,7 @@ const ICON_ART: Record<NodeType, ReactNode> = {
   </>,
   rest: <>
     <path d="m4 20 15-5m1 5L5 15" stroke="#65452f" strokeWidth="3" />
-    <path d="M12 3c4 4 1 6 5 8 2 2 1 7-5 8-6-1-7-6-4-9 1-2 2-4 4-7z" fill="#f1a53e" stroke="#77352d" strokeWidth="1.5" />
+    <path d="M12 3c4 4 1 6 5 8 2 2 1 7-5 8-6-1-7-6-4-9 1-2 2-4 4-7z" fill="#f1a53e" stroke="#77352d" strokeWidth="2" />
     <path d="M12 10c2 2 3 4 2 6-1 2-4 2-5 0-1-2 1-4 3-6z" fill="#fff1a0" />
   </>,
   shop: <>
@@ -27,8 +27,8 @@ const ICON_ART: Record<NodeType, ReactNode> = {
     <circle cx="12" cy="15" r="3" fill="#f7df80" /><path d="M12 12v6" stroke="#ae7938" />
   </>,
   event: <>
-    <path d="M8 7V4h8v2h3v5l-5 3v2h-4v-4l5-3V8h-4v2H8z" fill="#79c6ec" stroke="#294867" strokeWidth="1.5" />
-    <path d="M10 18h4v4h-4z" fill="#9edcff" stroke="#294867" strokeWidth="1.5" />
+    <path d="M8 7V4h8v2h3v5l-5 3v2h-4v-4l5-3V8h-4v2H8z" fill="#79c6ec" stroke="#294867" strokeWidth="2" />
+    <path d="M10 18h4v4h-4z" fill="#9edcff" stroke="#294867" strokeWidth="2" />
   </>,
   special: <>
     <path d="M3 10h18v11H3z" fill="#805132" stroke="#322936" strokeWidth="2" />
@@ -40,8 +40,8 @@ const ICON_ART: Record<NodeType, ReactNode> = {
     <path d="M6 17h12v3H6z" fill="#f4df88" /><path d="M10 12h4v3h-4z" fill="#bc4e52" />
   </>,
   arena: <>
-    <path d="M5 3h4l7 12-3 2L6 6z" fill="#cbd9dc" stroke="#39435a" strokeWidth="1.5" />
-    <path d="M13 3h4l-7 12-3-2 7-10z" fill="#dce7e3" stroke="#39435a" strokeWidth="1.5" />
+    <path d="M5 3h4l7 12-3 2L6 6z" fill="#cbd9dc" stroke="#39435a" strokeWidth="2" />
+    <path d="M13 3h4l-7 12-3-2 7-10z" fill="#dce7e3" stroke="#39435a" strokeWidth="2" />
     <path d="m4 18 6-4m4 0 6 4" stroke="#e4a75e" strokeWidth="3" />
   </>,
   gauntlet: <>

@@ -2275,16 +2275,15 @@ button.primary {
 }
 
 .ln-base {
-  stroke: #82969b;
+  stroke: #71858a;
   stroke-width: 2;
-  opacity: 0.36;
+  opacity: 0.42;
 }
 
 .ln-near {
   stroke: #70d8bd;
   stroke-width: 3;
-  opacity: 0.95;
-  filter: drop-shadow(0 0 4px #70d8bd);
+  opacity: 0.9;
 }
 
 .ln-far {
@@ -2296,9 +2295,8 @@ button.primary {
 
 .ln-path {
   stroke: #e8c26a;
-  stroke-width: 4;
+  stroke-width: 3;
   opacity: 1;
-  filter: drop-shadow(0 0 4px #e8c26a);
 }
 
 .map-row {
@@ -2308,7 +2306,7 @@ button.primary {
   justify-content: center;
   align-items: center;
   gap: 18px;
-  min-height: 72px;
+  min-height: 94px;
 }
 
 .map-row-index {
@@ -2317,8 +2315,8 @@ button.primary {
   top: 50%;
   transform: translateY(-50%);
   padding: 4px 7px;
-  border: 1px solid #52776e;
-  background: rgba(13, 20, 31, 0.88);
+  border: 2px solid #4a6d68;
+  background: #142532;
   color: #b8d5cd;
   font-size: 11px;
   white-space: nowrap;
@@ -2337,9 +2335,9 @@ button.primary {
   align-items: center;
   justify-content: center;
   gap: 0;
-  width: 70px;
-  min-width: 70px;
-  height: 70px;
+  width: 90px;
+  min-width: 90px;
+  height: 94px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2369,7 +2367,7 @@ button.primary {
   color: #e8c26a;
 }
 
-.node:hover,
+.node:not([aria-disabled='true']):hover,
 .node:focus-visible {
   z-index: 3;
   transform: translateY(-2px) scale(1.08);
@@ -2381,7 +2379,7 @@ button.primary {
 }
 
 .node.current .nicon {
-  filter: drop-shadow(0 0 3px #70d8bd) drop-shadow(0 0 7px #70d8bd);
+  filter: drop-shadow(0 0 4px #70d8bd);
 }
 
 .node.current .nlabel {
@@ -2390,7 +2388,7 @@ button.primary {
 }
 
 .node.visited .nicon {
-  filter: drop-shadow(0 0 4px rgba(232, 194, 106, 0.7));
+  filter: drop-shadow(0 0 3px rgba(232, 194, 106, 0.65));
 }
 
 .node.visited .nlabel {
@@ -2406,7 +2404,7 @@ button.primary {
 }
 
 .node.option .nicon {
-  filter: drop-shadow(0 0 3px rgba(112, 216, 189, 0.65));
+  filter: drop-shadow(0 0 3px rgba(112, 216, 189, 0.55));
 }
 
 .node.reach-1 {
@@ -2414,7 +2412,7 @@ button.primary {
 }
 
 .node.reach-2 .nicon {
-  filter: drop-shadow(0 0 5px rgba(112, 216, 189, 0.6));
+  filter: drop-shadow(0 0 3px rgba(112, 216, 189, 0.55));
 }
 
 /* 侦查模式：任意节点可点击查看情报 */
@@ -2423,7 +2421,7 @@ button.primary {
 }
 
 .node.node-scoutable .nicon {
-  filter: drop-shadow(0 0 5px #e8c26a);
+  filter: drop-shadow(0 0 3px #e8c26a);
 }
 
 /* 跳关模式：可达的战斗类节点可点击直接获得奖励 */
@@ -2432,7 +2430,7 @@ button.primary {
 }
 
 .node.node-skipable .nicon {
-  filter: drop-shadow(0 0 5px #70d8bd);
+  filter: drop-shadow(0 0 3px #70d8bd);
 }
 
 /* 已失效节点（被开启的双生宝箱配对节点 / 已开启的钥匙门）：灰显 */
@@ -2449,50 +2447,45 @@ button.primary {
 
 /* 已访问的瞭望塔：金色高亮边框 + 发光 */
 .node.visited-watchtower .nicon {
-  filter: drop-shadow(0 0 5px #e8c26a);
+  filter: drop-shadow(0 0 3px #e8c26a);
 }
 .node.visited-watchtower::after {
-  content: '★';
+  content: '';
   position: absolute;
-  top: -8px;
-  right: -8px;
-  font-size: 10px;
-  color: var(--gold);
-  filter: drop-shadow(0 0 3px var(--gold));
+  top: 1px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  background: #e8c26a;
+  transform: rotate(45deg);
 }
 
 .node[aria-disabled='true'] {
   cursor: default;
 }
 
+.node[aria-disabled='true']:not(.node-off):not(.node-locked):hover {
+  filter: none;
+}
+
 .node .nicon {
   position: relative;
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 52px;
+  width: 86px;
+  height: 78px;
   isolation: isolate;
   filter: drop-shadow(0 3px 0 #070c14);
 }
 
 .node .nicon::before,
-.node .nicon::after {
+.map-info-icon::before,
+.scout-result .ricon::before {
   content: '';
   position: absolute;
-  clip-path: polygon(13% 7%, 32% 2%, 73% 3%, 91% 14%, 98% 36%, 94% 72%, 80% 91%, 19% 91%, 3% 73%, 2% 32%);
-}
-
-.node .nicon::before {
   inset: 0;
-  background: #0a1119;
-  box-shadow: inset 0 0 0 2px #65757c;
-}
-
-.node .nicon::after {
-  inset: 3px;
-  z-index: 0;
-  background: linear-gradient(155deg, #4a5961 0 18%, #293842 19% 55%, #17232d 56% 100%);
-  border: 2px solid #526269;
+  background: url('/map-node-stele.png') center / 125% auto no-repeat;
+  image-rendering: pixelated;
 }
 
 .map-node-icon {
@@ -2500,7 +2493,9 @@ button.primary {
   z-index: 1;
   width: 32px;
   height: 32px;
-  filter: drop-shadow(1px 2px 0 #0a1119);
+  margin-top: -11px;
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 2px 0 #0b111c);
 }
 
 .node .nlabel {
@@ -2508,15 +2503,15 @@ button.primary {
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 66px;
-  min-height: 18px;
-  margin-top: -5px;
-  padding: 1px 2px;
-  border: 1px solid #566c70;
-  background: #0b151e;
+  width: 78px;
+  min-height: 21px;
+  margin-top: -8px;
+  padding: 2px 3px;
+  border: 2px solid #667d86;
+  background: #101e2c;
   box-shadow: 0 3px 0 #060a10;
   color: #f1ede7;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.1;
   white-space: nowrap;
@@ -2529,9 +2524,9 @@ button.primary {
   gap: 12px;
   min-width: 0;
   padding: 22px 16px;
-  border: 2px solid #42645e;
-  background: #111624;
-  box-shadow: inset 0 0 0 2px #202b36;
+  border: 4px solid #405661;
+  background: #111b29;
+  box-shadow: inset 0 0 0 2px #263c43;
   text-align: center;
 }
 
@@ -2545,20 +2540,22 @@ button.primary {
 }
 
 .map-info-icon {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 72px;
-  height: 72px;
+  width: 116px;
+  height: 108px;
   margin-top: 14px;
-  border: 2px solid #52646d;
-  background: #25303e;
-  color: #e8c26a;
-  box-shadow: 0 5px 0 #0b111d;
+  border: 0;
+  background: transparent;
+  color: #d6e5e4;
+  box-shadow: none;
 }
 
 .map-info-icon .map-node-icon {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
+  margin-top: -16px;
 }
 
 .map-info-icon[data-type='elite'],
@@ -2569,6 +2566,15 @@ button.primary {
 .map-info-icon[data-type='guardian'],
 .map-info-icon[data-type='arena3'] {
   color: #c87872;
+}
+
+.map-info-icon[data-type='rest'],
+.map-info-icon[data-type='shop'],
+.map-info-icon[data-type='special'],
+.map-info-icon[data-type='watchtower'],
+.map-info-icon[data-type='sync'],
+.map-info-icon[data-type='blacksmith'] {
+  color: #e8c26a;
 }
 
 .map-info-name {
@@ -2700,14 +2706,15 @@ button.primary {
   }
 
   .map-info-icon {
-    width: 38px;
-    height: 38px;
+    width: 58px;
+    height: 54px;
     margin: 0;
   }
 
   .map-info-icon .map-node-icon {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
+    margin-top: -7px;
   }
 
   .map-info-name {
@@ -3281,7 +3288,12 @@ button.primary {
 }
 
 .scout-result .ricon {
-  font-size: 32px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 78px;
+  margin: 0 auto;
 }
 
 .scout-result .rtitle {

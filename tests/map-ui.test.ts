@@ -66,6 +66,8 @@ describe('像素地图界面', () => {
     expect(path?.getAttribute('data-route-kind')).toBe('path');
     expect(container.querySelectorAll('line[data-route-kind="near"]').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('.map-row')).toHaveLength(base.map.layers.length);
+    expect(container.querySelectorAll('.node .nicon .map-node-icon')).toHaveLength(base.map.layers.flat().length);
+    expect(container.querySelector('.map-info-icon .map-node-icon')).toBeTruthy();
 
     const option = base.map.layers[2].find((node) => canStepTo(1, current.col, node, base.map))!;
     const button = container.querySelector(`button[data-node-id="${option.id}"]`)!;
