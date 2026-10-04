@@ -3431,7 +3431,7 @@ button.primary {
 .home-brand {
   position: absolute;
   z-index: 2;
-  top: clamp(20px, 3.5vh, 38px);
+  top: clamp(44px, 7vh, 76px);
   left: 50%;
   display: flex;
   flex-direction: column;
@@ -3805,7 +3805,7 @@ button.primary {
   }
 
   .home-brand {
-    top: 14px;
+    top: 36px;
     width: min(68%, 510px);
   }
 
