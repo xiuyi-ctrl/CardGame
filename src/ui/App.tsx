@@ -28,7 +28,20 @@ import { MapNodeIcon } from './MapNodeIcon';
 import { ShopItemIcon } from './ShopItemIcon';
 import { getMapRouteEdges } from './mapRoutes';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
-import titleEmblem from './assets/title-emblem.svg';
+import homeXunxun from './assets/home-xunxun.png';
+import homePaopao from './assets/home-paopao.png';
+import homeZhuozhuo from './assets/home-zhuozhuo.png';
+import homeTitleLogo from './assets/home-title-logo.png';
+import homeContinueIcon from './assets/home-terminal-kit/continue-backpack.png';
+import homeNewIcon from './assets/home-terminal-kit/new-map-flag.png';
+import homeProficiencyIcon from './assets/home-terminal-kit/proficiency-chart.png';
+import homeCodexIcon from './assets/home-terminal-kit/codex-book.png';
+import homeSaveIcon from './assets/home-terminal-kit/save-archive.png';
+import homeAchievementIcon from './assets/home-terminal-kit/achievement-trophy.png';
+import homeSettingsIcon from './assets/home-terminal-kit/settings-gear.png';
+import homeExitIcon from './assets/home-terminal-kit/exit-door.png';
+import homeChevronIcon from './assets/home-terminal-kit/chevron-right.png';
+import homePawIcon from './assets/home-terminal-kit/paw-status.png';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
@@ -867,71 +880,99 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
 
   return (
     <div className="center-col home-screen">
-      <div className="home-content">
-        <header className="home-brand">
-          <img className="home-emblem" src={titleEmblem} alt="" />
-          <h1 className="home-title">驯牌远征</h1>
-          <p className="home-subtitle">肉鸽卡牌 · 宠物对战 · 生死相随</p>
-        </header>
-        <nav className="home-menu" aria-label="主菜单">
-          <button className={`home-action${canContinue ? ' home-action-primary' : ''}`} onClick={onContinue} disabled={!canContinue}>
-            {hasSave === null ? '检查存档…' : selectedSlot ? '继续游戏' : '请先选择存档'}
-          </button>
-          <button className={`home-action${canContinue ? '' : ' home-action-primary'}`} onClick={onNewGame}>
-            新游戏
-          </button>
-          {(() => {
-            const slotState = slots.find((s) => s.slot === selectedSlot);
-            const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
-            const profLocked = !unlocks.proficiencyUnlocked;
-            return (
-              <button
-                className={`home-action home-action-proficiency${profLocked ? ' is-locked' : ''}`}
-                disabled={profLocked}
-                onClick={() => {
-                  if (profLocked) return;
-                  // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
-                  let slot = selectedSlot;
-                  if (!slot) {
-                    const occupied = slots.find(s => s.main || s.proficiency);
-                    slot = occupied ? occupied.slot : slots.find(s => !s.main && !s.proficiency)?.slot;
-                  }
-                  if (!slot) { alert('存档已满，请在「存档管理」中删除一个存档'); return; }
-
-                  // 检查该槽是否有未完成的熟练度远征
-                  const slotState2 = slots.find(s => s.slot === slot);
-                  if (slotState2?.proficiency) {
-                    setProfConfirmSlot(slot);
-                    return;
-                  }
-
-                  // 无远征记录 → 新开
-                  clearDeletedSlot(slot);
-                  selectSlot(slot);
-                  dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot, unlocks: getSlotUnlocks(slotState2) });
-                }}
-              >
-                熟练度远征
-                {profLocked && <span className="locked-hint">通关第 1 幕后解锁</span>}
-              </button>
-            );
-          })()}
-          <div className="home-menu-secondary">
-            <button onClick={openSaveMgmt}>存档管理</button>
-            <button onClick={() => setShowCodex(true)}>生物图鉴</button>
-            <button onClick={() => {
+      <div className="home-shell">
+        <section className="home-world" aria-labelledby="home-title">
+          <header className="home-brand">
+            <h1 className="home-title" id="home-title">
+              <img src={homeTitleLogo} alt="驯牌远征" />
+            </h1>
+          </header>
+          <div className="home-companions" aria-hidden="true">
+            <span className="home-companion home-companion-xunxun"><img src={homeXunxun} alt="" /></span>
+            <span className="home-companion home-companion-paopao"><img src={homePaopao} alt="" /></span>
+            <span className="home-companion home-companion-zhuozhuo"><img src={homeZhuozhuo} alt="" /></span>
+          </div>
+        </section>
+        <aside className="home-terminal" aria-label="远征终端">
+          <div className="home-terminal-header" aria-hidden="true">
+            <span className="home-terminal-tab">⌃</span>
+            <span className="home-terminal-indicators"><i /><i /><i /><i /><i /></span>
+            <img src={homePawIcon} alt="" />
+          </div>
+          <nav className="home-menu" aria-label="主菜单">
+            <button
+              aria-label={hasSave === null ? '检查存档…' : selectedSlot ? '继续游戏' : '请先选择存档'}
+              className={`home-action${canContinue ? ' home-action-primary' : ''}`}
+              onClick={onContinue}
+              disabled={!canContinue}
+            >
+              <span className="home-action-icon" aria-hidden="true"><img src={homeContinueIcon} alt="" /></span>
+              <span>{hasSave === null ? '检查存档…' : selectedSlot ? '继续远征' : '请先选择存档'}</span>
+              <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
+            </button>
+            <button aria-label="新游戏" className={`home-action${canContinue ? '' : ' home-action-primary'}`} onClick={onNewGame}>
+              <span className="home-action-icon" aria-hidden="true"><img src={homeNewIcon} alt="" /></span>
+              <span>新的远征</span>
+              <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
+            </button>
+            {(() => {
               const slotState = slots.find((s) => s.slot === selectedSlot);
               const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
-              dispatch({ type: 'ACHIEVEMENTS', unlocks });
-            }}>成就</button>
-          </div>
-          <div className="home-menu-footer">
-            <button onClick={() => setShowDebug((v) => !v)}>
-              {showDebug ? '收起测试面板' : '测试关卡'}
+              const profLocked = !unlocks.proficiencyUnlocked;
+              return (
+                <button
+                  className={`home-action home-action-proficiency${profLocked ? ' is-locked' : ''}`}
+                  disabled={profLocked}
+                  onClick={() => {
+                    if (profLocked) return;
+                    // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
+                    let slot = selectedSlot;
+                    if (!slot) {
+                      const occupied = slots.find(s => s.main || s.proficiency);
+                      slot = occupied ? occupied.slot : slots.find(s => !s.main && !s.proficiency)?.slot;
+                    }
+                    if (!slot) { alert('存档已满，请在「存档管理」中删除一个存档'); return; }
+
+                    // 检查该槽是否有未完成的熟练度远征
+                    const slotState2 = slots.find(s => s.slot === slot);
+                    if (slotState2?.proficiency) {
+                      setProfConfirmSlot(slot);
+                      return;
+                    }
+
+                    // 无远征记录 → 新开
+                    clearDeletedSlot(slot);
+                    selectSlot(slot);
+                    dispatch({ type: 'START_PROFICIENCY', seed: Date.now(), saveSlot: slot, unlocks: getSlotUnlocks(slotState2) });
+                  }}
+                >
+                  <span className="home-action-icon" aria-hidden="true"><img src={homeProficiencyIcon} alt="" /></span>
+                  <span className="home-action-copy">熟练度远征{profLocked && <small className="locked-hint">通关第 1 幕后解锁</small>}</span>
+                  <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
+                </button>
+              );
+            })()}
+            <button className="home-action" onClick={quitGame}>
+              <span className="home-action-icon" aria-hidden="true"><img src={homeExitIcon} alt="" /></span>
+              <span>退出游戏</span>
+              <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
             </button>
-            <button onClick={quitGame}>退出游戏</button>
-          </div>
-        </nav>
+            <div className="home-menu-divider" aria-hidden="true"><span><img src={homePawIcon} alt="" /></span></div>
+            <div className="home-menu-secondary">
+              <button onClick={() => setShowCodex(true)}><img src={homeCodexIcon} alt="" aria-hidden="true" /><span>生物图鉴</span></button>
+              <button onClick={openSaveMgmt}><img src={homeSaveIcon} alt="" aria-hidden="true" /><span>存档管理</span></button>
+              <button onClick={() => {
+                const slotState = slots.find((s) => s.slot === selectedSlot);
+                const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
+                dispatch({ type: 'ACHIEVEMENTS', unlocks });
+              }}><img src={homeAchievementIcon} alt="" aria-hidden="true" /><span>成就</span></button>
+              <button onClick={() => setShowDebug((v) => !v)}>
+                <img src={homeSettingsIcon} alt="" aria-hidden="true" />
+                <span>{showDebug ? '收起测试' : '测试关卡'}</span>
+              </button>
+            </div>
+          </nav>
+        </aside>
       </div>
       {showSaveMgmt && (
         <div className="save-mgmt-overlay" onClick={() => setShowSaveMgmt(false)}>
