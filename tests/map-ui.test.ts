@@ -78,12 +78,30 @@ describe('像素地图界面', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'MOVE', nodeId: option.id });
   });
 
+  it('地图顶部路牌显示实时资源，原有跳关和背包入口保持可用', () => {
+    const base = createInitialState();
+    const state = { ...base, screen: 'map' as const, gold: 36 };
+    const dispatch = vi.fn();
+    const { container } = render(createElement(MapScreen, { state, dispatch }));
+    const hud = container.querySelector('.map-hud')!;
+    expect(hud.textContent).toContain(`第${state.act}幕`);
+    expect(hud.querySelector('[aria-label^="出战"]')).toBeTruthy();
+    expect(hud.querySelector('[aria-label="金币 36"]')).toBeTruthy();
+    expect(hud.querySelectorAll('svg.map-hud-icon')).toHaveLength(6);
+
+    fireEvent.click(screen.getByRole('button', { name: '跳关' }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'USE_SKIP', free: true }));
+    fireEvent.click(screen.getByRole('button', { name: '背包' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'OPEN_BACKPACK' });
+  });
+
   it('侦查模式保留任意节点侦查入口，熟练度模式显示首领里程碑', () => {
     const base = createInitialState();
     const state = { ...base, screen: 'map' as const, scoutSelecting: true, runMode: 'proficiency' as const, map: generateGrowthMap(5) };
     const dispatch = vi.fn();
     const { container } = render(createElement(MapScreen, { state, dispatch }));
     expect(container.querySelectorAll('.map-row')).toHaveLength(50);
+    expect(container.querySelector('.map-hud-place')?.textContent).toContain('熟练度远征 · 第1/50层');
     expect(screen.getByText('首领层')).toBeTruthy();
     const future = state.map.layers[16][0];
     fireEvent.click(container.querySelector(`button[data-node-id="${future.id}"]`)!);

@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（414 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
+- `npm test` / `npx vitest run`：单元测试（415 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
 - `npm run balance` / `npm run balance:check`：生成双模式数值报告 / 执行固定基线与确定性门禁；报告位于 `balance-output/`。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。

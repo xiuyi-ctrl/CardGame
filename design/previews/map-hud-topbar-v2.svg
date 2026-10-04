@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="96" viewBox="0 0 1280 96" role="img" aria-label="地图顶部操作栏美术预览">
+  <style>
+    text { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; dominant-baseline: middle; }
+    .title { fill: #f0d98c; font-size: 19px; font-weight: 700; }
+    .value { fill: #eee8d8; font-size: 17px; font-weight: 700; }
+    .label { fill: #e2e8e4; font-size: 16px; font-weight: 600; }
+    .hint { fill: #aebdc0; font-size: 12px; }
+  </style>
+
+  <!-- A road sign, not another full stone slab. The uneven edge is kept at the corners only. -->
+  <path d="M8 8h1264v72h-6v8H14v-8H8z" fill="#07101a"/>
+  <path d="M14 10h1252v68H14z" fill="#273c3d"/>
+  <path d="M18 14h1244v60H18z" fill="#101a28"/>
+  <path d="M18 14h1244v3H18z" fill="#4d6f68"/>
+  <path d="M18 71h1244v3H18z" fill="#33554f"/>
+  <path d="M18 17h3v54h-3zM1259 17h3v54h-3z" fill="#223d3e"/>
+  <path d="M18 14h19v4H22v13h-4zM1243 14h19v17h-4V18h-15zM18 59h4v12h15v3H18zM1258 59h4v15h-19v-3h15z" fill="#72977f"/>
+
+  <!-- Small expedition crest: a route ending at a paw, echoing the home logo. -->
+  <path d="M34 25h37v37H34z" fill="#314a4b"/>
+  <path d="M37 28h31v31H37z" fill="#101f2b"/>
+  <path d="M41 53h8v-4h5v-5h6" fill="none" stroke="#70d8bd" stroke-width="3" stroke-linecap="square"/>
+  <path d="M55 34h4v4h-4zM63 33h4v4h-4zM60 39h4v4h-4zM57 44h8v5h-8z" fill="#e8c26a"/>
+  <text class="title" x="83" y="43">第1幕 · 翠绿之径</text>
+  <text class="hint" x="84" y="62">远征地图</text>
+
+  <!-- One quiet divider. Resource values are adjacent so the player can scan them together. -->
+  <path d="M325 27h2v43h-2z" fill="#36524f"/>
+  <path d="M344 30h100v36H344zM452 30h96v36h-96z" fill="#263c46"/>
+  <path d="M346 32h96v32h-96zM454 32h92v32h-92z" fill="#142431"/>
+  <path d="M346 32h96v2h-96zM454 32h92v2h-92z" fill="#57766f"/>
+  <!-- Pixel paw / party icon -->
+  <path d="M361 39h4v4h-4zM368 36h4v4h-4zM375 39h4v4h-4zM364 45h13v9h-13z" fill="#70d8bd"/>
+  <path d="M367 47h7v5h-7z" fill="#174342"/>
+  <text class="value" x="387" y="49">2/5</text>
+  <!-- Coin stack -->
+  <path d="M466 45h10v10h-10zM475 40h10v15h-10zM484 45h10v10h-10z" fill="#c58d42"/>
+  <path d="M466 43h10v4h-10zM475 37h10v5h-10zM484 43h10v4h-10z" fill="#f0c76b"/>
+  <text class="value" x="507" y="49">36</text>
+
+  <!-- Skip: neutral utility. Its flat edge contrasts with active cyan on the route, not with the text. -->
+  <path d="M688 28h112v42H688z" fill="#425661"/>
+  <path d="M691 31h106v36H691z" fill="#172634"/>
+  <path d="M691 31h106v3H691z" fill="#5c7380"/>
+  <path d="M703 42l9 7-9 7zM712 42l9 7-9 7zM722 42h3v14h-3z" fill="#70d8bd"/>
+  <text class="label" x="739" y="49">跳关</text>
+
+  <!-- Backpack: an active, useful tool, not a warning red emoji. -->
+  <path d="M824 28h124v42H824z" fill="#425661"/>
+  <path d="M827 31h118v36H827z" fill="#172634"/>
+  <path d="M827 31h118v3H827z" fill="#5c7380"/>
+  <path d="M844 41h17v16h-17zM847 37h11v6h-11z" fill="#a8744e"/>
+  <path d="M847 44h11v2h-11zM850 49h5v7h-5z" fill="#e8c26a"/>
+  <text class="label" x="875" y="49">背包</text>
+
+  <!-- Return home is visually separated as navigation away from the run. -->
+  <path d="M1068 30h2v38h-2z" fill="#36524f"/>
+  <path d="M1098 28h150v42h-150z" fill="#425661"/>
+  <path d="M1101 31h144v36h-144z" fill="#172634"/>
+  <path d="M1101 31h144v3h-144z" fill="#5c7380"/>
+  <path d="M1114 47l11-10 11 10h-4v12h-14V47z" fill="#d6b674"/>
+  <path d="M1123 49h5v10h-5z" fill="#172634"/>
+  <text class="label" x="1145" y="49">返回首页</text>
+  <path d="M1226 40h2v17h-2z" fill="#53736d"/>
+</svg>

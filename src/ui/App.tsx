@@ -111,6 +111,34 @@ export default function App() {
   );
 }
 
+function MapHudIcon({ kind }: { kind: 'route' | 'party' | 'gold' | 'skip' | 'bag' | 'home' }) {
+  return (
+    <svg className={`map-hud-icon map-hud-icon-${kind}`} viewBox="0 0 32 32" aria-hidden="true" shapeRendering="crispEdges">
+      {kind === 'route' && <>
+        <path d="M3 26h7v-4h5v-5h5" fill="none" stroke="#70d8bd" strokeWidth="3" />
+        <path d="M17 5h4v4h-4zM24 6h4v4h-4zM21 12h4v4h-4zM17 18h12v8H17z" fill="#e8c26a" />
+      </>}
+      {kind === 'party' && <>
+        <path d="M3 8h5v5H3zM11 4h5v5h-5zM20 7h5v5h-5zM8 15h17v13H8z" fill="#70d8bd" />
+        <path d="M11 20h11v6H11z" fill="#174342" />
+      </>}
+      {kind === 'gold' && <>
+        <path d="M3 16h8v11H3zM11 9h10v18H11zM21 16h8v11h-8z" fill="#b67d3d" />
+        <path d="M3 13h8v5H3zM11 6h10v5H11zM21 13h8v5h-8z" fill="#f0c76b" />
+      </>}
+      {kind === 'skip' && <path d="M3 7l11 9L3 25zM15 7l11 9-11 9zM27 7h3v18h-3z" fill="#70d8bd" />}
+      {kind === 'bag' && <>
+        <path d="M6 10h20v19H6zM10 4h12v8H10z" fill="#a8744e" />
+        <path d="M9 14h14v3H9zM13 20h6v9h-6z" fill="#e8c26a" />
+      </>}
+      {kind === 'home' && <>
+        <path d="M2 15L16 3l14 12h-5v15H7V15z" fill="#d6b674" />
+        <path d="M13 19h6v11h-6z" fill="#172634" />
+      </>}
+    </svg>
+  );
+}
+
 function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const handleSkip = () => {
     const isFirst = state.currentNodeId === '';
@@ -127,40 +155,51 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
     });
     if (target) dispatch({ type: 'USE_SKIP', nodeId: target.id, free: true });
   };
+  const returnHome = () => {
+    void persistSave(state);
+    dispatch({ type: 'TITLE' });
+  };
+  if (state.screen === 'map') {
+    return (
+      <div className="hud map-hud">
+        <div className="map-hud-place">
+          <span className="map-hud-crest"><MapHudIcon kind="route" /></span>
+          <span className="map-hud-place-copy">
+            <strong>{state.runMode === 'proficiency'
+              ? `熟练度远征 · 第${Math.max(1, state.currentRow + 1)}/50层`
+              : `第${state.act}幕 · ${MAP_ACT_NAMES[state.act] ?? '远征之路'}`}</strong>
+            <small>远征地图</small>
+          </span>
+        </div>
+        <div className="map-hud-resources">
+          <span className="map-hud-chip" aria-label={`出战 ${state.field.length}/${FIELD_MAX}`}><MapHudIcon kind="party" />{state.field.length}/{FIELD_MAX}</span>
+          <span className="map-hud-chip" aria-label={`金币 ${state.gold}`}><MapHudIcon kind="gold" />{state.gold}</span>
+        </div>
+        <div className="map-hud-actions">
+          <button className="map-hud-button" onClick={handleSkip}><MapHudIcon kind="skip" />跳关</button>
+          <button className="map-hud-button" onClick={() => dispatch({ type: 'OPEN_BACKPACK' })}><MapHudIcon kind="bag" />背包</button>
+        </div>
+        <div className="map-hud-exit">
+          <button className="map-hud-button" onClick={returnHome}><MapHudIcon kind="home" />返回首页</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="hud">
       <span className="act">
-        {state.screen === 'map'
-          ? state.runMode === 'proficiency'
-            ? `熟练度远征 · 第${Math.max(1, state.currentRow + 1)}/50层`
-            : `第${state.act}幕 · ${MAP_ACT_NAMES[state.act] ?? '远征之路'}`
-          : `第 ${state.act} 层`}
+        第 {state.act} 层
       </span>
       <span>
         <span className="chip">👥 {state.field.length}/{FIELD_MAX}</span>
         <span className="chip">💰 {state.gold}</span>
       </span>
-      {state.screen === 'map' && (
-        <button className="home-btn" onClick={handleSkip}>
-          ⏩ 跳关
-        </button>
-      )}
       {state.screen === 'backpack' ? (
         <button className="home-btn" onClick={() => dispatch({ type: 'CLOSE_BACKPACK' })}>
           🎒 关闭背包
         </button>
-      ) : state.screen === 'map' ? (
-        <button className="home-btn" onClick={() => dispatch({ type: 'OPEN_BACKPACK' })}>
-          🎒 背包
-        </button>
       ) : null}
-      <button
-        className="home-btn"
-        onClick={() => {
-          void persistSave(state);
-          dispatch({ type: 'TITLE' });
-        }}
-      >
+      <button className="home-btn" onClick={returnHome}>
         🏠 返回首页
       </button>
     </div>
