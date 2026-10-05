@@ -11,7 +11,7 @@
 
 标题页仅大标题使用随游戏离线打包的 [Fusion Pixel Font](https://github.com/TakWolf/fusion-pixel-font) 简体中文像素字形（SIL OFL 1.1）；副标题、按钮及正文使用系统字体。授权与上游说明见 `src/ui/fonts/fusion-pixel/`。
 
-主线开局的难度与遗物选择使用山口誓约门与长苔石框合成的无字像素底图，三块石碑展示当前三档难度的真实生命、速度、商店及战后恢复数值；右侧遗物柜陈列六件独立像素图标，未解锁项灰显且不可选，也可选择不携带遗物。底部确认栏显示当前组合并进入伙伴选择；数值、解锁条件、选中状态和按钮文字均由界面实时绘制。视觉参考见 [新存档预览](design/previews/difficulty-relic-new-save.png) 和 [已解锁预览](design/previews/difficulty-relic-unlocked.png)。
+主线开局的难度与遗物选择使用山口誓约门与长苔石框合成的无字像素底图，三块石碑展示当前三档难度的真实生命、速度、商店及战后恢复数值；右侧遗物柜陈列六件独立像素图标，未解锁项灰显且不可选，也可选择不携带遗物。底部确认栏显示当前组合并进入伙伴选择；数值、解锁条件、选中状态和按钮文字均由界面实时绘制。视觉参考见 [新存档预览](design/previews/difficulty-relic-new-save.png) 和 [已解锁预览](design/previews/difficulty-relic-unlocked.png)。（遗物改版设计为 3 件，见 `游戏文件/游戏玩法说明.md` §2.3，代码待实现。）
 
 开局选择界面使用三张独立背景：主线第一步的林间契约祭坛、第二步的石廊，以及熟练度远征的室内试炼大厅，不复用营地背景。主线先从迅迅／泡泡／灼灼中选一只主力（获得同种 2 只），再从铁墩／咪咪／刺刺中选一只同伴；选择卡片后按金色按钮确认。熟练度远征从六只基础生物中任选两只，按选中顺序出发。卡片中的生物、生命与速度从游戏数据实时绘制，主线技能名称可悬停查看；早期构图预览见 [主线第一步](design/previews/starter-main-step1-v2.png)、[主线第二步](design/previews/starter-main-step2-v2.png) 与 [熟练度远征](design/previews/starter-proficiency-v2.png)。
 
