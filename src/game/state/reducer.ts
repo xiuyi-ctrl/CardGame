@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
-import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, EVO2_POOL, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, removeCurseFromUnit, rollChest, recomputeStats } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -17,6 +17,10 @@ import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
+}
+
+function countItemUse(runStats: RunStats | undefined): RunStats | undefined {
+  return runStats ? { ...runStats, itemsUsed: (runStats.itemsUsed ?? 0) + 1 } : undefined;
 }
 
 /** 钥匙门节点：是否已持有对应守卫的专用钥匙 */
@@ -156,7 +160,7 @@ export function createInitialState(): GameState {
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
-    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
     difficulty: 'normal',
     unlocks: { ...DEFAULT_UNLOCKS },
   };
@@ -200,7 +204,7 @@ function emptyRunStats(): RunStats {
     fusions: 0,
     shopVisits: 0,
   };
-  return { ...actSnapshot, lastBattleRound: 0, actSnapshot };
+  return { ...actSnapshot, itemsUsed: 0, lastBattleRound: 0, actSnapshot };
 }
 
 /** 将旧版或字段不完整的存档迁移为当前 GameState；结构损坏时返回 null。 */
@@ -217,6 +221,7 @@ export function migrateGameState(value: unknown): GameState | null {
     petsLost: saved?.petsLost ?? defaults.petsLost,
     turnsPlayed: saved?.turnsPlayed ?? defaults.turnsPlayed,
     tameAttempts: saved?.tameAttempts ?? defaults.tameAttempts,
+    itemsUsed: saved?.itemsUsed ?? defaults.itemsUsed,
     圣果Used: saved?.圣果Used ?? defaults.圣果Used,
     fusions: saved?.fusions ?? defaults.fusions,
     shopVisits: saved?.shopVisits ?? defaults.shopVisits,
@@ -230,12 +235,12 @@ export function migrateGameState(value: unknown): GameState | null {
     unlocks: value.unlocks
       ? {
           difficulties: [...(value.unlocks.difficulties ?? DEFAULT_UNLOCKS.difficulties)],
-          relics: [...(value.unlocks.relics ?? DEFAULT_UNLOCKS.relics)],
+          relics: [...(value.unlocks.relics ?? DEFAULT_UNLOCKS.relics)].filter((id) => RELIC_ORDER.includes(id)),
           bestGrade: value.unlocks.bestGrade,
           proficiencyUnlocked: value.unlocks.proficiencyUnlocked ?? false,
         }
       : { ...DEFAULT_UNLOCKS, difficulties: [...DEFAULT_UNLOCKS.difficulties], relics: [...DEFAULT_UNLOCKS.relics] },
-    relics: [...(value.relics ?? [])],
+    relics: [...(value.relics ?? [])].filter((id) => RELIC_ORDER.includes(id)),
     map: { ...value.map, events: value.map.events ?? {}, specials: value.map.specials ?? {} },
     visitedWatchtowers: [...(value.visitedWatchtowers ?? [])],
     visitedNodeIds: [...(value.visitedNodeIds ?? [])],
@@ -261,20 +266,17 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
   // 应用遗物效果
   if (relicId) {
     switch (relicId) {
-      case 'traveler_charm': gold += 15; break;
-      case 'elite_badge': inventory.scout = (inventory.scout ?? 0) + 1; inventory.skip = (inventory.skip ?? 0) + 1; break;
-      case 'legend_seal': inventory.golden_fruit = (inventory.golden_fruit ?? 0) + 1; {
-        // 额外1只随机二阶宠物
-        if (EVO2_POOL && EVO2_POOL.length > 0) {
-          const relicRng = createRng((seed * 3571 + hashStr(relicId)) >>> 0);
-          const pick2 = EVO2_POOL[Math.floor(relicRng() * EVO2_POOL.length)];
-          if (pick2) roster.push(makeUnit(pick2, true, (roster.length % 3) as 0 | 1 | 2, false));
+      case 'traveler_charm': gold += 30; break;
+      case 'elite_badge':
+        for (const id of Object.keys(ITEMS).filter((itemId) => ITEMS[itemId].shop !== false)) {
+          inventory[id] = (inventory[id] ?? 0) + 1;
         }
         break;
-      }
-      case 'flame_medal': roster.push(makeUnit('chuchu', true, (roster.length % 3) as 0 | 1 | 2, false)); inventory.atk_potion = (inventory.atk_potion ?? 0) + 2; break;
-      case 'nature_medal': roster.push(makeUnit('tiedun', true, (roster.length % 3) as 0 | 1 | 2, false)); inventory.hp_potion = (inventory.hp_potion ?? 0) + 2; break;
-      case 'shadow_medal': roster.push(makeUnit('mimi', true, (roster.length % 3) as 0 | 1 | 2, false)); inventory.poison_potion = (inventory.poison_potion ?? 0) + 2; break;
+      case 'beast_master':
+        for (const id of Object.keys(FOODS).filter((foodId) => FOODS[foodId].baseTame > 0)) {
+          inventory[id] = (inventory[id] ?? 0) + 1;
+        }
+        break;
     }
   }
   const map = generateMap(seed, 1, difficulty);
@@ -294,7 +296,7 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
-    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
     difficulty: difficulty ?? 'normal',
     unlocks: unlocks ?? { ...DEFAULT_UNLOCKS },
     relics,
@@ -607,7 +609,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     const double = hasTwin;
     let inventory = base.inventory;
     if (hasTwin) inventory = { ...inventory, twin: inventory.twin! - 1 };
-    let next: GameState = { ...base, inventory };
+    let next: GameState = { ...base, inventory, runStats: hasTwin ? countItemUse(base.runStats) : base.runStats };
     const opened: string[] = [];
     if (double && paired) {
       const r1 = openChest(next, node, false);
@@ -1483,6 +1485,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         roster,
         inventory: { ...state.inventory, purify: inv - 1 },
+        runStats: countItemUse(state.runStats),
         log: [`净化药水清除了 ${target.name} 的诅咒`, ...state.log].slice(0, 20),
       };
     }
@@ -1509,6 +1512,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         screen: 'map',
         scoutSelecting: false,
         inventory: { ...state.inventory, scout: inv - 1 },
+        runStats: countItemUse(state.runStats),
         scoutResult: { nodeId: node.id, title: info.title, detail: info.detail },
         log: [`侦查：查看了「${node.label}」的情报`, ...state.log].slice(0, 20),
       };
@@ -1558,6 +1562,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         currentRow: targetRow,
         currentNodeId: node.id,
         inventory: { ...state.inventory, skip: action.free ? inv : inv - 1 },
+        runStats: action.free ? state.runStats : countItemUse(state.runStats),
       };
       const challenge = node.type === 'arena' || node.type === 'gauntlet';
       const corrupt = node.type === 'corrupted';
@@ -1665,7 +1670,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const battle = useBattleItem(state.battle, action.itemId, action.targetUid);
       if (battle.rngCount !== state.battle.rngCount) {
         const inventory = { ...state.inventory, [action.itemId]: inv - 1 };
-        return { ...state, battle, inventory };
+        return { ...state, battle, inventory, runStats: countItemUse(state.runStats) };
       }
       return { ...state, battle };
     }
@@ -2426,7 +2431,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         runMode: 'proficiency',
         currentLayer: 1,
         proficiencyStats: { totalProficiency: 0, totalGrowthPoints: 0, battlesWon: 0, battlesLost: 0, kills: 0 },
-        runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 } },
+        runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, tameAttempts: 0, petsLost: 0, turnsPlayed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 } },
         difficulty: 'normal',
         unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS },
         relics: [],

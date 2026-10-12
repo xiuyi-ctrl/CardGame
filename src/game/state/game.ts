@@ -220,6 +220,8 @@ export interface RunStats {
   petsLost: number;
   turnsPlayed: number;
   tameAttempts: number;
+  /** 本局实际消耗的普通道具数量（不含捕获食物与免费跳关） */
+  itemsUsed: number;
   圣果Used: number;
   fusions: number;
   shopVisits: number;
@@ -441,20 +443,16 @@ export interface RelicDef {
   name: string;
   emoji: string;
   desc: string;
-  unlockGrade: string;
-  style?: string;
+  unlockCondition: string;
 }
 
 export const RELIC_DEFS: Record<string, RelicDef> = {
-  traveler_charm: { name: '旅者护符', emoji: '🧭', desc: '开局金币 +15', unlockGrade: 'B' },
-  elite_badge:    { name: '精锐之证', emoji: '⚔️', desc: '初始赠送 1 个跳关道具 + 1 个侦察符', unlockGrade: 'A' },
-  legend_seal:    { name: '传奇之印', emoji: '👑', desc: '初始赠送 1 个圣果 + 开局额外 1 只随机二阶宠物', unlockGrade: 'S' },
-  flame_medal:    { name: '赤红勋章', emoji: '🔥', desc: '开局赠送 1 只灼灼 + 2 个攻击药水', unlockGrade: 'S', style: 'scorch' },
-  nature_medal:   { name: '翠绿勋章', emoji: '🌿', desc: '开局赠送 1 只铁墩 + 2 个生命药水', unlockGrade: 'S', style: 'tank' },
-  shadow_medal:   { name: '暗影勋章', emoji: '🌙', desc: '开局赠送 1 只咪咪 + 2 个腐蚀药水', unlockGrade: 'S', style: 'poison' },
+  traveler_charm: { name: '旅者护符', emoji: '🧭', desc: '开局金币 +30', unlockCondition: 'B 级通关' },
+  elite_badge:    { name: '精锐之证', emoji: '⚔️', desc: '初始赠送每种道具各 1 个', unlockCondition: '单局使用 20 个及以上道具' },
+  beast_master:   { name: '驯兽大师', emoji: '🍖', desc: '初始赠送每种捕获物各 1 个', unlockCondition: '单局捕捉 15 只及以上生物' },
 };
 
-export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'legend_seal', 'flame_medal', 'nature_medal', 'shadow_medal'];
+export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'beast_master'];
 
 export interface Unlocks {
   difficulties: string[];

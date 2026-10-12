@@ -54,7 +54,7 @@ describe('像素地图界面', () => {
     expect(getMapRouteEdges(disabled).some((edge) => edge.from === target.id || edge.to === target.id)).toBe(false);
   });
 
-  it('已走路线着金色，悬停展示已知信息且不泄露敌人阵容', () => {
+  it('已走路线着金色，右侧只展示标题、图标、可达状态和简要描述', () => {
     const base = createInitialState();
     const start = base.map.layers[0][0];
     const current = base.map.layers[1][0];
@@ -67,13 +67,15 @@ describe('像素地图界面', () => {
     expect(container.querySelectorAll('line[data-route-kind="near"]').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('.map-row')).toHaveLength(base.map.layers.length);
     expect(container.querySelectorAll('.node .nicon .map-node-icon')).toHaveLength(base.map.layers.flat().length);
-    expect(container.querySelector('.map-info-icon .map-node-icon')).toBeTruthy();
 
     const option = base.map.layers[2].find((node) => canStepTo(1, current.col, node, base.map))!;
     const button = container.querySelector(`button[data-node-id="${option.id}"]`)!;
     fireEvent.focus(button);
-    expect(screen.getByText('可进入')).toBeTruthy();
     expect(screen.getByText(option.label, { selector: '.map-info-name' })).toBeTruthy();
+    expect(screen.getByText('可进入', { selector: '.map-info-status' })).toBeTruthy();
+    expect(container.querySelector('.map-info p')?.textContent).toBeTruthy();
+    expect(container.querySelector('.map-info-icon .map-node-icon')).toBeTruthy();
+    expect(container.querySelector('.map-info-heading')).toBeNull();
     expect(container.querySelectorAll('line[data-route-kind="far"]').length).toBeGreaterThan(0);
     expect(container.querySelector('.map-info')?.textContent).not.toContain('敌方阵容');
     fireEvent.click(button);
@@ -89,7 +91,8 @@ describe('像素地图界面', () => {
     expect(hud.textContent).toContain(`第${state.act}幕`);
     expect(hud.querySelector('[aria-label^="出战"]')).toBeTruthy();
     expect(hud.querySelector('[aria-label="金币 36"]')).toBeTruthy();
-    expect(hud.querySelectorAll('svg.map-hud-icon')).toHaveLength(6);
+    expect(hud.querySelector('[aria-label="当前第 1 层"]')).toBeTruthy();
+    expect(hud.querySelectorAll('svg.map-hud-icon')).toHaveLength(7);
 
     fireEvent.click(screen.getByRole('button', { name: '跳关' }));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'USE_SKIP', free: true }));
@@ -97,14 +100,14 @@ describe('像素地图界面', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'OPEN_BACKPACK' });
   });
 
-  it('侦查模式保留任意节点侦查入口，熟练度模式显示首领里程碑', () => {
+  it('侦查模式保留任意节点侦查入口', () => {
     const base = createInitialState();
     const state = { ...base, screen: 'map' as const, scoutSelecting: true, runMode: 'proficiency' as const, map: generateGrowthMap(5) };
     const dispatch = vi.fn();
     const { container } = render(createElement(MapScreen, { state, dispatch }));
     expect(container.querySelectorAll('.map-row')).toHaveLength(50);
     expect(container.querySelector('.map-hud-place')?.textContent).toContain('熟练度远征 · 第1/50层');
-    expect(screen.getByText('首领层')).toBeTruthy();
+    expect(container.querySelector('.map-milestones')).toBeNull();
     const future = state.map.layers[16][0];
     fireEvent.click(container.querySelector(`button[data-node-id="${future.id}"]`)!);
     expect(dispatch).toHaveBeenCalledWith({ type: 'USE_SCOUT', nodeId: future.id });

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { createInitialState } from '../src/game/state/reducer';
 import { ProficiencyStarterScreen, StarterScreen } from '../src/ui/App';
 
@@ -12,19 +12,15 @@ describe('开局生物选择界面', () => {
     const dispatch = vi.fn();
     render(createElement(StarterScreen, { dispatch }));
 
-    expect(screen.getAllByRole('button', { pressed: false })).toHaveLength(3);
-    expect(document.querySelectorAll('.starter-choice.main-choice')).toHaveLength(3);
-    const next = screen.getByRole('button', { name: '下一步：选择同伴' });
-    expect((next as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: /迅迅.*灵巧/ }));
-    expect((next as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(next);
+    const choices = within(screen.getByRole('region', { name: '选择生物' }));
+    expect(document.querySelectorAll('.starter-select-choice')).toHaveLength(3);
+    expect(choices.getByRole('button', { name: /迅迅/ }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: /选择迅迅/ }));
 
-    expect(screen.getByText('已选主力：迅迅 ×2')).toBeTruthy();
-    expect(screen.getAllByRole('button', { pressed: false })).toHaveLength(3);
-    expect(document.querySelectorAll('.starter-choice.main-choice')).toHaveLength(3);
-    fireEvent.click(screen.getByRole('button', { name: /咪咪.*剧毒/ }));
-    fireEvent.click(screen.getByRole('button', { name: '开始远征' }));
+    expect(screen.getByText(/已选主力：迅迅 ×2/)).toBeTruthy();
+    expect(document.querySelectorAll('.starter-select-choice')).toHaveLength(3);
+    fireEvent.click(choices.getByRole('button', { name: /咪咪/ }));
+    fireEvent.click(screen.getByRole('button', { name: /选择咪咪/ }));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: 'START_RUN', starterId: 'momo', companionId: 'mimi', seed: expect.any(Number),
     }));
@@ -33,12 +29,13 @@ describe('开局生物选择界面', () => {
   it('主线返回重选时清除候选同伴', () => {
     const dispatch = vi.fn();
     render(createElement(StarterScreen, { dispatch }));
-    fireEvent.click(screen.getByRole('button', { name: /泡泡.*治愈/ }));
-    fireEvent.click(screen.getByRole('button', { name: '下一步：选择同伴' }));
-    fireEvent.click(screen.getByRole('button', { name: '← 返回重选' }));
-    expect(screen.queryByText('已选主力：泡泡 ×2')).toBeNull();
-    expect((screen.getByRole('button', { name: '下一步：选择同伴' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '← 返回难度' }));
+    const choices = within(screen.getByRole('region', { name: '选择生物' }));
+    fireEvent.click(choices.getByRole('button', { name: /泡泡/ }));
+    fireEvent.click(screen.getByRole('button', { name: /选择泡泡/ }));
+    fireEvent.click(screen.getByRole('button', { name: '◀ 返回' }));
+    expect(screen.queryByText(/已选主力：泡泡 ×2/)).toBeNull();
+    expect(choices.getByRole('button', { name: /迅迅/ }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: '◀ 返回' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'SELECT_DIFFICULTY_BACK' });
   });
 
@@ -49,7 +46,7 @@ describe('开局生物选择界面', () => {
     expect(document.querySelectorAll('.starter-choice.main-choice')).toHaveLength(0);
     const depart = screen.getByRole('button', { name: '出发远征' });
     expect((depart as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: /迅迅.*灵巧/ }));
+    fireEvent.click(screen.getByRole('button', { name: /迅迅.*均衡/ }));
     fireEvent.click(screen.getByRole('button', { name: /泡泡.*治愈/ }));
     fireEvent.click(screen.getByRole('button', { name: /灼灼.*进攻/ }));
     expect(screen.getByText('2/2')).toBeTruthy();

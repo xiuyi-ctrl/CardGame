@@ -1,4 +1,4 @@
-import { DEFAULT_UNLOCKS, type GameState, type Unlocks } from '../game/state/game';
+import { DEFAULT_UNLOCKS, RELIC_ORDER, type GameState, type RunStats, type Unlocks } from '../game/state/game';
 import { migrateGameState } from '../game/state/reducer';
 
 export interface PetCardBridge {
@@ -159,7 +159,7 @@ export function getSlotUnlocks(slot?: Pick<SaveSlotInfo, 'main' | 'proficiency'>
   return {
     ...source,
     difficulties: [...source.difficulties],
-    relics: [...source.relics],
+    relics: [...source.relics].filter((id) => RELIC_ORDER.includes(id)),
   };
 }
 
@@ -180,34 +180,26 @@ export function quitGame(): void {
   if (window.petCard) window.petCard.quit();
 }
 
-/** 检测通关后的解锁内容，返回新解锁项 */
+/** 检测通关后的难度、评级和遗物解锁内容。 */
 export function detectUnlocks(
   currentUnlocks: Unlocks,
   grade: string,
-  roster: { speciesId: string; passive?: string }[],
+  _roster: { speciesId: string; passive?: string }[],
   difficulty?: string,
+  runStats?: Pick<RunStats, 'itemsUsed' | 'petsTamed'>,
 ): Unlocks {
-  const next = { ...currentUnlocks, difficulties: [...currentUnlocks.difficulties], relics: [...currentUnlocks.relics] };
+  const next = {
+    ...currentUnlocks,
+    difficulties: [...currentUnlocks.difficulties],
+    relics: [...currentUnlocks.relics].filter((id) => RELIC_ORDER.includes(id)),
+  };
   const gradeRank: Record<string, number> = { S: 4, A: 3, B: 2, C: 1, D: 0 };
   const rank = gradeRank[grade] ?? 0;
   if (difficulty === 'normal' && rank >= 3 && !next.difficulties.includes('hard')) next.difficulties.push('hard');
   if (difficulty === 'hard' && rank >= 3 && !next.difficulties.includes('nightmare')) next.difficulties.push('nightmare');
   if (rank >= 2 && !next.relics.includes('traveler_charm')) next.relics.push('traveler_charm');
-  if (rank >= 3 && !next.relics.includes('elite_badge')) next.relics.push('elite_badge');
-  if (rank >= 4 && !next.relics.includes('legend_seal')) next.relics.push('legend_seal');
-  if (rank >= 4) {
-    const passiveCounts: Record<string, number> = {};
-    for (const p of roster) {
-      if (p.passive) passiveCounts[p.passive] = (passiveCounts[p.passive] ?? 0) + 1;
-    }
-    const scorchTypes = ['scorch', 'fireRage', 'emberDeath', 'flameAura', 'moltenArmor'];
-    const tankTypes = ['guard', 'thorns', 'thornRoyal', 'rockShellBreak'];
-    const poisonTypes = ['venom', 'venomPower', 'corruptSpread', 'corruptSac'];
-    const countOf = (types: string[]) => types.reduce((s, t) => s + (passiveCounts[t] ?? 0), 0);
-    if (countOf(scorchTypes) >= 3 && !next.relics.includes('flame_medal')) next.relics.push('flame_medal');
-    if (countOf(tankTypes) >= 3 && !next.relics.includes('nature_medal')) next.relics.push('nature_medal');
-    if (countOf(poisonTypes) >= 3 && !next.relics.includes('shadow_medal')) next.relics.push('shadow_medal');
-  }
+  if ((runStats?.itemsUsed ?? 0) >= 20 && !next.relics.includes('elite_badge')) next.relics.push('elite_badge');
+  if ((runStats?.petsTamed ?? 0) >= 15 && !next.relics.includes('beast_master')) next.relics.push('beast_master');
   if (next.bestGrade === undefined || rank > (gradeRank[next.bestGrade] ?? 0)) next.bestGrade = grade;
   return next;
 }

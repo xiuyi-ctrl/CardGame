@@ -31,6 +31,9 @@ import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, delete
 import homeXunxun from './assets/home-xunxun.png';
 import homePaopao from './assets/home-paopao.png';
 import homeZhuozhuo from './assets/home-zhuozhuo.png';
+import starterTiedun from './assets/starter-tiedun.png';
+import starterMimi from './assets/starter-mimi.png';
+import starterCici from './assets/starter-cici.png';
 import homeTitleLogo from './assets/home-title-logo.png';
 import homeContinueIcon from './assets/home-terminal-kit/continue-backpack.png';
 import homeNewIcon from './assets/home-terminal-kit/new-map-flag.png';
@@ -128,25 +131,23 @@ function MapHudIcon({ kind }: { kind: 'route' | 'party' | 'gold' | 'skip' | 'bag
   return (
     <svg className={`map-hud-icon map-hud-icon-${kind}`} viewBox="0 0 32 32" aria-hidden="true" shapeRendering="crispEdges">
       {kind === 'route' && <>
-        <path d="M3 26h7v-4h5v-5h5" fill="none" stroke="#70d8bd" strokeWidth="3" />
-        <path d="M17 5h4v4h-4zM24 6h4v4h-4zM21 12h4v4h-4zM17 18h12v8H17z" fill="#e8c26a" />
+        <path d="M2 8 16 1l14 7-14 7zM2 14l14 7 14-7v5l-14 7-14-7zM2 23l14 7 14-7v4l-14 5-14-5z" fill="#263444" />
       </>}
       {kind === 'party' && <>
-        <path d="M3 8h5v5H3zM11 4h5v5h-5zM20 7h5v5h-5zM8 15h17v13H8z" fill="#70d8bd" />
-        <path d="M11 20h11v6H11z" fill="#174342" />
+        <path d="M2 9h6v8H2zM9 2h6v10H9zM18 2h6v10h-6zM25 10h6v8h-6zM11 15h11v4h4v10H6V19h5z" fill="#142434" />
       </>}
       {kind === 'gold' && <>
-        <path d="M3 16h8v11H3zM11 9h10v18H11zM21 16h8v11h-8z" fill="#b67d3d" />
-        <path d="M3 13h8v5H3zM11 6h10v5H11zM21 13h8v5h-8z" fill="#f0c76b" />
+        <path d="M9 1h14v4h4v23h-4v4H9v-4H5V5h4z" fill="#152335" />
+        <path d="M10 5h12v23H10z" fill="#ff990c" /><path d="M12 6h7v20h-7z" fill="#ffe32b" />
       </>}
       {kind === 'skip' && <path d="M3 7l11 9L3 25zM15 7l11 9-11 9zM27 7h3v18h-3z" fill="#70d8bd" />}
       {kind === 'bag' && <>
-        <path d="M6 10h20v19H6zM10 4h12v8H10z" fill="#a8744e" />
-        <path d="M9 14h14v3H9zM13 20h6v9h-6z" fill="#e8c26a" />
+        <path d="M6 10h20v19H6zM10 4h12v8H10z" fill="#273645" />
+        <path d="M9 13h14v8H9zM13 20h6v5h-6z" fill="#56616b" />
       </>}
       {kind === 'home' && <>
-        <path d="M2 15L16 3l14 12h-5v15H7V15z" fill="#d6b674" />
-        <path d="M13 19h6v11h-6z" fill="#172634" />
+        <path d="M2 15L16 3l14 12h-5v15H7V15z" fill="#273645" />
+        <path d="M13 19h6v11h-6z" fill="#fffaf0" />
       </>}
     </svg>
   );
@@ -185,6 +186,7 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
           </span>
         </div>
         <div className="map-hud-resources">
+          <span className="map-hud-chip map-hud-layer" aria-label={`当前第 ${Math.max(1, state.currentRow + 1)} 层`}><MapHudIcon kind="route" />第{Math.max(1, state.currentRow + 1)}层</span>
           <span className="map-hud-chip" aria-label={`出战 ${state.field.length}/${FIELD_MAX}`}><MapHudIcon kind="party" />{state.field.length}/{FIELD_MAX}</span>
           <span className="map-hud-chip" aria-label={`金币 ${state.gold}`}><MapHudIcon kind="gold" />{state.gold}</span>
         </div>
@@ -1303,6 +1305,14 @@ function DifficultyEmblem({ difficulty }: { difficulty: Difficulty }) {
   </svg>;
 }
 
+function RelicEmblem({ id }: { id: string }) {
+  return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
+    {id === 'traveler_charm' && <><path d="M12 2h8v3h-8ZM14 5h4v3h-4Z" fill="#9b5a20"/><path d="M8 8h16v3h4v16h-4v3H8v-3H4V11h4Z" fill="#07182e"/><path d="M9 10h14v3h3v12h-3v3H9v-3H6V13h3Z" fill="#f3ad2f"/><path d="M10 14h12v10H10Z" fill="#fff5db"/><path d="m16 12 5 6-5 2-5-2Z" fill="#249dc4"/><path d="m16 24-5-6 5-2 5 2Z" fill="#dc5640"/></>}
+    {id === 'elite_badge' && <><path d="M4 5h4v4h3v3h3v3h4v4h3v3h4v4h3v3h-7v-3h-4v-4h-3v-3h-4v-4H7v-3H4Z" fill="#07182e"/><path d="M5 6h2v4h3v3h3v3h4v4h3v3h4v4h-3v-3h-4v-4h-3v-3h-4v-4H7v-3H5Z" fill="#e4a52c"/><path d="M24 5h4v7h-3v3h-3v4h-4v3h-3v4h-4v3H4v-3h3v-4h4v-3h3v-4h4v-3h3V9h3Z" fill="#07182e"/><path d="M25 6h2v5h-3v3h-3v4h-4v3h-3v4h-4v3H7v-2h3v-4h4v-3h3v-4h4v-3h3V9h1Z" fill="#f4c44f"/></>}
+    {id === 'beast_master' && <><path d="M10 2h12v4H10ZM13 6h6v4h-6Z" fill="#9b5a20"/><path d="M5 10h22v4h3v14h-3v3H5v-3H2V14h3Z" fill="#07182e"/><path d="M6 12h20v4h2v10h-2v3H6v-3H4V16h2Z" fill="#d9964b"/><path d="M10 14h4v5h-4ZM18 14h4v5h-4ZM5 18h4v5H5ZM23 18h4v5h-4ZM13 21h6v2h3v4H10v-4h3Z" fill="#fff2d3"/><path d="M14 23h4v2h-4Z" fill="#2e8ca8"/></>}
+  </svg>;
+}
+
 export function DifficultyScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('normal');
   const [selectedRelic, setSelectedRelic] = useState<string>('');
@@ -1317,10 +1327,10 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
   return (
     <div className="difficulty-screen">
       <header className="difficulty-header">
-        <div>
-          <h1>选择难度与遗物</h1>
-        </div>
-        <button className="difficulty-back" onClick={() => dispatch({ type: 'TITLE' })}>← 返回首页</button>
+        <span className="difficulty-header-emblem" aria-hidden="true">▥</span>
+        <h1><span>选择</span>难度与<span>遗物</span></h1>
+        <div className="difficulty-step" aria-label="新远征第 1 步，共 2 步"><i className="active" /><span>···</span><i /><strong>新远征 1/2</strong></div>
+        <button className="difficulty-back" onClick={() => dispatch({ type: 'TITLE' })}>◀ 返回</button>
       </header>
       <main className="difficulty-main">
         <section className="difficulty-choices" aria-label="选择难度">
@@ -1329,11 +1339,11 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
             const locked = !unlocks.difficulties.includes(d);
             return <button key={d} className={`difficulty-tablet difficulty-${d} ${selectedDifficulty === d ? 'selected' : ''}`}
               disabled={locked} aria-pressed={selectedDifficulty === d} onClick={() => setSelectedDifficulty(d)}>
-              <span className="difficulty-crest"><DifficultyEmblem difficulty={d} /></span>
+              <span className="difficulty-art" aria-hidden="true"><span className="difficulty-crest"><DifficultyEmblem difficulty={d} /></span>{locked && <span className="difficulty-art-lock" />}</span>
               <strong>{cfg.label}</strong>
               <span className="difficulty-stats">
                 <span><i className="difficulty-stat-hp" aria-hidden="true">♥</i>敌方生命 <b>×{cfg.enemyHpMult.toFixed(2)}</b></span>
-                <span><i className="difficulty-stat-spd" aria-hidden="true">◆</i>速度 <b>+{cfg.enemySpdBonus}</b></span>
+                <span><i className="difficulty-stat-spd" aria-hidden="true">ϟ</i>速度 <b>+{cfg.enemySpdBonus}</b></span>
                 <span><i className="difficulty-stat-shop" aria-hidden="true">●</i>商店 <b>×{cfg.shopPriceMult.toFixed(2)}</b></span>
                 <span><i className="difficulty-stat-heal" aria-hidden="true">✚</i>战后恢复 <b>{Math.round(cfg.healRatio * 100)}%</b></span>
               </span>
@@ -1342,7 +1352,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
           })}
         </section>
         <section className="relic-cabinet" aria-label="选择初始遗物">
-          <div className="relic-cabinet-heading"><h2>初始遗物 · 可选一件</h2></div>
+          <div className="relic-cabinet-heading"><h2>初始遗物</h2><span>可选一件</span></div>
           <button className={`relic-none ${selectedRelic === '' ? 'selected' : ''}`}
             aria-pressed={selectedRelic === ''} onClick={() => setSelectedRelic('')}>
             <span className="relic-none-icon" aria-hidden="true" /><span>不携带遗物</span>
@@ -1351,16 +1361,12 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
             {RELIC_ORDER.map((id) => {
               const def = RELIC_DEFS[id];
               const locked = !unlocks.relics.includes(id);
-              const unlockNote = def.style === 'scorch' ? 'S 级通关 + 3 只灼烧系宠物'
-                : def.style === 'tank' ? 'S 级通关 + 3 只坦克系宠物'
-                : def.style === 'poison' ? 'S 级通关 + 3 只毒系宠物'
-                : `${def.unlockGrade} 级通关解锁`;
+              const unlockNote = def.unlockCondition;
               return <button key={id} className={`relic-tile ${selectedRelic === id ? 'selected' : ''}`}
                 disabled={locked} aria-pressed={selectedRelic === id} title={locked ? unlockNote : def.desc}
                 onClick={() => setSelectedRelic(id)}>
-                <span className={`relic-symbol relic-symbol-${id}`} aria-hidden="true" />
-                <strong>{def.name}</strong>
-                <small>{locked ? unlockNote : selectedRelic === id ? '已选择' : def.desc}</small>
+                <span className="relic-symbol" aria-hidden="true"><RelicEmblem id={id} /></span>
+                <span className="relic-copy"><strong>{def.name}</strong><small>{def.desc}</small></span>
                 {locked && <span className="stone-lock relic-lock" aria-hidden="true" />}
               </button>;
             })}
@@ -1378,7 +1384,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
 }
 
 const STARTER_ROLES: Record<string, string> = {
-  momo: '灵巧', lulu: '治愈', fifi: '进攻',
+  momo: '均衡', lulu: '治愈', fifi: '进攻',
   kiki: '防护', mimi: '剧毒', pipi: '控制',
 };
 
@@ -1407,47 +1413,78 @@ function StarterChoiceCard({ id, selected, order, compact = false, onClick }: {
 
 export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [firstPick, setFirstPick] = useState<string | null>(null);
-  const [candidate, setCandidate] = useState<string | null>(null);
+  const [candidate, setCandidate] = useState<string | null>(STARTER_GROUP_1[0]);
   const isCompanion = firstPick !== null;
   const choices = isCompanion ? STARTER_GROUP_2 : STARTER_GROUP_1;
+  const selected = getMonster(candidate ?? choices[0]);
+  const passive = getPassive(selected.passive);
+  const starterArt: Record<string, string> = {
+    momo: homeXunxun, lulu: homePaopao, fifi: homeZhuozhuo,
+    kiki: starterTiedun, mimi: starterMimi, pipi: starterCici,
+  };
 
   const confirm = () => {
     if (!candidate) return;
     if (!firstPick) {
       setFirstPick(candidate);
-      setCandidate(null);
+      setCandidate(STARTER_GROUP_2[0]);
     } else {
       dispatch({ type: 'START_RUN', starterId: firstPick, companionId: candidate, seed: newSeed() });
     }
   };
 
   return (
-    <div className={`starter-screen ${isCompanion ? 'starter-passage' : 'starter-grove'}`}>
-      <header className="starter-header">
-        <div className="starter-heading"><span className="starter-mark" aria-hidden="true">✦</span><div>
-          <h1>{isCompanion ? '选择同行伙伴' : '选择初始伙伴'}</h1>
-          <p>主线远征 · 第{isCompanion ? '二' : '一'}步</p>
-        </div></div>
-        <button className="starter-back" onClick={() => {
-          if (isCompanion) { setFirstPick(null); setCandidate(null); }
+    <div className="starter-screen starter-selection">
+      <header className="starter-select-header">
+        <span className="starter-select-emblem" aria-hidden="true">▦</span>
+        <h1><span>选择</span>{isCompanion ? '同行伙伴' : '初始伙伴'}</h1>
+        <div className="starter-select-step" aria-label={`新远征第 ${isCompanion ? 2 : 1} 步，共 2 步`}>
+          <i className={!isCompanion ? 'active' : ''} /><span>···</span><i className={isCompanion ? 'active' : ''} />
+          <strong>新远征 {isCompanion ? 2 : 1}/2</strong>
+        </div>
+        <button className="starter-select-back" onClick={() => {
+          if (isCompanion) { setFirstPick(null); setCandidate(STARTER_GROUP_1[0]); }
           else dispatch({ type: 'SELECT_DIFFICULTY_BACK' });
-        }}>← {isCompanion ? '返回重选' : '返回难度'}</button>
+        }}>◀ 返回</button>
       </header>
-      <main className="starter-main">
-        {firstPick && <div className="starter-progress">已选主力：{getMonster(firstPick).name} ×2</div>}
-        <div className="starter-choice-grid main-choices">
-          {choices.map((id) => <StarterChoiceCard key={id} id={id} selected={candidate === id} onClick={() => setCandidate(id)} />)}
-        </div>
+      <main className="starter-select-layout">
+        <section className="starter-select-world" aria-label="选择生物">
+          <div className="starter-select-choices">
+            {choices.map((id) => {
+              const species = getMonster(id);
+              const choiceStats = computeStats(id);
+              return <button key={id} type="button" className={`starter-select-choice ${candidate === id ? 'selected' : ''}`}
+                aria-pressed={candidate === id} onClick={() => setCandidate(id)}>
+                <span className="starter-select-pet">
+                  {starterArt[id] ? <img src={starterArt[id]} alt="" /> : <BattlePixelSprite src={species.image!} name={species.name} />}
+                </span>
+                <span className="starter-select-ground" aria-hidden="true" />
+                <span className="starter-select-label">
+                  <strong>{species.name}</strong>
+                  <span className="starter-select-numbers"><span className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{choiceStats.maxHp}<span className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{choiceStats.spd}</span>
+                </span>
+              </button>;
+            })}
+          </div>
+        </section>
+        <aside className="starter-select-panel" aria-label={`${selected.name}详情`}>
+          <div className="starter-select-profile">
+            <div className="starter-select-portrait">
+              {starterArt[selected.id] ? <img src={starterArt[selected.id]} alt="" /> : <BattlePixelSprite src={selected.image!} name={selected.name} />}
+            </div>
+            <div><h2>{selected.name}</h2><span className="starter-select-role">{STARTER_ROLES[selected.id]}</span><p>{selected.desc}</p></div>
+          </div>
+          <div className="starter-select-abilities">
+            {passive && <div className="starter-select-ability"><span className="starter-ability-icon passive" aria-hidden="true">✦</span><strong>{passive.name}</strong><span>{passive.desc}</span></div>}
+            {selected.skills.map((id) => {
+              const skill = getSkill(id);
+              return <div key={id} className="starter-select-ability"><span className="starter-ability-icon" aria-hidden="true">◆</span><strong>{skill.name}</strong><span>{skill.desc}{skill.damage ? ` · ${skill.damage}${skill.hits ? `×${skill.hits}` : ''}` : skill.heal ? ` · 治疗 ${skill.heal}` : ''}</span></div>;
+            })}
+          </div>
+          <button className="starter-select-confirm" onClick={confirm}>选择{selected.name}<span aria-hidden="true">▶</span></button>
+          <p className="starter-select-note">{isCompanion ? `已选主力：${getMonster(firstPick).name} ×2 · 再选一只同伴` : '可在图鉴查看进化'}</p>
+        </aside>
       </main>
-      <footer className="starter-footer">
-        <div className="starter-footer-copy">
-          <strong>{isCompanion ? '再选一只同伴，获得 1 只' : '选择一只主力，获得同种生物 2 只'}</strong>
-          <span>{candidate ? `当前选择：${getMonster(candidate).name}` : '点击生物查看选择'}</span>
-        </div>
-        <button className="starter-confirm" disabled={!candidate} onClick={confirm}>
-          {isCompanion ? '开始远征' : '下一步：选择同伴'}
-        </button>
-      </footer>
     </div>
   );
 }
@@ -1750,7 +1787,8 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                                 : undefined
                     }
                   >
-                    <span className="nicon"><MapNodeIcon type={n.type} /></span>
+                    {isCurrent && <svg className="map-current-flag" viewBox="0 0 24 24" aria-hidden="true" shapeRendering="crispEdges"><path d="M3 24V1h3v23" fill="#152335" /><path d="M6 2h7v3h6v3h4v4h-7v3H6z" fill="#ff8b0b" stroke="#152335" strokeWidth="2" /></svg>}
+                    <span className="nicon"><MapNodeIcon type={n.type} silhouette /></span>
                     <span className="nlabel">{n.label}</span>
                   </button>
                 );
@@ -1761,16 +1799,16 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
           </div>
         </div>
         <aside className="map-info" aria-live="polite">
-          <div className="map-info-heading">{infoRow === optionsRow ? '下一处地点' : '地点情报'}</div>
           {infoNode ? (
             <>
-              <div className="map-info-icon" data-type={infoNode.type}><MapNodeIcon type={infoNode.type} /></div>
-              <div className="map-info-name">{isProficiency ? `第${infoRow + 1}层 · ` : ''}{infoNode.label}</div>
-              <div className={`map-info-status ${infoStatus === '可进入' ? 'available' : ''}`}>{infoStatus}</div>
+              <div className="map-info-summary">
+                <div className="map-info-icon" data-type={infoNode.type}><MapNodeIcon type={infoNode.type} silhouette /></div>
+                <div className="map-info-name">{infoNode.label}</div>
+                <div className={`map-info-status ${infoStatus === '可进入' ? 'available' : ''}`}>{infoStatus}</div>
+              </div>
               <p>{infoNode.type === 'gauntlet' ? `共${infoNode.gauntletSize ?? 2}轮，失败将承受惩罚。` : MAP_KNOWN_HINTS[infoNode.type]}</p>
             </>
-          ) : <p>选择下一处地点继续远征。</p>}
-          {isProficiency && <div className="map-milestones">首领层 <span>15</span><span>30</span><span>50</span></div>}
+          ) : <><div className="map-info-name">暂无关卡</div><p>选择下一处地点继续远征。</p></>}
         </aside>
       </div>
       {state.scoutResult && (
@@ -3212,7 +3250,7 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
     if (!rating) return;
     const currentUnlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
     const rosterInfo = state.roster.map((u) => ({ speciesId: u.speciesId, passive: u.passive }));
-    const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo, state.difficulty);
+    const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo, state.difficulty, state.runStats);
     const newItems: string[] = [];
     for (const d of nextUnlocks.difficulties) {
       if (!currentUnlocks.difficulties.includes(d)) newItems.push(`难度：${DIFFICULTY_CONFIG[d as Difficulty].label}`);
@@ -3319,15 +3357,7 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
     { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%', unlockCondition: '普通难度 A 级及以上通关' },
     { id: 'nightmare', label: '地狱', desc: '敌方 HP+50%、SPD+2，战后回血 20%，商品加价 40%', unlockCondition: '困难难度 A 级及以上通关' },
   ];
-  const relicCondMap: Record<string, string> = {
-    traveler_charm: 'B 级通关',
-    elite_badge: 'A 级通关',
-    legend_seal: 'S 级通关',
-    flame_medal: 'S 级通关 + 3 只灼烧系宠物',
-    nature_medal: 'S 级通关 + 3 只坦克系宠物',
-    shadow_medal: 'S 级通关 + 3 只毒系宠物',
-  };
-  const allRelics = RELIC_ORDER.map((id) => ({ id, ...RELIC_DEFS[id], unlockCondition: relicCondMap[id] ?? '未知' }));
+  const allRelics = RELIC_ORDER.map((id) => ({ id, ...RELIC_DEFS[id] }));
   const grades = ['S', 'A', 'B', 'C', 'D'];
 
   return (

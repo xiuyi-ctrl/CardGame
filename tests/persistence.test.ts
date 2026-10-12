@@ -23,6 +23,7 @@ describe('存档版本迁移', () => {
     expect(parsed?.saveVersion).toBe(CURRENT_SAVE_VERSION);
     expect(parsed?.main?.difficulty).toBe('normal');
     expect(parsed?.main?.runStats?.battlesWon).toBe(0);
+    expect(parsed?.main?.runStats?.itemsUsed).toBe(0);
     expect(parsed?.main?.unlocks?.difficulties).toEqual(['normal']);
     expect(parsed?.main?.map.events).toEqual({});
     expect(parsed?.main?.map.specials).toEqual({});

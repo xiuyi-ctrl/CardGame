@@ -1,0 +1,19 @@
+{
+  "target": "creature",
+  "mode": "single",
+  "prompt": "",
+  "role": "",
+  "input": "C:\\Users\\DELL\\.codex\\generated_images\\01a10677-3f6d-7a00-bb2f-92b2757806ea\\exec-6241e02e-430f-4973-8893-e4d5abb3ea9c.png",
+  "threshold": 100,
+  "edge_threshold": 150,
+  "duration": 200,
+  "single_size": 64,
+  "qc_config": {
+    "strict_qc": true,
+    "reject_edge_touch": false,
+    "allow_source_edge_touch": false,
+    "max_body_scale_cv": null,
+    "max_anchor_y_std": null,
+    "max_profile_scale_drift": null
+  }
+}

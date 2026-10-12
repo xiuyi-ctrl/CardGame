@@ -1,0 +1,7 @@
+Use case: precise-object-edit
+Asset type: runtime background for a roguelike route-selection map
+Primary request: Turn the supplied pixel-art map mockup into a clean standalone forest background plate. Remove every user-interface element and reconstruct the scenery underneath: remove the top HUD, right information panel, all route lines, node cards, icons, labels, borders, the bottom gate, and every piece of text. Extend the bright forest environment naturally across the entire 3:2 canvas.
+Scene/backdrop: cheerful layered mountain forest in daylight, bright blue sky with blocky white clouds at the top, blue mountain ridges, dense green tree canopies, rocky cliffs, several small waterfalls and streams along the side edges, darker teal forest depth near the bottom. Keep the central 65% visually calm and open enough for code-rendered route nodes and lines.
+Style/medium: crisp authentic 16-bit pixel art, hard square pixels, limited saturated palette, readable large clusters, no antialiasing, matching the supplied reference's bright forest scenery.
+Composition/framing: 1536x1024 landscape background, environmental depth from sky at top to dark forest at bottom; distribute landmarks toward the outer edges and keep the central route area uncluttered.
+Constraints: scenery only; no UI, no panels, no frames, no text, no numbers, no icons, no route lines, no map nodes, no flags, no gates, no buildings, no creatures, no characters, no watermark.

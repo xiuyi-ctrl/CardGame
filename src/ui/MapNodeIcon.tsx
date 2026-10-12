@@ -81,10 +81,31 @@ const ICON_ART: Record<NodeType, ReactNode> = {
   </>,
 };
 
-export function MapNodeIcon({ type }: { type: NodeType }) {
+const SILHOUETTES: Partial<Record<NodeType, string>> = {
+  event: 'M5 3h13v3h3v6l-7 5v1h-4v-4l6-5V7H9v3H5zM10 20h4v4h-4z',
+  shop: 'M2 9 12 1l10 8v14H2zm5 3v11h10V12zm3 3h4v8h-4z',
+  rest: 'M12 1l4 7 4-2v7l3 4-3 6H4l-3-6 5-8v5l4-3zm0 12-4 5 2 3h4l2-3z',
+  elite: 'M1 2h5v5l6 3 6-3V2h5v8l-5 4v7l-6 3-6-3v-7l-5-4zm6 10v4h3v-4zm7 0v4h3v-4z',
+  guardian: 'M2 2h20v11l-3 5-7 6-7-6-3-5zm5 4 5 8 5-8h-4l-1 3-1-3z',
+  boss: 'M1 3h5l3 5h6l3-5h5v7l-4 3v10H5V13l-4-3zm6 9v4h3v-4zm7 0v4h3v-4z',
+  special: 'M4 3h16v3h3v5H1V6h3zM1 13h8v4h6v-4h8v10H1zM11 11h2v4h-2z',
+  sync: 'M1 5h9v4H1zM14 5h9v4h-9zM1 11h9v11H1zm3 2v4h3v-4zM14 11h9v11h-9zm3 2v4h3v-4z',
+  corrupted: 'M7 1h4L8 9h3l5-8h4l-5 11h3l3-6h3l-3 13-7 5H6l-5-6 1-8h4l-1 6h3z',
+  watchtower: 'M3 1h4v4h3V1h4v4h3V1h4v8h-4v12h4v3H3v-3h4V9H3zm7 11v6h4v-6z',
+  keydoor: 'M5 2h14v22H5zm3 3v16h8V5zm4 8h2v3h-2z',
+  blacksmith: 'M2 2h14v6h-5v3l11 9-3 4L8 12H2z',
+  gauntlet: 'M3 1h5v4h4v5H8v4H3v-4H0V5h3zM16 10h5v4h3v5h-3v5h-5v-5h-4v-5h4z',
+  arena: 'M2 3h20v5H2zM4 10h4v10H4zM10 10h4v10h-4zM16 10h4v10h-4zM1 21h22v3H1z',
+  arena3: 'M2 3h20v5H2zM4 10h4v10H4zM10 10h4v10h-4zM16 10h4v10h-4zM1 21h22v3H1z',
+};
+
+export function MapNodeIcon({ type, silhouette = false }: { type: NodeType; silhouette?: boolean }) {
   return (
     <svg className="map-node-icon" viewBox="0 0 24 24" aria-hidden="true" shapeRendering="crispEdges">
-      {ICON_ART[type]}
+      {silhouette && type === 'battle' ? <g fill="currentColor">
+        <path d="M2 2h5l14 14-5 5L2 7zM13 19l6-6 3 3-6 6zM17 21l4-4 3 3-4 4z" />
+        <path d="M17 2h5v5L8 21l-5-5zM2 16l3-3 6 6-3 3zM0 20l3-3 4 4-3 3z" />
+      </g> : silhouette && SILHOUETTES[type] ? <path d={SILHOUETTES[type]} fill="currentColor" fillRule="evenodd" /> : ICON_ART[type]}
     </svg>
   );
 }

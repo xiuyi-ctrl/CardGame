@@ -139,6 +139,7 @@ describe('USE_BATTLE_ITEM reducer', () => {
     const next = dispatch({ type: 'USE_BATTLE_ITEM', itemId: 'atk_up', targetUid: uid });
     expect(next.inventory.atk_up).toBe(1);
     expect(next.battle!.playerUnits[0].battleBuffs?.atkUp).toBe(2);
+    expect(next.runStats!.itemsUsed).toBe(1);
   });
 
   it('库存不足时不生效', () => {
