@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <title>困难难度：险峰旗帜</title>
+  <path fill="#07182e" d="M4 26h3v-5h3v-5h3v-5h3v-4h3v4h2v5h3v5h3v5h2v4H4z"/>
+  <path fill="#637e98" d="M8 25h3v-5h3v-5h3v-4h2v5h3v5h3v5H8z"/>
+  <path fill="#b5d4d8" d="M15 12h3v4h-3zM12 17h3v4h-3zM19 17h2v4h-2z"/>
+  <path fill="#07182e" d="M16 2h2v12h-2zM18 3h9v6h-9z"/>
+  <path fill="#ff9b17" d="M18 4h7v4h-7z"/>
+  <path fill="#ffe08a" d="M19 4h3v2h-3z"/>
+  <path fill="#e4a63e" d="M13 26h4v-4h2v-4h2v6h-2v5h-6z"/>
+  <path fill="#07182e" d="M4 28h25v2H4z"/>
+</svg>

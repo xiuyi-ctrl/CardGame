@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <title>地狱难度：熔岩裂谷</title>
+  <path fill="#07182e" d="M2 26h4v-6h3v-5h3v-4h3v3h3v-4h3v5h3v5h3v6h3v4H2z"/>
+  <path fill="#564057" d="M5 26v-5h4v-5h3v4h4v-4h5v4h3v6H5z"/>
+  <path fill="#a75555" d="M7 24h4v-4h3v3h5v-3h3v5h3v2H7z"/>
+  <path fill="#07182e" d="M12 13h10v4H12z"/>
+  <path fill="#ff8019" d="M14 14h6v3h-6zM15 17h5v5h-5zM16 22h4v6h-4z"/>
+  <path fill="#ffd15d" d="M16 14h3v2h-3zM17 18h2v5h-2z"/>
+  <path fill="#ed5b33" d="M8 6h2v3H8zM10 3h2v3h-2zM24 7h2v3h-2z"/>
+  <path fill="#07182e" d="M2 28h28v2H2z"/>
+</svg>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>首页右侧终端图标设计</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 26px; background: #39a9f4; color: #07182e; font-family: 'Microsoft YaHei', sans-serif; }
+    .panel { max-width: 920px; padding: 20px 24px 24px; border: 6px solid #07182e; background: #fff9e9; box-shadow: inset 0 0 0 4px #cbd0cc, 5px 5px 0 #06456b; }
+    h1 { margin: 0 0 16px; font-size: 24px; }
+    h2 { margin: 18px 0 10px; font-size: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .tile { display: flex; align-items: center; gap: 10px; min-height: 68px; padding: 7px; border: 3px solid #a0a1a6; background: #fffdf3; font-size: 16px; font-weight: 800; }
+    .tile.primary:first-child { border-color: #ff9200; box-shadow: inset 0 0 0 2px #ffdc61; }
+    img { flex: none; width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; }
+    .small img { width: 32px; height: 32px; }
+    .detail { display: flex; align-items: center; gap: 16px; padding: 10px; border: 3px dashed #a0a1a6; background: #fffdf3; }
+    .detail span { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+    .detail img { width: 26px; height: 26px; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>首页右侧终端 · 独立像素图标</h1>
+    <div class="grid">
+      <div class="tile primary"><img src="home-terminal-kit-v2/continue-backpack.png" alt="">继续远征</div>
+      <div class="tile primary"><img src="home-terminal-kit-v2/new-expedition-map.png" alt="">新的远征</div>
+      <div class="tile primary"><img src="home-terminal-kit-v2/proficiency-chart.png" alt="">熟练度远征</div>
+      <div class="tile primary"><img src="home-terminal-kit-v2/exit-door.png" alt="">退出游戏</div>
+    </div>
+    <h2>底部功能</h2>
+    <div class="grid small">
+      <div class="tile"><img src="home-terminal-kit-v2/creature-codex.png" alt="">生物图鉴</div>
+      <div class="tile"><img src="home-terminal-kit-v2/save-archive.png" alt="">存档管理</div>
+      <div class="tile"><img src="home-terminal-kit-v2/achievement-trophy.png" alt="">成就</div>
+      <div class="tile"><img src="home-terminal-kit-v2/settings-gear.png" alt="">设置</div>
+    </div>
+    <h2>面板标记与导航</h2>
+    <div class="detail">
+      <span><img src="home-terminal-kit-v2/paw-status.png" alt="">爪印</span>
+      <span><img src="home-terminal-kit-v2/chevron-right.png" alt="">箭头</span>
+      <span><img src="home-terminal-kit-v2/chevron-right-selected.png" alt="">选中箭头</span>
+      <span><img src="home-terminal-kit-v2/bookmark-up.png" alt="">页签</span>
+      <span><img src="home-terminal-kit-v2/status-bars.png" alt="">状态刻度</span>
+    </div>
+  </div>
+</body>
+</html>

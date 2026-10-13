@@ -27,6 +27,7 @@ import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { MapNodeIcon } from './MapNodeIcon';
 import { ShopItemIcon } from './ShopItemIcon';
 import { getMapRouteEdges } from './mapRoutes';
+import { getDecodedImage, preloadImages } from './imageCache';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import homeXunxun from './assets/home-xunxun.png';
 import homePaopao from './assets/home-paopao.png';
@@ -35,34 +36,88 @@ import starterTiedun from './assets/starter-tiedun.png';
 import starterMimi from './assets/starter-mimi.png';
 import starterCici from './assets/starter-cici.png';
 import homeTitleLogo from './assets/home-title-logo.png';
-import homeContinueIcon from './assets/home-terminal-kit/continue-backpack.png';
-import homeNewIcon from './assets/home-terminal-kit/new-map-flag.png';
-import homeProficiencyIcon from './assets/home-terminal-kit/proficiency-chart.png';
-import homeCodexIcon from './assets/home-terminal-kit/codex-book.png';
-import homeSaveIcon from './assets/home-terminal-kit/save-archive.png';
-import homeAchievementIcon from './assets/home-terminal-kit/achievement-trophy.png';
-import homeSettingsIcon from './assets/home-terminal-kit/settings-gear.png';
-import homeExitIcon from './assets/home-terminal-kit/exit-door.png';
-import homeChevronIcon from './assets/home-terminal-kit/chevron-right.png';
-import homePawIcon from './assets/home-terminal-kit/paw-status.png';
+import homeContinueIcon from './assets/home-terminal-kit-v2/continue-backpack.png';
+import homeNewIcon from './assets/home-terminal-kit-v2/new-expedition-map.png';
+import homeProficiencyIcon from './assets/home-terminal-kit-v2/proficiency-chart.png';
+import homeCodexIcon from './assets/home-terminal-kit-v2/creature-codex.png';
+import homeSaveIcon from './assets/home-terminal-kit-v2/save-archive.png';
+import homeAchievementIcon from './assets/home-terminal-kit-v2/achievement-trophy.png';
+import homeSettingsIcon from './assets/home-terminal-kit-v2/settings-gear.png';
+import homeExitIcon from './assets/home-terminal-kit-v2/exit-door.png';
+import homePawIcon from './assets/home-terminal-kit-v2/paw-status.png';
 
 const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
 const EMPTY_ROW: MapNode[] = [];
 const MAP_ACT_NAMES = ['', '翠绿之径', '暗影沼泽', '余烬险地'];
 
+const HOME_BACKGROUND = new URL('./assets/home-handheld-background.png', import.meta.url).href;
+const MAP_BACKGROUNDS = [
+  new URL('./assets/map-act1.png', import.meta.url).href,
+  new URL('./assets/map-act2.png', import.meta.url).href,
+  new URL('./assets/map-act3.png', import.meta.url).href,
+  new URL('./assets/map-proficiency.png', import.meta.url).href,
+];
+
+function creatureImages(units: Unit[]): string[] {
+  return units.flatMap((unit) => unit.speciesId === 'momo' ? ['/battle-momo.png'] : unit.image ? [unit.image] : []);
+}
+
+function screenImages(screen: GameState['screen'], state: GameState): string[] {
+  switch (screen) {
+    case 'title':
+      return [HOME_BACKGROUND, homeTitleLogo, homeXunxun, homePaopao, homeZhuozhuo,
+        homeContinueIcon, homeNewIcon, homeProficiencyIcon, homeCodexIcon, homeSaveIcon,
+        homeAchievementIcon, homeSettingsIcon, homeExitIcon, homePawIcon];
+    case 'difficulty-select':
+      return [HOME_BACKGROUND];
+    case 'starter':
+    case 'proficiency-select':
+      return [HOME_BACKGROUND, homeXunxun, homePaopao, homeZhuozhuo,
+        starterTiedun, starterMimi, starterCici, '/starter-choice-stone.png',
+        '/formation-plinth-occupied.png'];
+    case 'map':
+      return [MAP_BACKGROUNDS[state.runMode === 'proficiency' ? 3 : Math.min(2, Math.max(0, state.act - 1))],
+        '/map-node-stele.png'];
+    case 'formation':
+      return ['/formation-camp.png', '/formation-plinth-occupied.png', '/formation-plinth-empty.png',
+        ...creatureImages(state.formation?.units ?? []),
+        ...(state.formation?.encounter ?? []).map((enemy) => enemy.speciesId === 'momo' ? '/battle-momo.png' : getMonster(enemy.speciesId).image).filter((src): src is string => !!src)];
+    case 'battle':
+      return ['/battle-ground.png', '/battle-plinth.png',
+        ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
+    case 'reward':
+      return ['/reward-background.png', ...creatureImages(state.roster)];
+    case 'roster':
+      return ['/roster-camp-background.png', ...creatureImages(state.roster)];
+    case 'shop':
+      return ['/shop-stall-background.png'];
+    default:
+      return [];
+  }
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
+  const [readyScreen, setReadyScreen] = useState<string | null>(null);
+  const screenKey = state.screen === 'map' ? `${state.screen}-${state.runMode}-${state.act}` : state.screen;
+  const imagesReady = readyScreen === screenKey || screenImages(state.screen, state).every((src) => !!getDecodedImage(src));
 
-  // 预加载自定义宠物图片，避免切换界面时延迟显示
   useEffect(() => {
-    for (const m of Object.values(MONSTERS)) {
-      if (m.image) {
-        const img = new Image();
-        img.src = m.image;
+    let active = true;
+    void preloadImages(screenImages(state.screen, state)).then(() => {
+      if (active) {
+        setReadyScreen(screenKey);
+        const nextScreen = state.screen === 'title' ? 'difficulty-select'
+          : state.screen === 'difficulty-select' ? 'starter'
+            : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'map'
+              : state.screen === 'map' ? 'formation'
+                : state.screen === 'formation' ? 'battle' : null;
+        if (nextScreen) void preloadImages(screenImages(nextScreen, state));
       }
-    }
-  }, []);
+    });
+    return () => { active = false; };
+  }, [screenKey]);
 
   useEffect(() => {
     if (!NO_SAVE_SCREENS.includes(state.screen)) {
@@ -82,6 +137,7 @@ export default function App() {
 
   return (
     <div className={state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : state.screen === 'difficulty-select' ? 'screen screen-difficulty' : 'screen'}>
+      {!imagesReady && <div className="screen-assets-loading" role="status" aria-live="polite">正在准备画面…</div>}
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
@@ -897,8 +953,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         </section>
         <aside className="home-terminal" aria-label="远征终端">
           <div className="home-terminal-header" aria-hidden="true">
-            <span className="home-terminal-tab">⌃</span>
-            <span className="home-terminal-indicators"><i /><i /><i /><i /><i /></span>
+            <span className="home-terminal-tab" />
             <img src={homePawIcon} alt="" />
           </div>
           <nav className="home-menu" aria-label="主菜单">
@@ -910,12 +965,12 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
             >
               <span className="home-action-icon" aria-hidden="true"><img src={homeContinueIcon} alt="" /></span>
               <span>{hasSave === null ? '检查存档…' : selectedSlot ? '继续远征' : '请先选择存档'}</span>
-              <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
+              <span className="home-action-arrow" aria-hidden="true" />
             </button>
             <button aria-label="新游戏" className={`home-action${canContinue ? '' : ' home-action-primary'}`} onClick={onNewGame}>
               <span className="home-action-icon" aria-hidden="true"><img src={homeNewIcon} alt="" /></span>
               <span>新的远征</span>
-              <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
+              <span className="home-action-arrow" aria-hidden="true" />
             </button>
             {(() => {
               const slotState = slots.find((s) => s.slot === selectedSlot);
@@ -950,14 +1005,14 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                 >
                   <span className="home-action-icon" aria-hidden="true"><img src={homeProficiencyIcon} alt="" /></span>
                   <span className="home-action-copy">熟练度远征{profLocked && <small className="locked-hint">通关第 1 幕后解锁</small>}</span>
-                  <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
+                  <span className="home-action-arrow" aria-hidden="true" />
                 </button>
               );
             })()}
             <button className="home-action" onClick={quitGame}>
               <span className="home-action-icon" aria-hidden="true"><img src={homeExitIcon} alt="" /></span>
               <span>退出游戏</span>
-              <span className="home-action-arrow" aria-hidden="true"><img src={homeChevronIcon} alt="" /></span>
+              <span className="home-action-arrow" aria-hidden="true" />
             </button>
             <div className="home-menu-divider" aria-hidden="true"><span><img src={homePawIcon} alt="" /></span></div>
             <div className="home-menu-secondary">
@@ -1297,14 +1352,6 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DifficultyEmblem({ difficulty }: { difficulty: Difficulty }) {
-  return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
-    {difficulty === 'normal' && <><path d="M1 26 11 8l5 8 5-12 10 22Z" fill="#66d3c7"/><path d="m11 8 3 7-3-2-4 7Zm10-4 4 12-4-3-4 8Z" fill="#b4f4dc"/></>}
-    {difficulty === 'hard' && <><path d="M14 1h4v5h-4ZM14 26h4v5h-4ZM1 14h5v4H1Zm25 0h5v4h-5ZM5 5l4 4-3 3-4-4Zm18 18 3-3 4 4-3 3ZM26 5l4 3-4 4-3-3ZM2 24l4-4 3 3-4 4Z" fill="#e8c26a"/><path d="M10 10h12v12H10Z" fill="#f5d98f"/></>}
-    {difficulty === 'nightmare' && <><path d="M1 27 10 11l4 7 5-14 12 23Z" fill="#c87872"/><path d="m19 4 4 14-5-4-4 5-4-8-5 13 8-8 5 7 5-6 4 10h4Z" fill="#ed9b79"/></>}
-  </svg>;
-}
-
 function RelicEmblem({ id }: { id: string }) {
   return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
     {id === 'traveler_charm' && <><path d="M12 2h8v3h-8ZM14 5h4v3h-4Z" fill="#9b5a20"/><path d="M8 8h16v3h4v16h-4v3H8v-3H4V11h4Z" fill="#07182e"/><path d="M9 10h14v3h3v12h-3v3H9v-3H6V13h3Z" fill="#f3ad2f"/><path d="M10 14h12v10H10Z" fill="#fff5db"/><path d="m16 12 5 6-5 2-5-2Z" fill="#249dc4"/><path d="m16 24-5-6 5-2 5 2Z" fill="#dc5640"/></>}
@@ -1327,7 +1374,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
   return (
     <div className="difficulty-screen">
       <header className="difficulty-header">
-        <span className="difficulty-header-emblem" aria-hidden="true">▥</span>
+        <span className="difficulty-header-emblem" aria-hidden="true" />
         <h1><span>选择</span>难度与<span>遗物</span></h1>
         <div className="difficulty-step" aria-label="新远征第 1 步，共 2 步"><i className="active" /><span>···</span><i /><strong>新远征 1/2</strong></div>
         <button className="difficulty-back" onClick={() => dispatch({ type: 'TITLE' })}>◀ 返回</button>
@@ -1339,13 +1386,13 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
             const locked = !unlocks.difficulties.includes(d);
             return <button key={d} className={`difficulty-tablet difficulty-${d} ${selectedDifficulty === d ? 'selected' : ''}`}
               disabled={locked} aria-pressed={selectedDifficulty === d} onClick={() => setSelectedDifficulty(d)}>
-              <span className="difficulty-art" aria-hidden="true"><span className="difficulty-crest"><DifficultyEmblem difficulty={d} /></span>{locked && <span className="difficulty-art-lock" />}</span>
+              <span className="difficulty-art" aria-hidden="true">{locked && <span className="difficulty-art-lock" />}</span>
               <strong>{cfg.label}</strong>
               <span className="difficulty-stats">
-                <span><i className="difficulty-stat-hp" aria-hidden="true">♥</i>敌方生命 <b>×{cfg.enemyHpMult.toFixed(2)}</b></span>
-                <span><i className="difficulty-stat-spd" aria-hidden="true">ϟ</i>速度 <b>+{cfg.enemySpdBonus}</b></span>
-                <span><i className="difficulty-stat-shop" aria-hidden="true">●</i>商店 <b>×{cfg.shopPriceMult.toFixed(2)}</b></span>
-                <span><i className="difficulty-stat-heal" aria-hidden="true">✚</i>战后恢复 <b>{Math.round(cfg.healRatio * 100)}%</b></span>
+                <span><i className="difficulty-stat-hp" aria-hidden="true" />敌方生命 <b>×{cfg.enemyHpMult.toFixed(2)}</b></span>
+                <span><i className="difficulty-stat-spd" aria-hidden="true" />速度 <b>+{cfg.enemySpdBonus}</b></span>
+                <span><i className="difficulty-stat-shop" aria-hidden="true" />商店 <b>×{cfg.shopPriceMult.toFixed(2)}</b></span>
+                <span><i className="difficulty-stat-heal" aria-hidden="true" />战后恢复 <b>{Math.round(cfg.healRatio * 100)}%</b></span>
               </span>
               <em>{locked && <span className="stone-lock" aria-hidden="true" />}{locked ? '未解锁' : selectedDifficulty === d ? '已选择' : '选择'}</em>
             </button>;
@@ -1374,7 +1421,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
         </section>
       </main>
       <footer className="difficulty-footer">
-        <div className="difficulty-summary"><span className="difficulty-summary-emblem"><DifficultyEmblem difficulty={selectedDifficulty} /></span>
+        <div className="difficulty-summary"><span className={`difficulty-summary-emblem difficulty-summary-${selectedDifficulty}`} aria-hidden="true" />
           <strong>{DIFFICULTY_CONFIG[selectedDifficulty].label} · {relicDef?.name ?? '无遗物'}</strong>
           <span>{relicDef?.desc ?? '通关后解锁更多难度与遗物'}</span></div>
         <button className="difficulty-next" onClick={handleNext}>下一步：选择伙伴 →</button>
@@ -1436,7 +1483,7 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
   return (
     <div className="starter-screen starter-selection">
       <header className="starter-select-header">
-        <span className="starter-select-emblem" aria-hidden="true">▦</span>
+        <span className="starter-select-emblem" aria-hidden="true" />
         <h1><span>选择</span>{isCompanion ? '同行伙伴' : '初始伙伴'}</h1>
         <div className="starter-select-step" aria-label={`新远征第 ${isCompanion ? 2 : 1} 步，共 2 步`}>
           <i className={!isCompanion ? 'active' : ''} /><span>···</span><i className={isCompanion ? 'active' : ''} />

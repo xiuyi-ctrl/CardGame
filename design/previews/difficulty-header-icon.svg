@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <title>远征选择徽记</title>
+  <path fill="#07182e" d="M2 7h18v23H2zM11 2h19v26H11z"/>
+  <path fill="#36bde9" d="M4 9h13v18H4z"/>
+  <path fill="#fff9e9" d="M13 4h15v22H13z"/>
+  <path fill="#176d9c" d="M5 11h11v2H5zM5 15h8v2H5zM5 19h6v2H5zM5 23h6v2H5z"/>
+  <path fill="#ff9a16" d="M18 7h6v2h2v5h-2v2h-6v-2h-2V9h2z"/>
+  <path fill="#ffdc61" d="M19 8h4v6h-4z"/>
+  <path fill="#07182e" d="M16 19h3v3h-3zM22 19h3v3h-3zM19 22h3v3h-3z"/>
+</svg>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>难度与遗物界面图标预览</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; background: #39a9f4; color: #07182e; font: 700 20px 'Microsoft YaHei', sans-serif; }
+    main { max-width: 1100px; margin: auto; padding: 22px; border: 6px solid #07182e; background: #fff9e9; box-shadow: inset 0 0 0 4px #d7d9d1, 6px 6px 0 #0b4265; }
+    h1 { margin: 0 0 20px; font-size: 27px; }
+    .icons { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    figure { display: grid; justify-items: center; gap: 10px; margin: 0; padding: 16px 8px; border: 4px solid #a1aaae; background: #f8f4e9; }
+    .icon { display: grid; place-items: center; width: 104px; height: 104px; }
+    img { display: block; width: 96px; height: 96px; object-fit: contain; image-rendering: pixelated; }
+    figcaption { text-align: center; }
+    small { color: #687687; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>选择难度与遗物 · 独立图标</h1>
+    <div class="icons">
+      <figure><div class="icon"><img src="difficulty-header-icon.svg" alt="远征选择徽记"></div><figcaption>标题徽记<br><small>新设计</small></figcaption></figure>
+      <figure><div class="icon"><img src="../../src/ui/assets/starter-stat-life.png" alt="生命"></div><figcaption>生命<br><small>沿用现有</small></figcaption></figure>
+      <figure><div class="icon"><img src="../../src/ui/assets/starter-stat-speed.png" alt="速度"></div><figcaption>速度<br><small>沿用现有</small></figcaption></figure>
+      <figure><div class="icon"><img src="difficulty-shop-icon.svg" alt="商店"></div><figcaption>商店<br><small>新设计</small></figcaption></figure>
+      <figure><div class="icon"><img src="difficulty-recovery-icon.svg" alt="战后恢复"></div><figcaption>战后恢复<br><small>新设计</small></figcaption></figure>
+    </div>
+  </main>
+</body>
+</html>

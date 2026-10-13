@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <title>普通难度：林间小径</title>
+  <path fill="#07182e" d="M2 25h3v-5h2v-5h3v-4h3v-4h3v4h2v6h2v-5h3v-4h3v5h2v8h2v4H2z"/>
+  <path fill="#3cb8e3" d="M8 19h2v-4h3v-4h3v4h2v8H8z"/>
+  <path fill="#a4ecf1" d="M13 10h3v4h-3zM10 15h3v3h-3z"/>
+  <path fill="#17895f" d="M4 26v-5h2v-4h3v5h2v4h5v-5h3v-5h3v-4h3v4h2v5h2v5H4z"/>
+  <path fill="#38c785" d="M6 20h3v4H6zM20 17h3v5h-3zM24 21h3v4h-3z"/>
+  <path fill="#07182e" d="M4 26h24v3H4z"/>
+  <path fill="#f7d77f" d="M14 26h6v3h-6zM15 23h4v3h-4zM16 20h2v3h-2z"/>
+</svg>

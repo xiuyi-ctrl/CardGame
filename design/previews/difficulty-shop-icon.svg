@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <title>商店</title>
+  <path fill="#07182e" d="M5 4h22v3h2v8h-2v14H5V15H3V7h2z"/>
+  <path fill="#fff9e9" d="M7 6h18v2H7zM7 15h18v12H7z"/>
+  <path fill="#ff9a16" d="M5 8h5v5H5zM15 8h5v5h-5zM25 8h2v5h-2z"/>
+  <path fill="#ffdc61" d="M10 8h5v5h-5zM20 8h5v5h-5z"/>
+  <path fill="#07182e" d="M4 13h24v2H4zM9 19h14v9H9z"/>
+  <path fill="#aa661d" d="M11 21h10v5H11z"/>
+  <path fill="#ffd44d" d="M14 17h4v2h2v5h-2v2h-4v-2h-2v-5h2z"/>
+  <path fill="#fff3b2" d="M15 18h2v2h-2z"/>
+</svg>

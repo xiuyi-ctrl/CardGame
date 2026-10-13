@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
+import { getDecodedImage, loadImage } from './imageCache';
 import { getPassive } from '../game/data/passives';
 import { getSkillEnhanceBonus } from '../game/core/growth';
 import { CURSE_CN } from '../game/state/game';
@@ -458,16 +459,18 @@ export interface UnitCardProps {
 
 export function BattlePixelSprite({ src, name }: { src: string; name: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const image = new Image();
-    image.onload = () => {
-      const context = canvasRef.current?.getContext('2d');
-      if (!context) return;
-      context.clearRect(0, 0, 64, 64);
-      context.drawImage(image, 0, 0, 64, 64);
+  useLayoutEffect(() => {
+    const context = canvasRef.current?.getContext('2d');
+    if (!context) return;
+    let cancelled = false;
+    context.clearRect(0, 0, 64, 64);
+    const draw = (image: HTMLImageElement) => {
+      if (!cancelled) context.drawImage(image, 0, 0, 64, 64);
     };
-    image.src = src;
-    return () => { image.onload = null; };
+    const cached = getDecodedImage(src);
+    if (cached) draw(cached);
+    else void loadImage(src).then(draw, () => {});
+    return () => { cancelled = true; };
   }, [src]);
   return <canvas ref={canvasRef} width={64} height={64} role="img" aria-label={name} />;
 }

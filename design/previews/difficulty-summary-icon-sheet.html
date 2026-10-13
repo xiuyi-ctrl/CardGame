@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>难度汇总图标预览</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; background: #39a9f4; color: #07182e; font-family: 'Microsoft YaHei', sans-serif; }
+    .panel { max-width: 1000px; margin: auto; padding: 24px; border: 6px solid #07182e; background: #fff9e9; box-shadow: inset 0 0 0 4px #dddcd3, 5px 5px 0 #06456b; }
+    h1 { margin: 0 0 18px; font-size: 24px; }
+    .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .card { display: flex; align-items: center; gap: 12px; padding: 14px; border: 3px solid #aab3b1; background: #fffdf4; }
+    .large { width: 66px; height: 66px; image-rendering: pixelated; }
+    .small { width: 24px; height: 24px; margin-left: auto; image-rendering: pixelated; }
+    strong { display: block; font-size: 22px; }
+    small { display: block; color: #6c7781; font-size: 13px; }
+    .normal strong { color: #218f3c; }.hard strong { color: #b87604; }.nightmare strong { color: #c74440; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>难度汇总栏 · 独立像素图标</h1>
+    <div class="row">
+      <div class="card normal"><img class="large" src="difficulty-summary-normal.svg" alt=""><div><strong>普通</strong><small>林间小径</small></div><img class="small" src="difficulty-summary-normal.svg" alt=""></div>
+      <div class="card hard"><img class="large" src="difficulty-summary-hard.svg" alt=""><div><strong>困难</strong><small>险峰旗帜</small></div><img class="small" src="difficulty-summary-hard.svg" alt=""></div>
+      <div class="card nightmare"><img class="large" src="difficulty-summary-nightmare.svg" alt=""><div><strong>地狱</strong><small>熔岩裂谷</small></div><img class="small" src="difficulty-summary-nightmare.svg" alt=""></div>
+    </div>
+  </div>
+</body>
+</html>
