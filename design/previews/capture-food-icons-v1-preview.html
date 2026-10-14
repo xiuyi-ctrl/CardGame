@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>驯牌远征 · 捕获食物图标</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; background:#102538; color:#101c2c; font-family:'Microsoft YaHei',sans-serif; }
+    main { max-width:1280px; min-height:800px; margin:auto; padding:34px 40px 40px; background:linear-gradient(#082135af,#082135af),url('../../src/ui/assets/home-handheld-background.png') center/cover; }
+    header { display:flex; align-items:end; justify-content:space-between; padding-bottom:17px; border-bottom:4px solid #fff4db; color:#fff8e8; }
+    header small { color:#91e7d3; font-size:15px; font-weight:900; letter-spacing:.18em; }
+    h1 { margin:5px 0 0; font-size:36px; letter-spacing:.07em; text-shadow:3px 3px #0b1b29; }
+    header p { max-width:400px; margin:0 0 4px; color:#dbebe4; font-size:15px; line-height:1.7; text-align:right; }
+    .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; margin-top:28px; }
+    .card { min-width:0; padding:12px; border:5px solid #101c2c; background:#fff9e9; box-shadow:inset 0 0 0 4px #d4d9d6,6px 7px 0 #071728; text-align:center; }
+    .card.berry { --accent:#d94d54; }.card.meat { --accent:#de715c; }.card.gem { --accent:#1db9cb; }.card.fruit { --accent:#f2a916; }
+    .art { display:grid; place-items:center; height:190px; margin:5px; border:3px solid #738a92; background:#e4f2ec; }
+    .art img { width:160px; height:160px; image-rendering:pixelated; object-fit:contain; }
+    .card h2 { margin:17px 0 4px; font-size:26px; }
+    .card p { min-height:46px; margin:0; color:#536776; font-size:14px; line-height:1.5; }
+    .tag { display:inline-block; margin:8px 0 4px; padding:4px 10px; border:2px solid #101c2c; background:var(--accent); color:#101c2c; font-size:12px; font-weight:900; }
+    .preview-title { display:flex; align-items:center; gap:12px; margin:32px 0 14px; color:#fff7e8; font-size:20px; font-weight:900; }
+    .preview-title:before { content:''; width:13px; height:13px; background:#ff900c; }
+    .dialog { width:min(720px,100%); margin:auto; padding:15px 20px 20px; border:5px solid #101c2c; background:#fff9e9; box-shadow:inset 0 0 0 4px #d4d9d6,7px 8px 0 #071728; }
+    .dialog h3 { margin:0 0 10px; padding-bottom:10px; border-bottom:3px dashed #87959c; font-size:24px; }
+    .rows { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; }
+    .row { display:flex; align-items:center; gap:12px; min-height:55px; padding:4px 10px; border:2px solid #84949a; background:#fffdf3; font-size:17px; font-weight:900; }
+    .row.selected { border-color:#ff900c; box-shadow:inset 0 0 0 2px #ffd05e; }
+    .row img { width:38px; height:38px; image-rendering:pixelated; object-fit:contain; }
+    .row span { margin-left:auto; }
+    .note { margin-top:10px; color:#bcd9d9; font-size:13px; text-align:center; }
+    @media(max-width:900px) { .cards { grid-template-columns:repeat(2,1fr); } header { display:block; } header p { margin-top:10px; text-align:left; } }
+    @media(max-width:530px) { main { padding:20px; }.cards { gap:9px; }.card { padding:5px; }.art { height:110px; }.art img { width:96px; height:96px; }.rows { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><div><small>CAPTURE FOOD · PIXEL ICON SET</small><h1>捕获食物 · 四枚独立图标</h1></div><p>统一 64×64 透明画布，深蓝像素描边；在弹窗中缩至 30～38 px 仍可区分轮廓与颜色。</p></header>
+    <section class="cards">
+      <article class="card berry"><div class="art"><img src="capture-food-icons-v1/berry.png" alt="浆果像素图标"></div><h2>浆果</h2><p>双果与叶片，最常见的捕获食物。</p><span class="tag">红 × 青绿</span></article>
+      <article class="card meat"><div class="art"><img src="capture-food-icons-v1/meat.png" alt="鲜肉像素图标"></div><h2>鲜肉</h2><p>珊瑚色肉块与象牙色骨柄。</p><span class="tag">珊瑚红 × 象牙白</span></article>
+      <article class="card gem"><div class="art"><img src="capture-food-icons-v1/gem.png" alt="秘晶像素图标"></div><h2>秘晶</h2><p>尖顶晶体，蓝绿切面便于辨识。</p><span class="tag">晶蓝 × 薄荷青</span></article>
+      <article class="card fruit"><div class="art"><img src="capture-food-icons-v1/golden-fruit.png" alt="圣果像素图标"></div><h2>圣果</h2><p>金橙果实与星芒，突出稀有度。</p><span class="tag">暖金 × 草绿</span></article>
+    </section>
+    <div class="preview-title">弹窗实际比例预览</div>
+    <section class="dialog"><h3>捕获食物</h3><div class="rows">
+      <div class="row selected"><img src="capture-food-icons-v1/berry.png" alt="">浆果<span>× 2</span></div>
+      <div class="row"><img src="capture-food-icons-v1/meat.png" alt="">鲜肉<span>× 1</span></div>
+      <div class="row"><img src="capture-food-icons-v1/gem.png" alt="">秘晶<span>× 0</span></div>
+      <div class="row"><img src="capture-food-icons-v1/golden-fruit.png" alt="">圣果<span>× 1</span></div>
+    </section>
+    <div class="note">目前仅为设计素材与预览，尚未替换游戏运行时图标。</div>
+  </main>
+</body>
+</html>

@@ -117,7 +117,7 @@ export function BlacksmithScreen({ state, dispatch }: Props) {
           <div className="growth-modal-overlay" onClick={() => setEnhanceSlotIndex(null)}>
             <div className="growth-modal" onClick={(e) => e.stopPropagation()}>
               <h3>强化：{getSkill(selectedUnit.skills[enhanceSlotIndex])?.name}（当前 +{getSkillEnhanceLevel(selectedUnit, enhanceSlotIndex)}）</h3>
-              <div className="growth-modal-content">
+              <div className="growth-modal-content has-comparison">
                 <p>当前：{renderSkillEffect(selectedUnit.skills[enhanceSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceSlotIndex))}</p>
                 <p>强化后：{renderSkillEffect(selectedUnit.skills[enhanceSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceSlotIndex) + 1)}</p>
                 <p>消耗：{getSkillEnhanceCost(selectedUnit, enhanceSlotIndex)} 成长点</p>
@@ -146,7 +146,7 @@ export function BlacksmithScreen({ state, dispatch }: Props) {
           <div className="growth-modal-overlay" onClick={() => setEnhanceStoneSlotIndex(null)}>
             <div className="growth-modal" onClick={(e) => e.stopPropagation()}>
               <h3>使用技能强化石：{getSkill(selectedUnit.skills[enhanceStoneSlotIndex])?.name}</h3>
-              <div className="growth-modal-content">
+              <div className="growth-modal-content has-comparison">
                 <p>当前：{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex))}</p>
                 <p>强化后：{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex) + 1)}</p>
                 <p>消耗：1 个技能强化石（剩余 {(state.inventory['skill_enhance_stone'] ?? 0) - 1} 个）</p>

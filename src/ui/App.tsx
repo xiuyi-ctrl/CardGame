@@ -84,7 +84,9 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         ...creatureImages(state.formation?.units ?? []),
         ...(state.formation?.encounter ?? []).map((enemy) => enemy.speciesId === 'momo' ? '/battle-momo.png' : getMonster(enemy.speciesId).image).filter((src): src is string => !!src)];
     case 'battle':
-      return ['/battle-ground.png', '/battle-plinth.png',
+      return ['/battle-forest-background.png',
+        '/capture-food-icons/berry.png', '/capture-food-icons/meat.png',
+        '/capture-food-icons/gem.png', '/capture-food-icons/golden_fruit.png',
         ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
     case 'reward':
       return ['/reward-background.png', ...creatureImages(state.roster)];
@@ -355,14 +357,16 @@ function FuseDiscardConfirm({
           </p>
         )}
         {isDiscard && target && (
-          <p>
-            确定要释放「{target.name}」吗？将获得 <b>{5 * getMonster(target.speciesId).rank} 金币</b>，宠物将被永久移除。
-          </p>
+          <div className="popup-pet-row">
+            {target.image ? <img className="popup-pet-portrait" src={target.image} alt="" /> : <span className="popup-pet-portrait">{target.emoji}</span>}
+            <div><p>释放「{target.name}」后，将获得 <b>{5 * getMonster(target.speciesId).rank} 金币</b>。</p><p className="popup-consequence">这名伙伴将永久离队。</p></div>
+          </div>
         )}
         {isReplace && target && (
-          <p>
-            确定要放生「{target.name}」吗？将获得 <b>{confirm.gold ?? 0} 金币</b>，然后「{state.tameOverflow?.[0]?.name ?? '新宠物'}」加入队伍。
-          </p>
+          <div className="popup-pet-row">
+            {target.image ? <img className="popup-pet-portrait" src={target.image} alt="" /> : <span className="popup-pet-portrait">{target.emoji}</span>}
+            <div><p>放生「{target.name}」后，将获得 <b>{confirm.gold ?? 0} 金币</b>，然后「{state.tameOverflow?.[0]?.name ?? '新宠物'}」加入队伍。</p><p className="popup-consequence">这名伙伴将永久离队。</p></div>
+          </div>
         )}
         {isTameFuse && target && tameTarget && (
           <p>
@@ -1076,10 +1080,10 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setDeleteTarget(null)}>
           <div className="confirm-box popup-danger" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">删除存档</div>
-            <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
-              确定要删除存档 <b style={{ color: 'var(--gold)' }}>{deleteTarget}</b> 吗？
+            <p>
+              确定要删除存档 <b>{deleteTarget}</b> 吗？
             </p>
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
+            <p className="popup-consequence">
               此操作不可撤销。
             </p>
             <div className="panel-row" style={{ justifyContent: 'center' }}>
@@ -1093,10 +1097,10 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setOverwriteTarget(null)}>
           <div className="confirm-box popup-danger" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">覆盖存档</div>
-            <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
-              存档 <b style={{ color: 'var(--gold)' }}>{overwriteTarget}</b> 已有游戏，确定覆盖？
+            <p>
+              存档 <b>{overwriteTarget}</b> 已有游戏，确定覆盖？
             </p>
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
+            <p className="popup-consequence">
               旧存档将被删除，此操作不可撤销。
             </p>
             <div className="panel-row" style={{ justifyContent: 'center' }}>
@@ -1110,10 +1114,10 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setProfConfirmSlot(null)}>
           <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">熟练度远征</div>
-            <p style={{ margin: '10px 0', color: 'var(--text-dim)' }}>
-              存档 <b style={{ color: 'var(--gold)' }}>{profConfirmSlot}</b> 有未完成的熟练度远征
+            <p>
+              存档 <b>{profConfirmSlot}</b> 有未完成的熟练度远征
             </p>
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
+            <p className="popup-consequence">
               重新开始将覆盖当前远征记录
             </p>
             <div className="panel-row" style={{ justifyContent: 'center' }}>
@@ -1860,7 +1864,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
       </div>
       {state.scoutResult && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}>
-          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+          <div className="confirm-box scout-popup" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">侦查结果</div>
             <div className="scout-result">
               <div className="ricon"><MapNodeIcon type={state.map.layers.flat().find((n) => n.id === state.scoutResult!.nodeId)?.type ?? 'battle'} /></div>
@@ -2920,7 +2924,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
       </div>
       {hatch && hatchMonster && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'EVENT_HATCH_CANCEL' })}>
-          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+          <div className="confirm-box scout-popup" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">孵化结果</div>
             <div style={{ fontSize: 48, marginBottom: 8 }}>{hatchMonster.image ? <img src={hatchMonster.image} className="pet-image" style={{ width: 48, height: 48 }} alt={hatchMonster.name} /> : hatchMonster.emoji}</div>
             <div>孵化出了 <b>{hatchMonster.name}</b>！</div>

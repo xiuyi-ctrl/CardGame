@@ -435,8 +435,10 @@ export interface UnitCardProps {
   className?: string;
   onClick?: () => void;
   small?: boolean;
-  /** 战场中只显示生物图像、底座和生命/速度 */
+  /** 战斗/布阵位置只显示生物图像与生命/速度 */
   battleDisplay?: boolean;
+  /** 战斗场景不绘制底座，只显示当前生命值 */
+  battleScene?: boolean;
   /** 是否在卡片上列出技能（出阵的我方卡隐藏，见底部技能面板） */
   showSkills?: boolean;
   /** 是否在卡片上展示每个技能的完整描述（队伍管理界面用） */
@@ -480,7 +482,7 @@ export function PixelCreature({ unit }: { unit: Unit }) {
   return image ? <BattlePixelSprite src={image} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, battleScene = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -503,7 +505,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
         <span className="battle-sprite">
           <PixelCreature unit={unit} />
         </span>
-        <span className="battle-plinth" aria-hidden="true" />
+        {!battleScene && <span className="battle-plinth" aria-hidden="true" />}
         <span className="battle-creature-stats">
           <span className="battle-stat battle-stat-spd" title="速度">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1h4v2h-2v2H8v2h5v2h-2v2H9v2H7v2H5v-5H3V8h2V6h1V4h1V2h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
@@ -511,7 +513,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
           </span>
           <span className="battle-stat battle-stat-hp" title="生命">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h4v1h2v1h1V3h2V2h3v1h1v6h-1v2h-2v2h-2v2H6v-2H4v-2H2V9H1V3h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
-            {unit.hp}/{unit.maxHp}
+            {battleScene ? unit.hp : `${unit.hp}/${unit.maxHp}`}
           </span>
         </span>
       </div>

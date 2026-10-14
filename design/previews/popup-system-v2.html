@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>驯牌远征 · 弹窗美术系统</title>
+  <style>
+    :root { --ink:#101c2c; --paper:#fff9e9; --paper-2:#f2eedf; --line:#8a979b; --orange:#ff8a08; --gold:#ffcc31; --teal:#1fa79a; --red:#ca5149; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#142735; color:var(--ink); font-family:'Microsoft YaHei',sans-serif; }
+    .board { width:min(1600px,100%); min-height:1130px; margin:auto; padding:28px 32px 34px; background:linear-gradient(#061b2bac,#061b2bac),url('../../src/ui/assets/map-act1.png') center/cover; }
+    .top { display:flex; justify-content:space-between; align-items:end; padding-bottom:20px; border-bottom:4px solid #fff5de; color:#fff8e8; }
+    .eyebrow { color:#8dded2; font-size:15px; letter-spacing:.22em; font-weight:900; }
+    .top h1 { margin:2px 0 0; font-size:36px; letter-spacing:.08em; text-shadow:4px 4px #07111b; }
+    .top p { max-width:520px; margin:0 0 3px; color:#d2e3e1; font-size:15px; text-align:right; line-height:1.6; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin-top:24px; }
+    .sample { min-width:0; padding:14px; background:#071a26ac; border:2px solid #64829b; box-shadow:0 5px 0 #07111a; }
+    .sample-label { display:flex; align-items:center; gap:10px; margin:0 0 12px; color:#fff3d9; font-size:15px; font-weight:900; letter-spacing:.04em; }
+    .sample-label em { margin-left:auto; color:#92b2b9; font-size:12px; font-style:normal; font-weight:600; }
+    .sample-label .pin { width:10px; height:10px; background:var(--orange); box-shadow:3px 3px #0b1520; }
+    .stage { height:390px; display:grid; place-items:center; padding:18px; overflow:hidden; background:linear-gradient(#061b2b7a,#061b2b7a),url('../../src/ui/assets/home-handheld-background.png') center/cover; }
+    .stage.battle { background-image:linear-gradient(#0c1020a9,#0c1020a9),url('../../public/battle-ground.png'); }
+    .stage.night { background-image:linear-gradient(#071728a3,#071728a3),url('../../public/formation-camp.png'); }
+    .dialog { position:relative; width:100%; max-width:430px; padding:18px 20px 20px; border:5px solid var(--ink); background:var(--paper); box-shadow:inset 0 0 0 4px #d7dad2,inset 0 0 0 7px var(--paper),7px 8px 0 #071421; }
+    .dialog:before,.dialog:after { content:''; position:absolute; width:16px; height:16px; background:var(--ink); }
+    .dialog:before { left:-5px; top:-5px; }
+    .dialog:after { right:-5px; bottom:-5px; }
+    .head { display:flex; align-items:center; gap:12px; min-height:50px; border-bottom:3px dashed var(--line); padding:0 0 12px; }
+    .badge { display:grid; place-items:center; flex:none; width:46px; height:46px; border:3px solid var(--ink); background:#e5edf0; color:var(--ink); font-size:31px; font-weight:900; line-height:1; box-shadow:3px 3px #85949c; }
+    .badge img { width:35px; height:35px; image-rendering:pixelated; object-fit:contain; }
+    .head h2 { flex:1; margin:0; font-size:23px; line-height:1.2; letter-spacing:.03em; }
+    .x { display:grid; place-items:center; width:32px; height:32px; border:3px solid var(--ink); background:var(--paper-2); color:var(--ink); font-size:23px; font-weight:900; line-height:1; }
+    .body { min-height:110px; padding:16px 2px 12px; font-size:16px; line-height:1.6; }
+    .body p { margin:0 0 8px; }
+    .muted { color:#586879; font-size:13px; }
+    .danger { color:var(--red); font-weight:900; }
+    .gold { color:#c67900; font-weight:900; }
+    .teal { color:#087d76; font-weight:900; }
+    .pet-row { display:flex; align-items:center; gap:14px; }
+    .pet-frame { display:grid; place-items:center; flex:none; width:78px; height:78px; border:3px solid var(--ink); background:#d4e9df; box-shadow:inset 0 0 0 3px #fffdf0; }
+    .pet-frame img { width:74px; height:74px; object-fit:contain; image-rendering:pixelated; }
+    .actions { display:flex; gap:10px; padding-top:10px; border-top:3px dashed var(--line); }
+    .btn { flex:1; min-height:43px; display:grid; place-items:center; padding:4px 8px; border:3px solid var(--ink); background:#e5e5df; box-shadow:inset 0 0 0 3px #fffdf4,3px 4px 0 #677780; color:var(--ink); font-size:16px; font-weight:900; white-space:nowrap; }
+    .btn.hot { background:var(--orange); box-shadow:inset 0 0 0 3px #ffd15c,3px 4px 0 #9a5111; }
+    .btn.bad { background:#a9433f; box-shadow:inset 0 0 0 3px #db7164,3px 4px 0 #542725; color:white; }
+    .btn.teal { background:#30afa2; box-shadow:inset 0 0 0 3px #a6e5d0,3px 4px 0 #356c69; color:var(--ink); }
+    .list { display:grid; gap:7px; padding:12px 0 4px; }
+    .item { display:flex; align-items:center; gap:9px; height:44px; padding:3px 9px; border:2px solid #84939a; background:#f8f6eb; font-size:16px; font-weight:900; }
+    .item.active { border-color:var(--orange); box-shadow:inset 0 0 0 2px #ffd058; }
+    .item.disabled { opacity:.47; }
+    .item i { display:grid; place-items:center; width:34px; height:34px; background:#fff9e9; border:2px solid var(--ink); font-style:normal; }
+    .item i img { width:30px; height:30px; object-fit:contain; image-rendering:pixelated; }
+    .item b { margin-left:auto; }
+    .footnote { padding:9px 0 0; border-top:3px dashed var(--line); color:#53697a; font-size:13px; text-align:center; }
+    .statline { display:flex; align-items:center; justify-content:space-between; margin:8px 0; padding:10px 13px; border:2px solid #86949b; background:#f8f7ef; font-size:17px; font-weight:900; }
+    .statline .arrow { color:var(--orange); font-size:23px; }
+    .cost { margin:7px 0 2px; font-size:14px; color:#5e6871; text-align:center; }
+    .result { text-align:center; }
+    .result .badge { margin:0 auto 10px; width:52px; height:52px; }
+    .result h2 { margin:0 0 8px; font-size:27px; }
+    .result p { margin:0; font-size:15px; line-height:1.55; }
+    .result .reward { margin:12px auto; padding:8px 12px; border:2px solid #b59f70; background:#fff2c9; font-size:17px; font-weight:900; }
+    .result.defeat .reward { border-color:#bd8d87; background:#f2dddd; color:#8e3431; }
+    .result.defeat .badge { border-color:#9a3c39; color:#9a3c39; background:#f4d8d5; }
+    .save-list { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; padding:13px 0; }
+    .slot { min-height:59px; padding:6px 10px; border:2px solid #8c9b9e; background:#f8f6ec; font-size:13px; line-height:1.4; }
+    .slot.active { border-color:var(--orange); box-shadow:inset 0 0 0 2px #ffd15c; }
+    .slot strong { display:block; font-size:15px; }
+    .slot.empty { color:#75858b; border-style:dashed; }
+    .slot small { color:#586979; }
+    .reveal { margin:12px 0; padding:10px 12px; border:2px solid #8d9c9d; background:#f7f3e5; }
+    .reveal strong { display:block; color:#0b837d; }
+    .reveal small { color:#5e6a72; }
+    .toast-row { display:flex; gap:12px; margin-top:19px; }
+    .toast { flex:1; display:flex; align-items:center; gap:10px; min-height:52px; padding:7px 13px; border:3px solid var(--ink); border-left-width:9px; background:var(--paper); box-shadow:3px 4px 0 #071421; font-size:15px; font-weight:900; }
+    .toast i { font-size:22px; font-style:normal; }
+    .toast.ok { border-left-color:var(--teal); }.toast.warn { border-left-color:var(--gold); }.toast.err { border-left-color:var(--red); }
+    .footer { margin-top:13px; color:#bbd1d4; font-size:13px; text-align:right; }
+    @media(max-width:1050px) { .board { padding:20px; }.grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.top h1 { font-size:28px; } }
+    @media(max-width:700px) { .grid { grid-template-columns:1fr; }.top { display:block; }.top p { text-align:left; margin-top:8px; }.toast-row { flex-direction:column; }.board { padding:14px; } }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="top"><div><div class="eyebrow">PIXEL UI · POPUP SYSTEM / V2</div><h1>远征中的每一次抉择</h1></div><p>奶白石纸、深海军蓝描边与橙色操作角标。正文、数值和按钮均为可修改的独立文字，不嵌入图片。</p></header>
+    <div class="grid">
+      <section class="sample"><div class="sample-label"><i class="pin"></i>01　危险确认<em>放生 / 删除 / 覆盖</em></div><div class="stage"><div class="dialog"><div class="head"><span class="badge"><img src="../../src/ui/assets/home-terminal-kit-v2/paw-status.png"></span><h2>确认放生</h2><span class="x">×</span></div><div class="body pet-row"><span class="pet-frame"><img src="../../src/ui/assets/home-xunxun.png"></span><div><p>放生 <b>迅迅</b> 后，<span class="gold">获得 5 金币</span>。</p><p class="danger">这名伙伴将永久离队。</p></div></div><div class="actions"><span class="btn">取消</span><span class="btn bad">确认放生</span></div></div></div></section>
+      <section class="sample"><div class="sample-label"><i class="pin"></i>02　战斗选择<em>捕获食物 / 道具</em></div><div class="stage battle"><div class="dialog"><div class="head"><span class="badge">✦</span><h2>捕获食物</h2><span class="x">×</span></div><div class="list"><div class="item active"><i><img src="capture-food-icons-v1/berry.png" alt=""></i>浆果<b>× 2</b></div><div class="item"><i><img src="capture-food-icons-v1/meat.png" alt=""></i>鲜肉<b>× 1</b></div><div class="item disabled"><i><img src="capture-food-icons-v1/gem.png" alt=""></i>秘晶<b>× 0</b></div><div class="item"><i><img src="capture-food-icons-v1/golden-fruit.png" alt=""></i>圣果<b>× 1</b></div></div><div class="footnote">选择食物后，再指定可驯服的敌人</div></div></div></section>
+      <section class="sample"><div class="sample-label"><i class="pin"></i>03　成长操作<em>强化 / 重置 / 转移</em></div><div class="stage night"><div class="dialog"><div class="head"><span class="badge">✚</span><h2>强化迅捷</h2><span class="x">×</span></div><div class="body"><p>为 <b>迅迅</b> 强化技能。强化后立即生效。</p><div class="statline"><span>开场速度　+2</span><span class="arrow">➜</span><span class="teal">+3</span></div><div class="cost">消耗成长点 8 · 当前持有 12</div></div><div class="actions"><span class="btn">返回</span><span class="btn hot">确认强化</span></div></div></div></section>
+      <section class="sample"><div class="sample-label"><i class="pin"></i>04　战斗结算<em>胜利 / 失败双状态</em></div><div class="stage battle"><div class="dialog result" id="battle-result"><div class="badge">⚔</div><h2>战斗胜利</h2><p>队伍平安归来。继续领取战利品。</p><div class="reward">金币 + 30　·　捕获 1 只生物</div><div class="actions"><span class="btn hot">领取奖励　▶</span></div></div></div></section>
+      <section class="sample"><div class="sample-label"><i class="pin"></i>05　存档管理<em>六槽位 / 当前槽位</em></div><div class="stage"><div class="dialog"><div class="head"><span class="badge"><img src="../../src/ui/assets/home-terminal-kit-v2/save-archive.png"></span><h2>存档管理</h2><span class="x">×</span></div><div class="save-list"><div class="slot active"><strong>存档 1　当前</strong><small>第 1 幕 · 3 只伙伴</small></div><div class="slot"><strong>存档 2</strong><small>熟练度远征 · 12 层</small></div><div class="slot empty"><strong>存档 3</strong>空存档</div><div class="slot empty"><strong>存档 4</strong>空存档</div><div class="slot empty"><strong>存档 5</strong>空存档</div><div class="slot empty"><strong>存档 6</strong>空存档</div></div><div class="footnote">橙色角标只标记当前选择；删除入口独立呈现</div></div></div></section>
+      <section class="sample"><div class="sample-label"><i class="pin"></i>06　情报揭示<em>侦查 / 事件结果</em></div><div class="stage"><div class="dialog"><div class="head"><span class="badge">?</span><h2>侦查结果</h2><span class="x">×</span></div><div class="body"><p>已查明下一层的节点信息。</p><div class="reveal"><strong>林间遭遇　·　普通战斗</strong><small>预计出现 2～3 只生物</small></div><p class="muted">只显示本次侦查已揭示的内容。</p></div><div class="actions"><span class="btn teal">明白了</span></div></div></div></section>
+    </div>
+    <div class="toast-row"><div class="toast ok"><i>◆</i>道具已加入背包</div><div class="toast warn"><i>!</i>成长点不足，无法强化</div><div class="toast err"><i>×</i>当前节点不可进入</div></div>
+    <div class="footer">同一套框架，按语义切换橙色 / 青绿 / 暗红；弹窗下方保留当前场景，不模糊像素背景。</div>
+  </main>
+  <script>
+    if (new URLSearchParams(location.search).has('defeat')) {
+      const result = document.querySelector('#battle-result');
+      result.classList.add('defeat');
+      result.querySelector('.badge').textContent = '×';
+      result.querySelector('h2').textContent = '远征失败';
+      result.querySelector('p').textContent = '队伍已无法继续前进。本次远征到此结束。';
+      result.querySelector('.reward').textContent = '抵达第 3 层　·　战胜 2 场';
+      result.querySelector('.btn').className = 'btn';
+      result.querySelector('.btn').textContent = '查看结算　▶';
+    }
+  </script>
+</body>
+</html>
