@@ -437,6 +437,8 @@ export interface UnitCardProps {
   small?: boolean;
   /** 战斗/布阵位置只显示生物图像与生命/速度 */
   battleDisplay?: boolean;
+  /** 仅覆盖当前卡片的生物立绘，不改变物种的全局图片。 */
+  imageOverride?: string;
   /** 战斗场景不绘制底座，只显示当前生命值 */
   battleScene?: boolean;
   /** 是否在卡片上列出技能（出阵的我方卡隐藏，见底部技能面板） */
@@ -482,7 +484,7 @@ export function PixelCreature({ unit }: { unit: Unit }) {
   return image ? <BattlePixelSprite src={image} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>;
 }
 
-export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, battleScene = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
+export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, imageOverride, battleScene = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -503,7 +505,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
         onClick={onClick}
       >
         <span className="battle-sprite">
-          <PixelCreature unit={unit} />
+          {imageOverride ? <img src={imageOverride} alt={unit.name} draggable={false} /> : <PixelCreature unit={unit} />}
         </span>
         {!battleScene && <span className="battle-plinth" aria-hidden="true" />}
         <span className="battle-creature-stats">

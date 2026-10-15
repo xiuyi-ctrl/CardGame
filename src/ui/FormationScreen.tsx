@@ -9,19 +9,14 @@ import { getPassive } from '../game/data/passives';
 import { firstEmptyFormationSlot, placeUnit } from '../game/state/formation';
 import type { FormationPosition, FormationRow } from '../game/state/formation';
 import { BattlePixelSprite, PixelCreature, UnitCard } from './components';
+import { FORMATION_SPRITES } from './formationSprites';
 import type { Unit } from '../game/types';
 
 const ROWS: { row: FormationRow; label: string }[] = [
-  { row: 'front', label: '前排' },
-  { row: 'back', label: '后排' },
+  { row: 'front', label: '我方前排' },
+  { row: 'back', label: '我方后排' },
 ];
 const COLS = [0, 1, 2] as const;
-
-function StatIcon({ kind }: { kind: 'hp' | 'spd' }) {
-  return kind === 'hp'
-    ? <svg className="formation-stat-hp" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h4v1h2v1h1V3h2V2h3v1h1v6h-1v2h-2v2h-2v2H6v-2H4v-2H2V9H1V3h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
-    : <svg className="formation-stat-spd" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1h4v2h-2v2H8v2h5v2h-2v2H9v2H7v2H5v-5H3V8h2V6h1V4h1V2h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>;
-}
 
 export function FormationScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const f = state.formation;
@@ -60,11 +55,8 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   const isBoss = !!state.map.boss[state.currentNodeId];
   const enemyCount = fb.encounter?.length ?? 1;
   const maxField = forceAll ? fb.units.length : (isBoss ? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX) : maxFieldForEnemy(enemyCount, state.runMode));
-  /** 宠物池 = 全部宠物中未上场的（强制全上时池为空） */
-  const pool = forceAll ? [] : fb.units.filter((u) => !positions[u.uid]);
-  const visiblePool = forceAll ? fb.units : pool;
-  const focusedUnit = fb.units.find((u) => u.uid === focusedUid) ?? visiblePool[0] ?? fb.units[0];
-  const emptyRosterSlots = Math.max(0, getMaxRoster(state.runMode) - visiblePool.length);
+  const focusedUnit = fb.units.find((u) => u.uid === focusedUid) ?? fb.units.find((u) => !positions[u.uid]) ?? fb.units[0];
+  const emptyRosterSlots = Math.max(0, getMaxRoster(state.runMode) - fb.units.length);
 
   function moveToSlot(uid: string, row: FormationRow, col: 0 | 1 | 2) {
     const key = `${row}-${col}`;
@@ -93,10 +85,17 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     setPositions(next);
   }
 
-  /** 点击候选宠物：按从左到右、从上到下 的顺序自动上阵 */
+  /** 点击伙伴卡片切换上场/下场；上场时按空位顺序自动布阵。 */
   function onListClick(uid: string) {
     if (dragMoved.current || forceAll) return;
-    if (positions[uid] || fieldCount >= maxField) return;
+    if (positions[uid]) {
+      const next = { ...positions };
+      delete next[uid];
+      setPositions(next);
+      setFocusedUid(uid);
+      return;
+    }
+    if (fieldCount >= maxField) return;
     const slot = firstEmptyFormationSlot(positions);
     if (!slot) return;
     setPositions(placeUnit(positions, uid, slot));
@@ -138,18 +137,19 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     <div className="screen formation-screen">
       <div className="hud formation-hud">
         <div className="formation-hud-brand">
-          <span className="formation-hud-swords" aria-hidden="true">⚔</span>
+          <img className="formation-hud-icon" src="/formation-art/formation-title-pines-v1.png" alt="" aria-hidden="true" />
           <span><strong>{title}</strong><small>整顿伙伴，迎接新的冒险。</small></span>
         </div>
         <div className="formation-intel" aria-label={`敌方情报：${forceAll ? '同我方生物' : enemyDesc}`}>
-          <span className="formation-intel-mark" aria-hidden="true">☠</span>
           <span className="formation-intel-copy"><strong>敌方情报</strong><small>{forceAll ? '模拟战 · 同我方生物' : `${location} · ${enemyKind}`}</small></span>
           <span className="formation-enemy-portraits">
             {fb.encounter.map((enemy, index) => {
               const monster = getMonster(enemy.speciesId);
               const image = enemy.speciesId === 'momo' ? '/battle-momo.png' : monster.image;
               return <span className="formation-enemy-portrait" key={`${enemy.speciesId}-${index}`} title={monster.name}>
-                {image ? <BattlePixelSprite src={image} name={monster.name} /> : monster.emoji}
+                {FORMATION_SPRITES[enemy.speciesId]
+                  ? <img src={FORMATION_SPRITES[enemy.speciesId]} alt={monster.name} />
+                  : image ? <BattlePixelSprite src={image} name={monster.name} /> : monster.emoji}
               </span>;
             })}
           </span>
@@ -198,7 +198,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                           onDrag={markDrag}
                           onDragEnd={clearDrag}
                         >
-                          <UnitCard unit={u} battleDisplay />
+                          <UnitCard unit={u} battleDisplay imageOverride={FORMATION_SPRITES[u.speciesId]} />
                         </div>
                       ) : null}
                     </div>
@@ -207,26 +207,25 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
               </div>
             ))}
           </div>
-          <div className="formation-tip">
-            {forceAll ? '模拟战：全员上场，拖动生物交换站位' : fieldCount >= maxField ? '出战名额已满，点击场上生物可下阵，或拖到已上场位置交换' : '点击或拖拽生物进行布阵'}
-          </div>
         </div>
 
         <div className="formation-list">
           <div className="formation-list-head">
-            <div className="formation-list-title">{forceAll ? '队伍总览' : '待命伙伴'} <small>（最多 {getMaxRoster(state.runMode)} 只）</small></div>
-            <span className="formation-list-hint">{forceAll ? '全员上场' : '选择伙伴加入队伍'} <span aria-hidden="true">✦</span></span>
+            <div className="formation-list-title">{forceAll ? '队伍总览' : '队伍伙伴'} <small>（最多 {getMaxRoster(state.runMode)} 只）</small></div>
+            <span className="formation-list-hint">{forceAll ? '全员上场' : '点击切换上场'} <span aria-hidden="true">✦</span></span>
           </div>
           <div className="formation-pets" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
-            {visiblePool.map((u) => {
+            {fb.units.map((u) => {
               return (
                 <div
                   key={u.uid}
-                  className={`formation-pet-tile ${forceAll ? 'read-only' : ''}`}
+                  className={`formation-pet-tile ${forceAll ? 'read-only' : ''} ${positions[u.uid] ? 'deployed' : ''}`}
                   draggable={!forceAll}
                   role={forceAll ? 'listitem' : 'button'}
                   tabIndex={0}
-                  aria-label={`${u.name}，速度 ${u.spd}，生命 ${u.hp}/${u.maxHp}`}
+                  aria-label={`${u.name}，速度 ${u.spd}，生命 ${u.hp}/${u.maxHp}，${positions[u.uid] ? '已上场，点击下场' : fieldCount >= maxField ? '待命，出战名额已满' : '待命，点击上场'}`}
+                  aria-pressed={forceAll ? undefined : !!positions[u.uid]}
+                  title={forceAll ? '模拟战：全员上场' : positions[u.uid] ? '点击下场' : fieldCount >= maxField ? '出战名额已满，请先下场一只伙伴' : '点击上场'}
                   onClick={() => { if (!forceAll) onListClick(u.uid); }}
                   onKeyDown={(e) => { if (!forceAll && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onListClick(u.uid); } }}
                   onMouseEnter={() => setFocusedUid(u.uid)}
@@ -240,12 +239,10 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                   onDrag={markDrag}
                   onDragEnd={clearDrag}
                 >
-                  <span className="formation-pet-portrait"><PixelCreature unit={u} /></span>
-                  <span className="formation-pet-info">
-                    <strong>{u.name}</strong>
-                    <span><StatIcon kind="hp" />{u.hp}/{u.maxHp}</span>
-                    <span><StatIcon kind="spd" />{u.spd}</span>
+                  <span className="formation-pet-portrait">
+                    {FORMATION_SPRITES[u.speciesId] ? <img src={FORMATION_SPRITES[u.speciesId]} alt={u.name} draggable={false} /> : <PixelCreature unit={u} />}
                   </span>
+                  {positions[u.uid] && !forceAll && <span className="formation-pet-status">已上场</span>}
                 </div>
               );
             })}
@@ -258,24 +255,34 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
           <div className="formation-detail">
             {focusedUnit ? (
               <>
-                <span className="formation-detail-portrait"><PixelCreature unit={focusedUnit} /></span>
-                <div className="formation-detail-main">
-                  <div className="formation-detail-head"><strong>{focusedUnit.name}</strong><span>{positions[focusedUnit.uid] ? '出战' : '待命'}</span></div>
-                  <div className="formation-detail-line">被动：{focusedUnit.passive ? getPassive(focusedUnit.passive)?.name ?? '无' : '无'}</div>
-                  <div className="formation-detail-line">技能：{focusedUnit.skills.map((id) => getSkill(id).name).join(' · ')}</div>
+                <div className="formation-detail-summary">
+                  <span className="formation-detail-portrait">
+                    {FORMATION_SPRITES[focusedUnit.speciesId] ? <img src={FORMATION_SPRITES[focusedUnit.speciesId]} alt={focusedUnit.name} /> : <PixelCreature unit={focusedUnit} />}
+                  </span>
+                  <div className="formation-detail-main">
+                    <div className="formation-detail-head"><strong>{focusedUnit.name}</strong><span>{positions[focusedUnit.uid] ? '出战' : '待命'}</span></div>
+                    <div className="formation-detail-stats">
+                      <span><i className="formation-detail-stat-icon hp" aria-hidden="true" />生命 <b>{focusedUnit.hp}/{focusedUnit.maxHp}</b></span>
+                      <span><i className="formation-detail-stat-icon spd" aria-hidden="true" />速度 <b>{focusedUnit.spd}</b></span>
+                    </div>
+                  </div>
                 </div>
-                <div className="formation-detail-stats">
-                  <span><StatIcon kind="hp" />生命 <b>{focusedUnit.hp}/{focusedUnit.maxHp}</b></span>
-                  <span><StatIcon kind="spd" />速度 <b>{focusedUnit.spd}</b></span>
+                <div className="formation-detail-ability formation-detail-passive">
+                  <div><span className="formation-ability-tag passive">被动</span><strong>{focusedUnit.passive ? getPassive(focusedUnit.passive)?.name ?? '无' : '无'}</strong></div>
+                  <p title={focusedUnit.passive ? getPassive(focusedUnit.passive)?.desc ?? '无被动效果' : '无被动效果'}>{focusedUnit.passive ? getPassive(focusedUnit.passive)?.desc ?? '无被动效果' : '无被动效果'}</p>
                 </div>
-                <p className="formation-detail-description">{getMonster(focusedUnit.speciesId).desc}</p>
+                <div className="formation-detail-ability formation-detail-skills">
+                  <span className="formation-ability-tag skill">技能</span>
+                  <div className="formation-skill-tags">
+                    {focusedUnit.skills.map((id) => <span className="formation-skill-tag" key={id}>{getSkill(id).name}</span>)}
+                  </div>
+                </div>
               </>
             ) : <span className="formation-detail-empty">悬停或聚焦生物查看详情</span>}
           </div>
           <div className="formation-footer">
-            <span className="formation-footer-note">准备好了吗？<br />林间的冒险正等着你。</span>
             <button className="primary big-btn" disabled={fieldCount === 0} onClick={confirm} aria-label={`确认出战，当前 ${fieldCount} 只`}>
-              <span aria-hidden="true">⚔</span> 确认出战
+              确认出战
             </button>
           </div>
         </div>

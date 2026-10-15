@@ -23,6 +23,7 @@ import { Arena3Screen } from './Arena3Screen';
 import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
+import { FORMATION_SPRITES } from './formationSprites';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { MapNodeIcon } from './MapNodeIcon';
 import { ShopItemIcon } from './ShopItemIcon';
@@ -63,6 +64,10 @@ function creatureImages(units: Unit[]): string[] {
   return units.flatMap((unit) => unit.speciesId === 'momo' ? ['/battle-momo.png'] : unit.image ? [unit.image] : []);
 }
 
+function formationImage(speciesId: string, image?: string): string | undefined {
+  return FORMATION_SPRITES[speciesId] ?? (speciesId === 'momo' ? '/battle-momo.png' : image);
+}
+
 function screenImages(screen: GameState['screen'], state: GameState): string[] {
   switch (screen) {
     case 'title':
@@ -80,9 +85,12 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
       return [MAP_BACKGROUNDS[state.runMode === 'proficiency' ? 3 : Math.min(2, Math.max(0, state.act - 1))],
         '/map-node-stele.png'];
     case 'formation':
-      return ['/formation-camp.png', '/formation-plinth-occupied.png', '/formation-plinth-empty.png',
-        ...creatureImages(state.formation?.units ?? []),
-        ...(state.formation?.encounter ?? []).map((enemy) => enemy.speciesId === 'momo' ? '/battle-momo.png' : getMonster(enemy.speciesId).image).filter((src): src is string => !!src)];
+      return ['/formation-art/formation-forest-left-v1.png',
+        '/formation-art/formation-plinth-occupied-v1.png',
+        '/formation-art/formation-plinth-empty-v1.png',
+        '/formation-art/formation-title-pines-v1.png',
+        ...(state.formation?.units ?? []).map((unit) => formationImage(unit.speciesId, unit.image)).filter((src): src is string => !!src),
+        ...(state.formation?.encounter ?? []).map((enemy) => formationImage(enemy.speciesId, getMonster(enemy.speciesId).image)).filter((src): src is string => !!src)];
     case 'battle':
       return ['/battle-forest-background.png',
         '/capture-food-icons/berry.png', '/capture-food-icons/meat.png',
