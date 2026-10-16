@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "size": [
+    128,
+    128
+  ],
+  "transparent": true,
+  "icons": [
+    {
+      "category": "status",
+      "key": "burn",
+      "label": "灼烧",
+      "file": "icons/burn.png"
+    },
+    {
+      "category": "status",
+      "key": "poison",
+      "label": "中毒",
+      "file": "icons/poison.png"
+    },
+    {
+      "category": "status",
+      "key": "atkDown",
+      "label": "攻击降低",
+      "file": "icons/atk-down.png"
+    },
+    {
+      "category": "status",
+      "key": "stun",
+      "label": "眩晕",
+      "file": "icons/stun.png"
+    },
+    {
+      "category": "status",
+      "key": "taunt",
+      "label": "嘲讽",
+      "file": "icons/taunt.png"
+    },
+    {
+      "category": "status",
+      "key": "spdDown",
+      "label": "速度降低",
+      "file": "icons/spd-down.png"
+    },
+    {
+      "category": "status",
+      "key": "shadowMark",
+      "label": "暗影印记",
+      "file": "icons/shadow-mark.png"
+    },
+    {
+      "category": "status",
+      "key": "fear",
+      "label": "恐惧",
+      "file": "icons/fear.png"
+    },
+    {
+      "category": "status",
+      "key": "atkUp",
+      "label": "攻击提升",
+      "file": "icons/atk-up.png"
+    },
+    {
+      "category": "status",
+      "key": "healTick",
+      "label": "持续治疗",
+      "file": "icons/heal-tick.png"
+    },
+    {
+      "category": "status",
+      "key": "shield",
+      "label": "护盾",
+      "file": "icons/shield.png"
+    },
+    {
+      "category": "status",
+      "key": "thorns",
+      "label": "荆棘反伤",
+      "file": "icons/thorns.png"
+    },
+    {
+      "category": "status",
+      "key": "shieldCounter",
+      "label": "盾反",
+      "file": "icons/shield-counter.png"
+    },
+    {
+      "category": "status",
+      "key": "thornSpikes",
+      "label": "复仇棘甲",
+      "file": "icons/thorn-spikes.png"
+    },
+    {
+      "category": "status",
+      "key": "rageThorn",
+      "label": "怒棘",
+      "file": "icons/rage-thorn.png"
+    },
+    {
+      "category": "status",
+      "key": "windSpd",
+      "label": "风羽",
+      "file": "icons/wind-spd.png"
+    },
+    {
+      "category": "status",
+      "key": "waterCurtain",
+      "label": "水幕",
+      "file": "icons/water-curtain.png"
+    },
+    {
+      "category": "status",
+      "key": "flameShield",
+      "label": "烈焰护盾",
+      "file": "icons/flame-shield.png"
+    },
+    {
+      "category": "status",
+      "key": "comboBoost",
+      "label": "连击增幅",
+      "file": "icons/combo-boost.png"
+    },
+    {
+      "category": "status",
+      "key": "sporeShield",
+      "label": "孢子防护",
+      "file": "icons/spore-shield.png"
+    },
+    {
+      "category": "status",
+      "key": "toxicBurstReady",
+      "label": "毒性爆发蓄力",
+      "file": "icons/toxic-burst-ready.png"
+    },
+    {
+      "category": "status",
+      "key": "chainLink",
+      "label": "锁链连接",
+      "file": "icons/chain-link.png"
+    },
+    {
+      "category": "status",
+      "key": "skillSeal",
+      "label": "技能封印",
+      "file": "icons/skill-seal.png"
+    },
+    {
+      "category": "status",
+      "key": "skillSealPending",
+      "label": "封印即将生效",
+      "file": "icons/skill-seal-pending.png"
+    },
+    {
+      "category": "battleBuffs",
+      "key": "atkUp",
+      "label": "药水·伤害提升",
+      "file": "icons/potion-atk-up.png"
+    },
+    {
+      "category": "battleBuffs",
+      "key": "spdUp",
+      "label": "药水·速度提升",
+      "file": "icons/potion-spd-up.png"
+    },
+    {
+      "category": "battleBuffs",
+      "key": "atkDown",
+      "label": "药水·伤害降低",
+      "file": "icons/potion-atk-down.png"
+    },
+    {
+      "category": "battleBuffs",
+      "key": "spdDown",
+      "label": "药水·速度降低",
+      "file": "icons/potion-spd-down.png"
+    },
+    {
+      "category": "battleBuffs",
+      "key": "skillSpd",
+      "label": "技能速度加成",
+      "file": "icons/potion-skill-spd.png"
+    },
+    {
+      "category": "curse",
+      "key": "hpDown",
+      "label": "血脆诅咒",
+      "file": "icons/curse-hp-down.png"
+    },
+    {
+      "category": "curse",
+      "key": "atkDown",
+      "label": "虚弱诅咒",
+      "file": "icons/curse-atk-down.png"
+    },
+    {
+      "category": "curse",
+      "key": "spdDown",
+      "label": "迟缓诅咒",
+      "file": "icons/curse-spd-down.png"
+    }
+  ]
+}

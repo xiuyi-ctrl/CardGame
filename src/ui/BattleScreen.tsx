@@ -22,22 +22,12 @@ import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PetIcon
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 import { ShopItemIcon } from './ShopItemIcon';
+import { BattleStatusIcons } from './BattleStatusIcons';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
 
-const BATTLE_ICON_PATHS: Record<SkillDef['kind'] | 'rest' | 'capture' | 'item' | 'swap', string> = {
-  attack: 'M2 1h2v2h2v2h2v2h2v2h2v2h2v2h-2v-2h-2v-2H8V9H6V7H4V5H2z M1 11h2v2h2v2H3v-2H1z',
-  heal: 'M6 1h4v4h4v4h-4v5H6V9H2V5h4z',
-  buff: 'M7 1h2v3h3v2h2v3h-2v2H9v3H7v-3H4V9H2V6h2V4h3z',
-  status: 'M6 1h4v2H6z M4 3h2v2H4z M10 3h2v2h-2z M2 5h2v5H2z M12 5h2v5h-2z M4 10h2v2H4z M10 10h2v2h-2z M6 12h4v2H6z M6 6h4v4H6z',
-  rest: 'M2 3h8v2H5v2h5v2H2V7l5-2H2z M10 1h4v2h-2v2h2v2h-4V5l2-2h-2z',
-  capture: 'M5 1h6v2H5z M3 3h2v2H3z M11 3h2v2h-2z M1 5h2v6H1z M13 5h2v6h-2z M3 11h2v2H3z M11 11h2v2h-2z M5 13h6v2H5z M3 7h10v2H3z M7 5h2v6H7z',
-  item: 'M6 1h4v2H6z M5 3h6v2H5z M4 5h8v2H4z M3 7h10v6H3z M4 13h8v2H4z M7 8h2v4H7z M6 9h4v2H6z',
-  swap: 'M2 4h8V2l4 4-4 4V8H2z M14 12H6v2l-4-4 4-4v2h8z',
-};
-
-function BattleActionIcon({ kind }: { kind: keyof typeof BATTLE_ICON_PATHS }) {
-  return <svg className={`battle-action-icon battle-action-icon-${kind}`} viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true"><path d={BATTLE_ICON_PATHS[kind]} /></svg>;
+function BattleActionIcon({ kind }: { kind: 'capture' | 'item' | 'swap' }) {
+  return <img className={`battle-action-icon battle-action-icon-${kind}`} src={`/battle-action-icons/${kind}.png`} alt="" aria-hidden="true" />;
 }
 
 function renderLogText(text: string, spans?: LogSpan[]) {
@@ -73,7 +63,7 @@ function enemyTargetable(skill: SkillDef, enemy: Unit, enemies: Unit[]): boolean
   return front.length > 0 ? enemy.row === 'front' : true;
 }
 
-function EnemySkillPanel({ unit, speed, children }: { unit: Unit; speed?: number; children?: React.ReactNode }) {
+function BattleUnitInspectPanel({ unit, speed, side, children }: { unit: Unit; speed?: number; side: 'enemy' | 'player'; children?: React.ReactNode }) {
   const hasBuffs = unit.shield > 0 || unit.statuses.length > 0 ||
     (!!unit.battleBuffs && Object.values(unit.battleBuffs).some(Boolean));
   return (
@@ -81,7 +71,7 @@ function EnemySkillPanel({ unit, speed, children }: { unit: Unit; speed?: number
       <div className="enemy-skill-panel-title">
         <span className="enemy-inspect-portrait"><PixelCreature unit={unit} /></span>
         <span className="enemy-inspect-identity">
-          <span className="enemy-inspect-eyebrow">敌方 · {unit.row === 'front' ? '前排' : '后排'}</span>
+          <span className="enemy-inspect-eyebrow">{side === 'enemy' ? '敌方' : '我方'} · {unit.row === 'front' ? '前排' : '后排'}</span>
           <strong>{unit.name}</strong>
           <span className="enemy-inspect-stats">
             <span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{unit.hp}/{unit.maxHp}</span>
@@ -93,12 +83,14 @@ function EnemySkillPanel({ unit, speed, children }: { unit: Unit; speed?: number
       {children}
       {!!unit.battleBuffs?.skillSpd && <div className="enemy-inspect-permanent-buff">💨 技能速度加成 +{unit.battleBuffs.skillSpd}</div>}
       {!hasBuffs && <div className="enemy-inspect-no-status">当前无状态效果</div>}
-      <div className="enemy-inspect-section-title">技能</div>
-      <div className="enemy-inspect-skills">
-        {unit.skills.map((sid) => (
-          <SkillTag key={sid} skill={getSkill(sid)} desc usesNote />
-        ))}
-      </div>
+      {side === 'enemy' && <>
+        <div className="enemy-inspect-section-title">技能</div>
+        <div className="enemy-inspect-skills">
+          {unit.skills.map((sid) => (
+            <SkillTag key={sid} skill={getSkill(sid)} desc usesNote />
+          ))}
+        </div>
+      </>}
     </div>
   );
 }
@@ -115,9 +107,11 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [pendingBattleItem, setPendingBattleItem] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [inspectEnemy, setInspectEnemy] = useState<string | null>(null);
+  const [inspectAlly, setInspectAlly] = useState<string | null>(null);
   const [foodOverlayOpen, setFoodOverlayOpen] = useState(false);
   const [itemOverlayOpen, setItemOverlayOpen] = useState(false);
   const [logExpanded, setLogExpanded] = useState(false);
+  const choosingEnemyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'single';
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
@@ -168,18 +162,27 @@ export function BattleScreen({ state, dispatch }: Props) {
     setPendingTame(null);
     setPendingBattleItem(null);
     setInspectEnemy(null);
+    setInspectAlly(null);
     setFoodOverlayOpen(false);
     setItemOverlayOpen(false);
   }, [battle?.round, battle?.rngCount, battle?.phase]);
 
   useEffect(() => {
-    if (!inspectEnemy) return;
+    if (!inspectEnemy && !inspectAlly && !choosingEnemyTarget) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setInspectEnemy(null);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (inspectEnemy || inspectAlly) {
+          setInspectEnemy(null);
+          setInspectAlly(null);
+        } else {
+          setPendingSkill(null);
+        }
+      }
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [inspectEnemy]);
+  }, [inspectEnemy, inspectAlly, choosingEnemyTarget]);
 
   // 车轮战：场上只有一只上场宠物，默认选中它，技能栏直接展示其技能（含替补轮换后自动重选）
   useEffect(() => {
@@ -212,6 +215,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
   const inspectedEnemy = inspectEnemy ? battle.enemyUnits.find((u) => u.uid === inspectEnemy && u.hp > 0) : undefined;
+  const inspectedAlly = inspectAlly ? battle.playerUnits.find((u) => u.uid === inspectAlly) : undefined;
   const selectedSkills: SkillDef[] = useMemo(
     () => (selected && selected.hp > 0 ? selected.skills.map((id) => getSkill(id)) : []),
     [selected],
@@ -416,12 +420,13 @@ export function BattleScreen({ state, dispatch }: Props) {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
     if (!u) return <div key={key} className={`${extra} empty`} aria-hidden="true" />;
     const isTarget = validEnemyTargets.has(u.uid) || (pendingTame && isTameable(u));
+    const aimClass = choosingEnemyTarget && u.hp > 0 ? (validEnemyTargets.has(u.uid) ? 'attack-target' : 'attack-target-blocked') : '';
     const showTameTip = pendingTame && isTameable(u);
     const fxInfo = fx[u.uid];
     return (
       <div
         key={key}
-        className={`${extra} ${isTarget ? 'valid-target targetable' : ''}`}
+        className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${aimClass}`}
         onClick={isTarget ? () => onEnemyClick(u.uid) : undefined}
         onContextMenu={(event) => { event.preventDefault(); setInspectEnemy(u.uid); }}
         onKeyDown={(event) => {
@@ -437,9 +442,10 @@ export function BattleScreen({ state, dispatch }: Props) {
         tabIndex={0}
         role="button"
         aria-label={`${u.name}，右键或按菜单键查看敌人信息`}
-        title="右键查看敌人信息"
+        title={choosingEnemyTarget ? (isTarget ? '点击选择攻击目标，右键查看敌人信息' : '当前技能无法攻击，右键查看敌人信息') : '右键查看敌人信息'}
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene skillEnhancements={u.skillEnhancements} className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
+        <BattleStatusIcons unit={shownUnit(u)} />
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
         {popOverlay(u.uid)}
       </div>
@@ -457,8 +463,23 @@ export function BattleScreen({ state, dispatch }: Props) {
         key={key}
         className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
+        onContextMenu={(event) => { event.preventDefault(); setInspectAlly(u.uid); }}
+        onKeyDown={(event) => {
+          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+            event.preventDefault();
+            setInspectAlly(u.uid);
+          } else if ((event.key === 'Enter' || event.key === ' ') && clickable) {
+            event.preventDefault();
+            onPlayerClick(u.uid);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label={`${u.name}，右键或按菜单键查看我方生物 Buff`}
+        title="右键查看我方生物 Buff"
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
+        <BattleStatusIcons unit={shownUnit(u)} />
         {popOverlay(u.uid)}
       </div>
     );
@@ -590,7 +611,6 @@ export function BattleScreen({ state, dispatch }: Props) {
                     </span>
                   </div>
                   <div className="battle-skill-scroll">
-                    <BuffDetailPanel unit={shownUnit(selected)} stacksOverride={passiveSpdMap?.[selected.uid]} rockShellHitsOverride={rockShellHitsMap?.[selected.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[selected.uid]} hideTitle />
                     <div className="battle-skill-grid">
                     {selectedSkills.map((s) => {
                     const left = skillUsesLeft(selected, s.id);
@@ -598,6 +618,8 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const limited = Number.isFinite(left);
                     const onCooldown = cd > 0;
                     const isCurrent = selectedOrder?.skillId === s.id;
+                    const isTargeting = choosingEnemyTarget && pendingSkill?.actorUid === selected.uid && pendingSkill.skillId === s.id;
+                    const isActive = isCurrent || isTargeting;
                     const cannotOrder = selected.acted && !selectedOrder;
                     const slotIdx = selected.skills.indexOf(s.id);
                     const enhanced = getSkillEnhanceLevel(selected, slotIdx);
@@ -609,16 +631,16 @@ export function BattleScreen({ state, dispatch }: Props) {
                     return (
                       <button
                         key={s.id}
-                        className={`skill-btn ${isCurrent ? 'skill-btn-current' : ''}`}
+                        className={`skill-btn ${isActive ? 'skill-btn-current' : ''}`}
+                        aria-pressed={isActive}
                         onClick={() => onSkillClick(s)}
                         disabled={!canAct || unavailable || cannotOrder}
                         title={`${fullDesc}${limited ? `，剩余 ${left} 次` : ''}${onCooldown ? `，冷却 ${cd} 回合` : ''}${isSealed ? `，被封印` : ''}`}
                       >
-                        <BattleActionIcon kind={s.kind} />
                         <span className="battle-skill-copy">
                           <span className="skill-btn-head">
-                            {s.name}{enhanceLabel && <span style={{ color: isCurrent ? '#0c1a2a' : '#9f5900', marginLeft: 2 }}>{enhanceLabel}</span>}
-                            <span className="skill-num" style={enhanced > 0 && !isCurrent ? { color: '#9f5900' } : undefined}>{skillBrief(s, enhanced)}</span>
+                            {s.name}{enhanceLabel && <span style={{ color: isActive ? '#0c1a2a' : '#9f5900', marginLeft: 2 }}>{enhanceLabel}</span>}
+                            <span className="skill-num" style={enhanced > 0 && !isActive ? { color: '#9f5900' } : undefined}>{skillBrief(s, enhanced)}</span>
                           </span>
                           <span className="skill-desc">{fullDesc}</span>
                         </span>
@@ -641,7 +663,6 @@ export function BattleScreen({ state, dispatch }: Props) {
                         (selectedOrder !== undefined && selectedOrder.skillId !== 'rest')
                       }
                     >
-                      <BattleActionIcon kind="rest" />
                       <span className="battle-skill-copy"><span className="skill-btn-head">休息</span><span className="skill-desc">
                         {selectedOrder?.skillId === 'rest' ? '已选择' : '0 AP'}
                       </span></span>
@@ -700,9 +721,23 @@ export function BattleScreen({ state, dispatch }: Props) {
               <h2 id="enemy-inspect-title" className="battle-overlay-title">敌人信息</h2>
               <button className="battle-overlay-close" onClick={() => setInspectEnemy(null)} aria-label="关闭敌人信息" autoFocus>×</button>
             </div>
-            <EnemySkillPanel unit={shownUnit(inspectedEnemy)} speed={spdMap?.[inspectedEnemy.uid]}>
+            <BattleUnitInspectPanel unit={shownUnit(inspectedEnemy)} speed={spdMap?.[inspectedEnemy.uid]} side="enemy">
               <BuffDetailPanel unit={shownUnit(inspectedEnemy)} stacksOverride={passiveSpdMap?.[inspectedEnemy.uid]} rockShellHitsOverride={rockShellHitsMap?.[inspectedEnemy.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[inspectedEnemy.uid]} hideTitle />
-            </EnemySkillPanel>
+            </BattleUnitInspectPanel>
+          </div>
+        </div>
+      )}
+
+      {inspectedAlly && (
+        <div className="battle-overlay-mask" onClick={() => setInspectAlly(null)}>
+          <div className="battle-overlay-panel enemy-inspect-modal" role="dialog" aria-modal="true" aria-labelledby="ally-inspect-title" onClick={(event) => event.stopPropagation()}>
+            <div className="battle-overlay-head">
+              <h2 id="ally-inspect-title" className="battle-overlay-title">我方生物 Buff</h2>
+              <button className="battle-overlay-close" onClick={() => setInspectAlly(null)} aria-label="关闭我方生物 Buff" autoFocus>×</button>
+            </div>
+            <BattleUnitInspectPanel unit={shownUnit(inspectedAlly)} speed={spdMap?.[inspectedAlly.uid]} side="player">
+              <BuffDetailPanel unit={shownUnit(inspectedAlly)} stacksOverride={passiveSpdMap?.[inspectedAlly.uid]} rockShellHitsOverride={rockShellHitsMap?.[inspectedAlly.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[inspectedAlly.uid]} hideTitle />
+            </BattleUnitInspectPanel>
           </div>
         </div>
       )}

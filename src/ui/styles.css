@@ -1704,6 +1704,25 @@ button.primary {
   justify-content: center;
 }
 
+.battle-field .battle-status-icons {
+  position: absolute;
+  z-index: 4;
+  top: 2%;
+  left: 94%;
+  width: clamp(20px, 20%, 28px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.battle-field .battle-status-icons img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
 .battle-field .formation-slot.selected::after,
 .battle-field .formation-slot.inspected::after {
   content: '';
@@ -1722,8 +1741,66 @@ button.primary {
     linear-gradient(currentColor, currentColor) right bottom / 4px 16px no-repeat;
 }
 
-.battle-field .formation-slot.selected::after { color: #ff9700; }
+.battle-field .player-area .formation-slot.selected .unit-card.battle-display { outline: none; }
+
+.battle-field .formation-slot.selected::after {
+  z-index: 1;
+  inset: 4% 12% 24%;
+  color: #ff9700;
+  filter: drop-shadow(2px 2px 0 #0b1930);
+}
+
+.battle-field .player-area .formation-slot:focus-visible { outline: none; }
+
+.battle-field .player-area .formation-slot:focus-visible::before {
+  content: '▼';
+  position: absolute;
+  z-index: 6;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #d8fcff;
+  font-size: 17px;
+  line-height: 1;
+  text-shadow: 2px 2px 0 #0b1930, -2px -2px 0 #0b1930;
+  pointer-events: none;
+}
 .battle-field .formation-slot.inspected::after { color: #e95242; }
+
+.battle-field .enemy-area .formation-slot.attack-target::after {
+  --aim-corner-size: 12px;
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 4% 12% 24%;
+  color: #ef5b46;
+  opacity: .7;
+  filter: drop-shadow(2px 2px 0 #0b1930);
+  pointer-events: none;
+  background:
+    linear-gradient(currentColor, currentColor) left top / var(--aim-corner-size) 4px no-repeat,
+    linear-gradient(currentColor, currentColor) left top / 4px var(--aim-corner-size) no-repeat,
+    linear-gradient(currentColor, currentColor) right top / var(--aim-corner-size) 4px no-repeat,
+    linear-gradient(currentColor, currentColor) right top / 4px var(--aim-corner-size) no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / var(--aim-corner-size) 4px no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / 4px var(--aim-corner-size) no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / var(--aim-corner-size) 4px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 4px var(--aim-corner-size) no-repeat;
+}
+
+.battle-field .enemy-area .formation-slot.attack-target:hover::after,
+.battle-field .enemy-area .formation-slot.attack-target:focus-visible::after {
+  --aim-corner-size: 18px;
+  color: #ff735b;
+  opacity: 1;
+}
+
+.battle-field .enemy-area .formation-slot.attack-target,
+.battle-field .enemy-area .formation-slot.attack-target .unit-card.battle-display { cursor: crosshair; }
+.battle-field .enemy-area .formation-slot.attack-target:focus-visible { outline: none; }
+.battle-field .enemy-area .formation-slot.attack-target-blocked,
+.battle-field .enemy-area .formation-slot.attack-target-blocked .unit-card.battle-display { cursor: not-allowed; }
+.battle-field .enemy-area .formation-slot.attack-target-blocked .battle-sprite { opacity: .5; }
 
 .battle-field .enemy-area .row-back .formation-slot {
   transform: translate(27%, -12%) scale(0.82);
@@ -2059,7 +2136,7 @@ button.primary {
   min-width: 0;
   min-height: 60px;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
@@ -2087,11 +2164,7 @@ button.primary {
 .battle-sidebar .skill-btn-current .skill-num,
 .battle-sidebar .skill-btn-current .skill-desc { color: #0c1a2a; }
 
-.battle-action-icon { display: block; flex: none; width: 26px; height: 26px; fill: currentColor; color: #172638; }
-.battle-action-icon-heal { color: #2b9d63; }
-.battle-action-icon-buff { color: #d29609; }
-.battle-action-icon-status { color: #8644a0; }
-.battle-action-icon-rest { color: #526e8a; }
+.battle-action-icon { display: block; flex: none; width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
 
 .battle-sidebar .battle-skill-grid .skill-btn:focus-visible,
 .battle-sidebar button:focus-visible {
@@ -2136,8 +2209,6 @@ button.primary {
   font-size: 14px;
   font-weight: 800;
 }
-
-.battle-utility-row .battle-action-icon { width: 20px; height: 20px; }
 
 .battle-utility-row .hud-action-btn:hover:not(:disabled),
 .battle-utility-row .hud-action-btn.active { background: #ffdda0; }

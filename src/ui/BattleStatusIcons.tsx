@@ -1,0 +1,80 @@
+import type { StatusEffect, Unit } from '../game/types';
+
+type IconArt = readonly [label: string, file: string];
+
+const STATUS_ART: Record<StatusEffect['kind'], IconArt> = {
+  burn: ['灼烧', 'burn'],
+  poison: ['中毒', 'poison'],
+  atkDown: ['攻击降低', 'atk-down'],
+  stun: ['眩晕', 'stun'],
+  taunt: ['嘲讽', 'taunt'],
+  spdDown: ['速度降低', 'spd-down'],
+  shadowMark: ['暗影印记', 'shadow-mark'],
+  fear: ['恐惧', 'fear'],
+  atkUp: ['攻击提升', 'atk-up'],
+  healTick: ['持续治疗', 'heal-tick'],
+  shield: ['护盾', 'shield'],
+  thorns: ['荆棘反伤', 'thorns'],
+  shieldCounter: ['盾反', 'shield-counter'],
+  thornSpikes: ['复仇棘甲', 'thorn-spikes'],
+  rageThorn: ['怒棘', 'rage-thorn'],
+  windSpd: ['风羽', 'wind-spd'],
+  waterCurtain: ['水幕', 'water-curtain'],
+  flameShield: ['烈焰护盾', 'flame-shield'],
+  comboBoost: ['连击增幅', 'combo-boost'],
+  sporeShield: ['孢子防护', 'spore-shield'],
+  toxicBurstReady: ['毒性爆发蓄力', 'toxic-burst-ready'],
+  chainLink: ['锁链连接', 'chain-link'],
+  skillSeal: ['技能封印', 'skill-seal'],
+  skillSealPending: ['封印即将生效', 'skill-seal-pending'],
+};
+
+const BATTLE_BUFF_ART: Record<keyof NonNullable<Unit['battleBuffs']>, IconArt> = {
+  atkUp: ['药水·伤害提升', 'potion-atk-up'],
+  spdUp: ['药水·速度提升', 'potion-spd-up'],
+  atkDown: ['药水·伤害降低', 'potion-atk-down'],
+  spdDown: ['药水·速度降低', 'potion-spd-down'],
+  skillSpd: ['技能速度加成', 'potion-skill-spd'],
+};
+
+const CURSE_ART: Record<NonNullable<Unit['curse']>, IconArt> = {
+  hpDown: ['血脆诅咒', 'curse-hp-down'],
+  atkDown: ['虚弱诅咒', 'curse-atk-down'],
+  spdDown: ['迟缓诅咒', 'curse-spd-down'],
+};
+
+export const BATTLE_BUFF_ICON_IMAGES = [...Object.values(STATUS_ART), ...Object.values(BATTLE_BUFF_ART), ...Object.values(CURSE_ART)]
+  .map(([, file]) => `/buff-icons/${file}.png`);
+
+export function BattleStatusIcons({ unit }: { unit: Unit }) {
+  if (unit.hp <= 0) return null;
+  const icons: { id: string; art: IconArt; detail: string }[] = [];
+  for (const status of unit.statuses) {
+    if (status.kind === 'shield' && unit.shield <= 0) continue;
+    const art = STATUS_ART[status.kind];
+    const value = status.kind === 'shield' ? unit.shield : status.value;
+    const turns = status.turns > 0 && !['burn', 'poison', 'fear', 'shield'].includes(status.kind) ? `，剩余 ${status.turns} 回合` : '';
+    icons.push({ id: `status-${status.kind}`, art, detail: `${art[0]}${value > 0 ? `（${value}）` : ''}${turns}` });
+  }
+  if (unit.shield > 0 && !unit.statuses.some((status) => status.kind === 'shield')) {
+    icons.push({ id: 'shield', art: STATUS_ART.shield, detail: `护盾（${unit.shield}）` });
+  }
+  for (const key of Object.keys(BATTLE_BUFF_ART) as (keyof NonNullable<Unit['battleBuffs']>)[]) {
+    const value = unit.battleBuffs?.[key] ?? 0;
+    if (value <= 0) continue;
+    const art = BATTLE_BUFF_ART[key];
+    icons.push({ id: `buff-${key}`, art, detail: `${art[0]}${key === 'skillSpd' ? ` +${value}` : `，剩余 ${value} 回合`}` });
+  }
+  if (unit.curse) {
+    const art = CURSE_ART[unit.curse];
+    icons.push({ id: 'curse', art, detail: art[0] });
+  }
+  if (icons.length === 0) return null;
+  return (
+    <span className="battle-status-icons" aria-label={`${unit.name}的状态`}>
+      {icons.slice(0, 3).map(({ id, art, detail }) => (
+        <img key={id} src={`/buff-icons/${art[1]}.png`} alt={art[0]} title={detail} draggable={false} />
+      ))}
+    </span>
+  );
+}

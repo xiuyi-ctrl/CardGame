@@ -23,6 +23,7 @@ import { Arena3Screen } from './Arena3Screen';
 import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
+import { BATTLE_BUFF_ICON_IMAGES } from './BattleStatusIcons';
 import { FORMATION_SPRITES } from './formationSprites';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { MapNodeIcon } from './MapNodeIcon';
@@ -93,6 +94,8 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         ...(state.formation?.encounter ?? []).map((enemy) => formationImage(enemy.speciesId, getMonster(enemy.speciesId).image)).filter((src): src is string => !!src)];
     case 'battle':
       return ['/battle-forest-background.png',
+        ...BATTLE_BUFF_ICON_IMAGES,
+        '/battle-action-icons/capture.png', '/battle-action-icons/item.png', '/battle-action-icons/swap.png',
         '/capture-food-icons/berry.png', '/capture-food-icons/meat.png',
         '/capture-food-icons/gem.png', '/capture-food-icons/golden_fruit.png',
         ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
