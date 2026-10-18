@@ -1914,15 +1914,11 @@ button.primary {
   gap: 3px;
 }
 
-:is(.battle-field, .formation-board) .battle-stat svg {
+:is(.battle-field, .formation-board) .battle-stat img {
   width: clamp(15px, 1.5vw, 19px);
   height: clamp(15px, 1.5vw, 19px);
-  color: #fa454e;
-  filter: drop-shadow(2px 2px 0 #090712);
-}
-
-:is(.battle-field, .formation-board) .battle-stat-spd svg {
-  color: #ffc437;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .battle-field .battle-sprite canvas {
@@ -1946,7 +1942,7 @@ button.primary {
 
 .battle-field .battle-stat { gap: 3px; }
 
-.battle-field .battle-stat svg {
+.battle-field .battle-stat img {
   width: clamp(20px, 1.7vw, 27px);
   height: clamp(20px, 1.7vw, 27px);
 }
@@ -2596,7 +2592,7 @@ button.primary {
   flex: none;
   width: 22px;
   height: 22px;
-  overflow: visible;
+  object-fit: contain;
   image-rendering: pixelated;
 }
 
@@ -2937,11 +2933,13 @@ button.primary {
 }
 
 .map-node-icon {
+  display: block;
   position: relative;
   z-index: 1;
   width: 38px;
   height: 38px;
   margin: 0;
+  object-fit: contain;
   image-rendering: pixelated;
   filter: drop-shadow(1px 2px 0 #0b111c);
 }
@@ -3255,8 +3253,6 @@ button.primary {
   stroke-dasharray: none;
   opacity: 1;
 }
-.map-screen .map-info-icon { color: #142434; }
-.map-screen .map-info-icon[data-type='corrupted'] { color: #572488; }
 .map-current-flag {
   position: absolute;
   width: 42px;
@@ -3265,6 +3261,8 @@ button.primary {
   left: calc(50% + 6px);
   transform: translateX(-50%);
   z-index: 4;
+  object-fit: contain;
+  image-rendering: pixelated;
   filter: drop-shadow(2px 0 #fff9e9) drop-shadow(-2px 0 #fff9e9);
 }
 .map-screen .map-info::after {
@@ -3278,8 +3276,6 @@ button.primary {
   border-top: 4px solid #12263b;
   border-bottom: 4px solid #12263b;
 }
-.map-screen .node[data-type='corrupted'] { color: #572488; }
-.map-screen .node .map-node-icon { shape-rendering: crispEdges; }
 @media (max-width: 1100px) {
   .map-screen { --map-panel-width: 270px; }
   .map-screen .map-hud { flex-wrap: wrap; min-height: 74px; }
@@ -6505,16 +6501,8 @@ button.primary {
 .formation-board .battle-sprite canvas { filter: drop-shadow(2px 3px 0 #102b2d); }
 .formation-board .battle-sprite img { width: 95%; height: 105%; object-fit: contain; object-position: center bottom; image-rendering: pixelated; filter: drop-shadow(2px 3px 0 #102b2d); }
 .formation-board .battle-creature-stats { top: 83%; color: #fff9e9; font-size: clamp(17px, 1.55vw, 23px); -webkit-text-stroke: 2px #0b1930; text-shadow: 2px 2px 0 #0b1930; }
-.formation-board .battle-stat svg { width: clamp(19px, 1.8vw, 26px); height: clamp(19px, 1.8vw, 26px); }
+.formation-board .battle-stat img { width: clamp(19px, 1.8vw, 26px); height: clamp(19px, 1.8vw, 26px); }
 .formation-board .battle-stat-hp { order: -1; }
-
-.formation-board .battle-stat svg {
-  color: #fa454e;
-}
-
-.formation-board .battle-stat-spd svg {
-  color: #ffc437;
-}
 
 .formation-list {
   position: relative;
@@ -6964,10 +6952,9 @@ button.primary {
   box-shadow: inset 0 0 0 2px #ffd058;
 }
 .battle-overlay-grid button:disabled { opacity: 1; background: #e2e2dc; color: #737a7b; border-color: #adb2ae; box-shadow: none; }
-.battle-overlay-grid button:disabled img, .battle-overlay-grid button:disabled .shop-item-icon { opacity: .5; }
+.battle-overlay-grid button:disabled img { opacity: .5; }
 .battle-overlay-item-name { display: flex; align-items: center; gap: 10px; }
-.battle-overlay-item-name .shop-item-icon, .battle-overlay-item-name .capture-food-icon { width: 48px; height: 48px; flex: none; }
-.battle-overlay-item-name .capture-food-icon { object-fit: contain; image-rendering: pixelated; }
+.battle-overlay-item-name .battle-item-icon, .battle-overlay-item-name .capture-food-icon { width: 48px; height: 48px; flex: none; object-fit: contain; image-rendering: pixelated; }
 .battle-overlay-note { margin: 16px 0 0; padding-top: 0; border: 0; color: #536776; font-size: 14px; line-height: 1.5; text-align: center; }
 .battle-overlay-panel .overlay-empty { color: #536776; }
 
@@ -7023,7 +7010,7 @@ button.primary {
   :is(.confirm-box, .battle-overlay-panel, .growth-modal, .save-mgmt-panel, .overlay-box) { padding: 6px 8px 12px; }
   :is(.confirm-box .section-title, .save-mgmt-panel > .section-title, .battle-overlay-title, .growth-modal h3)::before { width: 32px; height: 32px; }
   .battle-overlay-grid button { min-height: 58px; font-size: 16px; }
-  .battle-overlay-item-name .shop-item-icon, .battle-overlay-item-name .capture-food-icon { width: 36px; height: 36px; }
+  .battle-overlay-item-name .battle-item-icon, .battle-overlay-item-name .capture-food-icon { width: 36px; height: 36px; }
   .confirm-box p { font-size: 15px; }
   .growth-modal-content.has-comparison { gap: 10px; }
   .save-slot { min-height: 68px; padding: 6px 28px 6px 9px; }

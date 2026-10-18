@@ -463,11 +463,11 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
         {!battleScene && <span className="battle-plinth" aria-hidden="true" />}
         <span className="battle-creature-stats">
           <span className="battle-stat battle-stat-spd" title="速度">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1h4v2h-2v2H8v2h5v2h-2v2H9v2H7v2H5v-5H3V8h2V6h1V4h1V2h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
+            <img src="/battle-stat-icons/speed.png" alt="" aria-hidden="true" />
             {effectiveSpd}
           </span>
           <span className="battle-stat battle-stat-hp" title="生命">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h4v1h2v1h1V3h2V2h3v1h1v6h-1v2h-2v2h-2v2H6v-2H4v-2H2V9H1V3h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
+            <img src="/battle-stat-icons/life.png" alt="" aria-hidden="true" />
             {battleScene ? <BattleHpText hp={unit.hp} maxHp={unit.maxHp} /> : `${unit.hp}/${unit.maxHp}`}
           </span>
         </span>

@@ -21,7 +21,7 @@ import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
 import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PetIcon, PixelCreature, BattleHpText } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
-import { ShopItemIcon } from './ShopItemIcon';
+import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import { BattleStatusIcons } from './BattleStatusIcons';
 import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART } from './BuffIcon';
 
@@ -791,7 +791,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     onClick={() => { onBattleItemClick(it.id); setItemOverlayOpen(false); }}
                     disabled={!canAct}
                   >
-                    <span className="battle-overlay-item-name"><ShopItemIcon itemId={it.id} />{it.name}</span>
+                    <span className="battle-overlay-item-name"><img className="battle-item-icon" src={BACKPACK_ITEM_ART[it.id]} alt="" aria-hidden="true" />{it.name}</span>
                     <span>×{count}</span>
                   </button>
                 );

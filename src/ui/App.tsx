@@ -93,18 +93,23 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         '/formation-plinth-occupied.png'];
     case 'map':
       return [MAP_BACKGROUNDS[state.runMode === 'proficiency' ? 3 : Math.min(2, Math.max(0, state.act - 1))],
-        '/map-node-stele.png'];
+        '/map-node-stele.png',
+        ...['route', 'party', 'gold', 'skip', 'bag', 'home', 'flag'].map((kind) => `/map-hud-icons/${kind}.png`),
+        ...state.map.layers.flat().map((node) => `/map-node-icons/${node.type}.png`)];
     case 'formation':
       return ['/formation-art/formation-forest-left-v1.png',
         '/formation-art/formation-plinth-occupied-v1.png',
         '/formation-art/formation-plinth-empty-v1.png',
         '/formation-art/formation-title-pines-v1.png',
+        '/battle-stat-icons/life.png', '/battle-stat-icons/speed.png',
         ...(state.formation?.units ?? []).map((unit) => formationImage(unit.speciesId, unit.image)).filter((src): src is string => !!src),
         ...(state.formation?.encounter ?? []).map((enemy) => formationImage(enemy.speciesId, getMonster(enemy.speciesId).image)).filter((src): src is string => !!src)];
     case 'battle':
       return ['/battle-forest-background.png',
+        '/battle-stat-icons/life.png', '/battle-stat-icons/speed.png',
         ...BATTLE_BUFF_ICON_IMAGES,
         '/battle-action-icons/capture.png', '/battle-action-icons/item.png', '/battle-action-icons/swap.png',
+        ...['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'].map(id => BACKPACK_ITEM_ART[id]),
         '/capture-food-icons/berry.png', '/capture-food-icons/meat.png',
         '/capture-food-icons/gem.png', '/capture-food-icons/golden_fruit.png',
         ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
@@ -275,29 +280,7 @@ export default function App() {
 }
 
 function MapHudIcon({ kind }: { kind: 'route' | 'party' | 'gold' | 'skip' | 'bag' | 'home' }) {
-  return (
-    <svg className={`map-hud-icon map-hud-icon-${kind}`} viewBox="0 0 32 32" aria-hidden="true" shapeRendering="crispEdges">
-      {kind === 'route' && <>
-        <path d="M2 8 16 1l14 7-14 7zM2 14l14 7 14-7v5l-14 7-14-7zM2 23l14 7 14-7v4l-14 5-14-5z" fill="#263444" />
-      </>}
-      {kind === 'party' && <>
-        <path d="M2 9h6v8H2zM9 2h6v10H9zM18 2h6v10h-6zM25 10h6v8h-6zM11 15h11v4h4v10H6V19h5z" fill="#142434" />
-      </>}
-      {kind === 'gold' && <>
-        <path d="M9 1h14v4h4v23h-4v4H9v-4H5V5h4z" fill="#152335" />
-        <path d="M10 5h12v23H10z" fill="#ff990c" /><path d="M12 6h7v20h-7z" fill="#ffe32b" />
-      </>}
-      {kind === 'skip' && <path d="M3 7l11 9L3 25zM15 7l11 9-11 9zM27 7h3v18h-3z" fill="#70d8bd" />}
-      {kind === 'bag' && <>
-        <path d="M6 10h20v19H6zM10 4h12v8H10z" fill="#273645" />
-        <path d="M9 13h14v8H9zM13 20h6v5h-6z" fill="#56616b" />
-      </>}
-      {kind === 'home' && <>
-        <path d="M2 15L16 3l14 12h-5v15H7V15z" fill="#273645" />
-        <path d="M13 19h6v11h-6z" fill="#fffaf0" />
-      </>}
-    </svg>
-  );
+  return <img className={`map-hud-icon map-hud-icon-${kind}`} src={`/map-hud-icons/${kind}.png`} alt="" aria-hidden="true" draggable={false} />;
 }
 
 function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
@@ -1753,7 +1736,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   const nodeEls = useRef<Record<string, HTMLButtonElement | null>>({});
   const [svgSize, setSvgSize] = useState({ w: 0, h: 0 });
   const [lines, setLines] = useState<{ from: string; to: string; x1: number; y1: number; x2: number; y2: number; kind: 'base' | 'near' | 'far' | 'path' }[]>([]);
-  const routeEdges = useMemo(() => getMapRouteEdges(state.map), [state.map]);
+  const routeEdges = useMemo(() => getMapRouteEdges(state.map, state.visitedNodeIds), [state.map, state.visitedNodeIds]);
   const routeKey = (from: string, to: string) => `${from}->${to}`;
   const visitedIds = state.visitedNodeIds ?? [];
   const visitedPairs = new Set(visitedIds.slice(1).map((id, index) => routeKey(visitedIds[index], id)));
@@ -1889,7 +1872,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                 const cls = [
                   isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast && isVisited ? 'visited' : 'dim',
                   reachCls,
-                  isDisabled(n) ? 'node-off' : '',
+                  isDisabled(n) && !isVisited && !isCurrent ? 'node-off' : '',
                   isLocked(n) ? 'node-locked' : '',
                   isVisitedWatchtower ? 'visited-watchtower' : '',
                   scoutable ? 'node-scoutable' : '',
@@ -1941,8 +1924,8 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                                 : undefined
                     }
                   >
-                    {isCurrent && <svg className="map-current-flag" viewBox="0 0 24 24" aria-hidden="true" shapeRendering="crispEdges"><path d="M3 24V1h3v23" fill="#152335" /><path d="M6 2h7v3h6v3h4v4h-7v3H6z" fill="#ff8b0b" stroke="#152335" strokeWidth="2" /></svg>}
-                    <span className="nicon"><MapNodeIcon type={n.type} silhouette /></span>
+                    {isCurrent && <img className="map-current-flag" src="/map-hud-icons/flag.png" alt="" aria-hidden="true" draggable={false} />}
+                    <span className="nicon"><MapNodeIcon type={n.type} /></span>
                     <span className="nlabel">{n.label}</span>
                   </button>
                 );
@@ -1956,7 +1939,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
           {infoNode ? (
             <>
               <div className="map-info-summary">
-                <div className="map-info-icon" data-type={infoNode.type}><MapNodeIcon type={infoNode.type} silhouette /></div>
+                <div className="map-info-icon" data-type={infoNode.type}><MapNodeIcon type={infoNode.type} /></div>
                 <div className="map-info-name">{infoNode.label}</div>
                 <div className={`map-info-status ${infoStatus === '可进入' ? 'available' : ''}`}>{infoStatus}</div>
               </div>

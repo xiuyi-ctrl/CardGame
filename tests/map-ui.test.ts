@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { canStepTo, generateMap } from '../src/game/state/game';
+import { canStepTo, generateMap, type GameState } from '../src/game/state/game';
 import { generateGrowthMap } from '../src/game/core/growth-map';
-import { createInitialState } from '../src/game/state/reducer';
+import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { MapScreen } from '../src/ui/App';
 import { getMapRouteEdges } from '../src/ui/mapRoutes';
 
@@ -54,6 +54,54 @@ describe('像素地图界面', () => {
     expect(getMapRouteEdges(disabled).some((edge) => edge.from === target.id || edge.to === target.id)).toBe(false);
   });
 
+  it.each([false, true])('双生宝箱开启后保留已走路线及出口，配对宝箱仍失效（双生符：%s）', (hasTwin) => {
+    const base = gameReducer(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 17 });
+    const before: GameState = {
+      ...base, screen: 'map', currentRow: 1, currentNodeId: 'route-before', visitedNodeIds: ['route-start', 'route-before'],
+      inventory: { ...base.inventory, twin: hasTwin ? 1 : 0 },
+      map: { ...base.map, disabled: {}, layers: [
+        [{ id: 'route-start', type: 'rest', label: '出发', col: 0 }],
+        [{ id: 'route-before', type: 'shop', label: '商店', col: 0 }],
+        [{ id: 'route-chest', type: 'sync', label: '双生宝箱', col: 0, pairedId: 'route-paired' },
+          { id: 'route-paired', type: 'sync', label: '双生宝箱', col: 1, pairedId: 'route-chest' }],
+        [{ id: 'route-after', type: 'rest', label: '营火', col: 0 }],
+        [{ id: 'route-future', type: 'rest', label: '营火', col: 0 }],
+      ] },
+    };
+    const opened = gameReducer(before, { type: 'MOVE', nodeId: 'route-chest' });
+    expect(opened.screen).toBe('chest');
+    expect(opened.map.disabled?.['route-chest']).toBe(true);
+    expect(opened.map.disabled?.['route-paired']).toBe(true);
+    expect(opened.visitedNodeIds).toEqual(['route-start', 'route-before', 'route-chest']);
+    const onMap = gameReducer(opened, { type: 'NEXT_NODE' });
+    const edges = getMapRouteEdges(onMap.map, onMap.visitedNodeIds);
+    expect(edges).toContainEqual({ from: 'route-before', to: 'route-chest' });
+    expect(edges).toContainEqual({ from: 'route-chest', to: 'route-after' });
+    expect(edges.some(edge => edge.from === 'route-paired' || edge.to === 'route-paired')).toBe(false);
+    expect(canStepTo(1, 0, onMap.map.layers[2][0], onMap.map)).toBe(false);
+    const { container, rerender } = render(createElement(MapScreen, { state: onMap, dispatch: vi.fn() }));
+    const lineKind = (from: string, to: string) => container.querySelector(`line[data-from="${from}"][data-to="${to}"]`)?.getAttribute('data-route-kind');
+    expect(lineKind('route-before', 'route-chest')).toBe('path');
+    expect(lineKind('route-chest', 'route-after')).toBe('near');
+    expect(container.querySelector('[data-node-id="route-chest"]')?.classList.contains('node-off')).toBe(false);
+    expect(container.querySelector('[data-node-id="route-paired"]')?.classList.contains('node-off')).toBe(true);
+    const moved = gameReducer(onMap, { type: 'MOVE', nodeId: 'route-after' });
+    expect(moved.currentNodeId).toBe('route-after');
+    const after = gameReducer(gameReducer(moved, { type: 'REST_HEAL' }), { type: 'NEXT_NODE' });
+    rerender(createElement(MapScreen, { state: after, dispatch: vi.fn() }));
+    expect(lineKind('route-before', 'route-chest')).toBe('path');
+    expect(lineKind('route-chest', 'route-after')).toBe('path');
+    expect(container.querySelector('[data-node-id="route-chest"]')?.classList.contains('node-off')).toBe(false);
+  });
+
+  it('历史路线不会绕过列相邻限制', () => {
+    const map = generateMap(17, 1);
+    const from = map.layers[1][0];
+    const to = { ...map.layers[2][0], col: 4 };
+    const changed = { ...map, layers: map.layers.map((row, index) => index === 2 ? [to] : row), disabled: { [to.id]: true } };
+    expect(getMapRouteEdges(changed, [from.id, to.id])).not.toContainEqual({ from: from.id, to: to.id });
+  });
+
   it('已走路线着金色，右侧只展示标题、图标、可达状态和简要描述', () => {
     const base = createInitialState();
     const start = base.map.layers[0][0];
@@ -92,7 +140,7 @@ describe('像素地图界面', () => {
     expect(hud.querySelector('[aria-label^="出战"]')).toBeTruthy();
     expect(hud.querySelector('[aria-label="金币 36"]')).toBeTruthy();
     expect(hud.querySelector('[aria-label="当前第 1 层"]')).toBeTruthy();
-    expect(hud.querySelectorAll('svg.map-hud-icon')).toHaveLength(7);
+    expect(hud.querySelectorAll('img.map-hud-icon')).toHaveLength(7);
 
     fireEvent.click(screen.getByRole('button', { name: '跳关' }));
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'USE_SKIP', free: true }));

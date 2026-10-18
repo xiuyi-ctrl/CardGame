@@ -20,11 +20,11 @@ describe('商店界面', () => {
     const { container } = render(createElement(ShopScreen, { state, dispatch }));
 
     expect(container.querySelectorAll('.shop-product')).toHaveLength(4);
-    expect(container.querySelectorAll('.shop-item-icon')).toHaveLength(4);
+    expect(container.querySelectorAll('.shop-product-icon img, .shop-product-icon svg')).toHaveLength(4);
     expect(screen.getByText('林间商铺')).toBeTruthy();
     expect(screen.getByRole('button', { name: '已购买 鲜肉' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: '金币不足 秘晶' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText('● 15')).toBeTruthy();
+    expect([...container.querySelectorAll('.shop-price')].map((el) => el.textContent)).toEqual(['6', '10', '15', '18']);
     fireEvent.click(screen.getByRole('button', { name: '购买 浆果' }));
     fireEvent.click(screen.getByRole('button', { name: '休整' }));
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));

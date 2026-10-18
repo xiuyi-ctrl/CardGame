@@ -589,10 +589,12 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   if (node.type === 'blacksmith') return { ...base, screen: 'map' };
   if (node.type === 'watchtower') {
     const visited = base.visitedWatchtowers ?? [];
-    if (!visited.includes(node.id)) {
-      return { ...base, screen: 'map', visitedWatchtowers: [...visited, node.id] };
-    }
-    return { ...base, screen: 'map' };
+    return {
+      ...base,
+      screen: 'watchtower',
+      watchtowerPreviewNodeId: node.id,
+      visitedWatchtowers: visited.includes(node.id) ? visited : [...visited, node.id],
+    };
   }
   if (node.type === 'boss') {
     const encounter = base.map.boss[node.id];

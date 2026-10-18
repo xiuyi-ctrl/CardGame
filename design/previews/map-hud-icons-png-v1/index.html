@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>地图 HUD 图标 PNG · 第三批</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; background: #15364c; color: #101c2c; }
+    body { max-width: 900px; margin: 0 auto; padding: 24px; }
+    h1 { color: #fff9e9; font-size: 26px; }
+    p { color: #cbdde1; }
+    .hud { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; border: 5px solid #101c2c; background: #fff9e9; box-shadow: 6px 6px 0 #07111c; }
+    .chip { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 2px solid #8a979b; font-weight: 800; }
+    .chip img { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
+    .button { width: 52px; height: 52px; display: grid; place-items: center; border: 3px solid #101c2c; background: #f5efdf; }
+    .button img { width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated; }
+    .flag { margin-top: 30px; display: flex; align-items: center; gap: 12px; color: #fff9e9; }
+    .flag img { width: 42px; height: 42px; object-fit: contain; image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <h1>地图 HUD 图标 PNG · 第三批</h1>
+  <p>按地图中的接近实际显示尺寸预览。</p>
+  <main class="hud">
+    <span class="chip"><img src="icons/route.png" alt="" />第 1 幕 · 翠绿之径</span>
+    <span class="chip"><img src="icons/party.png" alt="" />出战 3/5</span>
+    <span class="chip"><img src="icons/gold.png" alt="" />金币 45</span>
+    <span class="button"><img src="icons/skip.png" alt="跳关" /></span>
+    <span class="button"><img src="icons/bag.png" alt="背包" /></span>
+    <span class="button"><img src="icons/home.png" alt="首页" /></span>
+  </main>
+  <div class="flag"><img src="icons/flag.png" alt="" />当前位置旗标</div>
+</body>
+</html>

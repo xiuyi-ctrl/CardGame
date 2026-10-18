@@ -821,7 +821,7 @@ describe('商人·每店限购', () => {
 });
 
 describe('瞭望塔', () => {
-  it('到达瞭望塔停留在地图，可反复打开/关闭查看，再继续前进', () => {
+  it('到达瞭望塔直接进入，可反复打开/关闭查看，再继续前进', () => {
     let run: GameState | null = null;
     let target: MapNode | null = null;
     for (let seed = 1; seed < 300 && !target; seed++) {
@@ -837,8 +837,10 @@ describe('瞭望塔', () => {
     const parent = run!.map.layers[row - 1].find((n) => Math.abs(n.col - target!.col) <= 1) ?? run!.map.layers[row - 1][0];
     let s: GameState = { ...run!, screen: 'map', currentRow: row - 1, currentNodeId: parent.id };
     s = dispatch(s, { type: 'MOVE', nodeId: target!.id });
-    // 到达后停留在地图，不会强制进入瞭望界面
-    expect(s.screen).toBe('map');
+    // 选择可达瞭望塔后立即打开，无需在地图上再次点击。
+    expect(s.screen).toBe('watchtower');
+    expect(s.watchtowerPreviewNodeId).toBe(target!.id);
+    expect(s.visitedWatchtowers?.filter(id => id === target!.id)).toHaveLength(1);
     expect(s.currentRow).toBe(row);
     expect(s.currentNodeId).toBe(target!.id);
     // 可反复打开 / 关闭
@@ -846,6 +848,9 @@ describe('瞭望塔', () => {
     expect(s.screen).toBe('watchtower');
     s = dispatch(s, { type: 'CLOSE_WATCHTOWER' });
     expect(s.screen).toBe('map');
+    expect(s.watchtowerPreviewNodeId).toBeUndefined();
+    expect(s.currentRow).toBe(row);
+    expect(s.currentNodeId).toBe(target!.id);
     s = dispatch(s, { type: 'OPEN_WATCHTOWER' });
     expect(s.screen).toBe('watchtower');
     // 从瞭望界面返回地图（同一层），再继续前进

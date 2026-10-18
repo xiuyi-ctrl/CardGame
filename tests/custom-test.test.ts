@@ -236,9 +236,10 @@ describe('自定义测试：非战斗类节点（不需要宠物，跳过选宠�
     expect(s.chestResult).toBeDefined();
   });
 
-  it('瞭望塔：直接标记已参观并返回地图', () => {
+  it('瞭望塔：标记已参观并直接进入瞭望界面', () => {
     const s = startTest('watchtower');
-    expect(s.screen).toBe('map');
+    expect(s.screen).toBe('watchtower');
+    expect(s.watchtowerPreviewNodeId).toBe('custom_test');
     expect(s.visitedWatchtowers).toContain('custom_test');
   });
 
