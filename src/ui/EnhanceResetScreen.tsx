@@ -6,7 +6,8 @@ import { useState } from 'react';
 import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
-import { PetIcon } from './components';
+import { TrainingWorkbench } from './ProficiencyArt';
+import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import {
   getSkillEnhanceLevel,
   getSkillEnhanceBonus,
@@ -28,9 +29,7 @@ export function EnhanceResetScreen({ state, dispatch }: Props) {
 
   if (selectedUnit) {
     return (
-      <div className="screen growth-screen">
-        <h2>♻️ 技能重置</h2>
-        <p className="growth-hint">为 {selectedUnit.name} 重置技能强化（剩余还原石: {resetCount}）</p>
+      <TrainingWorkbench state={state} dispatch={dispatch} title="还原石 · 技能重置" subtitle="重置技能强化，按原规则返还成长点" unit={selectedUnit} onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)}>
 
         <div className="growth-skill-enhance-list">
           {selectedUnit.skills.map((skillId, idx) => {
@@ -68,7 +67,7 @@ export function EnhanceResetScreen({ state, dispatch }: Props) {
                       title={!canReset ? (resetCount <= 0 ? '需要还原石' : '未强化') : `返还 ${refund} 成长点`}
                       onClick={() => setResetSlotIndex(idx)}
                     >
-                      重置 {resetCount > 0 && `×${resetCount}`}
+                      <img src={BACKPACK_ITEM_ART.reset_stone} alt="" /> 重置 {resetCount > 0 && `×${resetCount}`}
                     </button>
                   ) : (
                     <span className="growth-skill-max">未强化</span>
@@ -79,14 +78,6 @@ export function EnhanceResetScreen({ state, dispatch }: Props) {
           })}
         </div>
 
-        <div className="growth-actions">
-          <button className="btn" onClick={() => setSelectedUid(null)}>
-            返回
-          </button>
-          <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-            返回地图
-          </button>
-        </div>
 
         {/* 重置确认弹窗 */}
         {resetSlotIndex !== null && (
@@ -115,44 +106,11 @@ export function EnhanceResetScreen({ state, dispatch }: Props) {
             </div>
           </div>
         )}
-      </div>
+      </TrainingWorkbench>
     );
   }
 
-  return (
-    <div className="screen growth-screen">
-      <h2>♻️ 技能重置</h2>
-      <p className="growth-hint">选择一只宠物，使用还原石重置其技能强化</p>
-
-      <div className="growth-roster">
-        {roster.map((u) => {
-          const totalEnhanced = u.skills.reduce((sum, _, idx) => sum + getSkillEnhanceLevel(u, idx), 0);
-          return (
-            <div
-              key={u.uid}
-              className={`growth-pet-card ${selectedUid === u.uid ? 'selected' : ''}`}
-              onClick={() => setSelectedUid(u.uid)}
-            >
-              <PetIcon image={u.image} emoji={u.emoji} name={u.name} />
-              <div className="growth-pet-info">
-                <div className="growth-pet-name">{u.name}</div>
-                <div className="growth-pet-gp">成长点: {u.growthPoints ?? 0}</div>
-                <div className="growth-pet-stats">
-                  强化: +{totalEnhanced}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="growth-actions">
-        <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-          返回地图
-        </button>
-      </div>
-    </div>
-  );
+  return <TrainingWorkbench state={state} dispatch={dispatch} title="还原石 · 技能重置" subtitle="重置技能强化，按原规则返还成长点" onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)} />;
 }
 
 function renderSkillDesc(skillId: string, level: number): string {

@@ -48,6 +48,7 @@ describe('战场右侧状态图标', () => {
     expect(document.querySelector('.enemy-area .battle-status-icons img')?.getAttribute('alt')).toBe('中毒');
     fireEvent.click(screen.getByRole('button', { name: /迅迅，右键或按菜单键查看我方生物 Buff/ }));
     expect(document.querySelector('.battle-sidebar .buff-detail-panel')).toBeNull();
+    expect(document.querySelector('.battle-skill-grid .buff-art-icon')).toBeNull();
   });
 
   it('新增灼烧在对应攻击动画开始时才显示', () => {

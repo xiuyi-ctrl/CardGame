@@ -3,9 +3,9 @@ import type { Dispatch, DragEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import type { Unit } from '../game/types';
-import { UnitCard } from './components';
+import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 
-const SLOT_LABELS = ['⭐ 先发', '第二', '第三', '第四'];
+const SLOT_LABELS = ['先发', '第二', '第三', '第四'];
 
 export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const roster = state.roster;
@@ -94,30 +94,30 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
   const encounterLabel = `共 ${roster.length} 只宠物可选`;
 
   return (
-    <div className="screen">
-      <div className="hud">
-        <span className="act">第 {state.act} 层 · 车轮战出战顺序</span>
-        <span className="chip">🔥 轮换上阵</span>
-        <button className="home-btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-          ↩ 返回地图
+    <div className="flow-screen wheel-order-screen">
+      <header className="flow-header flow-frame wheel-header">
+        <h1><FlowIcon name="battles-won" />车轮战 · 出战顺序</h1>
+        <span>第{state.act}幕 · 轮换上阵</span>
+        <button type="button" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
+          返回地图 →
         </button>
-      </div>
+      </header>
 
-      <div className="formation-main">
-        <div className="formation-left">
-          <div className="side-label">出战顺序（把宠物拖到「先发 / 第二 / 第三 / 第四」槽位，按序轮换上阵；拖动顺序卡可交换）</div>
-          <div className="gauntlet-slots">
+      <main className="wheel-main">
+        <section className="flow-frame wheel-order-panel">
+          <div className="wheel-section-heading"><h2>出战顺序</h2><span>按顺序轮换上阵，拖动可交换</span></div>
+          <div className="wheel-slots" style={{ gridTemplateColumns: `repeat(${maxSlots}, minmax(0, 1fr))` }}>
             {order.map((u, i) => (
               <div
                 key={i}
-                className={`gauntlet-slot ${u ? '' : 'empty'}`}
+                className={`wheel-slot ${i === 0 ? 'is-first' : ''} ${u ? '' : 'is-empty'}`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => onSlotDrop(e, i)}
               >
-                <span className="gauntlet-order-index">{SLOT_LABELS[i]}</span>
-                <div className="gauntlet-slot-body">
+                <span className="wheel-order-index">{SLOT_LABELS[i]}</span>
+                <div className="wheel-slot-body">
                   {u ? (
-                    <div
+                    <button type="button"
                       draggable
                       title="点击放回宠物池"
                       onClick={() => onClickRemove(i)}
@@ -128,24 +128,23 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
                       onDrag={markDrag}
                       onDragEnd={clearDrag}
                     >
-                      <UnitCard unit={u} showSkills={false} topStats />
-                    </div>
+                      <FlowPet unit={u} /><strong>{u.name}</strong><FlowPetStats unit={u} />
+                    </button>
                   ) : (
-                    <span className="gauntlet-empty-slot">拖入宠物</span>
+                    <span className="wheel-empty-slot"><b aria-hidden="true">＋</b>点击下方伙伴加入，或拖入此槽</span>
                   )}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div className="formation-list">
-          <div className="side-label">
-            宠物池（{encounterLabel}，点击加入第一个空槽，或按住拖到左侧槽位）
+        <section className="flow-frame wheel-pool-panel">
+          <div className="wheel-section-heading"><h2>待命伙伴</h2><span>{encounterLabel} · 点击加入空槽，点击上方伙伴移回</span>
           </div>
-          <div className="formation-pets" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
+          <div className="wheel-pool" style={{ gridTemplateColumns: `repeat(${Math.min(5, Math.max(1, pool.length))}, minmax(0, 1fr))` }} onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
             {pool.map((u) => (
-              <div
+              <button type="button"
                 key={u.uid}
                 draggable
                 onClick={() => onClickAdd(u)}
@@ -156,19 +155,20 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
                 onDrag={markDrag}
                 onDragEnd={clearDrag}
               >
-                <UnitCard unit={u} showSkills={false} topStats />
-              </div>
+                <FlowPet unit={u} /><span><strong>{u.name}</strong><FlowPetStats unit={u} /></span>
+              </button>
             ))}
-            {pool.length === 0 && <span className="gauntlet-empty-slot">宠物已全部上场</span>}
+            {pool.length === 0 && <span className="wheel-pool-empty">伙伴已全部上场，可拖到此处移回</span>}
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
 
-      <div className="formation-footer">
-        <button className="primary big-btn" disabled={chosen.length === 0} onClick={() => dispatch({ type: 'GAUNTLET_ORDER_CONFIRM', units: chosen })}>
-          ⚔️ 确认出战（{chosen.length} 只）
+      <footer className="flow-frame remaining-footer">
+        <span>已选择 {chosen.length}/{maxSlots}</span>
+        <button type="button" className="flow-primary" disabled={chosen.length === 0} onClick={() => dispatch({ type: 'GAUNTLET_ORDER_CONFIRM', units: chosen })}>
+          确认出战（{chosen.length}只）
         </button>
-      </div>
+      </footer>
     </div>
   );
 }

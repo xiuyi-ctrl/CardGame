@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+  <symbol id="custom_guardian" viewBox="0 0 64 64"><g fill="#527e83"><path d="M8 26h6V16h10V9h16v7h10v10h6v22h-8v8H36v-8H24v8H12v-8H6V32h2z"/><path d="M3 27h11v18H3zm47 0h11v18H50z"/></g></symbol>
+  <symbol id="custom_fury" viewBox="0 0 64 64"><path fill="#527e83" d="M6 18V5l12 9h10l9-9v17l8 10h8V22h6v22H47v12H36V44H23v12H12V36H5v-8H1V18z"/></symbol>
+  <symbol id="custom_gale" viewBox="0 0 64 64"><path fill="#527e83" d="m5 6 23 9 8 10V14l9-9 5 11h8v7l6 5-14 4v10h-8l-3 14H28l-2-13-9-1L1 51l5-17 13-5L7 20z"/></symbol>
+</svg>

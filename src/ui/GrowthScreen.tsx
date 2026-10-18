@@ -1,278 +1,86 @@
-/**
- * 成长远征模式 - 成长点分配界面
- * 玩家在此界面为宠物分配成长点
- */
 import { useState } from 'react';
 import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import type { Unit } from '../game/types';
-import { PetIcon } from './components';
-import {
-  getAllGrowthChoices,
-  growthChoiceCost,
-  applyGrowthChoice,
-  SLOT3_COST,
-  SLOT4_COST,
-  SLOT5_COST,
-  REROLL_COST,
-  getTransferFee,
-  type GrowthChoice,
-} from '../game/core/growth';
+import { getAllGrowthChoices, growthChoiceCost, applyGrowthChoice, getTransferFee, type GrowthChoice } from '../game/core/growth';
+import { CampHeader } from './CampScreens';
+import { FlowPet, FlowPetStats } from './MainFlowArt';
+import { TrainingRoster } from './ProficiencyArt';
 
-interface Props {
-  state: GameState;
-  dispatch: Dispatch<GameAction>;
-}
-
-export function GrowthScreen({ state, dispatch }: Props) {
+export function GrowthScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferTargetUid, setTransferTargetUid] = useState<string | null>(null);
-  const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [transferAmount, setTransferAmount] = useState(0);
   const [transferConfirm, setTransferConfirm] = useState(false);
-
-  const roster = state.roster;
-  const selectedUnit = roster.find((u) => u.uid === selectedUid);
+  const selectedUnit = state.roster.find(unit => unit.uid === selectedUid);
   const pending = state.specialPending;
   const isShopPending = pending?.kind === 'shopGrantGrowthPoint' || pending?.kind === 'shopStatBoost' || pending?.kind === 'shopSlotUnlock' || pending?.kind === 'shopForget' || pending?.kind === 'legendSkill';
   const isBossNode = state.map.boss[state.currentNodeId] !== undefined;
-
+  const available = selectedUnit?.growthPoints ?? 0;
+  const fee = transferAmount > 0 ? getTransferFee(transferAmount) : 0;
+  const target = state.roster.find(unit => unit.uid === transferTargetUid && unit.uid !== selectedUnit?.uid);
+  const canTransfer = transferAmount > 0 && !!target && available >= transferAmount;
+  const closeTransfer = () => { setShowTransfer(false); setTransferTargetUid(null); setTransferAmount(0); setTransferConfirm(false); };
   const handleGrowthChoice = (unit: Unit, choice: GrowthChoice) => {
     if (choice.kind === 'slot3' || choice.kind === 'slot4' || choice.kind === 'slot5') {
-      dispatch({ type: 'PROF_SLOT_UNLOCK', uid: unit.uid, slot: choice.kind === 'slot3' ? 3 : choice.kind === 'slot4' ? 4 : 5 });
-      return;
+      dispatch({ type: 'PROF_SLOT_UNLOCK', uid: unit.uid, slot: choice.kind === 'slot3' ? 3 : choice.kind === 'slot4' ? 4 : 5 }); return;
     }
-    if (choice.kind === 'reroll') {
-      dispatch({ type: 'PROF_SKILL_REPLACE_START', uid: unit.uid });
-      return;
-    }
+    if (choice.kind === 'reroll') { dispatch({ type: 'PROF_SKILL_REPLACE_START', uid: unit.uid }); return; }
     const updatedUnit = applyGrowthChoice(unit, choice);
     if (updatedUnit) {
-      const label =
-        choice.kind === 'hp' ? `生命 +${choice.amount}` :
-        choice.kind === 'spd' ? `速度 +${choice.amount}` :
-        '';
+      const label = choice.kind === 'hp' ? `生命 +${choice.amount}` : choice.kind === 'spd' ? `速度 +${choice.amount}` : '';
       setMessage(`${unit.name}：${label}`);
       dispatch({ type: 'PROF_GROWTH_APPLY', uid: unit.uid, updatedUnit });
       dispatch({ type: 'SHOW_TOAST', msg: `${unit.name} 获得 ${label}`, kind: 'success' });
     }
   };
-
-  const handlePetClick = (unit: Unit) => {
-    if (isShopPending) {
-      dispatch({ type: 'PROF_SHOP_EFFECT', uid: unit.uid });
-      return;
-    }
-    setSelectedUid(unit.uid);
-  };
-
-  const getHintText = () => {
-    if (isShopPending && pending) {
-      if (pending.kind === 'shopGrantGrowthPoint') return `选择一只宠物获得 ${pending.amount} 成长点`;
-      if (pending.kind === 'shopStatBoost') return '选择一只宠物永久 +5 生命 或 +2 速度';
-      if (pending.kind === 'shopSlotUnlock') return '选择一只宠物解锁技能槽';
-      if (pending.kind === 'shopForget') return '选择一只宠物重置成长点';
-      if (pending.kind === 'legendSkill') return '选择一只宠物学习传奇技能';
-    }
-    return '选择一只宠物，消耗成长点提升其能力';
-  };
-
-  // 成长点转移界面
-  if (showTransfer && selectedUnit) {
-    const availableTargets = roster.filter(u => u.uid !== selectedUnit.uid);
-    const fee = transferAmount > 0 ? getTransferFee(transferAmount) : 0;
-    const actualGain = transferAmount - fee;
-    const canTransfer = transferAmount > 0 && 
-                        transferTargetUid !== null && 
-                        (selectedUnit.growthPoints ?? 0) >= transferAmount &&
-                        transferAmount >= 1;
-
-    return (
-      <div className="screen growth-screen">
-        <h2>🔄 成长点转移</h2>
-        <p className="growth-hint">将 {selectedUnit.name} 的成长点转移给其他宠物（手续费 50%，向上取整）</p>
-
-        <div className="growth-transfer-source">
-          <div className="growth-transfer-info">
-            <span className="growth-transfer-name">{selectedUnit.name}</span>
-            <span className="growth-transfer-gp">可用成长点: {selectedUnit.growthPoints ?? 0}</span>
-          </div>
-        </div>
-
-        <div className="growth-transfer-targets">
-          <h4>选择目标宠物：</h4>
-          {availableTargets.map(u => (
-            <div
-              key={u.uid}
-              className={`growth-transfer-target ${transferTargetUid === u.uid ? 'selected' : ''}`}
-              onClick={() => setTransferTargetUid(u.uid)}
-            >
-              <PetIcon image={u.image} emoji={u.emoji} name={u.name} />
-              <div className="growth-transfer-target-info">
-                <div className="growth-transfer-target-name">{u.name}</div>
-                <div className="growth-transfer-target-gp">当前成长点: {u.growthPoints ?? 0}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="growth-transfer-amount">
-          <label>转移数量：</label>
-          <input
-            type="range"
-            min="1"
-            max={selectedUnit.growthPoints ?? 0}
-            value={transferAmount}
-            onChange={(e) => setTransferAmount(parseInt(e.target.value) || 0)}
-            className="growth-transfer-slider"
-          />
-          <span className="growth-transfer-value">{transferAmount}</span>
-          <div className="growth-transfer-calc">
-            手续费: {fee} 点 → 目标获得: {actualGain} 点
-          </div>
-        </div>
-
-        <div className="growth-actions">
-          <button
-            className={`primary btn ${!canTransfer ? 'disabled' : ''}`}
-            disabled={!canTransfer}
-            onClick={() => setTransferConfirm(true)}
-          >
-            确认转移
-          </button>
-          <button className="btn" onClick={() => { 
-            setShowTransfer(false); 
-            setTransferTargetUid(null); 
-            setTransferAmount(0);
-            setTransferConfirm(false);
-          }}>
-            返回
-          </button>
-        </div>
-
-        {/* 转移确认弹窗 */}
-        {transferConfirm && transferTargetUid && (
-          <div className="growth-modal-overlay" onClick={() => setTransferConfirm(false)}>
-            <div className="growth-modal" onClick={(e) => e.stopPropagation()}>
-              <h3>确认转移</h3>
-              <div className="growth-modal-content">
-                <p>从 {selectedUnit.name} 转移 {transferAmount} 点成长点</p>
-                <p>手续费: {fee} 点</p>
-                <p>{roster.find(u => u.uid === transferTargetUid)?.name} 实际获得: {actualGain} 点</p>
-              </div>
-              <div className="growth-modal-actions">
-                <button
-                  className="primary btn"
-                  onClick={() => {
-                    dispatch({ 
-                      type: 'PROF_TRANSFER_GROWTH', 
-                      sourceUid: selectedUnit.uid, 
-                      targetUid: transferTargetUid, 
-                      amount: transferAmount 
-                    });
-                    setShowTransfer(false);
-                    setTransferTargetUid(null);
-                    setTransferAmount(0);
-                    setTransferConfirm(false);
-                  }}
-                >
-                  确认
-                </button>
-                <button className="btn" onClick={() => setTransferConfirm(false)}>
-                  取消
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // 主界面
-  return (
-    <div className="screen growth-screen">
-      <h2>📈 成长点分配</h2>
-      <p className="growth-hint">{getHintText()}</p>
-
-      {message && <div className="growth-message">{message}</div>}
-
-      <div className="growth-roster">
-        {roster.map((u) => {
-          const gp = u.growthPoints ?? 0;
-          return (
-            <div
-              key={u.uid}
-              className={`growth-pet-card ${selectedUid === u.uid ? 'selected' : ''}`}
-              onClick={() => handlePetClick(u)}
-            >
-              <PetIcon image={u.image} emoji={u.emoji} name={u.name} />
-              <div className="growth-pet-info">
-                <div className="growth-pet-name">{u.name}</div>
-                <div className="growth-pet-gp">成长点: {gp}</div>
-                <div className="growth-pet-stats">
-                  HP:{u.maxHp} SPD:{u.spd}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {selectedUnit && !isShopPending && (
-        <div className="growth-choices">
-          <h3>为 {selectedUnit.name} 选择成长：</h3>
-          <div className="growth-choice-list">
-            {getAllGrowthChoices(selectedUnit).map((choice, i) => {
-              const hpBonus = selectedUnit.bonusStats?.hp ?? 0;
-              const spdBonus = selectedUnit.bonusStats?.spd ?? 0;
-              const cost = growthChoiceCost(choice, hpBonus, spdBonus);
-              const canAfford = (selectedUnit.growthPoints ?? 0) >= cost;
-              const label =
-                choice.kind === 'hp' ? `生命 +${choice.amount} (${cost}点)` :
-                choice.kind === 'spd' ? `速度 +${choice.amount} (${cost}点)` :
-                choice.kind === 'slot3' ? `解锁第3技能槽 (${SLOT3_COST}点)` :
-                choice.kind === 'slot4' ? `解锁第4技能槽 (${SLOT4_COST}点)` :
-                choice.kind === 'slot5' ? `解锁第5技能槽 (${SLOT5_COST}点)` :
-                `替换技能 (${REROLL_COST}点)`;
-              return (
-                <button
-                  key={i}
-                  className={`growth-choice-btn ${!canAfford ? 'disabled' : ''}`}
-                  disabled={!canAfford}
-                  onClick={() => handleGrowthChoice(selectedUnit, choice)}
-                >
-                  {label}
-                </button>
-              );
-            })}
-            <button
-              className="growth-choice-btn growth-transfer-entry-btn"
-              onClick={() => setShowTransfer(true)}
-            >
-              🔄 成长点转移
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="growth-actions">
-        {isShopPending ? (
-          <button className="btn" onClick={() => dispatch({ type: 'CANCEL_GROWTH_ITEM' })}>
-            取消使用
-          </button>
-        ) : isBossNode ? (
-          <button className="primary btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
-            继续前进 →
-          </button>
-        ) : (
-          <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-            返回地图
-          </button>
-        )}
-      </div>
-    </div>
-  );
+  const hint = pending?.kind === 'shopGrantGrowthPoint' ? `选择一只宠物获得 ${pending.amount} 成长点`
+    : pending?.kind === 'shopStatBoost' ? '选择一只宠物永久 +5 生命 或 +2 速度'
+    : pending?.kind === 'shopSlotUnlock' ? '选择一只宠物解锁技能槽'
+    : pending?.kind === 'shopForget' ? '选择一只宠物重置成长点'
+    : pending?.kind === 'legendSkill' ? '选择一只宠物学习传奇技能'
+    : '选择伙伴，消耗成长点提升能力';
+  return <div className="flow-screen camp-screen training-growth-screen">
+    <CampHeader title="成长点分配" subtitle={showTransfer ? '成长点转移 · 手续费50%，向上取整' : hint}
+      onBack={!showTransfer && !isShopPending && !isBossNode ? () => dispatch({ type: 'BACK_TO_MAP' }) : undefined} />
+    <main className={`training-growth-layout ${showTransfer ? 'has-transfer' : ''}`}>
+      <TrainingRoster units={state.roster} selectedUid={selectedUid} disabled={showTransfer} onSelect={unit => {
+        if (isShopPending) dispatch({ type: 'PROF_SHOP_EFFECT', uid: unit.uid }); else setSelectedUid(unit.uid);
+      }} />
+      <section className="flow-frame training-growth-detail"><h2>{selectedUnit ? `${selectedUnit.name} · 可用${available}点` : '选择成长伙伴'}</h2>
+        <div className="camp-scroll training-growth-body">{selectedUnit ? <><FlowPet unit={selectedUnit} /><FlowPetStats unit={selectedUnit} />
+          {message && <p className="training-growth-message" role="status">{message}</p>}
+          {!isShopPending && <div className="training-growth-options">{getAllGrowthChoices(selectedUnit).map(choice => {
+            const cost = growthChoiceCost(choice, selectedUnit.bonusStats?.hp ?? 0, selectedUnit.bonusStats?.spd ?? 0);
+            const label = choice.kind === 'hp' ? `生命 +${choice.amount}` : choice.kind === 'spd' ? `速度 +${choice.amount}`
+              : choice.kind === 'slot3' ? '解锁第3技能槽' : choice.kind === 'slot4' ? '解锁第4技能槽' : choice.kind === 'slot5' ? '解锁第5技能槽' : '替换技能';
+            return <button type="button" key={choice.kind} disabled={showTransfer || available < cost} onClick={() => handleGrowthChoice(selectedUnit, choice)}>
+              {choice.kind === 'hp' || choice.kind === 'spd' ? <i className={`starter-stat-icon ${choice.kind === 'hp' ? 'starter-stat-heart' : 'starter-stat-speed'}`} aria-hidden="true" /> : null}<strong>{label}</strong><span>消耗 {cost} 成长点</span>
+            </button>;
+          })}</div>}
+        </> : <p>点击左侧伙伴查看成长选项</p>}</div>
+        {selectedUnit && !isShopPending && <button type="button" disabled={showTransfer} onClick={() => setShowTransfer(true)}>成长点转移</button>}
+      </section>
+      {showTransfer && selectedUnit && <aside className="flow-frame training-transfer"><h2>成长点转移</h2><div className="camp-scroll training-transfer-body">
+        <p>来源：{selectedUnit.name} · 可用 {available} 点</p><h3>选择接收伙伴</h3>
+        <div className="training-transfer-targets">{state.roster.filter(unit => unit.uid !== selectedUnit.uid).map(unit => <button type="button" className={target?.uid === unit.uid ? 'is-selected' : ''} key={unit.uid} aria-pressed={target?.uid === unit.uid} onClick={() => setTransferTargetUid(unit.uid)}><FlowPet unit={unit} /><strong>{unit.name}</strong><span>当前 {unit.growthPoints ?? 0} 点</span></button>)}</div>
+        {state.roster.length < 2 && <p>没有其他伙伴可接收成长点</p>}
+        <label className="training-transfer-quantity">转移数量 <output>{transferAmount}</output><input aria-label="转移数量" type="range" min="0" max={Math.max(0, available)} disabled={available <= 0} value={transferAmount} onChange={event => setTransferAmount(Number(event.target.value))} /></label>
+        <dl className="training-transfer-calc"><div><dt>来源扣除</dt><dd>{transferAmount} 点</dd></div><div><dt>手续费</dt><dd>{fee} 点</dd></div><div><dt>{target?.name ?? '目标'}获得</dt><dd>{transferAmount - fee} 点</dd></div></dl>
+        <p>手续费50%，向上取整，已包含在来源扣除中</p>
+      </div><footer><button type="button" className="flow-primary" disabled={!canTransfer} onClick={() => setTransferConfirm(true)}>确认转移</button><button type="button" onClick={closeTransfer}>返回</button></footer></aside>}
+    </main>
+    <footer className="flow-frame training-growth-footer">{showTransfer ? <p>转移过程中不能更换来源伙伴或分配成长点</p> : isShopPending
+      ? <button type="button" onClick={() => dispatch({ type: 'CANCEL_GROWTH_ITEM' })}>取消使用</button>
+      : isBossNode ? <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 →</button>
+      : <p>每位伙伴独立持有成长点</p>}</footer>
+    {transferConfirm && selectedUnit && target && <div className="growth-modal-overlay" onClick={() => setTransferConfirm(false)}><div className="growth-modal" onClick={event => event.stopPropagation()}>
+      <h3>确认转移</h3><div className="growth-modal-content"><p>从 {selectedUnit.name} 转移 {transferAmount} 点成长点</p><p>手续费：{fee} 点</p><p>{target.name} 实际获得：{transferAmount - fee} 点</p></div><div className="growth-modal-actions">
+        <button type="button" className="primary btn" onClick={() => { dispatch({ type: 'PROF_TRANSFER_GROWTH', sourceUid: selectedUnit.uid, targetUid: target.uid, amount: transferAmount }); closeTransfer(); }}>确认</button>
+        <button type="button" className="btn" onClick={() => setTransferConfirm(false)}>取消</button>
+      </div></div></div>}
+  </div>;
 }

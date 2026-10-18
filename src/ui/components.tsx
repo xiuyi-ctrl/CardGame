@@ -6,8 +6,9 @@ import { getDecodedImage, loadImage } from './imageCache';
 import { getPassive } from '../game/data/passives';
 import { getSkillEnhanceBonus } from '../game/core/growth';
 import { CURSE_CN } from '../game/state/game';
+import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
 
-/** 技能数值简述：仅伤害/治疗/buff效果数值，如 "5"、"3×2"、"🛡7" */
+/** 技能数值简述：仅伤害/治疗/buff效果数值，如 "5"、"3×2"、"7" */
 export function skillBrief(s: SkillDef, enhanced: number = 0): string {
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   if (s.kind === 'attack') {
@@ -20,38 +21,11 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
     const shieldEffect = s.effects?.find(e => e.kind === 'shield');
     if (shieldEffect) {
       const val = shieldEffect.value + bonus.effectBonus;
-      return `🛡${val}`;
+      return String(val);
     }
   }
   return '';
 }
-
-const EFFECT_ICON: Record<StatusEffect['kind'], string> = {
-  burn: '🔥',
-  poison: '☠️',
-  atkUp: '⬆️',
-  atkDown: '⬇️',
-  stun: '💫',
-  healTick: '✚',
-  shield: '🛡️',
-  taunt: '🫧',
-  spdDown: '🕸️',
-  thorns: '🌿',
-  shieldCounter: '🛡️',
-  thornSpikes: '🔱',
-  rageThorn: '🔴',
-  waterCurtain: '🌊',
-  flameShield: '🔥',
-  windSpd: '💨',
-  comboBoost: '✖️',
-  shadowMark: '🌑',
-  sporeShield: '🍄',
-  toxicBurstReady: '💀',
-  chainLink: '🔗',
-  skillSeal: '🔒',
-  skillSealPending: '⏳',
-  fear: '😱',
-};
 
 function effectText(e: StatusEffect): string {
   const turns = e.turns > 0 ? `，持续 ${e.turns} 回合` : '';
@@ -236,7 +210,7 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   return effects ? `${desc}（${effects}）` : desc;
 }
 
-/** 技能标签：名称 + 效果图标（如 🔥）+ 伤害/治疗数值；desc 模式下追加展示完整描述 */
+/** 技能标签：名称 + 状态像素图标 + 伤害/治疗数值；desc 模式下追加展示完整描述 */
 export function SkillTag({
   skill,
   className = '',
@@ -253,7 +227,7 @@ export function SkillTag({
   enhanced?: number;
 }) {
   const full = skillFullDesc(skill, enhanced);
-  const icons = (skill.effects ?? []).map((e) => EFFECT_ICON[e.kind]).join('');
+  const effects = skill.effects ?? [];
   const brief = skillBrief(skill, enhanced);
   const usesChip = usesNote && skill.uses !== undefined ? (
     <span className="skill-uses-note">每场限 {skill.uses} 次</span>
@@ -263,7 +237,7 @@ export function SkillTag({
     <span className="skill-head">
       <span className="skill-name">{skill.name}{enhanceLabel && <span style={{ color: '#e8c26a', marginLeft: 2 }}>{enhanceLabel}</span>}</span>
       <span className="skill-right">
-        {icons && <span className="skill-icons">{icons}</span>}
+        {effects.length > 0 && <span className="skill-icons">{effects.map((effect, index) => <BuffIcon key={index} art={STATUS_ART[effect.kind]} />)}</span>}
         {brief && <span className="skill-num" style={enhanced > 0 ? { color: '#e8c26a' } : undefined}>{brief}</span>}
       </span>
     </span>
@@ -283,32 +257,6 @@ export function SkillTag({
     </span>
   );
 }
-
-const STATUS_ICON: Record<string, { icon: string; label: string }> = {
-  burn: { icon: '🔥', label: '灼烧' },
-  poison: { icon: '☠️', label: '中毒' },
-  atkUp: { icon: '⬆️', label: '攻击提升' },
-  atkDown: { icon: '⬇️', label: '攻击降低' },
-  stun: { icon: '💫', label: '眩晕' },
-  healTick: { icon: '💚', label: '持续治疗' },
-  shield: { icon: '🛡️', label: '护盾' },
-  taunt: { icon: '🫧', label: '嘲讽' },
-  spdDown: { icon: '🕸️', label: '速度降低' },
-  thorns: { icon: '🌿', label: '荆棘反伤' },
-  shieldCounter: { icon: '🛡️', label: '盾反' },
-  thornSpikes: { icon: '🔱', label: '复仇棘甲' },
-  rageThorn: { icon: '🔴', label: '怒棘' },
-  waterCurtain: { icon: '🌊', label: '水幕' },
-  flameShield: { icon: '🟠', label: '烈焰护盾' },
-  windSpd: { icon: '💨', label: '风羽' },
-  comboBoost: { icon: '✖️', label: '连击段数' },
-  shadowMark: { icon: '🌑', label: '暗影印记' },
-  sporeShield: { icon: '🍄', label: '孢子防护' },
-  toxicBurstReady: { icon: '💀', label: '毒性爆发蓄力' },
-  chainLink: { icon: '🔗', label: '锁链连接' },
-  skillSealPending: { icon: '⏳', label: '封印即将生效' },
-  fear: { icon: '😱', label: '恐惧' },
-};
 
 /** 内联宠物图标：有 image 时显示小图，否则显示 emoji */
 export function PetIcon({ image, emoji, name, className = '' }: { image?: string; emoji: string; name: string; className?: string }) {
@@ -333,35 +281,34 @@ export function StatusIcons({ unit }: { unit: Unit }) {
   return (
     <span className="statuses">
       {visible.map((s, i) => {
-        // 怒棘：专属红色圆点图标，显示层数
+        // 怒棘显示层数。
         if (s.kind === 'rageThorn') {
           return (
             <span key={i} title={`怒棘（攻击+${s.value}，反伤+${s.value}，剩余 ${s.turns} 回合）`}>
-              🔴×{s.value}
+              <BuffIcon art={STATUS_ART.rageThorn} />×{s.value}
             </span>
           );
         }
-        // 水幕：专属水滴图标，显示减伤值
+        // 水幕显示减伤值。
         if (s.kind === 'waterCurtain') {
           return (
             <span key={i} title={`水幕（受伤 -${s.value}，剩余 ${s.turns} 回合）`}>
-              🌊-{s.value}
+              <BuffIcon art={STATUS_ART.waterCurtain} />-{s.value}
             </span>
           );
         }
-        const meta = STATUS_ICON[s.kind];
-        if (!meta) return null;
+        const art = STATUS_ART[s.kind];
         const tip =
           s.kind === 'burn' || s.kind === 'poison'
-            ? `${meta.label}（${s.value} 层，每回合结算一半）`
+            ? `${art[0]}（${s.value} 层，每回合结算一半）`
             : s.kind === 'fear'
-            ? `${meta.label}（${s.value} 层，≥3层受伤+1，≥6层震慑）`
+            ? `${art[0]}（${s.value} 层，≥3层受伤+1，≥6层震慑）`
             : s.kind === 'windSpd'
-            ? `${meta.label}（速度 +${s.value}，剩余 ${s.turns} 回合）`
-            : `${meta.label}（剩余 ${s.turns} 回合）`;
+            ? `${art[0]}（速度 +${s.value}，剩余 ${s.turns} 回合）`
+            : `${art[0]}（剩余 ${s.turns} 回合）`;
         return (
           <span key={i} title={tip}>
-            {meta.icon}{s.kind === 'fear' && s.value > 1 ? <sup>×{s.value}</sup> : null}
+            <BuffIcon art={art} />{s.kind === 'fear' && s.value > 1 ? <sup>×{s.value}</sup> : null}
           </span>
         );
       })}
@@ -369,12 +316,12 @@ export function StatusIcons({ unit }: { unit: Unit }) {
   );
 }
 
-const BATTLE_BUFF_ICON: Record<string, { icon: string; label: string }> = {
-  atkUp: { icon: '⚔️', label: '伤害 +2' },
-  spdUp: { icon: '💨', label: '速度 +2' },
-  atkDown: { icon: '🪄', label: '伤害 -2' },
-  spdDown: { icon: '🕸️', label: '速度 -2' },
-  skillSpd: { icon: '💨', label: '技能速度加成' },
+const BATTLE_BUFF_LABEL: Record<keyof NonNullable<Unit['battleBuffs']>, string> = {
+  atkUp: '伤害 +2',
+  spdUp: '速度 +2',
+  atkDown: '伤害 -2',
+  spdDown: '速度 -2',
+  skillSpd: '技能速度加成',
 };
 
 export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride, thornsHitCountOverride }: { unit: Unit; stacksOverride?: number; rockShellHitsOverride?: number; thornsHitCountOverride?: number }) {
@@ -396,19 +343,19 @@ export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride, thor
   );
 }
 
-const CURSE_ICON: Record<string, { icon: string; tip: string }> = {
-  hpDown: { icon: '💔', tip: '血脆（生命 -5）' },
-  atkDown: { icon: '🪄', tip: '虚弱（伤害 -2）' },
-  spdDown: { icon: '🕸️', tip: '迟缓（速度 -2）' },
+const CURSE_TIPS: Record<string, string> = {
+  hpDown: '血脆（生命 -5）',
+  atkDown: '虚弱（伤害 -2）',
+  spdDown: '迟缓（速度 -2）',
 };
 
 export function CurseBadge({ unit }: { unit: Unit }) {
   if (!unit.curse) return null;
-  const meta = CURSE_ICON[unit.curse];
+  const meta = CURSE_TIPS[unit.curse];
   if (!meta) return null;
   return (
-    <span className="curse-badge" title={meta.tip}>
-      {meta.icon}{CURSE_CN[unit.curse]}
+    <span className="curse-badge" title={meta}>
+      <BuffIcon art={CURSE_ART[unit.curse]} />{CURSE_CN[unit.curse]}
     </span>
   );
 }
@@ -416,13 +363,13 @@ export function CurseBadge({ unit }: { unit: Unit }) {
 export function BattleBuffIcons({ unit }: { unit: Unit }) {
   const buffs = unit.battleBuffs;
   if (!buffs) return null;
-  const entries = Object.entries(buffs).filter(([k, v]) => v && BATTLE_BUFF_ICON[k] && k !== 'skillSpd');
+  const entries = (Object.entries(buffs) as [keyof typeof BATTLE_BUFF_ART, number][]).filter(([k, v]) => v && BATTLE_BUFF_ART[k]);
   if (entries.length === 0) return null;
   return (
     <span className="battle-buffs">
       {entries.map(([k, v]) => (
-        <span key={k} title={k === 'skillSpd' ? `${BATTLE_BUFF_ICON[k].label} +${v}` : `${BATTLE_BUFF_ICON[k].label}（剩余 ${v} 回合）`}>
-          {BATTLE_BUFF_ICON[k].icon}
+        <span key={k} title={k === 'skillSpd' ? `${BATTLE_BUFF_LABEL[k]} +${v}` : `${BATTLE_BUFF_LABEL[k]}（剩余 ${v} 回合）`}>
+          <BuffIcon art={BATTLE_BUFF_ART[k]} />
           <sup>{k === 'skillSpd' ? `+${v}` : v}</sup>
         </span>
       ))}
@@ -484,6 +431,12 @@ export function PixelCreature({ unit }: { unit: Unit }) {
   return image ? <BattlePixelSprite src={image} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>;
 }
 
+export function BattleHpText({ hp, maxHp }: { hp: number; maxHp: number }) {
+  const pct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+  const color = pct <= 25 ? 'var(--hp-low)' : pct <= 60 ? 'var(--hp-mid)' : 'var(--hp-good)';
+  return <span><span style={{ color }}>{hp}</span>/{maxHp}</span>;
+}
+
 export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, imageOverride, battleScene = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
@@ -515,7 +468,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
           </span>
           <span className="battle-stat battle-stat-hp" title="生命">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h4v1h2v1h1V3h2V2h3v1h1v6h-1v2h-2v2h-2v2H6v-2H4v-2H2V9H1V3h1z" fill="currentColor" stroke="#090712" strokeWidth="1.5" strokeLinejoin="miter" /></svg>
-            {battleScene ? unit.hp : `${unit.hp}/${unit.maxHp}`}
+            {battleScene ? <BattleHpText hp={unit.hp} maxHp={unit.maxHp} /> : `${unit.hp}/${unit.maxHp}`}
           </span>
         </span>
       </div>
@@ -531,7 +484,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
         {topStats && (
           <div className="card-stats">
             <div className="card-stat" style={spdColor ? { color: spdColor } : undefined}>
-              {unit.shield > 0 && <span>🛡️{unit.shield} </span>}⚡{effectiveSpd}
+              {unit.shield > 0 && <span><BuffIcon art={STATUS_ART.shield} />{unit.shield} </span>}⚡{effectiveSpd}
             </div>
           </div>
         )}
@@ -540,7 +493,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
         <div>
           <div className="card-name">{unit.name}</div>
           <div className="card-sub">
-            {unit.shield > 0 && <span>🛡️{unit.shield} </span>}
+            {unit.shield > 0 && <span><BuffIcon art={STATUS_ART.shield} />{unit.shield} </span>}
             <span style={spdColor ? { color: spdColor } : undefined}>⚡{effectiveSpd}</span>
           </div>
         </div>
@@ -667,7 +620,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
   const passive = getPassive(unit.passive);
   const buffs = unit.battleBuffs;
   const battleBuffEntries = buffs
-    ? (Object.entries(buffs) as [string, number][]).filter(([k, v]) => v && k !== 'skillSpd')
+    ? (Object.entries(buffs) as [keyof typeof BATTLE_BUFF_ART, number][]).filter(([k, v]) => v && k !== 'skillSpd')
     : [];
   const statuses = unit.statuses;
   const hasPassive = !!passive;
@@ -711,11 +664,11 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
 
   if (!hasPassive && !hasStatuses && !hasBattleBuffs) return null;
 
-  const battleBuffMeta: Record<string, { icon: string; label: string }> = {
-    atkUp: { icon: '⚔️', label: '伤害加成' },
-    spdUp: { icon: '💨', label: '速度加成' },
-    atkDown: { icon: '🪄', label: '伤害降低' },
-    spdDown: { icon: '🕸️', label: '速度降低' },
+  const battleBuffMeta: Record<string, { label: string }> = {
+    atkUp: { label: '伤害加成' },
+    spdUp: { label: '速度加成' },
+    atkDown: { label: '伤害降低' },
+    spdDown: { label: '速度降低' },
   };
 
   return (
@@ -738,15 +691,14 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
         <div className="buff-section">
           <div className="buff-section-label">状态</div>
           {statuses.map((s, i) => {
-        const meta = STATUS_ICON[s.kind];
-            if (!meta) return null;
+            const art = STATUS_ART[s.kind];
             const descFn = STATUS_DESC[s.kind];
-            const desc = descFn ? descFn(s.value) : '';
+            const desc = descFn ? descFn(s.value) : effectText(s);
             const stacks = s.kind === 'burn' || s.kind === 'poison' || s.kind === 'rageThorn';
             return (
               <div key={i} className="buff-item">
-                <span className="buff-icon">{meta.icon}</span>
-                <span className="buff-name">{meta.label}{stacks && s.value > 1 ? ` ×${s.value}` : ''}</span>
+                <span className="buff-icon"><BuffIcon art={art} /></span>
+                <span className="buff-name">{art[0]}{stacks && s.value > 1 ? ` ×${s.value}` : ''}</span>
                 <span className="buff-turns">{s.kind !== 'shield' && s.turns > 0 ? `${s.turns}回合` : ''}</span>
                 <span className="buff-desc">{desc}</span>
               </div>
@@ -762,7 +714,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
             if (!m) return null;
             return (
               <div key={k} className="buff-item">
-                <span className="buff-icon">{m.icon}</span>
+                <span className="buff-icon"><BuffIcon art={BATTLE_BUFF_ART[k]} /></span>
                 <span className="buff-name">{m.label}</span>
                 <span className="buff-turns">{v}回合</span>
               </div>

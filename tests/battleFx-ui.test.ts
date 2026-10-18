@@ -563,7 +563,8 @@ describe('useBattleFx：战斗记录随攻击动画逐条揭示', () => {
     const popOnB = result.current.pops.filter((p) => p.uid === b.uid);
     const popOnA = result.current.pops.filter((p) => p.uid === a.uid);
     expect(popOnB.length).toBe(1);
-    expect(popOnB[0].text).toBe('🛡️护盾');
+    expect(popOnB[0].text).toBe('护盾');
+    expect(popOnB[0].statusIcon).toBe('shield');
     expect(popOnB[0].shield).toBe(true);
     expect(popOnA.length).toBe(0);
 

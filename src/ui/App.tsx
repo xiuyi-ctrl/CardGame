@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import type { Dispatch, DragEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, CUSTOM_PRESETS, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -13,8 +13,7 @@ import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
-import { getMaxSkillSlots } from '../game/core/growth';
-import { UnitCard, SkillTag, DragScrollRow, PetIcon, PixelCreature, BattlePixelSprite } from './components';
+import { UnitCard, SkillTag, PetIcon, PixelCreature, BattlePixelSprite } from './components';
 import { GrowthScreen } from './GrowthScreen';
 import { BlacksmithScreen } from './BlacksmithScreen';
 import { EnhanceStoneScreen } from './EnhanceStoneScreen';
@@ -23,8 +22,18 @@ import { Arena3Screen } from './Arena3Screen';
 import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
-import { BATTLE_BUFF_ICON_IMAGES } from './BattleStatusIcons';
+import { BATTLE_BUFF_ICON_IMAGES, BuffIcon, CURSE_ART } from './BuffIcon';
 import { FORMATION_SPRITES } from './formationSprites';
+import { BACKPACK_ITEM_ART } from './backpackItemArt';
+import './backpack.css';
+import { FLOW_ART, FLOW_ICON_NAMES, FlowIcon, FlowHeader, FlowPet, FlowPetStats, FlowTeam, flowChoiceArt } from './MainFlowArt';
+import './mainFlow.css';
+import './remainingMain.css';
+import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalScreen } from './ProgressionScreens';
+import { CampRestScreen, CampFusionScreen, CampFusionSkillScreen, SpecialTargetScreen } from './CampScreens';
+import { ProficiencyReport } from './ProficiencyArt';
+import chestOpenArt from './assets/chest-open.svg';
+import watchtowerTelescopeArt from './assets/watchtower-telescope.svg';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { MapNodeIcon } from './MapNodeIcon';
 import { ShopItemIcon } from './ShopItemIcon';
@@ -100,11 +109,78 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         '/capture-food-icons/gem.png', '/capture-food-icons/golden_fruit.png',
         ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
     case 'reward':
-      return ['/reward-background.png', ...creatureImages(state.roster)];
+      return ['/roster-camp-background.png', '/reward-icons/gold.png', '/reward-icons/food.png', '/reward-icons/heal.png',
+        ...state.rewards.flatMap((reward) => {
+          const recruit = reward.kind === 'recruit' && reward.monsterId ? getMonster(reward.monsterId) : undefined;
+          const image = recruit ? formationImage(recruit.id, recruit.image) : undefined;
+          return image ? [image] : [];
+        })];
     case 'roster':
-      return ['/roster-camp-background.png', ...creatureImages(state.roster)];
+      return ['/roster-camp-background.png', '/formation-camp.png', `${FLOW_ART}/partner-camp.png`, `${FLOW_ART}/encounter-shrine.png`, homePawIcon, ...BATTLE_BUFF_ICON_IMAGES, ...creatureImages(state.roster),
+        ...state.roster.flatMap((unit) => {
+          const image = formationImage(unit.speciesId, unit.image);
+          const next = nextStage(unit.speciesId);
+          const nextImage = next ? formationImage(next, getMonster(next).image) : undefined;
+          return [image, nextImage].filter((src): src is string => !!src);
+        })];
     case 'shop':
-      return ['/shop-stall-background.png'];
+      return ['/shop-stall-background.png', '/reward-icons/gold.png', homePawIcon,
+        ...(state.shopStock ?? []).flatMap((id) => BACKPACK_ITEM_ART[id] ? [BACKPACK_ITEM_ART[id]] : [])];
+    case 'backpack':
+      return ['/roster-camp-background.png', homeContinueIcon, homePawIcon, '/reward-icons/gold.png',
+        ...Object.entries(state.inventory).flatMap(([id, count]) => count > 0 && BACKPACK_ITEM_ART[id] ? [BACKPACK_ITEM_ART[id]] : []),
+        ...state.roster.flatMap((unit) => {
+          const image = formationImage(unit.speciesId, unit.image);
+          return image ? [image] : [];
+        })];
+    case 'event':
+    case 'special':
+    case 'tame-overflow':
+    case 'inter_act':
+    case 'victory':
+    case 'gameover': {
+      const backgrounds = { event: 'event-forest', special: 'encounter-shrine', 'tame-overflow': 'partner-camp',
+        inter_act: 'interact-sunset', victory: 'victory-dawn', gameover: 'defeat-dusk' };
+      return [`${FLOW_ART}/${backgrounds[screen]}.png`, '/reward-icons/gold.png', '/reward-icons/heal.png', '/reward-icons/food.png',
+        ...FLOW_ICON_NAMES.map(name => `${FLOW_ART}/icons/${name}.png`), ...Object.values(BACKPACK_ITEM_ART),
+        ...[...state.roster, ...(state.tameOverflow ?? [])].flatMap(unit => {
+          const image = formationImage(unit.speciesId, unit.image);
+          return image ? [image] : [];
+        })];
+    }
+    case 'watchtower':
+      return [`${FLOW_ART}/event-forest.png`, watchtowerTelescopeArt, '/reward-icons/gold.png'];
+    case 'chest':
+      return [`${FLOW_ART}/encounter-shrine.png`, chestOpenArt, '/reward-icons/gold.png', '/reward-icons/heal.png', ...Object.values(BACKPACK_ITEM_ART)];
+    case 'gauntlet-order':
+      return [`${FLOW_ART}/partner-camp.png`, ...state.roster.flatMap(unit => {
+        const image = formationImage(unit.speciesId, unit.image);
+        return image ? [image] : [];
+      })];
+    case 'rest':
+    case 'rest-fusion':
+    case 'rest-fusion-skill':
+    case 'skill-pick':
+    case 'growth-menu':
+    case 'blacksmith':
+    case 'enhance-stone':
+    case 'enhance-reset':
+    case 'arena3':
+    case 'proficiency-result':
+      return ['/formation-camp.png', `${FLOW_ART}/victory-dawn.png`, `${FLOW_ART}/defeat-dusk.png`, `${FLOW_ART}/icons/fuse-companion.png`, `${FLOW_ART}/icons/rating-laurel.png`, `${FLOW_ART}/icons/victory-crown.png`, `${FLOW_ART}/icons/journey-end.png`, BACKPACK_ITEM_ART.skill_enhance_stone, BACKPACK_ITEM_ART.reset_stone, ...state.roster.flatMap(unit => {
+        const image = formationImage(unit.speciesId, unit.image);
+        return image ? [image] : [];
+      })];
+    case 'boost':
+    case 'custom':
+    case 'revive-select':
+    case 'achievements':
+      return [`${FLOW_ART}/partner-camp.png`, `${FLOW_ART}/encounter-shrine.png`, homeAchievementIcon,
+        `${FLOW_ART}/icons/rating-laurel.png`, `${FLOW_ART}/icons/journey-end.png`,
+        ...[...state.roster, ...(state.deadPets ?? [])].flatMap(unit => {
+          const image = formationImage(unit.speciesId, unit.image);
+          return image ? [image] : [];
+        })];
     default:
       return [];
   }
@@ -115,6 +191,8 @@ export default function App() {
   const [readyScreen, setReadyScreen] = useState<string | null>(null);
   const screenKey = state.screen === 'map' ? `${state.screen}-${state.runMode}-${state.act}` : state.screen;
   const imagesReady = readyScreen === screenKey || screenImages(state.screen, state).every((src) => !!getDecodedImage(src));
+
+  useEffect(() => { void preloadImages(BATTLE_BUFF_ICON_IMAGES); }, []);
 
   useEffect(() => {
     let active = true;
@@ -149,7 +227,7 @@ export default function App() {
   }, [state.toast]);
 
   return (
-    <div className={state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : state.screen === 'difficulty-select' ? 'screen screen-difficulty' : 'screen'}>
+    <div className={['event', 'special', 'tame-overflow', 'inter_act', 'victory', 'gameover', 'watchtower', 'chest', 'gauntlet-order', 'boost', 'custom', 'revive-select', 'achievements', 'rest', 'rest-fusion', 'rest-fusion-skill', 'skill-pick', 'growth-menu', 'blacksmith', 'enhance-stone', 'enhance-reset', 'arena3', 'proficiency-result'].includes(state.screen) || (state.screen === 'roster' && !state.postBattle && (!state.specialPending || state.specialPending.kind === 'evolve' || ['boost', 'arena', 'growthPoint', 'shopSlotUnlock', 'eventBoostHp', 'eventBoostSpd', 'eventResetGrowth', 'eventSkillReplace', 'arena3Exhibition'].includes(state.specialPending.kind))) ? 'screen screen-flow' : state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'backpack' ? 'screen screen-backpack' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : state.screen === 'difficulty-select' ? 'screen screen-difficulty' : 'screen'}>
       {!imagesReady && <div className="screen-assets-loading" role="status" aria-live="polite">正在准备画面…</div>}
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
       {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
@@ -362,6 +440,7 @@ function FuseDiscardConfirm({
     <div className="confirm-overlay" onClick={() => setConfirm(null)}>
       <div className={`confirm-box${isDiscard || isReplace ? ' popup-danger' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : isReplace ? '确认替换' : isTameFuse ? '确认融合' : '提示'}</div>
+        <div className="popup-body">
         {isFuse && target && (
           <p>
             确定要融合「{target.name}」吗？将与同物种宠物融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>，继承强化/诅咒，生命回满。
@@ -385,6 +464,7 @@ function FuseDiscardConfirm({
           </p>
         )}
         {confirm.kind === 'notice' && <p>{confirm.msg}</p>}
+        </div>
         <div className="panel-row" style={{ justifyContent: 'center' }}>
           {(isFuse || isDiscard || isReplace || isTameFuse) ? (
             <>
@@ -1089,14 +1169,16 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       )}
       {deleteTarget !== null && (
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setDeleteTarget(null)}>
-          <div className="confirm-box popup-danger" onClick={(e) => e.stopPropagation()}>
+          <div className="confirm-box popup-danger popup-save" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">删除存档</div>
+            <div className="popup-body">
             <p>
               确定要删除存档 <b>{deleteTarget}</b> 吗？
             </p>
             <p className="popup-consequence">
               此操作不可撤销。
             </p>
+            </div>
             <div className="panel-row" style={{ justifyContent: 'center' }}>
               <button className="primary" onClick={confirmDelete}>确定删除</button>
               <button onClick={() => setDeleteTarget(null)}>取消</button>
@@ -1106,14 +1188,16 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       )}
       {overwriteTarget !== null && (
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setOverwriteTarget(null)}>
-          <div className="confirm-box popup-danger" onClick={(e) => e.stopPropagation()}>
+          <div className="confirm-box popup-danger popup-save" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">覆盖存档</div>
+            <div className="popup-body">
             <p>
               存档 <b>{overwriteTarget}</b> 已有游戏，确定覆盖？
             </p>
             <p className="popup-consequence">
               旧存档将被删除，此操作不可撤销。
             </p>
+            </div>
             <div className="panel-row" style={{ justifyContent: 'center' }}>
               <button className="primary" onClick={confirmOverwrite}>确定覆盖</button>
               <button onClick={() => setOverwriteTarget(null)}>取消</button>
@@ -1123,14 +1207,16 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       )}
       {profConfirmSlot !== null && (
         <div className="confirm-overlay" style={{ zIndex: 1100 }} onClick={() => setProfConfirmSlot(null)}>
-          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+          <div className="confirm-box popup-save" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">熟练度远征</div>
+            <div className="popup-body">
             <p>
               存档 <b>{profConfirmSlot}</b> 有未完成的熟练度远征
             </p>
             <p className="popup-consequence">
               重新开始将覆盖当前远征记录
             </p>
+            </div>
             <div className="panel-row" style={{ justifyContent: 'center' }}>
               <button className="primary" onClick={profConfirmContinue}>继续游戏</button>
               <button onClick={profConfirmRestart}>重新开始</button>
@@ -1187,7 +1273,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
           </button>
         </div>
       )}
-      {showCodex && <CodexScreen onClose={() => setShowCodex(false)} />}
+      {showCodex && createPortal(<CodexScreen onClose={() => setShowCodex(false)} />, document.body)}
     </div>
   );
 }
@@ -1203,6 +1289,12 @@ const CODEX_GROUPS: { key: string; label: string; match: (m: MonsterSpecies) => 
 ];
 
 function CodexScreen({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    void preloadImages(['/formation-camp.png', homeCodexIcon, ...Object.values(MONSTERS).flatMap(species => {
+      const image = formationImage(species.id, species.image);
+      return image ? [image] : [];
+    })]);
+  }, []);
   const groups = useMemo(
     () =>
       CODEX_GROUPS.map((g) => ({
@@ -1226,47 +1318,47 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
   const tameable = sp.rank !== 4;
 
   return (
-    <div className="codex-root">
-      <div className="codex-header">
-        <div className="codex-title">📖 生物图鉴</div>
+    <div className="codex-root flow-screen codex-terminal">
+      <header className="codex-header flow-frame">
+        <h1 className="codex-title"><img src={homeCodexIcon} alt="" />生物图鉴</h1>
         <div className="codex-sub">
-          共 {Object.keys(MONSTERS).length} 种生物 · 点击左侧查看详情
+          查看生物属性、技能与进化
         </div>
-        <button className="primary" onClick={onClose}>
+        <button type="button" onClick={onClose}>
           返回
         </button>
-      </div>
+      </header>
       <div className="codex-body">
-        <div className="codex-list">
+        <nav className="codex-list flow-frame" aria-label="生物目录">
           {groups.map((g) => (
             <div key={g.key} className="codex-group">
               <div className="codex-group-title">{g.label}</div>
               {g.items.map((m) => {
-                const num = m.image ? m.image.replace('/', '').replace('.png', '') : '';
                 return (
-                  <div
+                  <button type="button"
                     key={m.id}
                     className={`codex-item ${m.id === selectedId ? 'selected' : ''}`}
+                    aria-pressed={m.id === selectedId}
                     onClick={() => setSelectedId(m.id)}
                   >
-                    <span className="codex-item-num">{num}</span>
+                    <span className="codex-item-emoji"><PetIcon image={formationImage(m.id, m.image)} emoji={m.emoji} name={m.name} /></span>
                     <span className="codex-item-name">{m.name}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           ))}
-        </div>
-        <div className="codex-detail">
+        </nav>
+        <main className="codex-detail flow-frame">
           <div className="codex-detail-head">
-            <span className="codex-detail-emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
+            <span className="codex-detail-emoji"><PetIcon image={formationImage(sp.id, sp.image)} emoji={sp.emoji} name={sp.name} /></span>
             <div>
               <div className="codex-detail-name">
                 {sp.name}
                 <span className="chip rank-chip">{rankLabel}</span>
               </div>
               <div className="codex-detail-stats">
-                ❤️ 生命 {stats.maxHp} · ⚡ 速度 {stats.spd}
+                <span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />生命 {stats.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />速度 {stats.spd}</span>
               </div>
             </div>
           </div>
@@ -1277,10 +1369,10 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
             return (
               <>
                 <div className="codex-form-block form-1">
-                  <div className="codex-form-title">🔥 形态1：HP &gt; 50%</div>
+                  <div className="codex-form-title">形态1：生命 &gt; 50%</div>
                   {p1 && (
                     <div className="codex-passive" title={p1.desc}>
-                      💠 {p1.name}：{p1.desc}
+                      {p1.name}：{p1.desc}
                     </div>
                   )}
                   <div className="codex-skills">
@@ -1291,10 +1383,10 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
                 <div className="codex-form-block form-2">
-                  <div className="codex-form-title">💥 形态2：HP ≤ 50%</div>
+                  <div className="codex-form-title">形态2：生命 ≤ 50%</div>
                   {p2 && (
                     <div className="codex-passive" title={p2.desc}>
-                      💠 {p2.name}：{p2.desc}
+                      {p2.name}：{p2.desc}
                     </div>
                   )}
                   <div className="codex-skills">
@@ -1312,15 +1404,15 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
             <>
               {passive && (
                 <div className="codex-section">
-                  <div className="codex-sec-title">💠 专属被动</div>
+                  <div className="codex-sec-title">专属被动</div>
                   <div className="codex-passive" title={passive.desc}>
-                    {passive.name}：{passive.desc}
+                    <strong>{passive.name}</strong>：{passive.desc}
                   </div>
                 </div>
               )}
 
               <div className="codex-section">
-                <div className="codex-sec-title">⚔️ 技能</div>
+                <div className="codex-sec-title">技能</div>
                 <div className="codex-skills">
                   {sp.skills.map((sid) => {
                     const s = getSkill(sid);
@@ -1334,34 +1426,34 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
             </>
           )}
 
-          <div className="codex-section">
-            <div className="codex-sec-title">🎣 驯服</div>
+          <div className="codex-meta-grid"><div className="codex-section">
+            <div className="codex-sec-title">驯服</div>
             <div className="codex-line">
               {tameable ? `驯服成功率 ${Math.round(sp.tame.difficulty * 100)}%` : '首领 · 不可驯服'}
             </div>
           </div>
 
           <div className="codex-section">
-            <div className="codex-sec-title">✨ 融合</div>
+            <div className="codex-sec-title">融合</div>
             <div className="codex-line">
               {next ? (
                 <>
                   需 {fusionNeedCount(sp.id)} 只同物种 →{' '}
-                  <span
+                  <button type="button"
                     className="codex-link"
                     onClick={() => setSelectedId(next)}
                   >
-                    <PetIcon image={getMonster(next).image} emoji={getMonster(next).emoji} name={getMonster(next).name} /> {getMonster(next).name}
-                  </span>
+                    <PetIcon image={formationImage(next, getMonster(next).image)} emoji={getMonster(next).emoji} name={getMonster(next).name} /> {getMonster(next).name}
+                  </button>
                 </>
               ) : (
                 '不可融合'
               )}
             </div>
-          </div>
+          </div></div>
 
-          {sp.desc && <div className="codex-desc">{sp.desc}</div>}
-        </div>
+          {sp.desc && <div className="codex-section codex-description"><div className="codex-sec-title">生物说明</div><p className="codex-desc">{sp.desc}</p></div>}
+        </main>
       </div>
     </div>
   );
@@ -1911,22 +2003,21 @@ function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
         <div className="reward-heading"><svg className="reward-swords" viewBox="0 0 48 48" aria-hidden="true" shapeRendering="crispEdges"><path d="M7 6h7l28 28-5 5L9 11zM34 5h8v8l-4 4v-5h-5zM7 34l28-28 5 5L12 39H7zM4 38h9v6H4z" fill="#70d8bd"/><path d="M8 7h5l27 27-3 3L8 11zM35 7h5v5l-3 3v-5h-5z" fill="#b9fff0"/></svg><h1>{skipped ? '跳关奖励' : '战斗胜利'}</h1></div>
         <div className="reward-header-info">
           <span className="reward-location">{currentNode?.label ?? '远征战斗'} · 第 {state.act} 幕</span>
-          <span className="reward-gold"><ShopItemIcon itemId="gold_bag" />金币 <strong>{state.gold}</strong></span>
+          <span className="reward-gold"><img src="/reward-icons/gold.png" alt="" />金币 <strong>{state.gold}</strong></span>
         </div>
       </header>
       <main className="reward-content">
-        <section className="reward-scene" aria-label="战斗胜利后的营地" />
         <section className="reward-choice-panel" aria-labelledby="reward-choice-title">
           <div className="reward-panel-heading"><h2 id="reward-choice-title">选择一份战利品</h2></div>
-          <div className="reward-choice-list" style={{ gridTemplateRows: `repeat(${Math.max(1, state.rewards.length)}, minmax(0, 1fr))` }}>
+          <div className="reward-choice-list" style={{ gridTemplateColumns: `repeat(${Math.max(1, state.rewards.length)}, minmax(0, 1fr))` }}>
             {state.rewards.map((reward) => {
               const recruit = reward.kind === 'recruit' && reward.monsterId ? getMonster(reward.monsterId) : undefined;
               return <button key={reward.id} type="button" className={`reward-choice reward-choice-${reward.kind}`} aria-label={`领取：${reward.label}，${reward.desc}`} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id })}>
                 <span className={`reward-choice-icon reward-choice-icon-${reward.kind}`} aria-hidden="true">
-                  {recruit && <PetIcon image={recruit.image} emoji={recruit.emoji} name={recruit.name} />}
+                  {recruit ? <PetIcon image={formationImage(recruit.id, recruit.image)} emoji={recruit.emoji} name={recruit.name} /> : <img src={`/reward-icons/${reward.kind}.png`} alt="" draggable={false} />}
                 </span>
                 <span className="reward-choice-copy"><strong>{reward.label}</strong><small>{reward.desc}</small></span>
-                <span className="reward-claim"><span aria-hidden="true">◆</span>领取<span aria-hidden="true">◆</span></span>
+                <span className="reward-claim">领取</span>
               </button>;
             })}
           </div>
@@ -1967,13 +2058,10 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   if (state.postBattle) return <PostBattleRosterScreen state={state} dispatch={dispatch} />;
-  const title = evolveMode
-    ? pending.super
-      ? '超进化：选择要进化的宠物（会附带随机负面诅咒）'
-      : '进化之光：选择要进化的宠物'
-    : boostMode
-      ? '属性强化：选择要强化的宠物'
-      : growthPointMode
+  if (evolveMode || boostMode) return <ProgressionChoiceScreen state={state} dispatch={dispatch} />;
+  if (pending && ['arena', 'growthPoint', 'shopSlotUnlock', 'eventBoostHp', 'eventBoostSpd', 'eventResetGrowth', 'eventSkillReplace', 'arena3Exhibition'].includes(pending.kind)) return <SpecialTargetScreen state={state} dispatch={dispatch} />;
+  if (!pending) return <OrdinaryRosterScreen state={state} dispatch={dispatch} toggleField={toggleField} />;
+  const title = growthPointMode
         ? `选择一只宠物获得 ${pending.amount ?? 1} 成长点`
         : eventBoostMode
           ? `选择一只宠物永久 +${pending.amount ?? 1} ${pending.kind === 'eventBoostSpd' ? '速度' : '生命'}`
@@ -2037,7 +2125,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
                 <div className="panel-row" style={{ justifyContent: 'center' }}>
                   {u.curse && (
                     <span className="chip" title="负面诅咒，可用净化药水解除">
-                      ⚠️ {CURSE_CN[u.curse]}
+                      <BuffIcon art={CURSE_ART[u.curse]} /> {CURSE_CN[u.curse]}
                     </span>
                   )}
                   {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
@@ -2071,6 +2159,52 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   );
 }
 
+function OrdinaryRosterScreen({ state, dispatch, toggleField }: { state: GameState; dispatch: Dispatch<GameAction>; toggleField: (uid: string) => void }) {
+  const [focusedUid, setFocusedUid] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<PetConfirm>(null);
+  const focused = state.roster.find(unit => unit.uid === focusedUid) ?? state.roster[0];
+  const passive = focused ? getPassive(focused.passive) : undefined;
+  const fieldMax = state.map.boss[state.currentNodeId]
+    ? (state.runMode === 'proficiency' ? PROF_FIELD_MAX : FIELD_MAX)
+    : maxFieldForEnemy(state.formation?.encounter?.length ?? 1, state.runMode);
+  return <div className="flow-screen ordinary-roster-screen">
+    <FlowHeader title={`队伍管理 · ${state.roster.length}/${getMaxRoster(state.runMode)}`} state={state} fieldMax={fieldMax} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
+    <main className="ordinary-roster-layout">
+      <section className="flow-frame ordinary-roster-panel">
+        <div className="ordinary-roster-heading"><h2>队伍伙伴</h2><span>点击伙伴切换出战</span></div>
+        <div className="ordinary-roster-grid">{Array.from({ length: getMaxRoster(state.runMode) }, (_, index) => {
+          const unit = state.roster[index];
+          if (!unit) return <div className="flow-roster-empty" key={`empty-${index}`}>空位</div>;
+          const deployed = state.field.includes(unit.uid);
+          return <button type="button" key={unit.uid} className={`ordinary-roster-tile ${focused?.uid === unit.uid ? 'is-focused' : ''}`} aria-pressed={deployed}
+            aria-label={`${unit.name}，${deployed ? '已出战，点击下阵' : '待命，点击出战'}`}
+            onMouseEnter={() => setFocusedUid(unit.uid)} onFocus={() => setFocusedUid(unit.uid)} onClick={() => { setFocusedUid(unit.uid); toggleField(unit.uid); }}>
+            <span className={`ordinary-roster-badge ${deployed ? 'is-deployed' : ''}`}>{deployed ? '已出战' : '待命'}</span>
+            <FlowPet unit={unit} /><strong>{unit.name}</strong><FlowPetStats unit={unit} />
+          </button>;
+        })}</div>
+      </section>
+      <section className="flow-frame ordinary-roster-detail">
+        <h2>伙伴详情</h2>
+        {focused ? <>
+          <div className="ordinary-roster-profile"><FlowPet unit={focused} /><div><h3>{focused.name}</h3><span className="ordinary-detail-state">{state.field.includes(focused.uid) ? '已出战' : '待命'}</span><FlowPetStats unit={focused} /></div></div>
+          <div className="ordinary-roster-info">
+            {passive && <section className="flow-passive"><b>被动 · {passive.name}</b><p>{passive.desc}</p></section>}
+            <section><h3>技能</h3><div className="flow-skill-chips">{focused.skills.map(id => <span key={id} title={getSkill(id).desc}>{getSkill(id).name}</span>)}</div></section>
+            <section><h3>诅咒</h3><div className="ordinary-curse">{focused.curse ? <><BuffIcon art={CURSE_ART[focused.curse]} />{CURSE_CN[focused.curse]}</> : '无诅咒'}</div></section>
+            {focused.bonusStats && (focused.bonusStats.hp || focused.bonusStats.spd) ? <p className="ordinary-bonus">属性强化：{focused.bonusStats.hp ? `生命 +${focused.bonusStats.hp} ` : ''}{focused.bonusStats.spd ? `速度 +${focused.bonusStats.spd}` : ''}</p> : null}
+          </div>
+          <footer className="ordinary-detail-actions"><PetCardFooter unit={focused} state={state} setConfirm={setConfirm} />
+            <button type="button" className="flow-positive" disabled={!focused.curse || (state.inventory.purify ?? 0) <= 0} onClick={() => dispatch({ type: 'USE_PURIFY', uid: focused.uid })}>净化（{state.inventory.purify ?? 0}）</button>
+          </footer>
+        </> : <p>队伍中暂无伙伴</p>}
+      </section>
+    </main>
+    <footer className="flow-frame remaining-footer"><span>已出战 {state.field.length}/{fieldMax}</span><button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 →</button></footer>
+    {confirm && <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />}
+  </div>;
+}
+
 export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<PetConfirm>(null);
@@ -2084,7 +2218,7 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
 
   return <div className="postbattle-screen">
     <header className="postbattle-header">
-      <div className="postbattle-heading"><span aria-hidden="true">✦</span><div><h1>战后休整</h1><p>奖励已领取；整理伙伴后继续远征。</p></div></div>
+      <div className="postbattle-heading"><span className="postbattle-camp-icon" aria-hidden="true"><MapNodeIcon type="rest" /></span><h1>战后休整</h1></div>
       <div className="postbattle-header-actions">
         <span>队伍 {state.roster.length}/{getMaxRoster(state.runMode)}</span>
         <button type="button" onClick={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }}>返回首页</button>
@@ -2092,34 +2226,30 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
     </header>
     <main className="postbattle-layout">
       <section className="postbattle-roster-panel" aria-label="存活伙伴">
-        <div className="postbattle-result">
-          <div><strong>战斗胜利</strong><p>奖励已领取，以下仅展示仍在队伍中的伙伴。</p></div>
-          <div className="postbattle-rule"><small>战后可执行</small><span>{isProf ? '释放 · 暂不换阵' : '融合或释放 · 暂不换阵'}</span></div>
-        </div>
-        <div className="postbattle-roster-heading"><h2>存活伙伴</h2><span>队伍 {state.roster.length} / {getMaxRoster(state.runMode)}</span></div>
+        <div className="postbattle-roster-heading"><h2>存活伙伴</h2><span className="postbattle-result">奖励已领取</span></div>
         <div className="postbattle-roster-grid">
           {Array.from({ length: getMaxRoster(state.runMode) }, (_, index) => {
             const u = state.roster[index];
-            if (!u) return <div key={`empty-${index}`} className="postbattle-empty"><span aria-hidden="true">＋</span><small>空位</small></div>;
+            if (!u) return <div key={`empty-${index}`} className="postbattle-empty"><img src={homePawIcon} alt="" /><small>空位</small></div>;
+            const image = formationImage(u.speciesId, u.image);
             return <button key={u.uid} type="button" className={`postbattle-pet ${focused?.uid === u.uid ? 'selected' : ''}`}
               aria-label={`查看${u.name}，生命${u.hp}/${u.maxHp}，速度${u.spd}`}
               aria-pressed={focused?.uid === u.uid}
               onClick={() => setSelectedUid(u.uid)} onFocus={() => setSelectedUid(u.uid)}>
-              {focused?.uid === u.uid && <span className="postbattle-current">当前</span>}
-              <span className="postbattle-pet-portrait"><PixelCreature unit={u} /></span>
+              <span className="postbattle-pet-portrait">{image ? <BattlePixelSprite src={image} name={u.name} /> : <PixelCreature unit={u} />}</span>
               <strong>{u.name}</strong>
-              <span className="postbattle-pet-stats"><span>♥ {u.hp}/{u.maxHp}</span><span>ϟ {u.spd}</span></span>
-              <small>点击查看战后状态</small>
+              <span className="postbattle-pet-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{u.hp}/{u.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{u.spd}</span></span>
             </button>;
           })}
         </div>
       </section>
       <aside className="postbattle-detail" aria-label="伙伴详情">
         {focused ? <>
-          <div className="postbattle-detail-heading"><div><small>战后查看</small><h2>{focused.name}</h2></div><span>{focused.hp < focused.maxHp ? '生命未满' : '状态良好'}</span></div>
-          <div className="postbattle-detail-portrait"><PixelCreature unit={focused} /></div>
-          <div className="postbattle-detail-stats"><span>♥ {focused.hp}/{focused.maxHp}</span><span>ϟ {focused.spd}</span></div>
-          {focused.curse && <p className="postbattle-curse">⚠️ {CURSE_CN[focused.curse]}</p>}
+          <div className="postbattle-detail-body">
+          <div className="postbattle-detail-heading"><h2>{focused.name}</h2><span>{focused.hp < focused.maxHp ? '生命未满' : '状态良好'}</span></div>
+          <div className="postbattle-detail-portrait">{formationImage(focused.speciesId, focused.image) ? <BattlePixelSprite src={formationImage(focused.speciesId, focused.image)!} name={focused.name} /> : <PixelCreature unit={focused} />}</div>
+          <div className="postbattle-detail-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{focused.hp}/{focused.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{focused.spd}</span></div>
+          {focused.curse && <p className="postbattle-curse"><BuffIcon art={CURSE_ART[focused.curse]} /> {CURSE_CN[focused.curse]}</p>}
           {focused.bonusStats && (focused.bonusStats.hp || focused.bonusStats.spd) &&
             <p className="postbattle-bonus">属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}
           <div className="postbattle-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
@@ -2127,6 +2257,7 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
             const skill = getSkill(sid);
             return <span key={`${sid}-${index}`} title={skill.desc}>{skill.name}</span>;
           })}</div></div>
+          </div>
           <div className="postbattle-detail-actions">
             {!isProf && <><p>融合条件：{stage ? `同物种 ${sameCount} / ${need}` : '已是最终形态'}</p>
               <button type="button" className={`postbattle-fuse ${canFuse ? '' : 'unavailable'}`} onClick={() => {
@@ -2160,13 +2291,13 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
   return (
     <div className="shop-screen">
       <header className="shop-header">
-        <div className="shop-heading"><span className="shop-heading-mark" aria-hidden="true">✦</span><div>
+        <div className="shop-heading"><span className="shop-heading-mark" aria-hidden="true" /><div>
           <h1>{isProf ? '远征补给站' : '林间商铺'}</h1>
           <p>{isProf ? `熟练度远征 · 第 ${state.currentLayer ?? state.currentRow + 1} 层` : `第 ${state.act} 幕 · 旅途补给`}</p>
         </div></div>
         <div className="shop-header-actions">
-          <span className="shop-header-chip shop-gold">金币 <strong>{state.gold}</strong></span>
-          <span className="shop-header-chip">队伍 <strong>{state.field.length}/{isProf ? PROF_FIELD_MAX : FIELD_MAX}</strong></span>
+          <span className="shop-header-chip shop-gold"><img src="/reward-icons/gold.png" alt="金币" /><strong>{state.gold}</strong></span>
+          <span className="shop-header-chip"><img src={homePawIcon} alt="出战伙伴" /><strong>{state.field.length}/{isProf ? PROF_FIELD_MAX : FIELD_MAX}</strong></span>
           <button type="button" className="shop-leave" onClick={() => dispatch({ type: 'NEXT_NODE' })}>离开 →</button>
         </div>
       </header>
@@ -2201,10 +2332,10 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
           const affordable = state.gold >= price;
           return (
             <article key={id} className={`shop-product ${soldOut ? 'is-sold' : ''} ${!soldOut && !affordable ? 'is-unaffordable' : ''}`}>
-              {soldOut && <span className="shop-sold-badge">已售</span>}
-              <div className="shop-product-icon"><ShopItemIcon itemId={id} /></div>
+              {soldOut && <span className="shop-sold-badge">已购买</span>}
+              <div className="shop-product-icon">{BACKPACK_ITEM_ART[id] ? <img src={BACKPACK_ITEM_ART[id]} alt="" draggable={false} /> : <ShopItemIcon itemId={id} />}</div>
               <div className="shop-product-copy"><h3>{name}</h3><p>{desc}</p></div>
-              <span className="shop-price">● {price}</span>
+              <span className="shop-price"><img src="/reward-icons/gold.png" alt="金币" />{price}</span>
               <button
                   type="button"
                   className="shop-buy"
@@ -2220,11 +2351,11 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
         </div>
         <div className={`shop-utilities ${isProf ? 'shop-utilities-single' : ''}`}>
         {!isProf && (
-          <div className="shop-utility"><div><h3>立即休整</h3><p>免费让全队回满血，不解除诅咒</p></div>
+          <div className="shop-utility shop-utility-rest"><span className="shop-utility-icon" aria-hidden="true"><MapNodeIcon type="rest" /></span><div><h3>立即休整</h3><p>免费让全队回满血，不解除诅咒</p></div>
             <button type="button" disabled={!canRest} onClick={() => dispatch({ type: 'SHOP_REST' })}>{canRest ? '休整' : '已满血'}</button>
           </div>
         )}
-        <div className="shop-utility"><div><h3>刷新货架</h3><p>{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币 · 剩余 ${3 - refreshCount} 次`}</p></div>
+        <div className="shop-utility"><span className="shop-utility-icon" aria-hidden="true"><svg viewBox="0 0 32 32" shapeRendering="crispEdges"><path d="M4 15V9h4V5h12V1l10 8-10 8v-5H11v3zM28 17v6h-4v4H12v4L2 23l10-8v5h9v-3z" fill="#ff8a08" stroke="#101c2c" strokeWidth="2" /></svg></span><div><h3>刷新货架</h3><p>{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币 · 剩余 ${3 - refreshCount} 次`}</p></div>
           <button type="button" disabled={!canRefresh} onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_REFRESH' } : { type: 'SHOP_REFRESH' })}>{refreshCount >= 3 ? '已用完' : '刷新'}</button>
         </div>
         </div>
@@ -2234,344 +2365,17 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
 }
 
 function RestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const isProf = state.runMode === 'proficiency';
-  return (
-    <div className="center-col">
-      <div style={{ fontSize: 56 }}>🛌</div>
-      <div className="title-sub">营火休整</div>
-      {isProf ? (
-        <>
-          <p className="card-sub">选择一项：恢复全部生命，或进行宠物融合</p>
-          <button className="primary big-btn" style={{ marginBottom: 12 }} onClick={() => dispatch({ type: 'REST_HEAL' })}>
-            休息（恢复满血）
-          </button>
-          <button
-            className="primary big-btn"
-            disabled={state.roster.length < 2}
-            onClick={() => dispatch({ type: 'REST_FUSION_MODE' })}
-          >
-            宠物融合
-          </button>
-        </>
-      ) : (
-        <>
-          <p className="card-sub">让所有宠物恢复全部生命</p>
-          <button className="primary big-btn" onClick={() => dispatch({ type: 'REST_HEAL' })}>
-            休息（恢复满血）
-          </button>
-        </>
-      )}
-    </div>
-  );
+  return <CampRestScreen state={state} dispatch={dispatch} />;
 }
 
 function ReviveSelectScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const deadPets = state.deadPets ?? [];
-  if (deadPets.length === 0) {
-    return (
-      <div className="screen">
-        <div className="section-title">灵魂墓园</div>
-        <p className="card-sub">没有死亡的宠物可复活</p>
-        <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>返回</button>
-      </div>
-    );
-  }
-  const ratio = state.reviveRatio ?? 0.5;
-  return (
-    <div className="screen">
-      <div className="section-title">灵魂墓园</div>
-      <p className="card-sub">选择一只死亡宠物复活（保留 {Math.round(ratio * 100)}% 属性）</p>
-      <div className="reward-cards">
-        {deadPets.map((u) => {
-          const species = getMonster(u.speciesId);
-          const newHp = Math.max(1, Math.round(u.maxHp * ratio));
-          const newMaxHp = ratio >= 1 ? u.maxHp : Math.round(u.maxHp * ratio);
-          const newSpd = ratio >= 1 ? u.spd : Math.max(1, Math.round(u.spd * ratio));
-          return (
-            <button key={u.uid} className="reward-card" onClick={() => dispatch({ type: 'REVIVE', uid: u.uid, ratio })}>
-              <div className="reward-card-emoji">{species.emoji}</div>
-              <div className="reward-card-name">{u.name}</div>
-              <div className="reward-card-desc">
-                HP: {newHp}/{newMaxHp} | SPD: {newSpd}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>返回</button>
-    </div>
-  );
+  return <RevivalScreen state={state} dispatch={dispatch} />;
 }
 
 function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  // ─── 技能选择阶段 ───
-  if (state.screen === 'rest-fusion-skill') {
-    const unit = state.roster.find((u) => u.uid === state.fusionMainUid);
-    const subSkills = state.fusionSubSkills ?? [];
-    const learnSkill = state.fusionLearnSkill;
-    const replaceIdx = state.fusionReplaceIdx;
-    const maxSlots = unit ? getMaxSkillSlots(unit) : 3;
-    const hasEmptySlot = unit ? unit.skills.length < maxSlots : false;
-    const canConfirm = !!learnSkill && (replaceIdx !== undefined || hasEmptySlot);
-
-    if (!unit) {
-      return (
-        <div className="screen">
-          <div className="section-title">融合</div>
-          <p className="card-sub">找不到目标宠物</p>
-          <button className="btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>返回地图</button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="screen">
-        <div className="section-title">选择技能</div>
-        <p className="card-sub">为 {unit.name} 选择要继承的技能（从副宠），再选择要替换的已有技能，最后点击确认</p>
-
-        <div className="fusion-skill-layout">
-          {/* 左栏：副宠技能（选择要学的） */}
-          <div className="fusion-skill-col">
-            <div className="fusion-skill-header">副宠技能（点击选择继承）</div>
-            <div className="fusion-skill-list">
-              {subSkills.map((sid) => {
-                const sk = getSkill(sid);
-                const selected = learnSkill === sid;
-                return (
-                  <button
-                    key={sid}
-                    className={`fusion-skill-btn ${selected ? 'selected' : ''}`}
-                    onClick={() => dispatch({ type: 'REST_FUSION_SET_LEARN', skillId: sid })}
-                  >
-                    <span className="fusion-skill-name">{sk?.name ?? sid}</span>
-                    <span className="fusion-skill-desc">{sk?.desc ?? ''}</span>
-                    {sk?.damage != null && <span className="fusion-skill-stat">伤害 {sk.damage}</span>}
-                    {sk?.heal != null && <span className="fusion-skill-stat">治疗 {sk.heal}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 右栏：主宠已有技能（选择要替换的） */}
-          <div className="fusion-skill-col">
-            <div className="fusion-skill-header">主宠技能（{learnSkill ? '点击替换' : '先选左侧技能'}）</div>
-            <div className="fusion-skill-list">
-              {unit.skills.map((sid, idx) => {
-                const sk = getSkill(sid);
-                const canReplace = !!learnSkill;
-                const selected = replaceIdx === idx;
-                return (
-                  <button
-                    key={`${sid}-${idx}`}
-                    className={`fusion-skill-btn ${canReplace ? 'replaceable' : ''} ${selected ? 'replace-selected' : ''}`}
-                    disabled={!canReplace}
-                    onClick={() => {
-                      if (learnSkill) {
-                        dispatch({ type: 'REST_FUSION_SELECT_REPLACE', replaceIdx: idx });
-                      }
-                    }}
-                  >
-                    <span className="fusion-skill-name">{sk?.name ?? sid}</span>
-                    <span className="fusion-skill-desc">{sk?.desc ?? ''}</span>
-                    {sk?.damage != null && <span className="fusion-skill-stat">伤害 {sk.damage}</span>}
-                    {sk?.heal != null && <span className="fusion-skill-stat">治疗 {sk.heal}</span>}
-                    <span className="fusion-skill-slot">槽位 {idx + 1}</span>
-                  </button>
-                );
-              })}
-              {hasEmptySlot && learnSkill && (
-                <button
-                  className={`fusion-skill-btn empty-slot ${replaceIdx === -1 ? 'replace-selected' : ''}`}
-                  onClick={() => dispatch({ type: 'REST_FUSION_SELECT_REPLACE', replaceIdx: unit.skills.length })}
-                >
-                  <span className="fusion-skill-name">+ 添加到空槽</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* 确认按钮 */}
-        <div className="fusion-confirm-row">
-          <button
-            className="big-btn"
-            onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}
-          >
-            ← 返回地图
-          </button>
-          <button
-            className="primary big-btn"
-            disabled={!canConfirm}
-            onClick={() => {
-              if (learnSkill) {
-                dispatch({ type: 'REST_FUSION_SKILL', skillId: learnSkill, replaceIdx });
-              }
-            }}
-          >
-            {canConfirm ? '确认替换' : '请先选择技能'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── 宠物选择阶段（rest-fusion） ───
-  const main = state.fusionMainUid ? state.roster.find((u) => u.uid === state.fusionMainUid) : undefined;
-  const sub = state.fusionSubUid ? state.roster.find((u) => u.uid === state.fusionSubUid) : undefined;
-  const canConfirm = !!main && !!sub && main.uid !== sub.uid;
-
-  // 拖拽处理
-  const handleDragStart = (e: React.DragEvent, uid: string, slot: 'main' | 'sub') => {
-    e.dataTransfer.setData('text/plain', JSON.stringify({ uid, from: slot }));
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDrop = (e: React.DragEvent, targetSlot: 'main' | 'sub') => {
-    e.preventDefault();
-    try {
-      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      if (targetSlot === 'main') {
-        dispatch({ type: 'REST_FUSION_SET_MAIN', uid: data.uid });
-      } else {
-        dispatch({ type: 'REST_FUSION_SET_SUB', uid: data.uid });
-      }
-    } catch { /* ignore */ }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  // 副宠属性预览
-  const subBase = sub ? getMonster(sub.speciesId) : undefined;
-  const hpGain = subBase ? Math.round(subBase.baseHp * 0.5) : 0;
-  const spdGain = subBase ? Math.round(subBase.baseSpd * 0.5) : 0;
-
-  return (
-    <div className="screen">
-      <div className="section-title">宠物融合</div>
-      <p className="card-sub">拖动或点击宠物放入槽位，主宠继承副宠 50% 基础属性和 30% 成长点并学习一个技能</p>
-
-      {/* 两个槽位 */}
-      <div className="fusion-slots">
-        <div
-          className={`fusion-slot ${main ? 'filled' : 'empty'}`}
-          onDrop={(e) => handleDrop(e, 'main')}
-          onDragOver={handleDragOver}
-        >
-          <div className="fusion-slot-label">主宠</div>
-          {main ? (
-            <div
-              className="fusion-slot-card"
-              draggable
-              onDragStart={(e) => handleDragStart(e, main.uid, 'main')}
-              onClick={() => dispatch({ type: 'REST_FUSION_SET_MAIN', uid: main.uid })}
-            >
-              <div className="fusion-slot-emoji">{main.emoji}</div>
-              <div className="fusion-slot-name">{main.name}</div>
-              <div className="fusion-slot-stats">HP {main.hp}/{main.maxHp} SPD {main.spd}</div>
-            </div>
-          ) : (
-            <div className="fusion-slot-empty">拖入主宠</div>
-          )}
-        </div>
-
-        <div className="fusion-slot-arrow">→</div>
-
-        <div
-          className={`fusion-slot ${sub ? 'filled' : 'empty'}`}
-          onDrop={(e) => handleDrop(e, 'sub')}
-          onDragOver={handleDragOver}
-        >
-          <div className="fusion-slot-label">副宠（消耗）</div>
-          {sub ? (
-            <div
-              className="fusion-slot-card"
-              draggable
-              onDragStart={(e) => handleDragStart(e, sub.uid, 'sub')}
-              onClick={() => dispatch({ type: 'REST_FUSION_SET_SUB', uid: sub.uid })}
-            >
-              <div className="fusion-slot-emoji">{sub.emoji}</div>
-              <div className="fusion-slot-name">{sub.name}</div>
-              <div className="fusion-slot-stats">HP {sub.hp}/{sub.maxHp} SPD {sub.spd}</div>
-            </div>
-          ) : (
-            <div className="fusion-slot-empty">拖入副宠</div>
-          )}
-        </div>
-      </div>
-
-      {/* 融合预览 */}
-      {canConfirm && (
-        <div className="fusion-preview">
-          融合后 {main.name}：生命 +{hpGain}，速度 +{spdGain}
-        </div>
-      )}
-
-      {/* 融合按钮 */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button
-          className="primary big-btn"
-          disabled={!canConfirm}
-          onClick={() => dispatch({ type: 'REST_FUSION_CONFIRM' })}
-        >
-          {canConfirm ? '开始融合' : '请选择主宠和副宠'}
-        </button>
-      </div>
-
-      {/* 可选宠物列表 */}
-      <div className="fusion-roster">
-        <div className="fusion-roster-label">可选宠物（点击或拖入上方槽位）</div>
-        <div className="fusion-roster-grid">
-          {state.roster.map((u) => {
-            const isMain = u.uid === state.fusionMainUid;
-            const isSub = u.uid === state.fusionSubUid;
-            const base = getMonster(u.speciesId);
-            return (
-              <div
-                key={u.uid}
-                className={`fusion-roster-card ${isMain ? 'is-main' : ''} ${isSub ? 'is-sub' : ''}`}
-                draggable
-                onDragStart={(e) => {
-                  const slot = isMain ? 'main' : isSub ? 'sub' : undefined;
-                  if (slot) {
-                    handleDragStart(e, u.uid, slot);
-                  } else {
-                    e.dataTransfer.setData('text/plain', JSON.stringify({ uid: u.uid, from: 'roster' }));
-                    e.dataTransfer.effectAllowed = 'move';
-                  }
-                }}
-                onClick={() => {
-                  if (isMain) {
-                    dispatch({ type: 'REST_FUSION_SET_MAIN', uid: u.uid });
-                  } else if (isSub) {
-                    dispatch({ type: 'REST_FUSION_SET_SUB', uid: u.uid });
-                  } else if (!state.fusionMainUid) {
-                    dispatch({ type: 'REST_FUSION_SET_MAIN', uid: u.uid });
-                  } else {
-                    dispatch({ type: 'REST_FUSION_SET_SUB', uid: u.uid });
-                  }
-                }}
-              >
-                <div className="fusion-roster-emoji">{u.emoji}</div>
-                <div className="fusion-roster-name">{u.name}</div>
-                <div className="fusion-roster-stats">HP {u.hp}/{u.maxHp} SPD {u.spd}</div>
-                <div className="fusion-roster-base">基础 HP {base.baseHp} SPD {base.baseSpd}</div>
-                {isMain && <div className="fusion-roster-badge main">主宠</div>}
-                {isSub && <div className="fusion-roster-badge sub">副宠</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'REST_FUSION_CANCEL' })}>← 返回地图</button>
-      </div>
-    </div>
-  );
+  return state.screen === 'rest-fusion-skill'
+    ? <CampFusionSkillScreen state={state} dispatch={dispatch} />
+    : <CampFusionScreen state={state} dispatch={dispatch} />;
 }
 
 function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
@@ -2587,37 +2391,36 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   const sel = rows.includes(selRow) ? selRow : rows[0] ?? previewRow;
 
   return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="section-title">
-        瞭望塔 🔭 {previewNode ? `(第 ${previewRow + 1} 行)` : ''}
-      </div>
-      <p className="card-sub" style={{ textAlign: 'center' }}>
-        预览该瞭望塔后 3 行内某一行的全部节点情报（敌人属性与数量、商店货物、钥匙门/双生宝箱奖励、事件与奇遇）
-      </p>
-      <div className="panel-row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+    <div className="flow-screen watchtower-screen">
+      <FlowHeader title={`瞭望塔 · 第${state.act}幕`} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
+      <div className="watchtower-layout">
+      <aside className="watchtower-scenery" aria-hidden="true"><img src={watchtowerTelescopeArt} alt="" /><span>前路情报</span></aside>
+      <main className="flow-frame watchtower-panel">
+      <h2>选择瞭望层数</h2>
+      <div className="watchtower-tabs" role="group" aria-label="瞭望层数">
         {rows.map((r) => (
-          <button key={r} className={r === sel ? 'primary' : ''} onClick={() => setSelRow(r)}>
-            第 {r} 层{r === maxRow ? '（首领层）' : ''}
+          <button type="button" key={r} className={r === sel ? 'flow-primary' : ''} aria-pressed={r === sel} onClick={() => setSelRow(r)}>
+            第 {r + 1} 层{r === maxRow ? '（首领层）' : ''}
           </button>
         ))}
       </div>
-      <div className="reward-cards">
-        {state.map.layers[sel].map((n) => {
+      <p className="watchtower-hint">查看后3行内某一行的全部节点情报</p>
+      <div className="watchtower-intel">
+        {(state.map.layers[sel] ?? []).map((n) => {
           const info = nodeInfo(state, n);
           return (
-            <div key={n.id} className="reward-card">
-              <div className="ricon">{info.icon}</div>
-              <div className="rtitle">{info.title}</div>
-              <div className="rdesc">{info.detail}</div>
-            </div>
+            <article key={n.id} className="watchtower-intel-card">
+              <MapNodeIcon type={n.type} /><h3>{info.title}</h3><p>{info.detail}</p>
+            </article>
           );
         })}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'CLOSE_WATCHTOWER' })}>
+      <footer className="watchtower-footer"><p>情报仅供预览，不会进入节点</p>
+        <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'CLOSE_WATCHTOWER' })}>
           关闭瞭望
         </button>
+      </footer>
+      </main>
       </div>
     </div>
   );
@@ -2625,247 +2428,204 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
 
 function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const results = state.chestResult ?? [];
+  const resultArt = (text: string) => {
+    const food = Object.values(FOODS).find(item => text.includes(item.name));
+    const item = Object.values(ITEMS).find(item => text.includes(item.name));
+    if (text.includes('金币')) return '/reward-icons/gold.png';
+    if (food && BACKPACK_ITEM_ART[food.id]) return BACKPACK_ITEM_ART[food.id];
+    if (item && BACKPACK_ITEM_ART[item.id]) return BACKPACK_ITEM_ART[item.id];
+    return text.includes('恢复') ? '/reward-icons/heal.png' : chestOpenArt;
+  };
   return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="center-col">
-        <div className="section-title">宝箱 🎁</div>
-        <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
-          你开启了宝箱……
-        </p>
-        <div className="log-history" style={{ maxWidth: 480 }}>
-          {results.map((t, i) => (
-            <div key={i}>✨ {t}</div>
-          ))}
+    <div className="flow-screen chest-results-screen">
+      <FlowHeader title={`宝箱结果 · 第${state.act}幕`} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
+      <main className="flow-frame chest-results-panel">
+        <header className="chest-results-heading"><img src={chestOpenArt} alt="已开启的宝箱" /><h2>宝箱已开启</h2><p>奖励已结算，物品已放入背包</p></header>
+        <div className="chest-results-content">{results.map((text, index) => {
+          const separator = text.indexOf('：');
+          const title = separator >= 0 ? text.slice(0, separator) : '宝箱奖励';
+          const rewards = (separator >= 0 ? text.slice(separator + 1) : text).split('、');
+          return <section key={index} className="chest-result-group"><h3>{title}</h3><div className="chest-result-cards">{rewards.map((reward, rewardIndex) => <article key={rewardIndex}><img src={resultArt(reward)} alt="" /><strong>{reward}</strong></article>)}</div></section>;
+        })}
+        {results.length === 0 && <p className="chest-empty">暂无宝箱结果</p>}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-          <button className="big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
+        <footer className="chest-results-footer">
+          <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
             继续前进 →
           </button>
-        </div>
-      </div>
+          <p>已获得全部奖励</p>
+        </footer>
+      </main>
     </div>
   );
 }
 
 function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [confirm, setConfirm] = useState<PetConfirm>(null);
+  const [tab, setTab] = useState<'items' | 'pets'>('items');
+  const [selectedItemId, setSelectedItemId] = useState('scout');
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const isProf = state.runMode === 'proficiency';
-  const items = Object.entries(state.inventory).filter(([, c]) => c > 0);
-  const foodList = items.filter(([id]) => FOODS[id]);
   const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
-  const growthList = items.filter(([id]) => growthItemIds.includes(id));
-  const itemList = items.filter(([id]) => ITEMS[id] && !growthItemIds.includes(id)).sort((a, b) => (a[0] === 'scout' ? -1 : b[0] === 'scout' ? 1 : 0));
+  const items = Object.entries(state.inventory).filter(([id, count]) => count > 0 && (FOODS[id] || ITEMS[id]) && (!isProf || growthItemIds.includes(id)));
+  const itemId = items.find(([id]) => id === selectedItemId)?.[0] ?? items[0]?.[0];
+  const item = itemId ? ITEMS[itemId] ?? FOODS[itemId] : undefined;
+  const food = itemId && !growthItemIds.includes(itemId) ? FOODS[itemId] : undefined;
+  const growthItem = !!itemId && growthItemIds.includes(itemId);
+  const battleItem = !!itemId && !!ITEMS[itemId]?.usableInBattle;
+  const focused = state.roster.find((unit) => unit.uid === selectedUid) ?? state.roster[0];
+  const focusedImage = focused ? formationImage(focused.speciesId, focused.image) : undefined;
+  const passive = focused ? getPassive(focused.passive) : undefined;
+  const stage = focused ? nextStage(focused.speciesId) : undefined;
+  const sameCount = focused ? state.roster.filter((unit) => unit.speciesId === focused.speciesId).length : 0;
+  const canUseItem = growthItem || itemId === 'scout' || itemId === 'skip' || (itemId === 'purify' && state.roster.some((unit) => unit.curse));
+  const useItem = () => {
+    if (!itemId) return;
+    if (growthItem) dispatch({ type: 'USE_GROWTH_ITEM', itemId });
+    else if (itemId === 'scout') dispatch({ type: 'OPEN_SCOUT' });
+    else if (itemId === 'skip') dispatch({ type: 'OPEN_SKIP' });
+    else if (itemId === 'purify') {
+      setSelectedUid(state.roster.find((unit) => unit.curse)?.uid ?? null);
+      setTab('pets');
+    }
+  };
+  const useNote = food ? '在战斗中选择食物，再指定可驯服的敌人。'
+    : battleItem ? '在战斗界面的“道具”中使用。'
+    : itemId === 'scout' ? '使用后返回地图选择要侦查的节点。'
+    : itemId === 'skip' ? '使用后返回地图选择可跳过的战斗节点。'
+    : itemId === 'twin' ? '抵达双生宝箱节点时自动使用。'
+    : itemId === 'purify' ? (canUseItem ? '切换到伙伴页，选择需要净化的伙伴。' : '队伍中没有需要净化的伙伴。')
+    : itemId === 'heal_potion' ? '使用后全队回复 50% 生命。'
+    : growthItem ? '使用后选择需要应用效果的伙伴。' : '查看物品信息。';
+  const useLabel = food || battleItem ? '战斗中使用' : itemId === 'twin' ? '抵达节点时使用' : itemId === 'purify' ? '选择伙伴净化' : `使用${item?.name ?? '物品'}`;
+
   return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="section-title">🎒 背包</div>
-
-      {growthList.length > 0 && (
-        <>
-          <div className="section-sub">远征道具</div>
-          <DragScrollRow>
-            {growthList.map(([id, count]) => {
-              const it = ITEMS[id] ?? FOODS[id];
-              if (!it) return null;
-              return (
-                <div
-                  key={id}
-                  className="reward-card bag-item"
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => dispatch({ type: 'USE_GROWTH_ITEM', itemId: id })}
-                  title={`点击使用（持有 ${count} 个）`}
-                >
-                  <div className="ricon">{it.emoji}</div>
-                  <div className="rtitle">
-                    {it.name} ×{count}
-                  </div>
-                  <div className="rdesc">{it.desc}</div>
-                </div>
-              );
+    <div className="backpack-screen">
+      <header className="backpack-header">
+        <h1><img src={homeContinueIcon} alt="" />背包</h1>
+        <div className="backpack-header-actions">
+          <span><img src="/reward-icons/gold.png" alt="金币" />{state.gold}</span>
+          <span><img src={homePawIcon} alt="队伍" />{state.roster.length}/{getMaxRoster(state.runMode)}</span>
+          <button onClick={() => dispatch({ type: 'CLOSE_BACKPACK' })}>关闭背包</button>
+        </div>
+      </header>
+      <nav className="backpack-tabs" aria-label="背包分类">
+        <button className={tab === 'items' ? 'selected' : ''} aria-pressed={tab === 'items'} onClick={() => setTab('items')}>物品</button>
+        <button className={tab === 'pets' ? 'selected' : ''} aria-pressed={tab === 'pets'} onClick={() => setTab('pets')}>伙伴</button>
+      </nav>
+      <main className="backpack-layout">
+        <section className="backpack-storage" aria-label={tab === 'items' ? '物品收纳' : '队伍伙伴'}>
+          <h2>{tab === 'items' ? '物品收纳' : '队伍伙伴'}</h2>
+          {tab === 'items' ? <div className="backpack-item-grid">
+            {items.map(([id, count]) => {
+              const definition = ITEMS[id] ?? FOODS[id];
+              return <button key={id} className={`backpack-item ${itemId === id ? 'selected' : ''}`} aria-pressed={itemId === id} aria-label={`查看${definition.name}，持有${count}个`} onClick={() => setSelectedItemId(id)}>
+                <span className="backpack-item-count">×{count}</span>
+                {BACKPACK_ITEM_ART[id] ? <img src={BACKPACK_ITEM_ART[id]} alt="" draggable={false} /> : <span className="backpack-item-emoji">{definition.emoji}</span>}
+                <strong>{definition.name}</strong>
+              </button>;
             })}
-          </DragScrollRow>
-        </>
-      )}
-
-      {!isProf && (
-        <>
-          <div className="section-sub">道具</div>
-          <DragScrollRow>
-            {foodList.map(([id, count]) => {
-              const f = FOODS[id];
-              return (
-                <div key={id} className="reward-card bag-item" style={{ cursor: 'default' }}>
-                  <div className="ricon">{f.emoji}</div>
-                  <div className="rtitle">
-                    {f.name} ×{count}
-                  </div>
-                  <div className="rdesc">
-                    {f.desc}（{Math.round(f.baseTame * 100)}% 驯服率）
-                  </div>
-                </div>
-              );
+            {items.length === 0 && <p className="backpack-empty-message">背包中暂无物品。</p>}
+          </div> : <div className="backpack-pet-grid">
+            {Array.from({ length: getMaxRoster(state.runMode) }, (_, index) => {
+              const unit = state.roster[index];
+              if (!unit) return <div key={`empty-${index}`} className="backpack-empty-slot"><img src={homePawIcon} alt="" /><span>空位</span></div>;
+              const image = formationImage(unit.speciesId, unit.image);
+              return <button key={unit.uid} className={`backpack-pet ${focused?.uid === unit.uid ? 'selected' : ''}`} aria-pressed={focused?.uid === unit.uid} aria-label={`查看${unit.name}，生命${unit.hp}/${unit.maxHp}，速度${unit.spd}`} onClick={() => setSelectedUid(unit.uid)}>
+                <span className="backpack-pet-portrait">{image ? <BattlePixelSprite src={image} name={unit.name} /> : <PixelCreature unit={unit} />}</span>
+                <strong>{unit.name}</strong>
+                <span className="backpack-pet-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{unit.hp}/{unit.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{unit.spd}</span></span>
+              </button>;
             })}
-            {itemList.map(([id, count]) => {
-              const it = ITEMS[id];
-              const isScout = id === 'scout';
-              const isSkip = id === 'skip';
-              const clickable = isScout || isSkip;
-              return (
-                <div
-                  key={id}
-                  className="reward-card bag-item"
-                  style={{ cursor: clickable ? 'pointer' : 'default' }}
-                  onClick={isScout ? () => dispatch({ type: 'OPEN_SCOUT' }) : isSkip ? () => dispatch({ type: 'OPEN_SKIP' }) : undefined}
-                  title={isScout ? `点击前往地图选择要侦查的节点（持有 ${count} 个）` : isSkip ? `点击前往地图选择要跳过的战斗节点（持有 ${count} 个）` : undefined}
-                >
-                  <div className="ricon">{it.emoji}</div>
-                  <div className="rtitle">
-                    {it.name} ×{count}
-                  </div>
-                  <div className="rdesc">{it.desc}</div>
-                  {id === 'purify' && (
-                    <span className="card-sub" style={{ fontSize: 11 }}>
-                      对有诅咒的宠物使用（见下方宠物区）
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </DragScrollRow>
-        </>
-      )}
-
-      <div className="section-sub" style={{ marginTop: 30 }}>
-        宠物（{state.roster.length}/{getMaxRoster(state.runMode)}）
-      </div>
-      <DragScrollRow className="bag-pets">
-        {state.roster.map((u) => {
-          const inField = state.field.includes(u.uid);
-          return (
-            <div key={u.uid} className="roster-item">
-              <UnitCard
-                unit={u}
-                className={`roster-card ${inField ? 'selected' : ''}`}
-                showSkillDesc
-                topStats
-                footer={<PetCardFooter unit={u} state={state} setConfirm={setConfirm} />}
-              />
-              <div className="roster-actions">
-                <div className="panel-row" style={{ justifyContent: 'center' }}>
-                  {u.curse && <span className="chip">⚠️ {CURSE_CN[u.curse]}</span>}
-                  {u.bonusStats && (u.bonusStats.hp || u.bonusStats.spd) && (
-                    <span className="chip">
-                      ✨ 生命+{u.bonusStats.hp ?? 0} 速度+{u.bonusStats.spd ?? 0}
-                    </span>
-                  )}
-                  {u.curse && (state.inventory.purify ?? 0) > 0 && (
-                    <button onClick={() => dispatch({ type: 'USE_PURIFY', uid: u.uid })}>
-                      🧪 净化（{state.inventory.purify}）
-                    </button>
-                  )}
-                </div>
-              </div>
+          </div>}
+        </section>
+        <aside className="backpack-detail" aria-label={tab === 'items' ? '物品详情' : '伙伴详情'}>
+          {tab === 'items' ? item && itemId ? <>
+            <div className="backpack-detail-body">
+              <div className="backpack-detail-heading"><h2>{item.name}</h2><span>{food ? '捕获食物' : growthItem ? '远征道具' : battleItem ? '战斗药水' : itemId === 'purify' ? '净化道具' : '地图道具'}</span></div>
+              <div className="backpack-detail-art">{BACKPACK_ITEM_ART[itemId] ? <img src={BACKPACK_ITEM_ART[itemId]} alt="" /> : <span className="backpack-item-emoji">{item.emoji}</span>}</div>
+              <p className="backpack-detail-count">持有 ×{state.inventory[itemId]}</p>
+              <p className="backpack-description">{item.desc}</p>
+              {food && <p className="backpack-food-rate">基础驯服率 {Math.round(food.baseTame * 100)}%</p>}
+              <p className="backpack-use-note">{useNote}</p>
             </div>
-          );
-        })}
-      </DragScrollRow>
-
-      {confirm && (
-        <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />
-      )}
+            <button className="backpack-use" disabled={!canUseItem} onClick={useItem}>{useLabel}</button>
+          </> : <p className="backpack-empty-message">获得物品后，可在这里查看用途。</p> : focused ? <>
+            <div className="backpack-detail-body">
+              <div className="backpack-detail-heading"><h2>{focused.name}</h2><span>伙伴详情</span></div>
+              <div className="backpack-detail-art">{focusedImage ? <BattlePixelSprite src={focusedImage} name={focused.name} /> : <PixelCreature unit={focused} />}</div>
+              <div className="backpack-detail-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{focused.hp}/{focused.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{focused.spd}</span></div>
+              {focused.curse && <p className="backpack-curse"><BuffIcon art={CURSE_ART[focused.curse]} />{CURSE_CN[focused.curse]}</p>}
+              {focused.bonusStats && (focused.bonusStats.hp || focused.bonusStats.spd) && <p className="backpack-bonus">属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}
+              <div className="backpack-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
+              <div className="backpack-skills">{focused.skills.map((id, index) => <span key={`${id}-${index}`} title={getSkill(id).desc}>{getSkill(id).name}</span>)}</div>
+            </div>
+            <div className="backpack-pet-actions">
+              {!isProf && <p>融合条件：{stage ? `同物种 ${sameCount}/${fusionNeedCount(focused.speciesId)}` : '已是最终形态'}</p>}
+              <PetCardFooter unit={focused} state={state} setConfirm={setConfirm} />
+              {focused.curse && (state.inventory.purify ?? 0) > 0 && <button className="backpack-purify" onClick={() => dispatch({ type: 'USE_PURIFY', uid: focused.uid })}>净化（{state.inventory.purify}）</button>}
+            </div>
+          </> : <p className="backpack-empty-message">队伍中暂无伙伴。</p>}
+        </aside>
+      </main>
+      {confirm && <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />}
     </div>
   );
 }
 
 function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const [confirm, setConfirm] = useState<PetConfirm>(null);
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const tame = (state.tameOverflow ?? [])[0];
   if (!tame) return null;
+  const passive = getPassive(tame.passive);
   const remaining = state.tameOverflow!.length;
   const hasSpace = state.roster.length < getMaxRoster(state.runMode);
-  const [confirm, setConfirm] = useState<PetConfirm>(null);
+  const selected = state.roster.find(unit => unit.uid === selectedUid) ?? state.roster[0];
+  const stage = selected ? nextStage(selected.speciesId) : undefined;
+  const need = selected && stage ? fusionNeedCount(selected.speciesId) : 0;
+  const sameCount = selected ? state.roster.filter(unit => unit.speciesId === selected.speciesId).length : 0;
+  const tameSame = selected?.speciesId === tame.speciesId;
+  const totalCount = sameCount + (tameSame ? 1 : 0);
+  const canFuse = stage !== undefined && totalCount >= need;
+  const needTame = canFuse && tameSame && sameCount < need;
+  const fuseTitle = stage ? (canFuse ? `融合进化为 ${getMonster(stage).name}（${totalCount}/${need}）` : `同物种不足（${totalCount}/${need}）`) : '该宠物已是最终形态，无法融合';
   return (
-    <div className="screen">
-      <div className="section-title">{hasSpace ? '处理队伍' : '队伍已满'}（队伍 {state.roster.length}/{getMaxRoster(state.runMode)}）</div>
-      <p className="card-sub" style={{ maxWidth: 560, textAlign: 'center', margin: '0 auto 8px' }}>
-        你{state.tameOverflowReturn === 'map' ? '孵化了' : state.tameOverflowReturn === 'roster' ? '招募了' : '驯服了'}新的宠物。{hasSpace
-          ? '队伍有空位，可直接加入。'
-          : '队伍已满，选择：'}<b>替换</b>（放生一只现有宠物让它加入）{state.runMode !== 'proficiency' && '／融合（同物种足够可直接进化，待处理宠物也可作为材料）'}／<b>放生</b>（丢弃）。
-      </p>
-      <div className="center-col" style={{ flex: '0 0 auto', padding: '8px 0' }}>
-        <UnitCard unit={tame} />
+    <div className="flow-screen flow-partner-screen">
+      <header className="flow-header flow-frame"><h1><FlowIcon name="new-companion" />新伙伴加入</h1><span>队伍 {state.roster.length}/{getMaxRoster(state.runMode)} · 待处理 {remaining} 只</span></header>
+      <div className="flow-partner-layout">
+        <section className="flow-frame flow-new-partner">
+          <h2>新伙伴</h2><FlowPet unit={tame} /><h3>{tame.name}</h3><FlowPetStats unit={tame} />
+          {passive && <div className="flow-passive"><b>被动 · {passive.name}</b><p>{passive.desc}</p></div>}
+          <div className="flow-skill-chips">{tame.skills.map(id => <span key={id}>{getSkill(id).name}</span>)}</div>
+          <p>{hasSpace ? '队伍有空位，可以直接加入。' : '队伍已满，选择一只现有伙伴进行替换或融合。'}</p>
+        </section>
+        <section className="flow-frame flow-existing-partners">
+          <h2>现有伙伴</h2>
+          <div className="flow-roster-grid">{Array.from({ length: getMaxRoster(state.runMode) }, (_, index) => {
+            const unit = state.roster[index];
+            return unit ? <button key={unit.uid} className={`flow-roster-tile ${selected?.uid === unit.uid ? 'is-selected' : ''}`} aria-pressed={selected?.uid === unit.uid} onClick={() => setSelectedUid(unit.uid)}>
+              <FlowPet unit={unit} /><strong>{unit.name}</strong><FlowPetStats unit={unit} />
+            </button> : <div key={`empty-${index}`} className="flow-roster-empty">空位</div>;
+          })}</div>
+          {selected && <section className="flow-comparison"><h3>当前选择</h3><div><FlowPet unit={selected} /><span><b>{selected.name}</b><FlowPetStats unit={selected} /></span></div><div><FlowPet unit={tame} /><span><b>{tame.name}</b><FlowPetStats unit={tame} /></span></div></section>}
+        </section>
       </div>
-
-      <div className="section-sub">
-        选择操作（还有 {remaining} 只需要处理）：
-      </div>
-      <div className="roster-list">
-        {state.roster.map((u) => {
-          const stage = nextStage(u.speciesId);
-          const need = stage ? fusionNeedCount(u.speciesId) : 0;
-          const sameCount = state.roster.filter((x) => x.speciesId === u.speciesId).length;
-          const tameSame = tame.speciesId === u.speciesId;
-          const totalCount = sameCount + (tameSame ? 1 : 0);
-          const canFuse = stage !== undefined && totalCount >= need;
-          const needTame = canFuse && tameSame && sameCount < need;
-          return (
-          <div key={u.uid} className="roster-item">
-            <UnitCard
-              unit={u}
-              className="roster-card"
-              topStats
-              showSkillDesc
-              footer={
-                <div className="unit-card-actions">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const gold = 5 * getMonster(u.speciesId).rank;
-                      setConfirm({ kind: 'replace', uid: u.uid, gold });
-                    }}
-                  >
-                    替换
-                  </button>
-                  {state.runMode !== 'proficiency' && (
-                  <button
-                    title={stage ? (canFuse ? (needTame ? `融合进化为 ${getMonster(stage).name}（含待处理 ${totalCount}/${need}）` : `融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）`) : `同物种不足（${totalCount}/${need}，${tameSame ? '含待处理 1 只' : '不含待处理'}）`) : '该宠物已是最终形态，无法融合'}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!stage) {
-                        setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
-                      } else if (!canFuse) {
-                        setConfirm({ kind: 'notice', msg: `同物种不足（${totalCount}/${need}），无法融合` });
-                      } else if (needTame) {
-                        setConfirm({ kind: 'tame-fuse', uid: u.uid, tameUid: tame.uid });
-                      } else {
-                        dispatch({ type: 'FUSE_IN_OVERFLOW', uid: u.uid });
-                      }
-                    }}
-                  >
-                    融合
-                  </button>
-                  )}
-                </div>
-              }
-            />
-          </div>
-          );
-        })}
-      </div>
-
-      {hasSpace && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
-          <button className="primary big-btn" onClick={() => dispatch({ type: 'TAME_OVERFLOW_JOIN', tameUid: tame.uid })}>
-            将「{tame.name}」加入队伍
-          </button>
+      <footer className="flow-frame flow-partner-actions">
+        <p>替换或放生后无法撤销。融合需满足同物种数量。</p>
+        <div className="flow-actions">
+          {hasSpace && <button className="flow-primary" onClick={() => dispatch({ type: 'TAME_OVERFLOW_JOIN', tameUid: tame.uid })}><FlowIcon name="new-companion" />加入队伍</button>}
+          <button className="flow-primary" disabled={!selected} onClick={() => selected && setConfirm({ kind: 'replace', uid: selected.uid, gold: 5 * getMonster(selected.speciesId).rank })}><FlowIcon name="replace-companion" />替换伙伴</button>
+          {state.runMode !== 'proficiency' && <button className="flow-positive" disabled={!selected} title={fuseTitle} onClick={() => {
+            if (!selected) return;
+            if (!stage) setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
+            else if (!canFuse) setConfirm({ kind: 'notice', msg: `同物种不足（${totalCount}/${need}），无法融合` });
+            else if (needTame) setConfirm({ kind: 'tame-fuse', uid: selected.uid, tameUid: tame.uid });
+            else dispatch({ type: 'FUSE_IN_OVERFLOW', uid: selected.uid });
+          }}><FlowIcon name="fuse-companion" />融合</button>}
+          <button onClick={() => dispatch({ type: 'TAME_OVERFLOW_DISCARD', tameUid: tame.uid })}><FlowIcon name="release-companion" />放生新伙伴</button>
         </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <button className="big-btn" onClick={() => dispatch({ type: 'TAME_OVERFLOW_DISCARD', tameUid: tame.uid })}>
-          放生「{tame.name}」（不加入队伍）
-        </button>
-      </div>
+      </footer>
       {confirm && (
         <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />
       )}
@@ -2879,21 +2639,22 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   const hatch = state.pendingEventHatch;
   const hatchMonster = hatch ? getMonster(hatch.monsterId) : null;
   return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="center-col">
-        <div className="section-title">📜 {ev.title}</div>
-        <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
+    <div className="flow-screen flow-event-screen">
+      <FlowHeader title={`第${state.act}幕 · 林间事件`} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
+      <main className="flow-choice-panel flow-frame">
+        <span className="flow-eyebrow"><FlowIcon name="event-scroll" />旅途事件</span>
+        <h2>{ev.title}</h2>
+        <p className="flow-story">
           {ev.desc}
         </p>
-        <div className="reward-cards">
+        <div className="flow-choices">
           {ev.choices.map((c) => {
             const cost = c.goldDelta ?? 0;
             const cantAfford = state.gold + cost < 0 || (c.consumeFood && c.foodId && (state.inventory[c.foodId] ?? 0) <= 0);
             return (
-              <div
+              <button type="button"
                 key={c.id}
-                className={`reward-card${cantAfford ? ' disabled' : ''}`}
+                className="flow-choice" disabled={!!cantAfford}
                 onClick={() => {
                   if (cantAfford) return;
                   if (c.kind === 'recruit' && c.monsterId) {
@@ -2911,36 +2672,23 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
                   }
                 }}
               >
-              <div className="ricon">
-                {c.kind === 'heal' && '❤️'}
-                {c.kind === 'gold' && '💰'}
-                {c.kind === 'food' && FOODS[c.foodId ?? 'berry'].emoji}
-                {c.kind === 'item' && (c.itemId && ITEMS[c.itemId] ? ITEMS[c.itemId].emoji : '🎒')}
-                {c.kind === 'recruit' && '🥚'}
-                {c.kind === 'damage' && '☠️'}
-                {c.kind === 'none' && '🚶'}
-                {c.kind === 'battle' && '⚔️'}
-                {c.kind === 'sacrifice' && '🩸'}
-                {c.kind === 'boost' && '⬆️'}
-                {c.kind === 'purify' && '✨'}
-                {c.kind === 'curse' && '💀'}
-                {c.kind === 'status' && '🌀'}
-              </div>
-              <div className="rtitle">{c.label}</div>
-              <div className="rdesc">{c.desc}</div>
-            </div>
+              <img className="flow-choice-icon" src={flowChoiceArt(c.kind, c.itemId ?? c.foodId)} alt="" draggable={false} />
+              <span className="flow-choice-copy"><strong>{c.label}</strong><span>{c.desc}</span></span>
+            </button>
             );
           })}
         </div>
-      </div>
+      </main>
       {hatch && hatchMonster && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'EVENT_HATCH_CANCEL' })}>
           <div className="confirm-box scout-popup" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">孵化结果</div>
+            <div className="popup-body">
             <div style={{ fontSize: 48, marginBottom: 8 }}>{hatchMonster.image ? <img src={hatchMonster.image} className="pet-image" style={{ width: 48, height: 48 }} alt={hatchMonster.name} /> : hatchMonster.emoji}</div>
             <div>孵化出了 <b>{hatchMonster.name}</b>！</div>
             <div className="card-sub" style={{ marginBottom: 4, justifyContent: 'center' }}>
               ❤️ {hatchMonster.baseHp} &nbsp; ⚡ {hatchMonster.baseSpd}
+            </div>
             </div>
             <div className="panel-row" style={{ marginTop: 12, justifyContent: 'center' }}>
               <button className="primary" onClick={() => dispatch({ type: 'EVENT_HATCH_CONFIRM' })}>收下</button>
@@ -2962,110 +2710,42 @@ function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
     ((r.kind === 'evolve' || r.kind === 'superevolve') && !hasEvolvable) ||
     (r.kind === 'custom' && rosterFull);
   return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="center-col">
-        <div className="section-title">💎 {sp.title}</div>
-        <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
+    <div className="flow-screen flow-special-screen">
+      <FlowHeader title={`第${state.act}幕 · 林间奇遇`} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
+      <main className="flow-choice-panel flow-frame">
+        <span className="flow-eyebrow"><FlowIcon name="encounter-crystal" />稀有奇遇</span>
+        <h2>{sp.title}</h2>
+        <p className="flow-story">
           {sp.desc}
         </p>
-        <div className="reward-cards">
+        <div className="flow-choices flow-special-choices">
           {sp.rewards.map((r) => (
-            <div
+            <button type="button"
               key={r.id}
-              className={`reward-card ${disabled(r) ? 'dim' : ''}`}
+              className="flow-choice" disabled={disabled(r)}
               onClick={disabled(r) ? undefined : () => dispatch({ type: 'SPECIAL_CHOICE', rewardId: r.id })}
             >
-              <div className="ricon">
-                {r.kind === 'evolve' && '🧬'}
-                {r.kind === 'superevolve' && '🔥'}
-                {r.kind === 'gold' && '💰'}
-                {r.kind === 'boost' && '📈'}
-                {r.kind === 'custom' && '✨'}
-                {r.kind === 'item' && (FOODS[r.itemId ?? '']?.emoji ?? ITEMS[r.itemId ?? '']?.emoji)}
-              </div>
-              <div className="rtitle">{r.label}</div>
-              <div className="rdesc">{r.desc}</div>
-            </div>
+              <img className="flow-choice-icon" src={flowChoiceArt(r.kind, r.itemId)} alt="" draggable={false} />
+              <span className="flow-choice-copy"><strong>{r.label}</strong><span>{r.desc}</span></span>
+            </button>
           ))}
         </div>
         {!hasEvolvable && (
-          <p className="card-sub" style={{ textAlign: 'center' }}>
+          <p className="flow-notice">
             当前没有可进化的宠物，进化/超进化不可选
           </p>
         )}
-      </div>
+      </main>
     </div>
   );
 }
 
 function CustomScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="center-col">
-        <div className="section-title">✨ 造物·自创生物</div>
-        <p className="card-sub" style={{ maxWidth: 480, textAlign: 'center' }}>
-          选择属性模板，技能将从模板技能池中随机组合
-        </p>
-        <div className="starter-grid">
-          {CUSTOM_PRESETS.map((id) => {
-            const sp = getMonster(id);
-            const stats = computeStats(id);
-            return (
-              <div
-                key={id}
-                className="unit-card clickable"
-                onClick={() => dispatch({ type: 'PICK_CUSTOM', presetId: id })}
-              >
-                <div className="card-top">
-                  <span className="emoji">{sp.image ? <img src={sp.image} className="pet-image" alt={sp.name} /> : sp.emoji}</span>
-                </div>
-                <div className="card-name">{sp.name}</div>
-                <div className="card-sub">
-                  生命 {stats.maxHp} · 速度 {stats.spd}
-                </div>
-                <div className="skill-list">
-                  {sp.skills.map((s) => (
-                    <SkillTag key={s} skill={getSkill(s)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
+  return <CreationScreen state={state} dispatch={dispatch} />;
 }
 
 function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const uid = state.specialPending?.kind === 'boost' ? state.specialPending.uid : '';
-  const u = state.roster.find((x) => x.uid === uid);
-  if (!u) return null;
-  const options = [
-    { stat: 'hp' as const, icon: '❤️', label: '生命 +5', value: 5 },
-    { stat: 'spd' as const, icon: '⚡', label: '速度 +2', value: 2 },
-  ];
-  return (
-    <div className="screen">
-      <HUD state={state} dispatch={dispatch} />
-      <div className="center-col">
-        <div className="section-title">
-          📈 属性强化：<PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}
-        </div>
-        <div className="reward-cards">
-          {options.map((o) => (
-            <div key={o.stat} className="reward-card" onClick={() => dispatch({ type: 'BOOST_STAT', stat: o.stat })}>
-              <div className="ricon">{o.icon}</div>
-              <div className="rtitle">{o.label}</div>
-              <div className="rdesc">永久提升 {o.value} 点</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  return <AttributeBoostScreen state={state} dispatch={dispatch} />;
 }
 
 interface RatingDimension {
@@ -3222,40 +2902,32 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const highlights = snap ? getHighlights(stats!, snap, state.roster) : [];
   const expeditionLog = snap ? getExpeditionLog(stats!, snap, state.roster, state.act) : '';
   return (
-    <div className="center-col">
-      <div className="inter-act-header">
-        <div style={{ fontSize: 48 }}>{theme.emoji}</div>
-        <div className="title-name">{theme.name} · {actName}结算</div>
-        <div className="inter-act-flavor">"{theme.flavor}"</div>
+    <div className="flow-screen flow-report-screen flow-interact-screen">
+      <main className="flow-report flow-frame">
+      <header className="flow-report-heading">
+        <FlowIcon name="next-chapter" /><h1>{theme.name} · {actName}结算</h1>
+        <p>{theme.flavor}</p>
+      </header>
+      <div className="flow-report-body">
+      {rating && <div className="flow-act-rating"><FlowIcon name="rating-laurel" /><strong>{rating.grade}</strong><span>{rating.score}分 · {rating.label}</span><small>当前累计评级</small></div>}
+      <div className="flow-act-stats">
+        <div><FlowIcon name="battles-won" /><span>战斗场次</span><strong>{actStats.battlesWon + actStats.battlesLost}</strong></div>
+        <div><img src="/reward-icons/gold.png" alt="" /><span>金币获取</span><strong>{actStats.goldEarned}</strong></div>
+        <div><FlowIcon name="companions-tamed" /><span>驯服宠物</span><strong>{actStats.tamed}</strong></div>
+        <div><FlowIcon name="companions-lost" /><span>宠物阵亡</span><strong>{actStats.lost}</strong></div>
+        <div><FlowIcon name="turn-hourglass" /><span>行动回合</span><strong>{actStats.turns}</strong></div>
+        <div><FlowIcon name="party-completeness" /><span>当前伙伴</span><strong>{state.roster.length}</strong></div>
       </div>
-      {expeditionLog && <div className="inter-act-log">{expeditionLog}</div>}
-      <div className="inter-act-stats">
-        <div>⚔️ 战斗场次：{actStats.battlesWon + actStats.battlesLost}</div>
-        <div>💰 金币获取：{actStats.goldEarned}</div>
-        <div>🐾 驯服宠物：{actStats.tamed}</div>
-        <div>💀 宠物阵亡：{actStats.lost}</div>
-        <div>⏱️ 行动回合：{actStats.turns}</div>
-      </div>
+      {expeditionLog && <p className="flow-expedition-log">{expeditionLog}</p>}
       {highlights.length > 0 && (
-        <div className="highlight-list">
-          {highlights.map((h, i) => <div key={i} className="highlight-item">★ {h}</div>)}
+        <div className="flow-highlights">
+          {highlights.map((h, i) => <p key={i}>{h}</p>)}
         </div>
       )}
-      <div className="team-snapshot">
-        {state.roster.slice(0, 5).map((u) => (
-          <span key={u.uid} className="team-snapshot-pet"><PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}</span>
-        ))}
-        {state.roster.length > 5 && <span className="team-snapshot-pet">+{state.roster.length - 5}</span>}
+      <FlowTeam units={state.roster} />
       </div>
-      {rating && (
-        <div className="rating-display inter-act-rating">
-          <span className="rating-grade" style={{ fontSize: 28 }}>{rating.grade}</span>
-          <span className="rating-score">{rating.score}分 · {rating.label}</span>
-        </div>
-      )}
-      <button className="primary big-btn" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>
-        远征{nextName} →
-      </button>
+      <footer className="flow-actions"><button className="flow-primary" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>远征{nextName} →</button></footer>
+      </main>
     </div>
   );
 }
@@ -3283,29 +2955,24 @@ function RatingDisplay({ rating, color }: { rating: NonNullable<ReturnType<typeo
 function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const rating = state.runStats ? computeRating(state.runStats, state.roster.length, state.act) : null;
   return (
-    <div className="center-col">
+    <div className="flow-screen flow-report-screen flow-defeat-screen">
+      <main className="flow-report flow-frame">
+      <header className="flow-report-heading"><FlowIcon name="journey-end" /><h1>远征失败</h1><p>阵亡的宠物已永远消失，但这只是旅程的开始</p></header>
+      <div className="flow-report-body">
       {rating && <RatingDisplay rating={rating} color="#e05555" />}
-      <div style={{ fontSize: 56 }}>💀</div>
-      <div className="title-name" style={{ color: '#e05555', letterSpacing: 4 }}>
-        远征失败
+      <FlowTeam units={state.roster} />
       </div>
-      <p className="card-sub">阵亡的宠物已永远消失，但这只是旅程的开始</p>
-      {state.roster.length > 0 && (
-        <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
-          {state.roster.map((u) => (
-            <span className="chip" key={u.uid}><PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}</span>
-          ))}
-        </div>
-      )}
-      <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+      <footer className="flow-actions"><button onClick={() => dispatch({ type: 'TITLE' })}>
         返回首页
-      </button>
+      </button></footer>
+      </main>
     </div>
   );
 }
 
 function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const rating = state.runStats ? computeRating(state.runStats, state.roster.length, state.act) : null;
+  const rating = useMemo(() => state.runStats ? computeRating(state.runStats, state.roster.length, state.act) : null,
+    [state.runStats, state.roster.length, state.act]);
   const [unlocked, setUnlocked] = useState<string[]>([]);
 
   useEffect(() => {
@@ -3328,83 +2995,36 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
   }, [rating]);
 
   return (
-    <div className="center-col">
-      {rating && <RatingDisplay rating={rating} />}
-      <div style={{ fontSize: 64 }}>👑</div>
-      <div className="title-name">通关！</div>
-      <p className="card-sub">你击败了所有首领，驯服了沿途的怪物军团</p>
+    <div className="flow-screen flow-report-screen flow-victory-screen">
+      <main className="flow-report flow-frame">
+      <header className="flow-report-heading"><FlowIcon name="victory-crown" /><h1>远征通关</h1><p>你击败了所有首领，驯服了沿途的怪物军团</p></header>
+      <div className="flow-report-body">
+      {rating && <RatingDisplay rating={rating} color="#d68b00" />}
       {unlocked.length > 0 && (
-        <div className="unlock-notify">
-          <div className="unlock-title">🔓 解锁新内容</div>
+        <div className="flow-unlocks">
+          <h2><FlowIcon name="unlock" />解锁新内容</h2>
           {unlocked.map((item) => (
             <div key={item} className="unlock-item">{item}</div>
           ))}
         </div>
       )}
-      <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
-        {state.roster.map((u) => (
-          <span className="chip" key={u.uid}>{u.emoji} {u.name}</span>
-        ))}
+      <FlowTeam units={state.roster} />
       </div>
-      <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
+      <footer className="flow-actions">
+      <button className="flow-primary" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
         再来一次
       </button>
-      <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
+      <button onClick={() => dispatch({ type: 'TITLE' })}>
         返回标题
       </button>
+      </footer>
+      </main>
     </div>
   );
 }
 
 function ProficiencyResultScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const won = state.proficiencyResult === 'won';
-  const maxLayer = state.currentRow + 1;
-  const totalLayers = 50;
-  const battleCount = (state.runStats?.battlesWon ?? 0) + (state.runStats?.battlesLost ?? 0);
-  const alive = state.roster.filter((u) => u.hp > 0);
-  const bestPet = [...alive].sort((a, b) => (b.growthPoints ?? 0) - (a.growthPoints ?? 0))[0];
-
-  return (
-    <div className="center-col">
-      <div style={{ fontSize: 64 }}>{won ? '🏆' : '💀'}</div>
-      <div className="title-name" style={{ color: won ? '#e8c26a' : '#e05555' }}>
-        成长远征 · {won ? '胜利' : '失败'}
-      </div>
-
-      <div style={{ margin: '16px 0', textAlign: 'center' }}>
-        <p className="card-sub" style={{ margin: '4px 0' }}>到达层数：{maxLayer} / {totalLayers}</p>
-        <p className="card-sub" style={{ margin: '4px 0' }}>总战斗场次：{battleCount}</p>
-      </div>
-
-      <div style={{ margin: '12px 0', textAlign: 'center' }}>
-        <div className="section-sub">最终队伍</div>
-        <div className="panel-row" style={{ flexWrap: 'wrap', justifyContent: 'center', margin: '8px 0' }}>
-          {alive.map((u) => (
-            <span className="chip" key={u.uid} style={{ margin: '4px' }}>
-              {u.emoji} {u.name} +{u.growthPoints ?? 0}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {bestPet && (
-        <div style={{ margin: '12px 0', textAlign: 'center' }}>
-          <p className="card-sub">最高成长：{bestPet.emoji} {bestPet.name} +{bestPet.growthPoints ?? 0}</p>
-        </div>
-      )}
-
-      <div className="panel-row" style={{ gap: 12, marginTop: 16 }}>
-        {won && (
-          <button className="primary big-btn" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
-            重新开始
-          </button>
-        )}
-        <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })}>
-          返回主菜单
-        </button>
-      </div>
-    </div>
-  );
+  return <ProficiencyReport state={state} dispatch={dispatch} onRetry={() => dispatch({ type: 'RETRY', seed: newSeed() })} />;
 }
 
 function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
@@ -3412,89 +3032,69 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
   const [tab, setTab] = useState<'difficulties' | 'relics' | 'grades'>('difficulties');
   const tabs = ['difficulties', 'relics', 'grades'] as const;
   const tabLabels: Record<string, string> = { difficulties: '难度', relics: '遗物', grades: '评级里程碑' };
-  const tabIdx = tabs.indexOf(tab);
 
-  const allDifficulties: { id: Difficulty; label: string; desc: string; unlockCondition: string }[] = [
-    { id: 'normal', label: '普通', desc: '标准难度，无额外修正', unlockCondition: '默认解锁' },
-    { id: 'hard', label: '困难', desc: '敌方 HP+20%、SPD+1，战后回血 40%，商品加价 20%', unlockCondition: '普通难度 A 级及以上通关' },
-    { id: 'nightmare', label: '地狱', desc: '敌方 HP+50%、SPD+2，战后回血 20%，商品加价 40%', unlockCondition: '困难难度 A 级及以上通关' },
-  ];
+  const conditions = { normal: '默认解锁', hard: '普通难度 A 级及以上通关', nightmare: '困难难度 A 级及以上通关' };
+  const allDifficulties = DIFFICULTY_ORDER.map(id => {
+    const config = DIFFICULTY_CONFIG[id];
+    return { id, label: config.label, unlockCondition: conditions[id],
+      desc: `敌方生命 ×${config.enemyHpMult} · 速度 +${config.enemySpdBonus} · 商店 ×${config.shopPriceMult} · 战后恢复 ${Math.round(config.healRatio * 100)}%` };
+  });
   const allRelics = RELIC_ORDER.map((id) => ({ id, ...RELIC_DEFS[id] }));
   const grades = ['S', 'A', 'B', 'C', 'D'];
 
   return (
-    <div className="center-col">
-      <div className="achievement-header">
-        <div className="section-title achievement-title">🏆 成就</div>
-        <div className="section-sub">最高评级：{unlocks.bestGrade ?? '无'}</div>
-      </div>
-      <div className="achievement-tabs">
-        <span className="achievement-tab-label">{tabLabels[tab]}</span>
-      </div>
-      {createPortal(
-        <>
-          <button className="achievement-tab-btn left" onClick={() => setTab(tabs[(tabIdx + tabs.length - 1) % tabs.length])}>←</button>
-          <button className="achievement-tab-btn right" onClick={() => setTab(tabs[(tabIdx + 1) % tabs.length])}>→</button>
-        </>,
-        document.body
-      )}
+    <div className="flow-screen achievements-screen">
+      <header className="flow-header flow-frame"><h1><img src={homeAchievementIcon} alt="" />成就与解锁</h1><span>当前存档的远征记录</span><button type="button" onClick={() => dispatch({ type: 'TITLE' })}>返回首页</button></header>
+      <main className="flow-frame achievements-panel">
+      <div className="achievements-tabs" role="tablist" aria-label="成就分类">{tabs.map(id => <button type="button" key={id} role="tab" id={`achievement-tab-${id}`} aria-selected={tab === id} aria-controls="achievement-content" className={tab === id ? 'flow-primary' : ''} onClick={() => setTab(id)}>{tabLabels[id]}</button>)}</div>
+      <div className="achievements-heading"><h2>{tabLabels[tab]}{tab === 'grades' ? '' : '解锁'}</h2><div className="achievement-best-grade"><FlowIcon name="rating-laurel" /><span>最高评级 <b>{unlocks.bestGrade ?? '无'}</b></span></div></div>
+      <section className="achievements-content" id="achievement-content" role="tabpanel" aria-labelledby={`achievement-tab-${tab}`}>
       {tab === 'difficulties' && (
-        <div className="achievement-group">
+        <div className="achievement-rows">
           {allDifficulties.map((d) => {
             const unlocked = unlocks.difficulties.includes(d.id);
             return (
-              <div key={d.id} className={`achievement-item achievement-item-row ${unlocked ? 'unlocked' : 'locked'}`}>
-                <span className="achievement-icon">{unlocked ? '🔓' : '🔒'}</span>
-                <span className="achievement-name">{d.label}</span>
-                <span className="achievement-desc">{d.desc}</span>
-                <span className="achievement-unlock">{d.unlockCondition}</span>
+              <div key={d.id} className={`achievement-row ${unlocked ? 'is-unlocked' : ''}`}>
+                <span className={`achievement-difficulty-art difficulty-${d.id}`} aria-hidden="true" />
+                <div className="achievement-row-copy"><h3>{d.label}</h3><p>{d.desc}</p><p>解锁条件：{d.unlockCondition}</p></div>
+                <span className="achievement-state">{unlocked ? '已解锁' : '未解锁'}</span>
               </div>
             );
           })}
         </div>
       )}
       {tab === 'relics' && (
-        <div className="achievement-group">
+        <div className="achievement-rows">
           {allRelics.map((r) => {
             const unlocked = unlocks.relics.includes(r.id);
             return (
-              <div key={r.id} className={`achievement-item achievement-item-row ${unlocked ? 'unlocked' : 'locked'}`}>
-                <span className="achievement-icon">{unlocked ? r.emoji : '🔒'}</span>
-                <span className="achievement-name">{r.name}</span>
-                <span className="achievement-desc">{r.desc}</span>
-                <span className="achievement-unlock">{r.unlockCondition}</span>
+              <div key={r.id} className={`achievement-row ${unlocked ? 'is-unlocked' : ''}`}>
+                <span className="achievement-relic-art"><RelicEmblem id={r.id} /></span>
+                <div className="achievement-row-copy"><h3>{r.name}</h3><p>效果：{r.desc}</p><p>解锁条件：{r.unlockCondition}</p></div>
+                <span className="achievement-state">{unlocked ? '已解锁' : '未解锁'}</span>
               </div>
             );
           })}
         </div>
       )}
       {tab === 'grades' && (
-        <div className="achievement-group">
+        <div className="achievement-rows">
           {grades.map((g) => {
             const rank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[g] ?? 0;
             const bestRank = unlocks.bestGrade ? ({ S: 4, A: 3, B: 2, C: 1, D: 0 }[unlocks.bestGrade] ?? -1) : -1;
             const reached = bestRank >= rank;
             return (
-              <div key={g} className={`achievement-item ${reached ? 'unlocked' : 'locked'}`}>
-                <div className="achievement-grade-header">
-                  <span className="achievement-icon">{reached ? '⭐' : '☆'}</span>
-                  <span className="achievement-name">评级 {g}</span>
-                </div>
-                <span className="achievement-desc">
-                  {g === 'D' && '完成任意通关'}
-                  {g === 'C' && 'B 级通关解锁困难难度'}
-                  {g === 'B' && 'A 级通关解锁旅行者护符'}
-                  {g === 'A' && 'S 级通关解锁精英勋章 + 地狱难度'}
-                  {g === 'S' && 'S 级通关解锁传说印章 + 勋章检测'}
-                </span>
+              <div key={g} className={`achievement-row ${reached ? 'is-unlocked' : ''}`}>
+                <span className="achievement-grade-art">{g}</span>
+                <div className="achievement-row-copy"><h3>评级 {g}</h3><p>达成 {g} 级及以上通关评级</p></div>
+                <span className="achievement-state">{reached ? '已达成' : '未达成'}</span>
               </div>
             );
           })}
         </div>
       )}
-      <button className="big-btn" onClick={() => dispatch({ type: 'TITLE' })} style={{ marginTop: 12 }}>
-        返回标题
-      </button>
+      </section><footer className="achievement-footer">解锁进度按存档独立保存</footer>
+      </main>
     </div>
   );
 }

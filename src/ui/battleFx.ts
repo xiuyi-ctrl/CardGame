@@ -42,6 +42,7 @@ export interface PopItem {
   buff?: boolean;
   shield?: boolean;
   debuff?: boolean;
+  statusIcon?: StatusEffect['kind'];
 }
 
 /** 揭示目标：事件 i 播放时揭示 uid 上的指定状态 kind */
@@ -142,10 +143,10 @@ function buffText(skillName: string): string {
   if (skill?.kind === 'buff') {
     // 召唤类技能（孢子/幽灵/成长召唤）飘字统一为「召唤」，而非「强化」
     if (skill.id.endsWith('_summon')) return '召唤';
-    if (skill.id === 'chain_link') return '🔗锁链';
+    if (skill.id === 'chain_link') return '锁链';
     const e = skill.effects?.[0];
     if (e?.kind === 'atkUp') return '攻击↑';
-    if (e?.kind === 'shield') return '🛡️护盾';
+    if (e?.kind === 'shield') return '护盾';
   }
   return '强化';
 }
@@ -693,6 +694,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: isDebuffEvt ? 'fx-status-cast' : 'fx-cast', seq: capturedActorSeq } })); }
             const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
             const isShield = sk?.effects?.[0]?.kind === 'shield';
+            const statusIcon = isShield ? 'shield' : sk?.id === 'chain_link' ? 'chainLink' : undefined;
             const buffCls = isShield ? 'fx-shield' : 'fx-buff';
             const debuffLabel = (kind?: string) => kind === 'poison' ? '中毒↓' : kind === 'burn' ? '灼烧↓' : kind === 'atkDown' ? '弱化↓' : kind === 'spdDown' ? '迟缓↓' : kind === 'stun' ? '眩晕↓' : '▼ debuff';
             if (ev.debuffTargets && ev.debuffTargets.length > 0) {
@@ -714,13 +716,13 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               } else {
                 ++fxSeq; capturedTargetSeq = fxSeq;
                 setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
-                setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
+                setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield, statusIcon }]);
               }
             }
             if (ev.secondTargetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq;
               setFx((p) => ({ ...p, [ev.secondTargetUid!]: { cls: buffCls, seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: ev.secondTargetUid!, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield }]);
+              setPops((p) => [...p, { id: popId, uid: ev.secondTargetUid!, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield, statusIcon }]);
             }
             // 回血效果：buff 技能带 heal 值时，额外显示 +N 绿色飘字
             if (ev.value > 0 && targetUid) {

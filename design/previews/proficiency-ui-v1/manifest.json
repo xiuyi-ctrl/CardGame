@@ -1,0 +1,37 @@
+{
+  "status": "integrated-as-components-not-image-backgrounds",
+  "generator": "built-in image_gen",
+  "styleReference": "design/previews/camp-selection-v1/skill-learning-v1.png",
+  "pages": [
+    {
+      "id": "skill-replacement-v1",
+      "image": "skill-replacement-v1.png",
+      "prompt": "skill-replacement-v1.prompt.txt",
+      "source": "exec-7b269959-71a0-4495-b24a-2449be32a6f0.png"
+    },
+    {
+      "id": "growth-transfer-v1",
+      "image": "growth-transfer-v1.png",
+      "prompt": "growth-transfer-v1.prompt.txt",
+      "source": "exec-07d95ece-acc6-4110-938c-38bb19c67a6b.png"
+    },
+    {
+      "id": "blacksmith-v1",
+      "image": "blacksmith-v1.png",
+      "prompt": "blacksmith-v1.prompt.txt",
+      "source": "exec-97fcdf99-1c06-43ee-a95c-083494b58122.png"
+    },
+    {
+      "id": "arena-three-modes-v1",
+      "image": "arena-three-modes-v1.png",
+      "prompt": "arena-three-modes-v1.prompt.txt",
+      "source": "exec-cf0e6000-6406-4dfa-9ecb-da91475f3592.png"
+    },
+    {
+      "id": "proficiency-result-v1",
+      "image": "proficiency-result-v1.png",
+      "prompt": "proficiency-result-v1.prompt.txt",
+      "source": "exec-054f5e27-489c-49a5-8c4e-312624517a92.png"
+    }
+  ]
+}

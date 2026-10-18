@@ -1,0 +1,145 @@
+{
+  "aliases": {
+    "heal_potion_g": "heal_potion"
+  },
+  "icons": [
+    {
+      "id": "berry",
+      "name": "浆果",
+      "group": "foods",
+      "file": "icons/berry.png"
+    },
+    {
+      "id": "meat",
+      "name": "鲜肉",
+      "group": "foods",
+      "file": "icons/meat.png"
+    },
+    {
+      "id": "gem",
+      "name": "秘晶",
+      "group": "foods",
+      "file": "icons/gem.png"
+    },
+    {
+      "id": "golden_fruit",
+      "name": "圣果",
+      "group": "foods",
+      "file": "icons/golden_fruit.png"
+    },
+    {
+      "id": "scout",
+      "name": "侦察符",
+      "group": "main",
+      "file": "icons/scout.png"
+    },
+    {
+      "id": "skip",
+      "name": "跳关道具",
+      "group": "main",
+      "file": "icons/skip.png"
+    },
+    {
+      "id": "twin",
+      "name": "双生符",
+      "group": "main",
+      "file": "icons/twin.png"
+    },
+    {
+      "id": "purify",
+      "name": "净化药水",
+      "group": "main",
+      "file": "icons/purify.png"
+    },
+    {
+      "id": "atk_up",
+      "name": "攻击药水",
+      "group": "main",
+      "file": "icons/atk_up.png"
+    },
+    {
+      "id": "spd_up",
+      "name": "速度药水",
+      "group": "main",
+      "file": "icons/spd_up.png"
+    },
+    {
+      "id": "hp_up",
+      "name": "生命药水",
+      "group": "main",
+      "file": "icons/hp_up.png"
+    },
+    {
+      "id": "atk_down",
+      "name": "虚弱药水",
+      "group": "main",
+      "file": "icons/atk_down.png"
+    },
+    {
+      "id": "spd_down",
+      "name": "缓速药水",
+      "group": "main",
+      "file": "icons/spd_down.png"
+    },
+    {
+      "id": "hp_down",
+      "name": "腐蚀药水",
+      "group": "main",
+      "file": "icons/hp_down.png"
+    },
+    {
+      "id": "book_small",
+      "name": "成长之书（小）",
+      "group": "growth",
+      "file": "icons/book_small.png"
+    },
+    {
+      "id": "book_medium",
+      "name": "成长之书（中）",
+      "group": "growth",
+      "file": "icons/book_medium.png"
+    },
+    {
+      "id": "book_large",
+      "name": "成长之书（大）",
+      "group": "growth",
+      "file": "icons/book_large.png"
+    },
+    {
+      "id": "slot_unlock",
+      "name": "技能槽解锁",
+      "group": "growth",
+      "file": "icons/slot_unlock.png"
+    },
+    {
+      "id": "forget_stone",
+      "name": "遗忘之石",
+      "group": "growth",
+      "file": "icons/forget_stone.png"
+    },
+    {
+      "id": "heal_potion",
+      "name": "治疗圣水",
+      "group": "growth",
+      "file": "icons/heal_potion.png"
+    },
+    {
+      "id": "reset_stone",
+      "name": "还原石",
+      "group": "growth",
+      "file": "icons/reset_stone.png"
+    },
+    {
+      "id": "skill_enhance_stone",
+      "name": "技能强化石",
+      "group": "growth",
+      "file": "icons/skill_enhance_stone.png"
+    },
+    {
+      "id": "revival_stone",
+      "name": "复活石",
+      "group": "growth",
+      "file": "icons/revival_stone.png"
+    }
+  ]
+}

@@ -1,135 +1,48 @@
 /**
- * 技能选择界面
- * - 解锁技能槽模式：从3个新技能中选1个追加
- * - 替换技能模式：先选要替换的技能，再从3个新技能中选1个替换
+ * 技能学习与替换：只更新展示层，保持原有分步选择、刷新与取消动作。
  */
 import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
-import { getSkillEnhanceLevel } from '../game/core/growth';
-import { REFRESH_COST, MAX_REFRESH_COUNT } from '../game/core/growth';
+import { getSkillEnhanceLevel, REFRESH_COST, MAX_REFRESH_COUNT } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
-import { SkillTag } from './components';
+import { FlowPet, FlowPetStats } from './MainFlowArt';
+import { CampHeader, CampSkillCard } from './CampScreens';
 
-interface Props {
-  state: GameState;
-  dispatch: Dispatch<GameAction>;
-}
-
-export function SkillPickScreen({ state, dispatch }: Props) {
+export function SkillPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const { skillPick, skillReplace } = state;
-
-  // 替换技能模式
-  if (skillReplace) {
-    const unit = state.roster.find((u) => u.uid === skillReplace.uid);
-    if (!unit) return null;
-    const replaceIdx = skillReplace.replaceIdx;
-
-    // 第一步：选择要替换的技能（replaceIdx === -1）
-    if (replaceIdx === -1) {
-      return (
-        <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24 }}>
-          <h2>🔄 替换技能 — 为 {unit.name} 选择要替换的技能</h2>
-          <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>点击选择要替换的技能（替换后不可撤销）：</p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {unit.skills.map((skillId, idx) => {
-              const sk = getSkill(skillId);
-              const enhanced = getSkillEnhanceLevel(unit, idx);
-              return (
-                <div
-                  key={`${skillId}-${idx}`}
-                  className="unit-card clickable"
-                  style={{ minWidth: 140, cursor: 'pointer', textAlign: 'center', padding: 12 }}
-                  onClick={() => dispatch({ type: 'PROF_SKILL_REPLACE_SELECT', replaceIdx: idx })}
-                >
-                  <div style={{ fontSize: 16, marginBottom: 4, fontWeight: 'bold' }}>{sk.name}</div>
-                  <SkillTag skill={sk} enhanced={enhanced} />
-                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{sk.desc}</div>
-                </div>
-              );
-            })}
-          </div>
-          <button className="btn" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>
-            取消
-          </button>
+  const uid = skillReplace?.uid ?? skillPick?.uid;
+  const unit = state.roster.find(candidate => candidate.uid === uid);
+  if (!unit || (!skillPick && !skillReplace)) return null;
+  const choosingOld = skillReplace?.replaceIdx === -1;
+  const isLegend = state.specialPending?.kind === 'legendSkill';
+  const refreshCount = skillReplace?.refreshCount ?? 0;
+  const canRefresh = !isLegend && refreshCount < MAX_REFRESH_COUNT && (unit.growthPoints ?? 0) >= REFRESH_COST;
+  const choices = choosingOld ? unit.skills : skillReplace?.choices ?? skillPick?.choices ?? [];
+  const title = skillReplace ? (choosingOld ? '替换技能 · 选择旧技能' : '替换技能 · 选择新技能') : '学习新技能';
+  const subtitle = choosingOld ? '先选择要替换的技能' : skillReplace
+    ? `将「${getSkill(unit.skills[skillReplace.replaceIdx]).name}」替换为以下技能之一`
+    : `为${unit.name}选择第${skillPick!.slot}技能槽的新技能`;
+  return <div className="flow-screen camp-screen camp-learning-screen">
+    <CampHeader title={title} subtitle={subtitle} />
+    <main className="camp-learning-layout">
+      <aside className="flow-frame camp-learning-target camp-scroll"><h2>{unit.name}</h2><FlowPet unit={unit} /><FlowPetStats unit={unit} />
+        <h3>当前技能</h3><div className="flow-skill-chips">{unit.skills.map((id, index) => <span className={skillReplace && skillReplace.replaceIdx === index ? 'training-replace-pending' : ''} key={`${id}-${index}`}>{getSkill(id).name}{getSkillEnhanceLevel(unit, index) > 0 && ` +${getSkillEnhanceLevel(unit, index)}`}{skillReplace && skillReplace.replaceIdx === index && <small>待替换</small>}</span>)}</div>
+        <p>{skillReplace ? '替换后不可撤销' : `第${skillPick!.slot}技能槽`}</p>
+        {!!skillReplace && !isLegend && <p>成长点：{unit.growthPoints ?? 0}</p>}
+      </aside>
+      <section className="flow-frame camp-learning-panel"><h2>{choosingOld ? '选择要替换的槽位' : '从以下技能中选择一项'}</h2>
+        <div className="camp-learning-cards camp-scroll">{choices.map((id, index) => <CampSkillCard key={`${id}-${index}`} id={id}
+          enhanced={choosingOld ? getSkillEnhanceLevel(unit, index) : 0}
+          label={choosingOld ? `槽位 ${index + 1} · 点击选择` : skillReplace ? '点击替换' : '点击学习'}
+          onClick={() => dispatch(choosingOld ? { type: 'PROF_SKILL_REPLACE_SELECT', replaceIdx: index } : { type: 'PROF_SLOT_PICK', skillId: id })} />)}
+          {choices.length === 0 && <p>没有可选择的技能</p>}
         </div>
-      );
-    }
-
-    // 第二步：从新技能中选1个替换
-    const rc = skillReplace.refreshCount ?? 0;
-    const isLegend = state.specialPending?.kind === 'legendSkill';
-    const canRefresh = !isLegend && rc < MAX_REFRESH_COUNT && (unit.growthPoints ?? 0) >= REFRESH_COST;
-    return (
-      <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24 }}>
-        <h2>🔄 替换技能 — 选择新技能</h2>
-        <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>
-          将「{getSkill(unit.skills[replaceIdx])?.name}」替换为以下技能之一：
-        </p>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {skillReplace.choices.map((skillId) => {
-            const sk = getSkill(skillId);
-            return (
-              <div
-                key={skillId}
-                className="unit-card clickable"
-                style={{ minWidth: 160, cursor: 'pointer', textAlign: 'center', padding: 12 }}
-                onClick={() => dispatch({ type: 'PROF_SLOT_PICK', skillId })}
-              >
-                <div style={{ fontSize: 18, marginBottom: 4, fontWeight: 'bold' }}>{sk.name}</div>
-                <SkillTag skill={sk} />
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{sk.desc}</div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          {!isLegend && (
-            <button
-              className="btn"
-              disabled={!canRefresh}
-              onClick={() => dispatch({ type: 'PROF_SKILL_REFRESH' })}
-            >
-              🔄 刷新（{REFRESH_COST} 成长点，剩 {MAX_REFRESH_COUNT - rc} 次）
-            </button>
-          )}
-          <button className="btn" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>
-            取消
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 技能槽解锁模式（原有逻辑）
-  if (!skillPick) return null;
-  const unit = state.roster.find((u) => u.uid === skillPick.uid);
-  if (!unit) return null;
-
-  return (
-    <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24 }}>
-      <h2>🔓 解锁技能槽 — 为 {unit.name} 选择新技能</h2>
-      <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>解锁了第 {skillPick.slot} 技能槽，从以下 3 个技能中选择 1 个：</p>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {skillPick.choices.map((skillId) => {
-          const sk = getSkill(skillId);
-          return (
-            <div
-              key={skillId}
-              className="unit-card clickable"
-              style={{ minWidth: 160, cursor: 'pointer', textAlign: 'center', padding: 12 }}
-              onClick={() => dispatch({ type: 'PROF_SLOT_PICK', skillId })}
-            >
-              <div style={{ fontSize: 18, marginBottom: 4, fontWeight: 'bold' }}>{sk.name}</div>
-              <SkillTag skill={sk} />
-              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{sk.desc}</div>
-            </div>
-          );
-        })}
-      </div>
-      <button className="btn" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>
-        取消（不解锁）
-      </button>
-    </div>
-  );
+        <footer className="camp-learning-actions"><p>{choosingOld ? '选择旧技能后，再选择新技能' : skillReplace ? '点击技能直接替换' : '点击技能直接学习'}</p><div>
+          {!!skillReplace && !choosingOld && !isLegend && <button type="button" disabled={!canRefresh} onClick={() => dispatch({ type: 'PROF_SKILL_REFRESH' })}>刷新（{REFRESH_COST}成长点，剩{MAX_REFRESH_COUNT - refreshCount}次）</button>}
+          <button type="button" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>{skillReplace ? '取消' : '取消（不解锁）'}</button>
+        </div></footer>
+      </section>
+    </main>
+  </div>;
 }

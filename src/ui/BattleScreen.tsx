@@ -18,11 +18,12 @@ import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
-import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PetIcon, PixelCreature } from './components';
+import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PetIcon, PixelCreature, BattleHpText } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 import { ShopItemIcon } from './ShopItemIcon';
 import { BattleStatusIcons } from './BattleStatusIcons';
+import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART } from './BuffIcon';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
 
@@ -74,14 +75,14 @@ function BattleUnitInspectPanel({ unit, speed, side, children }: { unit: Unit; s
           <span className="enemy-inspect-eyebrow">{side === 'enemy' ? '敌方' : '我方'} · {unit.row === 'front' ? '前排' : '后排'}</span>
           <strong>{unit.name}</strong>
           <span className="enemy-inspect-stats">
-            <span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{unit.hp}/{unit.maxHp}</span>
+            <span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" /><BattleHpText hp={unit.hp} maxHp={unit.maxHp} /></span>
             <span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{speed ?? getEffectiveSpd(unit)}</span>
-            {unit.shield > 0 && <span>🛡️ 护盾 {unit.shield}</span>}
+            {unit.shield > 0 && <span><BuffIcon art={STATUS_ART.shield} /> 护盾 {unit.shield}</span>}
           </span>
         </span>
       </div>
       {children}
-      {!!unit.battleBuffs?.skillSpd && <div className="enemy-inspect-permanent-buff">💨 技能速度加成 +{unit.battleBuffs.skillSpd}</div>}
+      {!!unit.battleBuffs?.skillSpd && <div className="enemy-inspect-permanent-buff"><BuffIcon art={BATTLE_BUFF_ART.skillSpd} /> 技能速度加成 +{unit.battleBuffs.skillSpd}</div>}
       {!hasBuffs && <div className="enemy-inspect-no-status">当前无状态效果</div>}
       {side === 'enemy' && <>
         <div className="enemy-inspect-section-title">技能</div>
@@ -412,6 +413,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       .filter((p) => p.uid === uid)
       .map((p) => (
         <span key={p.id} className={`dmg-pop ${p.heal ? 'heal' : ''} ${p.buff ? 'buff' : ''} ${p.shield ? 'shield' : ''} ${p.debuff ? 'debuff' : ''}`}>
+          {p.statusIcon && <BuffIcon art={STATUS_ART[p.statusIcon]} />}
           {p.text}
         </span>
       ));
@@ -607,7 +609,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                           <span className="order-badge">已行动</span>
                         ) : null}
                       </span>
-                      <span className="battle-selected-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{shownUnit(selected).hp}/{selected.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{spdMap?.[selected.uid] ?? getEffectiveSpd(shownUnit(selected))}</span></span>
+                      <span className="battle-selected-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" /><BattleHpText hp={shownUnit(selected).hp} maxHp={selected.maxHp} /></span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{spdMap?.[selected.uid] ?? getEffectiveSpd(shownUnit(selected))}</span></span>
                     </span>
                   </div>
                   <div className="battle-skill-scroll">
@@ -746,7 +748,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         <div className="battle-overlay-mask" onClick={() => setFoodOverlayOpen(false)}>
           <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
             <div className="battle-overlay-head">
-              <div className="battle-overlay-title">捕获食物</div>
+              <div className="battle-overlay-title popup-food">捕获食物</div>
               <button className="battle-overlay-close" onClick={() => setFoodOverlayOpen(false)} aria-label="关闭捕获食物">×</button>
             </div>
             <div className="battle-overlay-grid">
@@ -775,7 +777,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         <div className="battle-overlay-mask" onClick={() => setItemOverlayOpen(false)}>
           <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
             <div className="battle-overlay-head">
-              <div className="battle-overlay-title">战斗道具</div>
+              <div className="battle-overlay-title popup-items">战斗道具</div>
               <button className="battle-overlay-close" onClick={() => setItemOverlayOpen(false)} aria-label="关闭战斗道具">×</button>
             </div>
             <div className="battle-overlay-grid">
@@ -802,7 +804,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       {battle.phase === 'won' && !animating && !logPending && (
         <div className="overlay">
           <div className="overlay-box popup-victory">
-            <div className="popup-result-mark" aria-hidden="true">⚔</div>
+            <div className="popup-result-mark" aria-hidden="true" />
             <h2>{isChallenge ? '挑战胜利' : '战斗胜利'}</h2>
             <p className="popup-result-detail">
               {isChallenge
@@ -819,7 +821,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       {battle.phase === 'lost' && !animating && !logPending && !isSimulation && (
         <div className="overlay">
           <div className="overlay-box popup-defeat">
-            <div className="popup-result-mark" aria-hidden="true">✕</div>
+            <div className="popup-result-mark" aria-hidden="true" />
             <h2>{isArena3Challenge || !isChallenge ? '全队阵亡' : '挑战失败'}</h2>
             <p className="popup-result-detail">{isArena3Challenge || !isChallenge ? '阵亡的宠物永久消失，本次远征到此结束' : '没有宠物阵亡，但需要承受挑战失败的代价'}</p>
             <button className="big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>

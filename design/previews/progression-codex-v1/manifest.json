@@ -1,0 +1,55 @@
+{
+  "status": "integrated-as-components-not-image-backgrounds",
+  "generator": "built-in image_gen",
+  "styleReference": "design/previews/remaining-main-ui-v1/roster-management-preview-v1.png",
+  "pages": [
+    {
+      "id": "achievements-v1",
+      "image": "achievements-v1.png",
+      "brief": "成就与解锁：难度、遗物、评级里程碑三个分类；预览遗物页，当前存档独立解锁。",
+      "promptProvenance": "achievements-v1.prompt.txt"
+    },
+    {
+      "id": "evolution-v1",
+      "image": "evolution-v1.png",
+      "source": "exec-f15e27b3-4963-493f-bb01-39315a8f87dd.png",
+      "brief": "普通进化：左侧候选伙伴，右侧当前/下一形态、属性及被动对比；点击合法伙伴直接进化，无材料消耗和新增确认。",
+      "promptProvenance": "Original generation calls in this conversation; design requirements recorded in design-spec.md."
+    },
+    {
+      "id": "super-evolution-v1",
+      "image": "super-evolution-v1.png",
+      "source": "exec-c5bb3390-5f14-429e-9184-73b36021e5bf.png",
+      "brief": "超进化：沿用候选及形态对比，突出随机诅咒警告；血脆、虚弱、迟缓只展示可能结果，不提前选定或泄露随机结果。",
+      "promptProvenance": "Original generation calls in this conversation; design requirements recorded in design-spec.md."
+    },
+    {
+      "id": "attribute-boost-v1",
+      "image": "attribute-boost-v1.png",
+      "source": "exec-1fb0901e-6d05-4c94-9e3c-bb2f9b3ac33e.png",
+      "brief": "属性强化：已选伙伴立绘及当前属性，生命+5、速度+2两项互斥选项；点击选项直接强化，不新增消耗或确认步骤。",
+      "promptProvenance": "Original generation calls in this conversation; design requirements recorded in design-spec.md."
+    },
+    {
+      "id": "creation-v1",
+      "image": "creation-v1.png",
+      "source": "exec-5d882423-b92e-43fd-ad04-8fd126c67314.png",
+      "brief": "造物：岩甲兽20/2、狂焰兽16/5、迅风兽15/8三个属性模板及技能池，随机组合3个技能；轮廓只是模板示意，不是新生物最终立绘。",
+      "promptProvenance": "Original generation calls in this conversation; design requirements recorded in design-spec.md."
+    },
+    {
+      "id": "revive-v1",
+      "image": "revive-v1.png",
+      "source": "exec-1637d9e9-8213-47f8-805a-cf9dabb98490.png",
+      "brief": "复活选择：醒目的本次保留比例，候选死亡伙伴原属性/复活后属性对比和复活生命n/n；只复活点击对象，比例不可修改。",
+      "promptProvenance": "Original generation calls in this conversation; design requirements recorded in design-spec.md."
+    },
+    {
+      "id": "codex-v1",
+      "image": "codex-v1.png",
+      "source": "exec-bf9915f1-b85c-4338-8618-df88ef3e1e60.png",
+      "brief": "生物图鉴：按普通/精英/传奇/首领/造物分组的目录，右侧独立大立绘与属性、被动、技能、驯服、融合及生物说明；只读，不新增发现/研究/收藏解锁。",
+      "promptProvenance": "Original generation calls in this conversation; design requirements recorded in design-spec.md."
+    }
+  ]
+}

@@ -6,7 +6,8 @@ import { useState } from 'react';
 import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
-import { PetIcon } from './components';
+import { TrainingWorkbench } from './ProficiencyArt';
+import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import {
   getSkillEnhanceLevel,
   getSkillEnhanceMaxLevel,
@@ -30,9 +31,7 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
 
   if (selectedUnit) {
     return (
-      <div className="screen growth-screen">
-        <h2>⚒️ 技能强化</h2>
-        <p className="growth-hint">为 {selectedUnit.name} 强化技能（剩余强化石: {stoneCount}）</p>
+      <TrainingWorkbench state={state} dispatch={dispatch} title="技能强化石" subtitle="使用强化石提升技能，不消耗成长点" unit={selectedUnit} onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)}>
 
         <div className="growth-skill-enhance-list">
           {selectedUnit.skills.map((skillId, idx) => {
@@ -70,7 +69,7 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
                       title={!canEnhance ? (stoneCount <= 0 ? '需要技能强化石' : '已满级') : `消耗 1 个技能强化石`}
                       onClick={() => setEnhanceStoneSlotIndex(idx)}
                     >
-                      强化 ⚒️
+                      <img src={BACKPACK_ITEM_ART.skill_enhance_stone} alt="" /> 强化 · 1个
                     </button>
                   ) : (
                     <span className="growth-skill-max">已满级</span>
@@ -82,7 +81,7 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
                       title={(state.inventory['reset_stone'] ?? 0) <= 0 ? '需要「还原石」才能重置' : '消耗 1 个还原石重置技能强化'}
                       onClick={() => setResetSlotIndex(idx)}
                     >
-                      重置 {(state.inventory['reset_stone'] ?? 0) > 0 && `×${state.inventory['reset_stone']}`}
+                      <img src={BACKPACK_ITEM_ART.reset_stone} alt="" /> 重置 {(state.inventory['reset_stone'] ?? 0) > 0 && `×${state.inventory['reset_stone']}`}
                     </button>
                   )}
                 </div>
@@ -91,23 +90,16 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
           })}
         </div>
 
-        <div className="growth-actions">
-          <button className="btn" onClick={() => setSelectedUid(null)}>
-            返回
-          </button>
-          <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-            返回地图
-          </button>
-        </div>
 
         {/* 技能强化石确认弹窗 */}
         {enhanceStoneSlotIndex !== null && (
           <div className="growth-modal-overlay" onClick={() => setEnhanceStoneSlotIndex(null)}>
             <div className="growth-modal" onClick={(e) => e.stopPropagation()}>
-              <h3>使用技能强化石：{getSkill(selectedUnit.skills[enhanceStoneSlotIndex])?.name}</h3>
+              <h3>使用技能强化石</h3>
+              <div className="growth-modal-skill">{getSkill(selectedUnit.skills[enhanceStoneSlotIndex])?.name}<span>+{getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex)} → +{getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex) + 1}</span></div>
               <div className="growth-modal-content has-comparison">
-                <p>当前：{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex))}</p>
-                <p>强化后：{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex) + 1)}</p>
+                <p><strong>当前</strong>{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex))}</p>
+                <p><strong>强化后</strong>{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex) + 1)}</p>
                 <p>消耗：1 个技能强化石（剩余 {stoneCount - 1} 个）</p>
                 <p>无需消耗成长点</p>
               </div>
@@ -156,40 +148,11 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
             </div>
           </div>
         )}
-      </div>
+      </TrainingWorkbench>
     );
   }
 
-  return (
-    <div className="screen growth-screen">
-      <h2>⚒️ 技能强化</h2>
-      <p className="growth-hint">选择一只宠物，使用技能强化石强化其技能</p>
-
-      <div className="growth-roster">
-        {roster.map((u) => (
-          <div
-            key={u.uid}
-            className={`growth-pet-card ${selectedUid === u.uid ? 'selected' : ''}`}
-            onClick={() => setSelectedUid(u.uid)}
-          >
-            <PetIcon image={u.image} emoji={u.emoji} name={u.name} />
-            <div className="growth-pet-info">
-              <div className="growth-pet-name">{u.name}</div>
-              <div className="growth-pet-stats">
-                HP:{u.maxHp} SPD:{u.spd}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="growth-actions">
-        <button className="btn" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-          返回地图
-        </button>
-      </div>
-    </div>
-  );
+  return <TrainingWorkbench state={state} dispatch={dispatch} title="技能强化石" subtitle="使用强化石提升技能，不消耗成长点" onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)} />;
 }
 
 function renderSkillDesc(skillId: string, level: number): string {

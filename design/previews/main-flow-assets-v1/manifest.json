@@ -1,0 +1,195 @@
+{
+  "status": "integrated-main-flow",
+  "source": "built-in image_gen",
+  "map_mode": "baked_scene_mode",
+  "visual_model": "baked_raster",
+  "runtime_object_model": "none",
+  "collision_model": "none",
+  "style_reference": "src/ui/assets/map-act1.png",
+  "backgrounds": [
+    {
+      "id": "event-forest",
+      "path": "event-forest.png",
+      "prompt": "event-forest.prompt.txt"
+    },
+    {
+      "id": "encounter-shrine",
+      "path": "encounter-shrine.png",
+      "prompt": "encounter-shrine.prompt.txt"
+    },
+    {
+      "id": "partner-camp",
+      "path": "partner-camp.png",
+      "prompt": "partner-camp.prompt.txt"
+    },
+    {
+      "id": "interact-sunset",
+      "path": "interact-sunset.png",
+      "prompt": "interact-sunset.prompt.txt"
+    },
+    {
+      "id": "victory-dawn",
+      "path": "victory-dawn.png",
+      "prompt": "victory-dawn.prompt.txt"
+    },
+    {
+      "id": "defeat-dusk",
+      "path": "defeat-dusk.png",
+      "prompt": "defeat-dusk.prompt.txt"
+    }
+  ],
+  "icons": [
+    {
+      "id": "event-scroll",
+      "path": "icons/event-scroll.png",
+      "sourceCell": 1,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "encounter-crystal",
+      "path": "icons/encounter-crystal.png",
+      "sourceCell": 2,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "new-companion",
+      "path": "icons/new-companion.png",
+      "sourceCell": 3,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "replace-companion",
+      "path": "icons/replace-companion.png",
+      "sourceCell": 4,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "fuse-companion",
+      "path": "icons/fuse-companion.png",
+      "sourceCell": 5,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "release-companion",
+      "path": "icons/release-companion.png",
+      "sourceCell": 6,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "battles-won",
+      "path": "icons/battles-won.png",
+      "sourceCell": 7,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "companions-lost",
+      "path": "icons/companions-lost.png",
+      "sourceCell": 8,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "turn-hourglass",
+      "path": "icons/turn-hourglass.png",
+      "sourceCell": 9,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "companions-tamed",
+      "path": "icons/companions-tamed.png",
+      "sourceCell": 10,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "victory-crown",
+      "path": "icons/victory-crown.png",
+      "sourceCell": 11,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "unlock",
+      "path": "icons/unlock.png",
+      "sourceCell": 12,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "rating-laurel",
+      "path": "icons/rating-laurel.png",
+      "sourceCell": 13,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "next-chapter",
+      "path": "icons/next-chapter.png",
+      "sourceCell": 14,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "journey-end",
+      "path": "icons/journey-end.png",
+      "sourceCell": 15,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "id": "party-completeness",
+      "path": "icons/party-completeness.png",
+      "sourceCell": 16,
+      "size": [
+        128,
+        128
+      ]
+    }
+  ],
+  "reuse": [
+    "existing-life-icon",
+    "existing-speed-icon",
+    "existing-gold-icon",
+    "existing-food-icons",
+    "existing-creature-art"
+  ],
+  "qcNote": "All icon output cells nonempty, no output edge contact or paste clamping. Visually complete bottom-row source contours touch inferred cell padding; explicitly accepted with allow-source-edge-touch."
+}

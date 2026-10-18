@@ -1,0 +1,32 @@
+{
+  "status": "integrated-as-components-not-image-backgrounds",
+  "generator": "built-in image_gen",
+  "styleReference": "design/previews/progression-codex-v1/codex-v1.png",
+  "pages": [
+    {
+      "id": "camp-rest-v1",
+      "image": "camp-rest-v1.png",
+      "prompt": "camp-rest-v1.prompt.txt"
+    },
+    {
+      "id": "camp-fusion-v1",
+      "image": "camp-fusion-v1.png",
+      "prompt": "camp-fusion-v1.prompt.txt"
+    },
+    {
+      "id": "fusion-skill-v1",
+      "image": "fusion-skill-v1.png",
+      "prompt": "fusion-skill-v1.prompt.txt"
+    },
+    {
+      "id": "skill-learning-v1",
+      "image": "skill-learning-v1.png",
+      "prompt": "skill-learning-v1.prompt.txt"
+    },
+    {
+      "id": "special-target-v1",
+      "image": "special-target-v1.png",
+      "prompt": "special-target-v1.prompt.txt"
+    }
+  ]
+}

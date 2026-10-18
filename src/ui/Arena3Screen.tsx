@@ -1,67 +1,27 @@
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
+import { CampHeader } from './CampScreens';
+import { FlowPet } from './MainFlowArt';
+import { MapNodeIcon } from './MapNodeIcon';
+import './proficiency.css';
 
-interface Props {
-  state: GameState;
-  dispatch: (action: GameAction) => void;
-}
-
-export function Arena3Screen({ state, dispatch }: Props) {
-  const gold = state.gold;
-  return (
-    <div className="screen">
-      <div className="section-title">🏟️ 竞技场</div>
-      <div style={{ display: 'flex', flexDirection: 'row', gap: 12, padding: '0 16px', marginTop: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-        {/* 模拟战 */}
-        <div
-          className="reward-card"
-          style={{ cursor: 'pointer', padding: 16, border: '2px solid #4a9eff', borderRadius: 8, background: 'rgba(74,158,255,0.1)', flex: '1 1 0', minWidth: 200, maxWidth: 280 }}
-          onClick={() => dispatch({ type: 'ARENA3_MODE', mode: 'simulation' })}
-        >
-          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#4a9eff', marginBottom: 8 }}>🎬 模拟战</div>
-          <div style={{ fontSize: 13, color: '#ccc', lineHeight: 1.5 }}>
-            与自己的镜像队伍对战。<br/>
-            <span style={{ color: '#6fd8a8' }}>不消耗生命、不产生死亡</span>。<br/>
-            胜利 → 全体存活生物获得 <span style={{ color: '#e8c26a' }}>5 成长点</span>。
-          </div>
-        </div>
-        {/* 挑战赛 */}
-        <div
-          className="reward-card"
-          style={{ cursor: 'pointer', padding: 16, border: '2px solid #e8c26a', borderRadius: 8, background: 'rgba(232,194,106,0.1)', flex: '1 1 0', minWidth: 200, maxWidth: 280 }}
-          onClick={() => dispatch({ type: 'ARENA3_MODE', mode: 'challenge' })}
-        >
-          <div style={{ fontSize: 18, fontWeight: 'bold', color: '#e8c26a', marginBottom: 8 }}>⚔️ 挑战赛</div>
-          <div style={{ fontSize: 13, color: '#ccc', lineHeight: 1.5 }}>
-            与 3 只精英级敌人对战。<br/>
-            <span style={{ color: '#ff6b6b' }}>正常战斗规则（可死亡）</span>。<br/>
-            胜利 → 获得 <span style={{ color: '#e8c26a' }}>50 金币</span> + 全体 <span style={{ color: '#e8c26a' }}>+3 成长点</span>。<br/>
-            <span style={{ color: '#ff6b6b' }}>失败 → 远征直接结束</span>。
-          </div>
-        </div>
-        {/* 表演赛 */}
-        <div
-          className="reward-card"
-          style={{
-            cursor: gold >= 20 ? 'pointer' : 'not-allowed',
-            padding: 16,
-            border: `2px solid ${gold >= 20 ? '#b08dff' : '#555'}`,
-            borderRadius: 8,
-            background: gold >= 20 ? 'rgba(176,141,255,0.1)' : 'rgba(50,50,50,0.3)',
-            opacity: gold >= 20 ? 1 : 0.6,
-            flex: '1 1 0',
-            minWidth: 200,
-            maxWidth: 280,
-          }}
-          onClick={() => gold >= 20 && dispatch({ type: 'ARENA3_MODE', mode: 'exhibition' })}
-        >
-          <div style={{ fontSize: 18, fontWeight: 'bold', color: gold >= 20 ? '#b08dff' : '#555', marginBottom: 8 }}>🎭 表演赛</div>
-          <div style={{ fontSize: 13, color: '#ccc', lineHeight: 1.5 }}>
-            消耗 <span style={{ color: '#e8c26a' }}>20 金币</span>，选择 1 只宠物获得 <span style={{ color: '#e8c26a' }}>5 成长点</span>。<br/>
-            <span style={{ color: '#999', fontSize: 12 }}>当前金币：{gold}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export function Arena3Screen({ state, dispatch }: { state: GameState; dispatch: (action: GameAction) => void }) {
+  const partner = state.roster[0];
+  return <div className="flow-screen camp-screen proficiency-arena-screen">
+    <CampHeader title="竞技场" subtitle={`选择一种挑战方式 · 当前金币 ${state.gold}`} />
+    <main className="proficiency-arena-options camp-scroll">
+      <button type="button" className="arena-mode is-simulation" onClick={() => dispatch({ type: 'ARENA3_MODE', mode: 'simulation' })}>
+        <h2>模拟战</h2><div className="arena-mode-art arena-mirror" aria-hidden="true">{partner && <FlowPet unit={partner} />}<span className="arena-mirror-glass" />{partner && <FlowPet unit={partner} />}</div>
+        <p>与自己的镜像队伍对战</p><p className="arena-safety">不消耗生命，不产生死亡</p><div className="arena-reward">胜利：<br />全体存活生物 <b>+5成长点</b></div><p className="arena-footnote">失败无惩罚</p><span className="arena-mode-action">选择模拟战</span>
+      </button>
+      <button type="button" className="arena-mode is-challenge" onClick={() => dispatch({ type: 'ARENA3_MODE', mode: 'challenge' })}>
+        <h2>挑战赛</h2><div className="arena-mode-art arena-challenge-art" aria-hidden="true"><MapNodeIcon type="elite" /><MapNodeIcon type="battle" /><MapNodeIcon type="elite" /></div>
+        <p>对战3只精英级敌人</p><p className="arena-danger">正常战斗规则，可死亡</p><div className="arena-reward">胜利：<br /><b>50金币</b> + 全体<b>3成长点</b></div><p className="arena-danger">失败：远征直接结束</p><span className="arena-mode-action">选择挑战赛</span>
+      </button>
+      <button type="button" className="arena-mode is-exhibition" disabled={state.gold < 20} onClick={() => dispatch({ type: 'ARENA3_MODE', mode: 'exhibition' })}>
+        <h2>表演赛</h2><div className="arena-mode-art arena-stage" aria-hidden="true"><MapNodeIcon type="arena3" /></div>
+        <p>花费20金币</p><div className="arena-reward">选择1只宠物，<br />获得<b>5成长点</b></div><p className="arena-footnote">{state.gold < 20 ? '金币不足，需要20金币' : `当前金币 ${state.gold}`}</p><span className="arena-mode-action">选择表演赛</span>
+      </button>
+    </main>
+  </div>;
 }
