@@ -1321,11 +1321,17 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
     [],
   );
   const [selectedId, setSelectedId] = useState<string>(() => groups[0]?.items[0]?.id ?? '');
+  const listRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-codex-id="${selectedId}"]`);
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [selectedId]);
   const sp = getMonster(selectedId);
   const stats = computeStats(sp.id);
   const passive = getPassive(sp.passive);
   const next = nextStage(sp.id);
   const rankLabel = sp.id.startsWith('custom_') ? '造物' : (CODEX_RANK_LABEL[sp.rank] ?? '');
+  const rankTone = sp.id.startsWith('custom_') ? '' : sp.rank === 2 ? ' rank-chip-elite' : sp.rank === 3 ? ' rank-chip-legend' : sp.rank === 4 ? ' rank-chip-boss' : '';
   const tameable = sp.rank !== 4;
 
   return (
@@ -1340,7 +1346,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
         </button>
       </header>
       <div className="codex-body">
-        <nav className="codex-list flow-frame" aria-label="生物目录">
+        <nav className="codex-list flow-frame" aria-label="生物目录" ref={listRef}>
           {groups.map((g) => (
             <div key={g.key} className="codex-group">
               <div className="codex-group-title">{g.label}</div>
@@ -1350,6 +1356,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
                     key={m.id}
                     className={`codex-item ${m.id === selectedId ? 'selected' : ''}`}
                     aria-pressed={m.id === selectedId}
+                    data-codex-id={m.id}
                     onClick={() => setSelectedId(m.id)}
                   >
                     <span className="codex-item-emoji"><PetIcon image={formationImage(m.id, m.image)} emoji={m.emoji} name={m.name} /></span>
@@ -1366,7 +1373,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
             <div>
               <div className="codex-detail-name">
                 {sp.name}
-                <span className="chip rank-chip">{rankLabel}</span>
+                <span className={`chip rank-chip${rankTone}`}>{rankLabel}</span>
               </div>
               <div className="codex-detail-stats">
                 <span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />生命 {stats.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />速度 {stats.spd}</span>
@@ -1454,7 +1461,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
                     className="codex-link"
                     onClick={() => setSelectedId(next)}
                   >
-                    <PetIcon image={formationImage(next, getMonster(next).image)} emoji={getMonster(next).emoji} name={getMonster(next).name} /> {getMonster(next).name}
+                    {getMonster(next).name}
                   </button>
                 </>
               ) : (
