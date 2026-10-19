@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>通用小图标 PNG · 第六批</title>
+  <style>
+    :root { font-family: 'Microsoft YaHei', system-ui, sans-serif; color: #101c2c; background: #1682be; }
+    body { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    h1, h2 { color: #fff9e9; text-shadow: 3px 3px #101c2c; }
+    h1 { font-size: 30px; }
+    p { color: #eef9fb; line-height: 1.7; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    figure { margin: 0; padding: 16px 8px; border: 4px solid #101c2c; background: #fff9e9; box-shadow: 5px 5px 0 #065077; text-align: center; }
+    .sizes { display: flex; align-items: end; justify-content: center; gap: 10px; min-height: 88px; }
+    .sample { display: grid; justify-items: center; align-content: end; gap: 7px; }
+    img { display: block; object-fit: contain; image-rendering: pixelated; }
+    .sample small { font-size: 10px; color: #607580; }
+    figcaption { margin-top: 14px; font-size: 16px; font-weight: 900; }
+    figcaption small { display: block; margin-top: 3px; color: #607580; font-size: 11px; font-weight: 600; }
+    .dark { background: #173a4c; border: 3px solid #101c2c; padding: 16px; display: flex; gap: 18px; flex-wrap: wrap; }
+    .dark img { width: 32px; height: 32px; }
+    @media (max-width: 960px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 470px) { body { padding: 12px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>通用操作与提示图标 · 第六批 PNG</h1>
+  <p>16 张独立透明图已纳入游戏素材与预加载，15 张用于现有界面，暂停图预留。每张分别以 16 / 24 / 32 / 64 px 展示。</p>
+  <div id="groups"></div>
+  <h2>深色背景 · 32 px</h2>
+  <div class="dark" id="dark"></div>
+  <script>
+    const groups = [
+      ['锁定、关闭与警告', [['lock', '灰银锁头'], ['none', '不携带遗物'], ['close', '关闭'], ['warning', '警告']]],
+      ['四向箭头', [['arrow-left', '向左'], ['arrow-right', '向右'], ['arrow-up', '向上'], ['arrow-down', '向下']]],
+      ['操作与星芒', [['pause', '暂停'], ['play', '播放 / 继续'], ['plus', '添加'], ['sparkle', '星芒']]],
+      ['步骤与提示', [['step-active', '当前步骤'], ['step-inactive', '未激活步骤'], ['marker-info', '提示菱形'], ['error', '错误']]],
+    ];
+    const container = document.getElementById('groups');
+    for (const [title, entries] of groups) {
+      const heading = document.createElement('h2'); heading.textContent = title; container.append(heading);
+      const grid = document.createElement('div'); grid.className = 'grid';
+      for (const [name, label] of entries) {
+        const figure = document.createElement('figure');
+        figure.innerHTML = `<div class="sizes">${[16, 24, 32, 64].map(size => `<div class="sample"><img src="icons/${name}.png" alt="" width="${size}" height="${size}" /><small>${size}</small></div>`).join('')}</div><figcaption>${label}<small>${name}.png</small></figcaption>`;
+        grid.append(figure);
+        const darkIcon = document.createElement('img'); darkIcon.src = `icons/${name}.png`; darkIcon.alt = label; darkIcon.title = label; document.getElementById('dark').append(darkIcon);
+      }
+      container.append(grid);
+    }
+  </script>
+</body>
+</html>

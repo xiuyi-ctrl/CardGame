@@ -4,6 +4,7 @@ import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import type { Unit } from '../game/types';
 import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
+import { UiSymbol } from './UiSymbol';
 
 const SLOT_LABELS = ['先发', '第二', '第三', '第四'];
 
@@ -99,7 +100,7 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
         <h1><FlowIcon name="battles-won" />车轮战 · 出战顺序</h1>
         <span>第{state.act}幕 · 轮换上阵</span>
         <button type="button" onClick={() => dispatch({ type: 'BACK_TO_MAP' })}>
-          返回地图 →
+          返回地图 <UiSymbol name="arrow-right" />
         </button>
       </header>
 
@@ -131,7 +132,7 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
                       <FlowPet unit={u} /><strong>{u.name}</strong><FlowPetStats unit={u} />
                     </button>
                   ) : (
-                    <span className="wheel-empty-slot"><b aria-hidden="true">＋</b>点击下方伙伴加入，或拖入此槽</span>
+                    <span className="wheel-empty-slot"><UiSymbol name="plus" />点击下方伙伴加入，或拖入此槽</span>
                   )}
                 </div>
               </div>

@@ -84,7 +84,7 @@
 .wheel-slot-body strong { font-size: 20px; }
 .wheel-slot-body .flow-pet-stats { gap: 6px 12px; font-size: 17px; }
 .wheel-empty-slot { min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; gap: 8px; border: 2px dashed #a4b0ac; color: #75818a; text-align: center; font-size: 13px; }
-.wheel-empty-slot b { font-size: 50px; line-height: 1; }
+.wheel-empty-slot .ui-symbol { width: 50px; height: 50px; }
 .wheel-pool { min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 8px; }
 .flow-screen .wheel-pool > button { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 4px; align-items: center; min-width: 0; min-height: 0; padding: 6px; background: #fff9e9; overflow: hidden; }
 .wheel-pool .flow-pet { width: 100%; height: 100%; }

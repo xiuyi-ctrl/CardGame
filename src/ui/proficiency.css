@@ -88,12 +88,7 @@
 .arena-mode > h2 { font-size: clamp(26px, 3vw, 42px); }
 .arena-mode > p { font-size: 17px; font-weight: 700; }
 .arena-mode-art { flex: 1 1 150px; min-height: 75px; max-height: 210px; height: clamp(100px, 23vh, 210px); display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; }
-.arena-mode-art > .flow-pet { min-width: 0; width: 38%; height: 100%; }
-.arena-mode-art > .flow-pet:last-child { transform: scaleX(-1); }
-.arena-mirror-glass { width: 24%; height: 70%; background: #a6e3e9; border: 5px solid #bf8b2d; box-shadow: inset 0 0 0 3px #fff9e9; }
-.arena-mode-art > .map-node-icon { min-width: 0; width: 32%; height: 100%; }
-.arena-mode-art > .map-node-icon:nth-child(2) { width: 40%; }
-.arena-stage > .map-node-icon { width: 75%; color: #885797; }
+.arena-mode-art > img { min-width: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 .arena-reward { margin-top: auto; padding: 12px; border: 2px solid #a4b0ac; font-size: 20px; font-weight: 800; line-height: 1.6; }
 .arena-reward b { color: #096a75; }
 .arena-mode .arena-safety { color: #096a75; background: #dcf0e5; padding: 8px; }

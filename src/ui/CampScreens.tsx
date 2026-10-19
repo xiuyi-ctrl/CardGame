@@ -11,6 +11,7 @@ import { getMaxSkillSlots, getSkillEnhanceLevel } from '../game/core/growth';
 import { skillBrief, skillFullDesc } from './components';
 import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { MapNodeIcon } from './MapNodeIcon';
+import { UiSymbol } from './UiSymbol';
 import './camp.css';
 
 type Props = { state: GameState; dispatch: Dispatch<GameAction> };
@@ -74,7 +75,7 @@ export function CampFusionScreen({ state, dispatch }: Props) {
           <h2>{slot === 'main' ? '主宠 · 保留' : '副宠 · 消耗'}</h2>
           {unit ? <button type="button" draggable onDragStart={event => dragStart(event, unit)} onClick={() => dispatch({ type: slot === 'main' ? 'REST_FUSION_SET_MAIN' : 'REST_FUSION_SET_SUB', uid: unit.uid })}><FlowPet unit={unit} /><span><strong>{unit.name}</strong><FlowPetStats unit={unit} /></span></button> : <p className="camp-fusion-empty">点击下方伙伴或拖入{slot === 'main' ? '主宠' : '副宠'}</p>}
         </section>;
-      })}<span className="camp-fusion-arrow" aria-hidden="true">←</span></div>
+      })}<span className="camp-fusion-arrow" aria-hidden="true"><UiSymbol name="arrow-left" /></span></div>
       <section className="camp-fusion-preview"><h2>融合效果预览</h2><p>继承副宠50%基础属性与30%成长点</p>{canConfirm ? <div><span>生命 <b>+{hpGain}</b></span><span>速度 <b>+{spdGain}</b></span><span>成长点 <b>+{gpGain}</b></span></div> : <p>请选择主宠和副宠</p>}</section>
     </div><footer className="camp-fusion-confirm"><p>副宠将离开队伍，此操作不可撤销</p><div><button type="button" className="flow-primary" disabled={!canConfirm} onClick={() => dispatch({ type: 'REST_FUSION_CONFIRM' })}>开始融合</button><small>融合后可选择一个未学过的副宠技能</small></div></footer></main>
     <section className="flow-frame camp-fusion-roster"><h2>我的宠物 · 点击或拖动选择</h2><div className="camp-fusion-roster-grid camp-scroll">{state.roster.map(unit => <button type="button" key={unit.uid} draggable onDragStart={event => dragStart(event, unit)} onClick={() => choose(unit)} className={`camp-roster-card ${main?.uid === unit.uid ? 'is-main' : sub?.uid === unit.uid ? 'is-sub' : ''}`}>

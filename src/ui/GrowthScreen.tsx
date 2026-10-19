@@ -7,6 +7,7 @@ import { getAllGrowthChoices, growthChoiceCost, applyGrowthChoice, getTransferFe
 import { CampHeader } from './CampScreens';
 import { FlowPet, FlowPetStats } from './MainFlowArt';
 import { TrainingRoster } from './ProficiencyArt';
+import { UiSymbol } from './UiSymbol';
 
 export function GrowthScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
@@ -75,7 +76,7 @@ export function GrowthScreen({ state, dispatch }: { state: GameState; dispatch: 
     </main>
     <footer className="flow-frame training-growth-footer">{showTransfer ? <p>转移过程中不能更换来源伙伴或分配成长点</p> : isShopPending
       ? <button type="button" onClick={() => dispatch({ type: 'CANCEL_GROWTH_ITEM' })}>取消使用</button>
-      : isBossNode ? <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 →</button>
+      : isBossNode ? <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 <UiSymbol name="arrow-right" /></button>
       : <p>每位伙伴独立持有成长点</p>}</footer>
     {transferConfirm && selectedUnit && target && <div className="growth-modal-overlay" onClick={() => setTransferConfirm(false)}><div className="growth-modal" onClick={event => event.stopPropagation()}>
       <h3>确认转移</h3><div className="growth-modal-content"><p>从 {selectedUnit.name} 转移 {transferAmount} 点成长点</p><p>手续费：{fee} 点</p><p>{target.name} 实际获得：{transferAmount - fee} 点</p></div><div className="growth-modal-actions">

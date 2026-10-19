@@ -11,6 +11,7 @@ import { computeStats } from '../game/core/battle';
 import { persistSave } from './persistence';
 import { FlowHeader, FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { BuffIcon, CURSE_ART } from './BuffIcon';
+import { UiSymbol } from './UiSymbol';
 import './progression.css';
 
 // 仅用于展示：按 fuseUnit 的属性公式计算，不调用 makeUnit，避免预览递增全局 UID。
@@ -54,7 +55,7 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
       <section className="flow-frame progression-preview"><h2>{isEvolution ? '进化预览' : '伙伴资料'}</h2>
         <div className="progression-preview-body">{focused && <>
           {evolved ? <>
-            <div className="evolution-portraits"><div><FlowPet unit={focused} /><strong>{focused.name}</strong></div><span aria-hidden="true">→</span><div><FlowPet unit={evolved} /><strong>{evolved.name}</strong></div></div>
+            <div className="evolution-portraits"><div><FlowPet unit={focused} /><strong>{focused.name}</strong></div><span aria-hidden="true"><UiSymbol name="arrow-right" /></span><div><FlowPet unit={evolved} /><strong>{evolved.name}</strong></div></div>
             <div className="progression-stat-change"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />最大生命</span><b>{focused.maxHp} → <em>{evolved.maxHp}</em></b></div>
             <div className="progression-stat-change"><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />速度</span><b>{focused.spd} → <em>{evolved.spd}</em></b></div>
             <section className="progression-passive-change"><h3>被动对比</h3><p>{oldPassive?.name ?? '无'} → {newPassive?.name ?? '无'}</p>{newPassive && <p>{newPassive.desc}</p>}</section>
@@ -95,7 +96,7 @@ export function CreationScreen({ state, dispatch }: { state: GameState; dispatch
         const species = getMonster(id); const stats = computeStats(id); const passive = getPassive(species.passive);
         return <button type="button" className="creation-option" key={id} onClick={() => dispatch({ type: 'PICK_CUSTOM', presetId: id })}>
           <h3>{species.name}</h3><span className="creation-role">{['坚韧模板', '输出模板', '高速模板'][index]}</span>
-          <div className="creation-template-symbol" aria-hidden="true"><svg viewBox="0 0 64 64" shapeRendering="crispEdges"><use href={`/creation-templates.svg#${id}`} /></svg><b>?</b></div>
+          <div className="creation-template-symbol" aria-hidden="true"><img src={`/page-special-icons/creation-${id}.png`} alt="" draggable={false} /><b>?</b></div>
           <div className="flow-pet-stats"><span><i className="starter-stat-icon starter-stat-heart" />{stats.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" />{stats.spd}</span></div>
           <h4>技能池</h4><div className="flow-skill-chips">{species.skills.map(skill => <span key={skill} title={getSkill(skill).desc}>{getSkill(skill).name}</span>)}</div>
           {passive && <p className="creation-passive">被动 · {passive.name}：{passive.desc}</p>}

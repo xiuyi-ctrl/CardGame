@@ -32,11 +32,10 @@ import './remainingMain.css';
 import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalScreen } from './ProgressionScreens';
 import { CampRestScreen, CampFusionScreen, CampFusionSkillScreen, SpecialTargetScreen } from './CampScreens';
 import { ProficiencyReport } from './ProficiencyArt';
-import chestOpenArt from './assets/chest-open.svg';
-import watchtowerTelescopeArt from './assets/watchtower-telescope.svg';
 import { GauntletOrderScreen } from './GauntletOrderScreen';
 import { MapNodeIcon } from './MapNodeIcon';
 import { ShopItemIcon } from './ShopItemIcon';
+import { UiSymbol, UI_SYMBOL_IMAGES } from './UiSymbol';
 import { getMapRouteEdges } from './mapRoutes';
 import { getDecodedImage, preloadImages } from './imageCache';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
@@ -61,6 +60,8 @@ const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievement
 
 const EMPTY_ROW: MapNode[] = [];
 const MAP_ACT_NAMES = ['', '翠绿之径', '暗影沼泽', '余烬险地'];
+const chestOpenArt = '/page-special-icons/chest-open.png';
+const watchtowerTelescopeArt = '/page-special-icons/watchtower-telescope.png';
 
 const HOME_BACKGROUND = new URL('./assets/home-handheld-background.png', import.meta.url).href;
 const MAP_BACKGROUNDS = [
@@ -85,12 +86,15 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         homeContinueIcon, homeNewIcon, homeProficiencyIcon, homeCodexIcon, homeSaveIcon,
         homeAchievementIcon, homeSettingsIcon, homeExitIcon, homePawIcon];
     case 'difficulty-select':
-      return [HOME_BACKGROUND];
+      return [HOME_BACKGROUND,
+        ...['difficulty-header', 'difficulty-normal', 'difficulty-hard', 'difficulty-nightmare',
+          'traveler_charm', 'elite_badge', 'beast_master', 'difficulty-shop', 'difficulty-recovery']
+          .map((name) => `/starter-growth-icons/${name}.png`)];
     case 'starter':
     case 'proficiency-select':
       return [HOME_BACKGROUND, homeXunxun, homePaopao, homeZhuozhuo,
         starterTiedun, starterMimi, starterCici, '/starter-choice-stone.png',
-        '/formation-plinth-occupied.png'];
+        '/formation-plinth-occupied.png', '/starter-growth-icons/starter-paw.png'];
     case 'map':
       return [MAP_BACKGROUNDS[state.runMode === 'proficiency' ? 3 : Math.min(2, Math.max(0, state.act - 1))],
         '/map-node-stele.png',
@@ -114,7 +118,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         '/capture-food-icons/gem.png', '/capture-food-icons/golden_fruit.png',
         ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
     case 'reward':
-      return ['/roster-camp-background.png', '/reward-icons/gold.png', '/reward-icons/food.png', '/reward-icons/heal.png',
+      return ['/roster-camp-background.png', '/reward-icons/gold.png', '/reward-icons/food.png', '/reward-icons/heal.png', '/page-special-icons/victory-swords.png',
         ...state.rewards.flatMap((reward) => {
           const recruit = reward.kind === 'recruit' && reward.monsterId ? getMonster(reward.monsterId) : undefined;
           const image = recruit ? formationImage(recruit.id, recruit.image) : undefined;
@@ -130,6 +134,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         })];
     case 'shop':
       return ['/shop-stall-background.png', '/reward-icons/gold.png', homePawIcon,
+        '/starter-growth-icons/difficulty-shop.png', '/page-special-icons/shop-refresh.png',
         ...(state.shopStock ?? []).flatMap((id) => BACKPACK_ITEM_ART[id] ? [BACKPACK_ITEM_ART[id]] : [])];
     case 'backpack':
       return ['/roster-camp-background.png', homeContinueIcon, homePawIcon, '/reward-icons/gold.png',
@@ -172,7 +177,9 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
     case 'enhance-reset':
     case 'arena3':
     case 'proficiency-result':
-      return ['/formation-camp.png', `${FLOW_ART}/victory-dawn.png`, `${FLOW_ART}/defeat-dusk.png`, `${FLOW_ART}/icons/fuse-companion.png`, `${FLOW_ART}/icons/rating-laurel.png`, `${FLOW_ART}/icons/victory-crown.png`, `${FLOW_ART}/icons/journey-end.png`, BACKPACK_ITEM_ART.skill_enhance_stone, BACKPACK_ITEM_ART.reset_stone, ...state.roster.flatMap(unit => {
+      return ['/formation-camp.png', `${FLOW_ART}/victory-dawn.png`, `${FLOW_ART}/defeat-dusk.png`, `${FLOW_ART}/icons/fuse-companion.png`, `${FLOW_ART}/icons/rating-laurel.png`, `${FLOW_ART}/icons/victory-crown.png`, `${FLOW_ART}/icons/journey-end.png`, BACKPACK_ITEM_ART.skill_enhance_stone, BACKPACK_ITEM_ART.reset_stone, '/page-special-icons/upgrade-anvil.png',
+        ...(screen === 'arena3' ? ['simulation', 'challenge', 'exhibition'].map(mode => `/page-special-icons/arena-${mode}.png`) : []),
+        ...state.roster.flatMap(unit => {
         const image = formationImage(unit.speciesId, unit.image);
         return image ? [image] : [];
       })];
@@ -182,6 +189,9 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
     case 'achievements':
       return [`${FLOW_ART}/partner-camp.png`, `${FLOW_ART}/encounter-shrine.png`, homeAchievementIcon,
         `${FLOW_ART}/icons/rating-laurel.png`, `${FLOW_ART}/icons/journey-end.png`,
+        ...(screen === 'achievements' ? ['difficulty-normal', 'difficulty-hard', 'difficulty-nightmare',
+          'traveler_charm', 'elite_badge', 'beast_master'].map((name) => `/starter-growth-icons/${name}.png`) : []),
+        ...(screen === 'custom' ? ['custom_guardian', 'custom_fury', 'custom_gale'].map(id => `/page-special-icons/creation-${id}.png`) : []),
         ...[...state.roster, ...(state.deadPets ?? [])].flatMap(unit => {
           const image = formationImage(unit.speciesId, unit.image);
           return image ? [image] : [];
@@ -195,13 +205,13 @@ export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
   const [readyScreen, setReadyScreen] = useState<string | null>(null);
   const screenKey = state.screen === 'map' ? `${state.screen}-${state.runMode}-${state.act}` : state.screen;
-  const imagesReady = readyScreen === screenKey || screenImages(state.screen, state).every((src) => !!getDecodedImage(src));
+  const imagesReady = readyScreen === screenKey || [...UI_SYMBOL_IMAGES, ...screenImages(state.screen, state)].every((src) => !!getDecodedImage(src));
 
   useEffect(() => { void preloadImages(BATTLE_BUFF_ICON_IMAGES); }, []);
 
   useEffect(() => {
     let active = true;
-    void preloadImages(screenImages(state.screen, state)).then(() => {
+    void preloadImages([...UI_SYMBOL_IMAGES, ...screenImages(state.screen, state)]).then(() => {
       if (active) {
         setReadyScreen(screenKey);
         const nextScreen = state.screen === 'title' ? 'difficulty-select'
@@ -1139,7 +1149,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                       <div className="save-slot-text">{info.text}</div>
                       {info.sub && <div className="save-slot-sub">{info.sub}</div>}
                       {(s.main || s.proficiency) && (
-                        <button className="save-slot-del" onClick={(e) => onDeleteSlot(s.slot, e)} title="删除存档">✕</button>
+                        <button className="save-slot-del" onClick={(e) => onDeleteSlot(s.slot, e)} title="删除存档" aria-label="删除存档"><UiSymbol name="close" /></button>
                       )}
                     </div>
                   );
@@ -1443,11 +1453,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
 }
 
 function RelicEmblem({ id }: { id: string }) {
-  return <svg viewBox="0 0 32 32" shapeRendering="crispEdges" aria-hidden="true">
-    {id === 'traveler_charm' && <><path d="M12 2h8v3h-8ZM14 5h4v3h-4Z" fill="#9b5a20"/><path d="M8 8h16v3h4v16h-4v3H8v-3H4V11h4Z" fill="#07182e"/><path d="M9 10h14v3h3v12h-3v3H9v-3H6V13h3Z" fill="#f3ad2f"/><path d="M10 14h12v10H10Z" fill="#fff5db"/><path d="m16 12 5 6-5 2-5-2Z" fill="#249dc4"/><path d="m16 24-5-6 5-2 5 2Z" fill="#dc5640"/></>}
-    {id === 'elite_badge' && <><path d="M4 5h4v4h3v3h3v3h4v4h3v3h4v4h3v3h-7v-3h-4v-4h-3v-3h-4v-4H7v-3H4Z" fill="#07182e"/><path d="M5 6h2v4h3v3h3v3h4v4h3v3h4v4h-3v-3h-4v-4h-3v-3h-4v-4H7v-3H5Z" fill="#e4a52c"/><path d="M24 5h4v7h-3v3h-3v4h-4v3h-3v4h-4v3H4v-3h3v-4h4v-3h3v-4h4v-3h3V9h3Z" fill="#07182e"/><path d="M25 6h2v5h-3v3h-3v4h-4v3h-3v4h-4v3H7v-2h3v-4h4v-3h3v-4h4v-3h3V9h1Z" fill="#f4c44f"/></>}
-    {id === 'beast_master' && <><path d="M10 2h12v4H10ZM13 6h6v4h-6Z" fill="#9b5a20"/><path d="M5 10h22v4h3v14h-3v3H5v-3H2V14h3Z" fill="#07182e"/><path d="M6 12h20v4h2v10h-2v3H6v-3H4V16h2Z" fill="#d9964b"/><path d="M10 14h4v5h-4ZM18 14h4v5h-4ZM5 18h4v5H5ZM23 18h4v5h-4ZM13 21h6v2h3v4H10v-4h3Z" fill="#fff2d3"/><path d="M14 23h4v2h-4Z" fill="#2e8ca8"/></>}
-  </svg>;
+  return <img src={`/starter-growth-icons/${id}.png`} alt="" aria-hidden="true" draggable={false} />;
 }
 
 export function DifficultyScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
@@ -1467,7 +1473,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
         <span className="difficulty-header-emblem" aria-hidden="true" />
         <h1><span>选择</span>难度与<span>遗物</span></h1>
         <div className="difficulty-step" aria-label="新远征第 1 步，共 2 步"><i className="active" /><span>···</span><i /><strong>新远征 1/2</strong></div>
-        <button className="difficulty-back" onClick={() => dispatch({ type: 'TITLE' })}>◀ 返回</button>
+        <button className="difficulty-back" onClick={() => dispatch({ type: 'TITLE' })}><UiSymbol name="arrow-left" /> 返回</button>
       </header>
       <main className="difficulty-main">
         <section className="difficulty-choices" aria-label="选择难度">
@@ -1514,7 +1520,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
         <div className="difficulty-summary"><span className={`difficulty-summary-emblem difficulty-summary-${selectedDifficulty}`} aria-hidden="true" />
           <strong>{DIFFICULTY_CONFIG[selectedDifficulty].label} · {relicDef?.name ?? '无遗物'}</strong>
           <span>{relicDef?.desc ?? '通关后解锁更多难度与遗物'}</span></div>
-        <button className="difficulty-next" onClick={handleNext}>下一步：选择伙伴 →</button>
+        <button className="difficulty-next" onClick={handleNext}>下一步：选择伙伴 <UiSymbol name="arrow-right" /></button>
       </footer>
     </div>
   );
@@ -1543,7 +1549,7 @@ function StarterChoiceCard({ id, selected, order, compact = false, onClick }: {
         <span className="starter-choice-stats"><span title="速度">⚡ {!compact && <small>速度</small>} {stats.spd}</span><span title="生命">♥ {!compact && <small>生命</small>} {stats.maxHp}</span></span>
         {!compact && <span className="starter-choice-skills">{species.skills.map((skill) => getSkill(skill).name).join(' · ')}</span>}
       </span>
-      {!compact && selected && <span className="starter-choice-selected-note" aria-hidden="true">◇ 已选择 ◇</span>}
+      {!compact && selected && <span className="starter-choice-selected-note" aria-hidden="true"><UiSymbol name="marker-info" /> 已选择 <UiSymbol name="marker-info" /></span>}
     </button>
   );
 }
@@ -1582,7 +1588,7 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
         <button className="starter-select-back" onClick={() => {
           if (isCompanion) { setFirstPick(null); setCandidate(STARTER_GROUP_1[0]); }
           else dispatch({ type: 'SELECT_DIFFICULTY_BACK' });
-        }}>◀ 返回</button>
+        }}><UiSymbol name="arrow-left" /> 返回</button>
       </header>
       <main className="starter-select-layout">
         <section className="starter-select-world" aria-label="选择生物">
@@ -1612,13 +1618,13 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
             <div><h2>{selected.name}</h2><span className="starter-select-role">{STARTER_ROLES[selected.id]}</span><p>{selected.desc}</p></div>
           </div>
           <div className="starter-select-abilities">
-            {passive && <div className="starter-select-ability"><span className="starter-ability-icon passive" aria-hidden="true">✦</span><strong>{passive.name}</strong><span>{passive.desc}</span></div>}
+            {passive && <div className="starter-select-ability"><span className="starter-ability-icon passive" aria-hidden="true"><UiSymbol name="sparkle" /></span><strong>{passive.name}</strong><span>{passive.desc}</span></div>}
             {selected.skills.map((id) => {
               const skill = getSkill(id);
-              return <div key={id} className="starter-select-ability"><span className="starter-ability-icon" aria-hidden="true">◆</span><strong>{skill.name}</strong><span>{skill.desc}{skill.damage ? ` · ${skill.damage}${skill.hits ? `×${skill.hits}` : ''}` : skill.heal ? ` · 治疗 ${skill.heal}` : ''}</span></div>;
+              return <div key={id} className="starter-select-ability"><span className="starter-ability-icon" aria-hidden="true"><UiSymbol name="marker-info" /></span><strong>{skill.name}</strong><span>{skill.desc}{skill.damage ? ` · ${skill.damage}${skill.hits ? `×${skill.hits}` : ''}` : skill.heal ? ` · 治疗 ${skill.heal}` : ''}</span></div>;
             })}
           </div>
-          <button className="starter-select-confirm" onClick={confirm}>选择{selected.name}<span aria-hidden="true">▶</span></button>
+          <button className="starter-select-confirm" onClick={confirm}>选择{selected.name}<UiSymbol name="play" /></button>
           <p className="starter-select-note">{isCompanion ? `已选主力：${getMonster(firstPick).name} ×2 · 再选一只同伴` : '可在图鉴查看进化'}</p>
         </aside>
       </main>
@@ -1635,10 +1641,10 @@ export function ProficiencyStarterScreen({ state, dispatch }: { state: GameState
   return (
     <div className="starter-screen starter-observatory">
       <header className="starter-header">
-        <div className="starter-heading"><span className="starter-mark" aria-hidden="true">✦</span><div>
+        <div className="starter-heading"><span className="starter-mark" aria-hidden="true"><UiSymbol name="sparkle" /></span><div>
           <h1>熟练度远征</h1><p>从六只生物中选择两只，开启 50 层远征</p>
         </div></div>
-        <button className="starter-back" onClick={() => dispatch({ type: 'TITLE' })}>← 返回首页</button>
+        <button className="starter-back" onClick={() => dispatch({ type: 'TITLE' })}><UiSymbol name="arrow-left" /> 返回首页</button>
       </header>
       <main className="starter-proficiency-main">
         <div className="starter-choice-grid proficiency">
@@ -1818,7 +1824,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
           <span className="chip" style={{ fontSize: 13 }}>
             🔍 侦查模式：点击任意节点查看情报（消耗 1 个侦查符，持有 {state.inventory.scout ?? 0} 个）
           </span>
-          <button onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}>✕ 取消</button>
+          <button onClick={() => dispatch({ type: 'CANCEL_SCOUT' })}><UiSymbol name="close" /> 取消</button>
         </div>
       )}
       {state.skipSelecting && (
@@ -1826,7 +1832,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
           <span className="chip" style={{ fontSize: 13 }}>
             🪜 跳关模式：点击可达的战斗类节点，直接获得其奖励（消耗 1 个跳关道具，持有 {state.inventory.skip ?? 0} 个）
           </span>
-          <button onClick={() => dispatch({ type: 'CANCEL_SKIP' })}>✕ 取消</button>
+          <button onClick={() => dispatch({ type: 'CANCEL_SKIP' })}><UiSymbol name="close" /> 取消</button>
         </div>
       )}
       <div className="map-layout">
@@ -1983,7 +1989,7 @@ function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
   return (
     <div className="reward-screen">
       <header className="reward-header">
-        <div className="reward-heading"><svg className="reward-swords" viewBox="0 0 48 48" aria-hidden="true" shapeRendering="crispEdges"><path d="M7 6h7l28 28-5 5L9 11zM34 5h8v8l-4 4v-5h-5zM7 34l28-28 5 5L12 39H7zM4 38h9v6H4z" fill="#70d8bd"/><path d="M8 7h5l27 27-3 3L8 11zM35 7h5v5l-3 3v-5h-5z" fill="#b9fff0"/></svg><h1>{skipped ? '跳关奖励' : '战斗胜利'}</h1></div>
+        <div className="reward-heading"><img className="reward-swords" src="/page-special-icons/victory-swords.png" alt="" draggable={false} /><h1>{skipped ? '跳关奖励' : '战斗胜利'}</h1></div>
         <div className="reward-header-info">
           <span className="reward-location">{currentNode?.label ?? '远征战斗'} · 第 {state.act} 幕</span>
           <span className="reward-gold"><img src="/reward-icons/gold.png" alt="" />金币 <strong>{state.gold}</strong></span>
@@ -2004,7 +2010,7 @@ function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
               </button>;
             })}
           </div>
-          <div className="reward-panel-footer"><span className="reward-footer-sigil" aria-hidden="true">✦</span><span>选择后进入战后休整</span><span className="reward-footer-sigil" aria-hidden="true">✦</span></div>
+          <div className="reward-panel-footer"><span className="reward-footer-sigil" aria-hidden="true"><UiSymbol name="sparkle" /></span><span>选择后进入战后休整</span><span className="reward-footer-sigil" aria-hidden="true"><UiSymbol name="sparkle" /></span></div>
         </section>
       </main>
     </div>
@@ -2131,7 +2137,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
       {!evolveMode && !boostMode && !growthPointMode && !eventBoostMode && !eventResetGrowthMode && !eventSkillReplaceMode && !arenaMode && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
           <button className="primary big-btn" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
-            继续前进 →
+            继续前进 <UiSymbol name="arrow-right" />
           </button>
         </div>
       )}
@@ -2183,7 +2189,7 @@ function OrdinaryRosterScreen({ state, dispatch, toggleField }: { state: GameSta
         </> : <p>队伍中暂无伙伴</p>}
       </section>
     </main>
-    <footer className="flow-frame remaining-footer"><span>已出战 {state.field.length}/{fieldMax}</span><button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 →</button></footer>
+    <footer className="flow-frame remaining-footer"><span>已出战 {state.field.length}/{fieldMax}</span><button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 <UiSymbol name="arrow-right" /></button></footer>
     {confirm && <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />}
   </div>;
 }
@@ -2253,7 +2259,7 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
               <button type="button" className="postbattle-purify" onClick={() => dispatch({ type: 'USE_PURIFY', uid: focused.uid })}>净化（{state.inventory.purify}）</button>}
           </div>
         </> : <p className="postbattle-no-pets">没有存活伙伴。</p>}
-        <button type="button" className="postbattle-continue" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 →</button>
+        <button type="button" className="postbattle-continue" onClick={() => dispatch({ type: 'NEXT_NODE' })}>继续前进 <UiSymbol name="arrow-right" /></button>
       </aside>
     </main>
     {confirm && <FuseDiscardConfirm confirm={confirm} state={state} dispatch={dispatch} setConfirm={setConfirm} />}
@@ -2281,7 +2287,7 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
         <div className="shop-header-actions">
           <span className="shop-header-chip shop-gold"><img src="/reward-icons/gold.png" alt="金币" /><strong>{state.gold}</strong></span>
           <span className="shop-header-chip"><img src={homePawIcon} alt="出战伙伴" /><strong>{state.field.length}/{isProf ? PROF_FIELD_MAX : FIELD_MAX}</strong></span>
-          <button type="button" className="shop-leave" onClick={() => dispatch({ type: 'NEXT_NODE' })}>离开 →</button>
+          <button type="button" className="shop-leave" onClick={() => dispatch({ type: 'NEXT_NODE' })}>离开 <UiSymbol name="arrow-right" /></button>
         </div>
       </header>
       <main className="shop-catalog">
@@ -2338,7 +2344,7 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
             <button type="button" disabled={!canRest} onClick={() => dispatch({ type: 'SHOP_REST' })}>{canRest ? '休整' : '已满血'}</button>
           </div>
         )}
-        <div className="shop-utility"><span className="shop-utility-icon" aria-hidden="true"><svg viewBox="0 0 32 32" shapeRendering="crispEdges"><path d="M4 15V9h4V5h12V1l10 8-10 8v-5H11v3zM28 17v6h-4v4H12v4L2 23l10-8v5h9v-3z" fill="#ff8a08" stroke="#101c2c" strokeWidth="2" /></svg></span><div><h3>刷新货架</h3><p>{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币 · 剩余 ${3 - refreshCount} 次`}</p></div>
+        <div className="shop-utility"><span className="shop-utility-icon" aria-hidden="true"><img src="/page-special-icons/shop-refresh.png" alt="" draggable={false} /></span><div><h3>刷新货架</h3><p>{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币 · 剩余 ${3 - refreshCount} 次`}</p></div>
           <button type="button" disabled={!canRefresh} onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_REFRESH' } : { type: 'SHOP_REFRESH' })}>{refreshCount >= 3 ? '已用完' : '刷新'}</button>
         </div>
         </div>
@@ -2434,7 +2440,7 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
         </div>
         <footer className="chest-results-footer">
           <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
-            继续前进 →
+            继续前进 <UiSymbol name="arrow-right" />
           </button>
           <p>已获得全部奖励</p>
         </footer>
@@ -2909,7 +2915,7 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
       )}
       <FlowTeam units={state.roster} />
       </div>
-      <footer className="flow-actions"><button className="flow-primary" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>远征{nextName} →</button></footer>
+      <footer className="flow-actions"><button className="flow-primary" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>远征{nextName} <UiSymbol name="arrow-right" /></button></footer>
       </main>
     </div>
   );

@@ -24,6 +24,7 @@ import { persistSave } from './persistence';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import { BattleStatusIcons } from './BattleStatusIcons';
 import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART } from './BuffIcon';
+import { UiSymbol } from './UiSymbol';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
 
@@ -537,9 +538,6 @@ export function BattleScreen({ state, dispatch }: Props) {
             🌑 暗影侵蚀：{battle.corruptDebuff === 'spd' ? '我方速度 -2' : battle.corruptDebuff === 'dmg' ? '我方受到伤害 +2' : '我方每回合受到 2 点侵蚀伤害'}
           </span>
         )}
-        <span className="chip">
-          💰 {state.gold} · 食物 {foods.reduce((s, f) => s + (state.inventory[f.id] ?? 0), 0)}
-        </span>
         <button
           className="home-btn"
           onClick={() => {
@@ -576,7 +574,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="log-panel">
             <button type="button" className="log-title" onClick={() => setLogExpanded((v) => !v)}>
               <span>战斗记录</span>
-              <span className="log-title-toggle">{logExpanded ? '▼' : '▲'}</span>
+              <span className="log-title-toggle"><UiSymbol name={logExpanded ? 'arrow-down' : 'arrow-up'} /></span>
             </button>
             <div className="log-box">
               {logItems.map((l, i) => (
@@ -699,12 +697,13 @@ export function BattleScreen({ state, dispatch }: Props) {
               <div className="end-row">
                 <span className="end-ap">⚡ {battle.playerAp}/{battle.playerApMax}</span>
                 <div className="anim-controls">
-                  {animating && <button className="anim-skip-btn" onClick={skipAnim}>⏭️</button>}
+                  {animating && <button className="anim-skip-btn" onClick={skipAnim} aria-label="跳过动画" title="跳过动画"><UiSymbol name="arrow-right" /></button>}
                   <button
                     className="anim-speed-btn"
+                    aria-label={`当前动画速度 ${animSpeed} 倍，点击切换`}
                     onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
                   >
-                    ⏩ {animSpeed}x
+                    <UiSymbol name="play" /> {animSpeed}x
                   </button>
                 </div>
                 <button className="end-turn-btn" onClick={() => dispatch({ type: 'END_TURN' })} disabled={!canAct}>
@@ -721,7 +720,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="battle-overlay-panel enemy-inspect-modal" role="dialog" aria-modal="true" aria-labelledby="enemy-inspect-title" onClick={(event) => event.stopPropagation()}>
             <div className="battle-overlay-head">
               <h2 id="enemy-inspect-title" className="battle-overlay-title">敌人信息</h2>
-              <button className="battle-overlay-close" onClick={() => setInspectEnemy(null)} aria-label="关闭敌人信息" autoFocus>×</button>
+              <button className="battle-overlay-close" onClick={() => setInspectEnemy(null)} aria-label="关闭敌人信息" autoFocus><UiSymbol name="close" /></button>
             </div>
             <BattleUnitInspectPanel unit={shownUnit(inspectedEnemy)} speed={spdMap?.[inspectedEnemy.uid]} side="enemy">
               <BuffDetailPanel unit={shownUnit(inspectedEnemy)} stacksOverride={passiveSpdMap?.[inspectedEnemy.uid]} rockShellHitsOverride={rockShellHitsMap?.[inspectedEnemy.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[inspectedEnemy.uid]} hideTitle />
@@ -735,7 +734,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="battle-overlay-panel enemy-inspect-modal" role="dialog" aria-modal="true" aria-labelledby="ally-inspect-title" onClick={(event) => event.stopPropagation()}>
             <div className="battle-overlay-head">
               <h2 id="ally-inspect-title" className="battle-overlay-title">我方生物 Buff</h2>
-              <button className="battle-overlay-close" onClick={() => setInspectAlly(null)} aria-label="关闭我方生物 Buff" autoFocus>×</button>
+              <button className="battle-overlay-close" onClick={() => setInspectAlly(null)} aria-label="关闭我方生物 Buff" autoFocus><UiSymbol name="close" /></button>
             </div>
             <BattleUnitInspectPanel unit={shownUnit(inspectedAlly)} speed={spdMap?.[inspectedAlly.uid]} side="player">
               <BuffDetailPanel unit={shownUnit(inspectedAlly)} stacksOverride={passiveSpdMap?.[inspectedAlly.uid]} rockShellHitsOverride={rockShellHitsMap?.[inspectedAlly.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[inspectedAlly.uid]} hideTitle />
@@ -749,7 +748,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
             <div className="battle-overlay-head">
               <div className="battle-overlay-title popup-food">捕获食物</div>
-              <button className="battle-overlay-close" onClick={() => setFoodOverlayOpen(false)} aria-label="关闭捕获食物">×</button>
+              <button className="battle-overlay-close" onClick={() => setFoodOverlayOpen(false)} aria-label="关闭捕获食物"><UiSymbol name="close" /></button>
             </div>
             <div className="battle-overlay-grid">
               {foods.length === 0 ? (
@@ -778,7 +777,7 @@ export function BattleScreen({ state, dispatch }: Props) {
           <div className="battle-overlay-panel" onClick={(e) => e.stopPropagation()}>
             <div className="battle-overlay-head">
               <div className="battle-overlay-title popup-items">战斗道具</div>
-              <button className="battle-overlay-close" onClick={() => setItemOverlayOpen(false)} aria-label="关闭战斗道具">×</button>
+              <button className="battle-overlay-close" onClick={() => setItemOverlayOpen(false)} aria-label="关闭战斗道具"><UiSymbol name="close" /></button>
             </div>
             <div className="battle-overlay-grid">
               {battleItems.length === 0 ? (

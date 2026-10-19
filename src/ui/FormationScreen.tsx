@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { UiSymbol } from './UiSymbol';
 import type { Dispatch, DragEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import { FIELD_MAX, PROF_FIELD_MAX, getMaxRoster, maxFieldForEnemy } from '../game/state/game';
@@ -212,7 +213,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
         <div className="formation-list">
           <div className="formation-list-head">
             <div className="formation-list-title">{forceAll ? '队伍总览' : '队伍伙伴'} <small>（最多 {getMaxRoster(state.runMode)} 只）</small></div>
-            <span className="formation-list-hint">{forceAll ? '全员上场' : '点击切换上场'} <span aria-hidden="true">✦</span></span>
+            <span className="formation-list-hint">{forceAll ? '全员上场' : '点击切换上场'} <UiSymbol name="sparkle" /></span>
           </div>
           <div className="formation-pets" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
             {fb.units.map((u) => {
@@ -248,7 +249,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
             })}
             {Array.from({ length: emptyRosterSlots }, (_, index) => (
               <div className="formation-pet-empty" key={`empty-${index}`} aria-hidden="true">
-                <span>✦</span><small>{forceAll ? '未招募' : '空位'}</small>
+                <UiSymbol name="sparkle" /><small>{forceAll ? '未招募' : '空位'}</small>
               </div>
             ))}
           </div>
