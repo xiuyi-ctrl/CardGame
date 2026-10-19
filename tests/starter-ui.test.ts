@@ -32,10 +32,10 @@ describe('开局生物选择界面', () => {
     const choices = within(screen.getByRole('region', { name: '选择生物' }));
     fireEvent.click(choices.getByRole('button', { name: /泡泡/ }));
     fireEvent.click(screen.getByRole('button', { name: /选择泡泡/ }));
-    fireEvent.click(screen.getByRole('button', { name: '◀ 返回' }));
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
     expect(screen.queryByText(/已选主力：泡泡 ×2/)).toBeNull();
     expect(choices.getByRole('button', { name: /迅迅/ }).getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: '◀ 返回' }));
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'SELECT_DIFFICULTY_BACK' });
   });
 
@@ -57,7 +57,7 @@ describe('开局生物选择界面', () => {
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: 'START_PROFICIENCY_PICKED', starterId: 'momo', companionId: 'mimi',
     }));
-    fireEvent.click(screen.getByRole('button', { name: '← 返回首页' }));
+    fireEvent.click(screen.getByRole('button', { name: '返回首页' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'TITLE' });
   });
 });

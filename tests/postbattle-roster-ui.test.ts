@@ -40,7 +40,7 @@ describe('战后休整界面', () => {
     fireEvent.click(screen.getByRole('button', { name: '释放' }));
     expect(screen.getByText('确认释放')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
-    fireEvent.click(screen.getByRole('button', { name: '继续前进 →' }));
+    fireEvent.click(screen.getByRole('button', { name: '继续前进' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'NEXT_NODE' });
   });
 

@@ -28,7 +28,7 @@ describe('商店界面', () => {
     fireEvent.click(screen.getByRole('button', { name: '购买 浆果' }));
     fireEvent.click(screen.getByRole('button', { name: '休整' }));
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
-    fireEvent.click(screen.getByRole('button', { name: '离开 →' }));
+    fireEvent.click(screen.getByRole('button', { name: '离开' }));
     expect(dispatch.mock.calls.map(([action]) => action)).toEqual([
       { type: 'SHOP_BUY', foodId: 'berry' }, { type: 'SHOP_REST' },
       { type: 'SHOP_REFRESH' }, { type: 'NEXT_NODE' },
