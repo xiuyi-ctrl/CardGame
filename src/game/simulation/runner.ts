@@ -227,6 +227,8 @@ export function simulationStep(state: GameState, seed: number): GameState {
     case 'formation': return dispatch(state, { type: 'FORMATION_CONFIRM', units: state.formation?.units ?? [] });
     case 'gauntlet-order': return dispatch(state, { type: 'GAUNTLET_ORDER_CONFIRM', units: state.gauntletOrder ?? [] });
     case 'reward': {
+      const pending = state.rewards.find((item) => item.id === state.pendingRecruitRewardId);
+      if (pending?.recruitCandidates?.[0]) return dispatch(state, { type: 'PICK_REWARD', rewardId: pending.id, monsterId: pending.recruitCandidates[0] });
       const wounded = state.roster.some((unit) => unit.hp / unit.maxHp < 0.7);
       const reward = (wounded && state.rewards.find((item) => item.kind === 'heal')) || state.rewards.find((item) => item.kind === 'recruit') || state.rewards.find((item) => item.kind === 'food') || state.rewards[0];
       return dispatch(state, { type: 'PICK_REWARD', rewardId: reward?.id ?? '' });

@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, fuseUnit, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -118,11 +118,13 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         '/capture-food-icons/gem.png', '/capture-food-icons/golden_fruit.png',
         ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
     case 'reward':
-      return ['/roster-camp-background.png', '/reward-icons/gold.png', '/reward-icons/food.png', '/reward-icons/heal.png', '/page-special-icons/victory-swords.png',
+      return ['/roster-camp-background.png', '/reward-icons/gold.png', '/reward-icons/food.png', '/reward-icons/heal.png', '/starter-growth-icons/starter-paw.png', '/battle-stat-icons/life.png', '/battle-stat-icons/speed.png', '/page-special-icons/victory-swords.png',
         ...state.rewards.flatMap((reward) => {
-          const recruit = reward.kind === 'recruit' && reward.monsterId ? getMonster(reward.monsterId) : undefined;
-          const image = recruit ? formationImage(recruit.id, recruit.image) : undefined;
-          return image ? [image] : [];
+          return (reward.recruitCandidates ?? []).flatMap((id) => {
+            const species = getMonster(id);
+            const image = formationImage(id, species.image);
+            return image ? [image] : [];
+          });
         })];
     case 'roster':
       return ['/roster-camp-background.png', '/formation-camp.png', `${FLOW_ART}/partner-camp.png`, `${FLOW_ART}/encounter-shrine.png`, homePawIcon, ...BATTLE_BUFF_ICON_IMAGES, ...creatureImages(state.roster),
@@ -361,7 +363,7 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
   );
 }
 
-type PetConfirm = { kind: 'fuse' | 'discard' | 'notice' | 'replace' | 'tame-fuse'; uid?: string; msg?: string; gold?: number; tameUid?: string } | null;
+type PetConfirm = { kind: 'fuse' | 'discard' | 'notice' | 'replace'; uid?: string; msg?: string; gold?: number } | null;
 
 /** 宠物卡片底部操作区：融合 / 释放（点击弹出确认框，材料不足时提示） */
 function PetCardFooter({
@@ -411,6 +413,37 @@ function PetCardFooter({
 }
 
 /** 融合/释放/提示 的二次确认弹窗 */
+export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: Unit; state: GameState; dispatch: Dispatch<GameAction>; onClose: () => void }) {
+  const overflow = state.screen === 'tame-overflow' ? state.tameOverflow ?? [] : [];
+  const materials = [...state.roster, ...overflow].filter(unit => unit.uid !== primary.uid && unit.speciesId === primary.speciesId);
+  const [materialUid, setMaterialUid] = useState(materials.length === 1 ? materials[0].uid : '');
+  const material = materials.find(unit => unit.uid === materialUid);
+  const evolved = useMemo(() => fuseUnit(primary), [primary]);
+  if (!evolved) return null;
+  const fromOverflow = !!material && overflow.some(unit => unit.uid === material.uid);
+  const passive = getPassive(evolved.passive);
+  const materialInfo = (unit: Unit) => `生命 ${unit.hp}/${unit.maxHp} · 速度 ${unit.spd} · 强化：生命 +${unit.bonusStats?.hp ?? 0}、速度 +${unit.bonusStats?.spd ?? 0} · 诅咒：${unit.curse ? CURSE_CN[unit.curse] : '无'}`;
+  return <div className="confirm-overlay" onClick={onClose}>
+    <div className="confirm-box fusion-confirm" role="dialog" aria-modal="true" aria-labelledby="fusion-confirm-title" onClick={event => event.stopPropagation()}>
+      <div className="section-title" id="fusion-confirm-title">确认融合</div>
+      <div className="popup-body fusion-confirm-body">
+        <section><h3>融合结果</h3><div className="fusion-pet-row"><PetIcon image={formationImage(evolved.speciesId, evolved.image)} emoji={evolved.emoji} name={evolved.name} /><div><strong>{evolved.name}</strong><p>生命 {evolved.hp}/{evolved.maxHp} · 速度 {evolved.spd}</p><p>永久强化：生命 +{evolved.bonusStats?.hp ?? 0}、速度 +{evolved.bonusStats?.spd ?? 0}；诅咒：{evolved.curse ? CURSE_CN[evolved.curse] : '无'}</p></div></div>
+          {passive && <p>新形态被动：{passive.name} · {passive.desc}</p>}
+          <div className="fusion-result-skills"><b>新形态技能</b>{evolved.skills.map(id => <SkillTag key={id} skill={getSkill(id)} />)}</div>
+        </section>
+        {materials.length > 1 && <label>融合材料 <select aria-label="融合材料" value={materialUid} onChange={event => setMaterialUid(event.target.value)}><option value="">请选择材料</option>{materials.map((unit, index) => <option key={unit.uid} value={unit.uid}>{index + 1}. {unit.name} · {overflow.some(item => item.uid === unit.uid) ? '待处理' : '队伍内'} · {materialInfo(unit)}</option>)}</select></label>}
+      </div>
+      <div className="panel-row"><button className="primary" disabled={!material || state.runMode === 'proficiency'} onClick={() => {
+        if (!material) return;
+        if (fromOverflow) dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: material.uid, primaryUid: primary.uid });
+        else if (state.screen === 'tame-overflow') dispatch({ type: 'FUSE_IN_OVERFLOW', uid: primary.uid, materialUid: material.uid });
+        else dispatch({ type: 'FUSE', primaryUid: primary.uid, materialUid: material.uid });
+        onClose();
+      }}>确定融合</button><button onClick={onClose}>取消</button></div>
+    </div>
+  </div>;
+}
+
 function FuseDiscardConfirm({
   confirm,
   state,
@@ -424,21 +457,14 @@ function FuseDiscardConfirm({
 }) {
   if (!confirm) return null;
   const target = confirm.uid ? state.roster.find((x) => x.uid === confirm.uid) : undefined;
-  const isFuse = confirm.kind === 'fuse';
+  if (confirm.kind === 'fuse' && target) return <FusionConfirm key={target.uid} primary={target} state={state} dispatch={dispatch} onClose={() => setConfirm(null)} />;
   const isDiscard = confirm.kind === 'discard';
   const isReplace = confirm.kind === 'replace';
-  const isTameFuse = confirm.kind === 'tame-fuse';
-  const tameTarget = isTameFuse ? state.tameOverflow?.[0] : undefined;
   return (
     <div className="confirm-overlay" onClick={() => setConfirm(null)}>
       <div className={`confirm-box${isDiscard || isReplace ? ' popup-danger' : ''}`} onClick={(e) => e.stopPropagation()}>
-        <div className="section-title">{isFuse ? '确认融合' : isDiscard ? '确认释放' : isReplace ? '确认替换' : isTameFuse ? '确认融合' : '提示'}</div>
+        <div className="section-title">{isDiscard ? '确认释放' : isReplace ? '确认替换' : '提示'}</div>
         <div className="popup-body">
-        {isFuse && target && (
-          <p>
-            确定要融合「{target.name}」吗？将与同物种宠物融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>，继承强化/诅咒，生命回满。
-          </p>
-        )}
         {isDiscard && target && (
           <div className="popup-pet-row">
             {target.image ? <img className="popup-pet-portrait" src={target.image} alt="" /> : <span className="popup-pet-portrait">{target.emoji}</span>}
@@ -451,25 +477,17 @@ function FuseDiscardConfirm({
             <div><p>放生「{target.name}」后，将获得 <b>{confirm.gold ?? 0} 金币</b>，然后「{state.tameOverflow?.[0]?.name ?? '新宠物'}」加入队伍。</p><p className="popup-consequence">这名伙伴将永久离队。</p></div>
           </div>
         )}
-        {isTameFuse && target && tameTarget && (
-          <p>
-            确定要将「{tameTarget.name}」作为材料，与「{target.name}」融合进化为 <b>{getMonster(nextStage(target.speciesId)!).name}</b>？继承强化/诅咒，生命回满。
-          </p>
-        )}
         {confirm.kind === 'notice' && <p>{confirm.msg}</p>}
         </div>
         <div className="panel-row" style={{ justifyContent: 'center' }}>
-          {(isFuse || isDiscard || isReplace || isTameFuse) ? (
+          {(isDiscard || isReplace) ? (
             <>
               <button
                 className="primary"
                 onClick={() => {
-                  if (isFuse) dispatch({ type: 'FUSE', primaryUid: confirm.uid! });
-                  else if (isDiscard) dispatch({ type: 'DISCARD', uid: confirm.uid! });
+                  if (isDiscard) dispatch({ type: 'DISCARD', uid: confirm.uid! });
                   else if (isReplace && state.tameOverflow?.[0]) {
                     dispatch({ type: 'TAME_OVERFLOW_REPLACE', tameUid: state.tameOverflow[0].uid, discardUid: confirm.uid! });
-                  } else if (isTameFuse && confirm.tameUid) {
-                    dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: confirm.tameUid, primaryUid: confirm.uid! });
                   }
                   setConfirm(null);
                 }}
@@ -1983,11 +2001,13 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   );
 }
 
-function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const pending = state.rewards.find((reward) => reward.id === state.pendingRecruitRewardId);
+  const candidates = useMemo(() => (pending?.recruitCandidates ?? []).map((id) => makeUnit(id, true, 0, false)), [pending]);
   const currentNode = state.map.layers[state.currentRow]?.find((node) => node.id === state.currentNodeId);
   const skipped = state.log[0]?.startsWith('使用跳关道具');
   return (
-    <div className="reward-screen">
+    <div className={`reward-screen${pending ? ' recruit-screen' : ''}`}>
       <header className="reward-header">
         <div className="reward-heading"><img className="reward-swords" src="/page-special-icons/victory-swords.png" alt="" draggable={false} /><h1>{skipped ? '跳关奖励' : '战斗胜利'}</h1></div>
         <div className="reward-header-info">
@@ -1996,21 +2016,34 @@ function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
         </div>
       </header>
       <main className="reward-content">
-        <section className="reward-choice-panel" aria-labelledby="reward-choice-title">
-          <div className="reward-panel-heading"><h2 id="reward-choice-title">选择一份战利品</h2></div>
+        <section className={`reward-choice-panel${pending ? ' recruit-choice-panel' : ''}`} aria-labelledby="reward-choice-title">
+          <div className="reward-panel-heading"><div>{pending && <img className="recruit-heading-paw" src="/starter-growth-icons/starter-paw.png" alt="" />}<h2 id="reward-choice-title">{pending ? '招募伙伴' : '选择一份战利品'}</h2>{pending && <p className="recruit-subtitle">选择一位伙伴加入队伍</p>}</div></div>
+          {pending ? <div className="recruit-candidate-list">
+            {candidates.map((unit) => {
+              const passive = getPassive(unit.passive);
+              return <section className="recruit-candidate" key={unit.speciesId} aria-label={`${unit.name}候选详情`}>
+                <div className="recruit-overview">
+                  <div className="recruit-portrait"><PetIcon image={formationImage(unit.speciesId, unit.image)} emoji={unit.emoji} name={unit.name} /></div>
+                  <div className="recruit-identity"><h3>{unit.name}</h3><div className="recruit-stats"><span><img src="/battle-stat-icons/life.png" alt="" />生命 <strong>{unit.hp}/{unit.maxHp}</strong></span><span><img src="/battle-stat-icons/speed.png" alt="" />速度 <strong>{unit.spd}</strong></span></div></div>
+                </div>
+                <div className="recruit-detail-section"><h4>被动</h4><div className="recruit-passive"><strong>{passive?.name ?? '无'}</strong>{passive && <p>{passive.desc}</p>}</div></div>
+                <div className="recruit-detail-section recruit-skills"><h4>技能</h4><div className="recruit-skill-list">{unit.skills.map((skillId) => <SkillTag key={skillId} skill={getSkill(skillId)} />)}</div></div>
+                <button type="button" className="recruit-confirm" aria-label={`确认招募 ${unit.name}`} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: pending.id, monsterId: unit.speciesId })}>确认招募</button>
+              </section>;
+            })}
+          </div> :
           <div className="reward-choice-list" style={{ gridTemplateColumns: `repeat(${Math.max(1, state.rewards.length)}, minmax(0, 1fr))` }}>
             {state.rewards.map((reward) => {
-              const recruit = reward.kind === 'recruit' && reward.monsterId ? getMonster(reward.monsterId) : undefined;
               return <button key={reward.id} type="button" className={`reward-choice reward-choice-${reward.kind}`} aria-label={`领取：${reward.label}，${reward.desc}`} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id })}>
                 <span className={`reward-choice-icon reward-choice-icon-${reward.kind}`} aria-hidden="true">
-                  {recruit ? <PetIcon image={formationImage(recruit.id, recruit.image)} emoji={recruit.emoji} name={recruit.name} /> : <img src={`/reward-icons/${reward.kind}.png`} alt="" draggable={false} />}
+                  <img src={reward.kind === 'recruit' ? '/starter-growth-icons/starter-paw.png' : `/reward-icons/${reward.kind}.png`} alt="" draggable={false} />
                 </span>
                 <span className="reward-choice-copy"><strong>{reward.label}</strong><small>{reward.desc}</small></span>
                 <span className="reward-claim">领取</span>
               </button>;
             })}
-          </div>
-          <div className="reward-panel-footer"><span className="reward-footer-sigil" aria-hidden="true"><UiSymbol name="sparkle" /></span><span>选择后进入战后休整</span><span className="reward-footer-sigil" aria-hidden="true"><UiSymbol name="sparkle" /></span></div>
+          </div>}
+          {!pending && <div className="reward-panel-footer"><span className="reward-footer-sigil" aria-hidden="true"><UiSymbol name="sparkle" /></span><span>选择后进入战后休整</span><span className="reward-footer-sigil" aria-hidden="true"><UiSymbol name="sparkle" /></span></div>}
         </section>
       </main>
     </div>
@@ -2574,10 +2607,8 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
   const stage = selected ? nextStage(selected.speciesId) : undefined;
   const need = selected && stage ? fusionNeedCount(selected.speciesId) : 0;
   const sameCount = selected ? state.roster.filter(unit => unit.speciesId === selected.speciesId).length : 0;
-  const tameSame = selected?.speciesId === tame.speciesId;
-  const totalCount = sameCount + (tameSame ? 1 : 0);
+  const totalCount = sameCount + (state.tameOverflow ?? []).filter(unit => unit.speciesId === selected?.speciesId).length;
   const canFuse = stage !== undefined && totalCount >= need;
-  const needTame = canFuse && tameSame && sameCount < need;
   const fuseTitle = stage ? (canFuse ? `融合进化为 ${getMonster(stage).name}（${totalCount}/${need}）` : `同物种不足（${totalCount}/${need}）`) : '该宠物已是最终形态，无法融合';
   return (
     <div className="flow-screen flow-partner-screen">
@@ -2609,8 +2640,7 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
             if (!selected) return;
             if (!stage) setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
             else if (!canFuse) setConfirm({ kind: 'notice', msg: `同物种不足（${totalCount}/${need}），无法融合` });
-            else if (needTame) setConfirm({ kind: 'tame-fuse', uid: selected.uid, tameUid: tame.uid });
-            else dispatch({ type: 'FUSE_IN_OVERFLOW', uid: selected.uid });
+            else setConfirm({ kind: 'fuse', uid: selected.uid });
           }}><FlowIcon name="fuse-companion" />融合</button>}
           <button onClick={() => dispatch({ type: 'TAME_OVERFLOW_DISCARD', tameUid: tame.uid })}><FlowIcon name="release-companion" />放生新伙伴</button>
         </div>

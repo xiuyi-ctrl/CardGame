@@ -248,6 +248,7 @@ export interface RewardChoice {
   kind: 'food' | 'heal' | 'recruit' | 'gold';
   foodId?: string;
   monsterId?: string;
+  recruitCandidates?: string[];
   amount?: number;
 }
 
@@ -267,6 +268,7 @@ export interface GameState {
   gold: number;
   battle?: BattleState;
   rewards: RewardChoice[];
+  pendingRecruitRewardId?: string;
   log: string[];
   /** 奇遇关奖励进行中：进化/超进化（等待玩家在队伍中点选）或属性强化（等待选属性）；斗兽场等待选择出战宠物 */
   specialPending?:
@@ -1464,6 +1466,17 @@ export function buildPunishmentEvent(rng: () => number): EventNode {
   };
 }
 
+/** 主模式按幕抽取两个不同的招募候选，不依赖现有队伍。 */
+function recruitCandidates(rng: () => number, act: number): string[] {
+  const candidates: string[] = [];
+  const advancedChance = act >= 3 ? 0.6 : act === 2 ? 0.3 : 0;
+  for (let i = 0; i < 2; i++) {
+    const pool = rng() < advancedChance ? EVO1_POOL : BASE_POOL;
+    candidates.push(pick(rng, pool.filter((id) => !candidates.includes(id))));
+  }
+  return candidates;
+}
+
 /** 斗兽场/车轮战胜利奖励：3 选 1 的丰厚选择（金币/食物/治疗/招募） */
 export function generateChallengeRewards(state: GameState, type: 'arena' | 'gauntlet'): RewardChoice[] {
   const rng = createRng(state.seed * 173 + state.act * 37 + state.currentRow * 59 + (type === 'arena' ? 1 : 2));
@@ -1472,7 +1485,8 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
     { id: 'ch-food', label: '美味补给', desc: '获得 1 个随机食物', kind: 'food', foodId: pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false)) },
     { id: 'ch-heal', label: '庆功宴', desc: '全体恢复 50% 生命', kind: 'heal', amount: 50 },
   ];
-  if (state.roster.length < getMaxRoster(state.runMode)) {
+  const mainRecruit = state.runMode !== 'proficiency';
+  if (mainRecruit || state.roster.length < getMaxRoster(state.runMode)) {
     options.push({
       id: 'ch-recruit',
       label: '斗士招募',
@@ -1481,7 +1495,10 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
       monsterId: pick(rng, RECRUIT_POOL),
     });
   }
-  return shuffle(rng, options).slice(0, 3);
+  return shuffle(rng, options).slice(0, 3).map((reward) => {
+    if (!mainRecruit || reward.kind !== 'recruit') return reward;
+    return { ...reward, monsterId: undefined, recruitCandidates: recruitCandidates(rng, state.act), desc: '从两位候选伙伴中选择一位' };
+  });
 }
 
 export function generateMap(seed: number, act: number, difficulty?: Difficulty): RunMap {
@@ -1866,7 +1883,7 @@ export function nextStage(speciesId: string): string | undefined {
   return getMonster(speciesId).evolutions?.[0]?.to;
 }
 
-/** 融合需要的同物种数量（含主宠自身）：第 n 阶需 n+1 只 */
+/** 融合需要的同形态数量（含主宠自身），六条主要进化链均为两只。 */
 export function fusionNeedCount(speciesId: string): number {
   return fusionNeed(speciesId);
 }
@@ -1931,7 +1948,8 @@ export function generateRewards(state: GameState): RewardChoice[] {
       amount: 30,
     },
   ];
-  const space = state.roster.length < getMaxRoster(state.runMode);
+  const mainRecruit = state.runMode !== 'proficiency';
+  const space = mainRecruit || state.roster.length < getMaxRoster(state.runMode);
   if (space) {
     options.push({
       id: 'r-recruit',
@@ -1964,7 +1982,10 @@ export function generateRewards(state: GameState): RewardChoice[] {
       }
     }
   }
-  return shuffled.slice(0, 2);
+  return shuffled.slice(0, 2).map((reward) => {
+    if (!mainRecruit || reward.kind !== 'recruit') return reward;
+    return { ...reward, monsterId: undefined, recruitCandidates: recruitCandidates(rng, state.act), desc: '从两位候选伙伴中选择一位' };
+  });
 }
 
 /** 被侵蚀节点奖励翻倍：把奖励池中的食物选项数量翻倍；若无食物选项则强制加入一个双份食物奖励 */

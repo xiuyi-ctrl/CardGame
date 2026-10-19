@@ -59,7 +59,7 @@ export type GameAction =
   | { type: 'EVOLVE_ONE'; uid: string }
   | { type: 'SPECIAL_TARGET'; uid: string }
   | { type: 'BOOST_STAT'; stat: 'hp' | 'spd' }
-  | { type: 'FUSE'; primaryUid: string }
+  | { type: 'FUSE'; primaryUid: string; materialUid?: string }
   | { type: 'PICK_CUSTOM'; presetId: string }
   | { type: 'USE_PURIFY'; uid: string }
   | { type: 'USE_SKIP'; nodeId: string; free?: boolean }
@@ -75,7 +75,7 @@ export type GameAction =
   | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string }
   | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
   | { type: 'TAME_OVERFLOW_JOIN'; tameUid: string }
-  | { type: 'FUSE_IN_OVERFLOW'; uid: string }
+  | { type: 'FUSE_IN_OVERFLOW'; uid: string; materialUid?: string }
   | { type: 'PLAYER_SKILL'; actorUid: string; skillId: string; targetUid?: string }
   | { type: 'PLAYER_REST'; actorUid: string }
   | { type: 'PLAYER_CANCEL_ORDER'; actorUid: string }
@@ -86,7 +86,7 @@ export type GameAction =
   | { type: 'GAUNTLET_ORDER_CONFIRM'; units: Unit[] }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
-  | { type: 'PICK_REWARD'; rewardId: string }
+  | { type: 'PICK_REWARD'; rewardId: string; monsterId?: string }
   | { type: 'SET_FIELD'; uids: string[] }
   | { type: 'DISCARD'; uid: string }
   | { type: 'SHOP_BUY'; foodId: string }
@@ -1855,9 +1855,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'PICK_REWARD': {
+      if (state.screen !== 'reward') return state;
+      if (state.pendingRecruitRewardId && state.pendingRecruitRewardId !== action.rewardId) return state;
       const reward = state.rewards.find((r) => r.id === action.rewardId);
       if (!reward) return state;
-      let next: GameState = { ...state, screen: 'roster', rewards: [], postBattle: true };
+      if (reward.kind === 'recruit' && reward.recruitCandidates) {
+        if (!action.monsterId) return { ...state, rewards: [reward], pendingRecruitRewardId: reward.id };
+        if (state.pendingRecruitRewardId !== reward.id || !reward.recruitCandidates.includes(action.monsterId)) return state;
+      }
+      const recruitId = reward.recruitCandidates ? action.monsterId : reward.monsterId;
+      let next: GameState = { ...state, screen: 'roster', rewards: [], postBattle: true, pendingRecruitRewardId: undefined };
       if (reward.kind === 'food' && reward.foodId) {
         const amt = reward.amount ?? 1;
         next = { ...next, inventory: { ...next.inventory, [reward.foodId]: (next.inventory[reward.foodId] ?? 0) + amt } };
@@ -1865,12 +1872,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         next = { ...next, toast: { msg: `获得 ${fname} ×${amt}`, kind: 'success' } };
       } else if (reward.kind === 'heal') {
         next = healRoster(next, (reward.amount ?? 30) / 100);
-      } else if (reward.kind === 'recruit' && reward.monsterId) {
+      } else if (reward.kind === 'recruit' && recruitId) {
         if (next.roster.length < getMaxRoster(state.runMode)) {
-          const u = makeUnit(reward.monsterId, true, 0, false);
+          const u = makeUnit(recruitId, true, 0, false);
           next = { ...next, roster: [...next.roster, u], toast: { msg: `招募了 ${u.name}！`, kind: 'success' } };
         } else {
-          const recruited = makeUnit(reward.monsterId, true, 0, false);
+          const recruited = makeUnit(recruitId, true, 0, false);
           next = {
             ...next,
             screen: 'tame-overflow',
@@ -1893,6 +1900,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'FUSE': {
+      if (state.runMode === 'proficiency') return state;
       if (state.screen !== 'roster' && state.screen !== 'backpack') return state;
       const primary = state.roster.find((u) => u.uid === action.primaryUid);
       if (!primary) return state;
@@ -1900,10 +1908,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const need = fusionNeedCount(primary.speciesId);
       const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
       if (same.length < need) return state;
+      // 主宠保留原 uid；其余同物种材料（need-1 只）从队伍移除
+      const materials = same.filter((u) => u.uid !== primary.uid && (!action.materialUid || u.uid === action.materialUid)).slice(0, need - 1);
+      if (materials.length !== need - 1) return state;
       const evolved = fuseUnit(primary);
       if (!evolved) return state;
-      // 主宠保留原 uid；其余同物种材料（need-1 只）从队伍移除
-      const materials = same.filter((u) => u.uid !== primary.uid).slice(0, need - 1);
       const materialUids = materials.map((u) => u.uid);
       const roster = state.roster
         .filter((u) => !materialUids.includes(u.uid))
@@ -1957,6 +1966,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'TAME_OVERFLOW_FUSE': {
+      if (state.runMode === 'proficiency' || state.screen !== 'tame-overflow') return state;
       const tame = state.tameOverflow?.find((u) => u.uid === action.tameUid);
       if (!tame) return state;
       const primary = state.roster.find((u) => u.uid === action.primaryUid);
@@ -1981,6 +1991,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         field: state.field.filter((uid) => roster.some((u) => u.uid === uid)),
         tameOverflow: overflow,
         log: [`融合！${materialNames} 与 ${primary.name} 融合成了 ${evolved.name}！`, ...state.log].slice(0, 20),
+        runStats: state.runStats ? { ...state.runStats, fusions: state.runStats.fusions + 1 } : state.runStats,
       };
       return overflow.length === 0 ? { ...next, screen: state.tameOverflowReturn ?? 'reward', tameOverflow: undefined, tameOverflowReturn: undefined } : next;
     }
@@ -2012,6 +2023,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'FUSE_IN_OVERFLOW': {
+      if (state.runMode === 'proficiency') return state;
       if (state.screen !== 'tame-overflow') return state;
       const primary = state.roster.find((u) => u.uid === action.uid);
       if (!primary) return state;
@@ -2019,9 +2031,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const need = fusionNeedCount(primary.speciesId);
       const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
       if (same.length < need) return state;
+      const materials = same.filter((u) => u.uid !== primary.uid && (!action.materialUid || u.uid === action.materialUid)).slice(0, need - 1);
+      if (materials.length !== need - 1) return state;
       const evolved = fuseUnit(primary);
       if (!evolved) return state;
-      const materials = same.filter((u) => u.uid !== primary.uid).slice(0, need - 1);
       const materialUids = materials.map((u) => u.uid);
       const roster = state.roster
         .filter((u) => !materialUids.includes(u.uid))

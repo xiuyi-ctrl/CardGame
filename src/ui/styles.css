@@ -3353,6 +3353,56 @@ button.primary {
 .reward-panel-heading::before, .reward-panel-heading::after { content: ''; flex: 1; max-width: 110px; height: 3px; background: #8a979b; }
 .reward-panel-heading h2 { margin: 0; color: #101c2c; font-size: clamp(23px, 2.7vw, 38px); }
 .reward-choice-list { min-height: 0; display: grid; gap: 16px; padding: 4px; overflow: auto; }
+.recruit-choice-panel { grid-template-rows: auto minmax(0, 1fr); gap: 16px; }
+.recruit-heading-paw { display: inline-block; width: 40px; height: 40px; margin-right: 12px; object-fit: contain; image-rendering: pixelated; vertical-align: middle; }
+.recruit-choice-panel .reward-panel-heading h2 { display: inline; vertical-align: middle; }
+.recruit-subtitle { margin: 6px 0 0; color: #101c2c; font-size: 16px; }
+.recruit-candidate-list { min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 6px; }
+.recruit-candidate { --text: #101c2c; --text-dim: #536574; --gold: #9b6100; position: relative; min-width: 0; padding: 14px; border: 3px solid #8a979b; background: #fff9e9; color: #101c2c; display: flex; flex-direction: column; gap: 10px; }
+.recruit-candidate:hover, .recruit-candidate:focus-within { border-color: #ff8a08; }
+.recruit-candidate:hover::after, .recruit-candidate:focus-within::after { content: ''; position: absolute; inset: -5px; border: 15px solid transparent; border-image: url('./assets/popup-terminal-frame.svg') 32 / 15px / 0 stretch; pointer-events: none; }
+.recruit-overview { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; border-bottom: 2px solid #8a979b; }
+.recruit-portrait { width: 88px; height: 88px; flex: none; display: grid; place-items: center; font-size: 48px; }
+.recruit-portrait .pet-icon-inline { width: 100%; height: 100%; object-fit: contain; border-radius: 0; image-rendering: pixelated; }
+.recruit-identity { min-width: 0; display: grid; gap: 8px; }
+.recruit-candidate h3 { margin: 0; text-align: left; font: 30px/1.15 'Fusion Pixel 12px Proportional Simplified Chinese', 'Microsoft YaHei', sans-serif; }
+.recruit-stats { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 16px; }
+.recruit-stats > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.recruit-stats img { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; }
+.recruit-detail-section { position: relative; padding: 10px 12px; border: 2px solid #a5b0ad; }
+.recruit-detail-section h4 { float: left; margin: -10px 12px 0 -12px; padding: 4px 10px; background: #ff8a08; color: #101c2c; font-size: 16px; }
+.recruit-passive { overflow-wrap: anywhere; }
+.recruit-passive p { margin: 5px 0 0; color: #536574; font-size: 14px; line-height: 1.45; }
+.recruit-skills h4 { float: none; display: table; margin-bottom: 4px; }
+.recruit-skill-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.recruit-skills .skill-tag { flex: 1 1 0; min-width: max-content; padding: 4px 6px; border: 1px solid #a5b0ad; border-radius: 0; background: #f0ebdc; }
+.recruit-skills .skill-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.recruit-skills .skill-icons { display: none; }
+.recruit-skills .skill-name, .recruit-skills .skill-num { color: #101c2c; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.recruit-confirm { margin-top: auto; min-height: 48px; padding: 8px 16px; border: 4px solid #101c2c; border-radius: 0; background: #ff8a08; color: #101c2c; box-shadow: inset 0 0 0 3px #ffd15c, 3px 3px 0 #8a979b; font-size: 23px; font-weight: 800; }
+.recruit-confirm:hover { background: #ffab24; }
+.recruit-confirm:focus-visible { outline: 3px solid #147f76; outline-offset: 4px; }
+@media (max-height: 760px), (max-width: 1100px) {
+  .recruit-screen .reward-content { padding: 8px 2%; }
+  .recruit-screen .recruit-choice-panel { padding: 4px 8px; border-width: 12px; border-image-width: 12px; gap: 8px; }
+  .recruit-choice-panel .reward-panel-heading h2 { font-size: 26px; }
+  .recruit-heading-paw { width: 28px; height: 28px; }
+  .recruit-subtitle { margin-top: 3px; font-size: 14px; }
+  .recruit-candidate-list { gap: 12px; padding: 4px; }
+  .recruit-candidate { gap: 5px; padding: 6px; }
+  .recruit-overview { gap: 10px; padding-bottom: 6px; }
+  .recruit-portrait { width: 64px; height: 64px; }
+  .recruit-identity { gap: 5px; }
+  .recruit-candidate h3 { font-size: 24px; }
+  .recruit-stats { gap: 4px 10px; font-size: 14px; }
+  .recruit-stats img { width: 22px; height: 22px; }
+  .recruit-detail-section { padding: 6px 8px; }
+  .recruit-detail-section h4 { margin: -6px 8px 0 -8px; padding: 3px 7px; font-size: 14px; }
+  .recruit-skills h4 { margin-bottom: 4px; }
+  .recruit-passive { font-size: 14px; }
+  .recruit-passive p { margin-top: 3px; font-size: 13px; }
+  .recruit-confirm { min-height: 36px; padding: 5px 8px; font-size: 19px; }
+}
 .reward-choice { position: relative; min-width: 0; min-height: 300px; padding: 18px 14px; display: grid; grid-template-rows: minmax(90px, 1fr) auto auto; justify-items: center; align-items: center; gap: 16px; border: 3px solid #8a979b; border-radius: 0; background: #fff9e9; color: #101c2c; text-align: center; box-shadow: none; transition: none; }
 .reward-choice:hover, .reward-choice:focus-visible { border-color: #ff8a08; background: #fff3d7; filter: none; box-shadow: inset 0 0 0 2px #ffd15c; }
 .reward-choice:hover::after, .reward-choice:focus-visible::after, .postbattle-pet.selected::after { content: ''; position: absolute; inset: -4px; border: 12px solid transparent; border-image: url('./assets/popup-terminal-frame.svg') 32 / 12px / 0 stretch; pointer-events: none; }
@@ -7023,3 +7073,15 @@ button.primary {
   :is(.confirm-box, .growth-modal) button { padding-inline: 8px; font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+.confirm-box.fusion-confirm { width: min(620px, 94vw); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.fusion-confirm .fusion-confirm-body { min-height: 0; max-height: none; overflow-y: auto; display: grid; gap: 12px; }
+.fusion-confirm-body section { padding: 10px; border: 2px solid #8a979b; background: #fff9e9; }
+.fusion-confirm h3 { margin: 0 0 8px; color: #101c2c; font-size: 17px; }
+.fusion-confirm p { margin: 6px 0; font-size: 14px; line-height: 1.5; }
+.fusion-pet-row { display: flex; align-items: center; gap: 12px; }
+.fusion-pet-row > .pet-icon-inline { width: 64px; height: 64px; flex: none; border-radius: 0; object-fit: contain; image-rendering: pixelated; }
+.fusion-pet-row > div { min-width: 0; }
+.fusion-confirm select { display: block; width: 100%; min-width: 0; margin: 6px 0; padding: 8px; border: 2px solid #8a979b; border-radius: 0; color: #101c2c; background: #fff9e9; font-size: 14px; }
+.fusion-result-skills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fusion-result-skills .skill-tag { border-radius: 0; border-color: #8a979b; background: #f0ebdc; color: #101c2c; }
+.fusion-result-skills .skill-num { color: #9b6100; }

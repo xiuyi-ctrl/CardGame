@@ -25,9 +25,9 @@ describe('成长与融合', () => {
     expect(nextStage('boss_vine')).toBeUndefined();
   });
 
-  it('融合需求数量：第 n 阶需 n+1 只同物种', () => {
+  it('融合需求数量：主要进化链每阶两只同形态', () => {
     expect(fusionNeedCount('momo')).toBe(2);
-    expect(fusionNeedCount('momo_queen')).toBe(3);
+    expect(fusionNeedCount('momo_queen')).toBe(2);
     expect(fusionNeedCount('momo_god')).toBe(4);
   });
 
@@ -73,17 +73,17 @@ describe('成长与融合', () => {
     expect(next.log[0]).toContain('融合');
   });
 
-  it('二阶融合需要 3 只同物种', () => {
+  it('二阶融合只需要两只同形态，额外伙伴不消耗', () => {
     const a = makeUnit('momo_queen', true, 0, false);
     const b = makeUnit('momo_queen', true, 1, false);
     let s: GameState = { ...createInitialState(), screen: 'roster', roster: [a, b], field: [a.uid, b.uid] };
-    // 2 只不够
+    // 两只即可进化
     const two = dispatch(s, { type: 'FUSE', primaryUid: a.uid });
-    expect(two.roster.map((u) => u.speciesId)).toEqual(['momo_queen', 'momo_queen']);
-    // 3 只融合成 momo_god
+    expect(two.roster.map((u) => u.speciesId)).toEqual(['momo_god']);
+    // 多余伙伴保留
     const c = makeUnit('momo_queen', true, 2, false);
     const three = dispatch({ ...s, roster: [a, b, c], field: [a.uid, b.uid, c.uid] }, { type: 'FUSE', primaryUid: a.uid });
-    expect(three.roster).toHaveLength(1);
+    expect(three.roster).toHaveLength(2);
     expect(three.roster[0].speciesId).toBe('momo_god');
   });
 });
@@ -332,6 +332,10 @@ describe('完整肉鸽流程', () => {
     expect(s.roster.length).toBeGreaterThanOrEqual(1);
 
     s = dispatch(s, { type: 'PICK_REWARD', rewardId: s.rewards[0].id });
+    if (s.pendingRecruitRewardId) {
+      const reward = s.rewards.find((item) => item.id === s.pendingRecruitRewardId)!;
+      s = dispatch(s, { type: 'PICK_REWARD', rewardId: reward.id, monsterId: reward.recruitCandidates![0] });
+    }
     expect(s.screen).toBe('roster');
 
     s = dispatch(s, { type: 'NEXT_NODE' });
@@ -480,6 +484,10 @@ describe('完整肉鸽流程', () => {
     // 选奖励进入队伍界面
     if (s.rewards.length > 0) {
       s = dispatch(s, { type: 'PICK_REWARD', rewardId: s.rewards[0].id });
+      if (s.pendingRecruitRewardId) {
+        const reward = s.rewards.find((item) => item.id === s.pendingRecruitRewardId)!;
+        s = dispatch(s, { type: 'PICK_REWARD', rewardId: reward.id, monsterId: reward.recruitCandidates![0] });
+      }
     }
     if (s.screen === 'tame-overflow') {
       s = dispatch(s, { type: 'TAME_OVERFLOW_DISCARD', tameUid: '' });

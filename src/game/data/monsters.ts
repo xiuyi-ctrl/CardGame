@@ -442,8 +442,9 @@ export function fusionDepth(id: string): number {
   return depth;
 }
 
-/** 融合所需的同物种数量：结果形态为第 n 阶时需 n+1 只（基础→1阶需 2 只、1阶→2阶需 3 只…） */
+/** 六条主要进化链每阶均需两只同形态；其他物种沿用原有需求。 */
 export function fusionNeed(id: string): number {
+  if (BASE_POOL.includes(id) || EVO1_POOL.includes(id)) return 2;
   return fusionDepth(id) + 2;
 }
 

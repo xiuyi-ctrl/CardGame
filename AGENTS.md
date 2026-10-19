@@ -10,7 +10,7 @@
 ## 开发命令
 
 - `npm run dev`：同时启动 Vite(5173) 与 Electron（双进程热更新）。
-- `npm test` / `npx vitest run`：单元测试（452 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
+- `npm test` / `npx vitest run`：单元测试（480 个，含主线 100 种子整局模拟与熟练度冒烟模拟）。
 - `npm run balance` / `npm run balance:check`：生成双模式数值报告 / 执行固定基线与确定性门禁；报告位于 `balance-output/`。
 - `npm run typecheck`：TS 类型检查（tsconfig.json + tsconfig.electron.json）。
 - `npm run build`：编译 Electron 主进程 + 类型检查 + Vite 产物到 `dist/`。
@@ -40,7 +40,7 @@
   - 标题界面 `HomeScreen` 使用独立像素营地背景、SVG「叠放卡牌—山林道路—爪印」横向徽记；仅大标题用离线 Fusion Pixel Font，其他文字用系统字体。继续/新游戏/熟练度远征为主按钮，存档管理/生物图鉴/成就为次级入口，测试关卡/退出游戏在底部。生物图鉴打开 `CodexScreen` 覆盖层：左侧按 普通/精英/传奇/首领/造物 分组，右侧展示详情（属性/被动/技能/驯服/融合/说明），数据来自 `MONSTERS`+`computeStats`+`getPassive`+`nextStage`（物种 `desc` 为图鉴说明，见 `monsters.ts`）。
   - 地图界面 `MapScreen` 使用四张像素地形背景；节点由不规则石质底座、彩色 SVG 像素图标和独立铭牌组成，所有文字仍用系统字体。`mapRoutes.ts` 复用 `canStepTo` 只连接相邻上下层，禁用节点无连线，已走/可达/悬停预览分别着色。悬停与键盘聚焦只展示已知信息，不调用 `nodeInfo` 泄露侦查内容；熟练度 50 层采用紧凑单列，窄窗口把信息栏移至底部。
   - 商店界面 `ShopScreen` 共用林间流动商棚背景，顶部显示地点、金币、出战数量和离开入口；右侧两列货架用 `ShopItemIcon` 的像素 SVG 图标展示实际四件商品，标明已购买与金币不足。主线保留免费休整、熟练度仅有刷新；主线价格显示与难度倍率后的实付价格一致。所有文字仍使用系统字体。
-  - 战后奖励 `RewardScreen` 使用像素营地战利品背景；顶部显示地点与金币，右侧石框从 `state.rewards` 绘制两项或三项奖励，金币/食物/治疗使用预览图中的像素图标，招募使用真实生物图片。整张卡片是按钮，悬停/聚焦青绿描边；领取仍派发 `PICK_REWARD`。跳关进入此页时标题显示「跳关奖励」。
+  - 战后奖励 `RewardScreen` 使用像素营地战利品背景；顶部显示地点与金币，右侧石框从 `state.rewards` 绘制两项或三项奖励，金币/食物/治疗使用预览图中的像素图标，主模式普通招募卡使用通用爪印。点击招募后锁定奖励（`pendingRecruitRewardId`），从两位预生成候选（`recruitCandidates`）中确认一位，候选与锁定状态随存档保留；满员仍可招募后进入处理队伍。整张卡片是按钮，悬停/聚焦青绿描边；领取仍派发 `PICK_REWARD`。跳关进入此页时标题显示「跳关奖励」。
   - `RosterScreen` 在 `postBattle` 状态使用 `PostBattleRosterScreen`：独立营地背景、八格存活伙伴肖像及右侧详情，选中只改变查看对象；融合、释放、净化和继续前进沿用原有状态动作，普通队伍管理与满员处理新伙伴界面不变。
 - `electron/`：Electron 主进程/预加载（编译产物到 `dist-electron/`）。
 - `美术素材/`：当前实际使用的 61 个图像文件的集中合集；运行时副本仍位于 `public/` 和 `src/ui/assets/`，修改素材时需同步两处，勿直接改动旧存档使用的图片路径。
@@ -50,7 +50,7 @@
 
 - 属性只有 `maxHp/hp/spd`（整数）；无等级/经验/攻击/防御/五行元素。伤害=技能固定值（`SkillDef.damage?/heal?`）+ 固定修正（战吼+2/虚弱-1/铁刺-1/药水±1，见 `getDamageBonus`），无随机浮动；**受击减伤被动（guard）对多段技能的每一段都生效**（每段最低 1）。`getEffectiveSpd` 含药水 ±1。**速度加成技能**：`SkillDef.spdScaling?: number`，伤害 += 施法者当前速度 × spdScaling（狂叶/叶震波等）。
 - **技能描述约定**：技能 `desc` 直接写明效果层数（如「附加灼烧2层」「降低其伤害1层，持续2回合」），设 `hideEffects: true` 防止 UI 的 `skillFullDesc` 重复追加 `（效果文本）`。未设 `hideEffects` 的技能由 `skillFullDesc` 自动追加 effects 括号说明。**技能分类**：`SkillDef.kind` 分四种——`'attack'`（攻击技能，触发攻击被动）、`'heal'`（治疗技能）、`'buff'`（增益技能）、`'status'`（状态技能，施加 debuff 但不触发攻击被动如蛇狩/荆棘/吸血等）。
-- 成长=「融合」：进化链第 n 阶需 n+1 只同物种（`fusionNeedCount`，1 阶 2 只、2 阶 3 只…）；队伍界面主宠+材料融合，继承主宠 bonusStats/诅咒/自创技能，血回满。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+5 / 速度+2。
+- 成长=「融合」：主模式六条主要进化链每阶均需 **2 只相同物种、相同形态**（`fusionNeed`：`BASE_POOL`/`EVO1_POOL` 返回 2，其他物种仍为 `fusionDepth+2`）；队伍界面主宠+材料融合，主宠变为下一形态，属性取新形态固定值，继承主宠 bonusStats/诅咒/自创技能，血回满，材料强化/技能不继承。确认框只展示融合后生物信息。`nextStage(speciesId)` 取下一形态。属性强化固定值：生命+5 / 速度+2。
 - **反伤先打盾**：`applyCounterDmg(attacker, dmg)` 统一处理荆棘/盾反/棘刺王的反击伤害——先扣护盾再扣血，避免护盾失效后反伤仍穿透护盾的 bug。`thorns`/`thornRoyal`/`shieldCounter` 三处均已改为调用此函数。
 - **技能冷却**：`SkillDef.cooldown?: number` 设置使用后冷却回合数（缺省=0）；`Unit.skillCooldowns?: Record<string, number>` 追踪当前冷却；`applySkillCooldown` 存储 `skill.cooldown + 1`（因为 `startRound` 在回合开始时立即递减，+1 确保实际冷却回合数正确）；`skillCooldownLeft` 检查冷却是否归零。已设：盾反（shield_counter）冷却 1 回合、孢子防护（spore_shield）冷却 1 回合。
 - **换位限次**：`Unit.swapCount?: number` 追踪每场战斗换位次数，上限 2 次（守卫战禁用换位，首回合禁用）。
