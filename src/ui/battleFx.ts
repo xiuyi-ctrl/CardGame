@@ -125,7 +125,15 @@ export function allRevealed(newStatuses: Record<string, string[]>): Record<strin
 
 const RE_ATTACK = /^(.+?) 使用「(.+?)」攻击 (.+?)，造成 (\d+) 伤害$/;
 const RE_HEAL = /^(.+?) 使用「(.+?)」(?:，治愈|恢复) (?:(.+?) )?(\d+) 点生命$/;
+const RE_MOSS_CLEANSE = /^(.+?) 的「(吸热苔|净苔|灼烧反转)」移除 (.+?) (\d+) 层(灼烧|中毒)$/;
 const RE_PASSIVE_HEAL = /^(.+?) 的「(.+?)」(?:恢复|治愈) (\d+) 点生命$/;
+const RE_FURNACE_BURN = /^(.+?) 的「(炉火|炽炉|熔炉之心)」使 (.+?) 灼烧 (\d+) 层$/;
+const RE_FURNACE_SHIELD = /^(.+?) 的「(熔炉之心|热壳换火|熔蜕|赤甲炼火|热壳顶撞)」获得 (\d+) 点护盾$/;
+const RE_BURN_STRIP = /^(.+?) 的「(灼羽剥甲|焚风蚀甲|烈日销甲|掠日破盾)」剥除 (.+?) (\d+) 点护盾$/;
+const RE_BURN_BRAND = /^(.+?) 的「灼烧烙印」引爆 (\d+) 层，受到 (\d+) 点灼烧伤害$/;
+const RE_SHELL_CHARGE = /^(.+?) 使用「(裂壳冲撞|熔甲震荡)」消耗 (\d+) 点护盾$/;
+const RE_SELF_BURN = /^(.+?) 使用「熔火自焚」，自身损失 1 点生命$/;
+const RE_AFTERGLOW_HEAL = /^(.+?) 的「(?:余温|暖辉|长明之光)」治愈 (.+?) (\d+) 点生命$/;
 const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_THORN_DEBUFF = /^(.+?) 的「荆棘」反噬，受到 (\d+) 点伤害$/;
@@ -280,6 +288,11 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
       shields: entry.shields,
     };
   }
+  if ((m = text.match(RE_MOSS_CLEANSE))) {
+    return { kind: 'buff', actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, side, m[3]), value: 0, skillName: m[2],
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
   if ((m = text.match(RE_HEAL))) {
     const actorUid = entry.actorUid ?? findUid(b, side, m[1]);
     const targetUid = entry.targetUid ?? (m[3] ? findUid(b, side, m[3]) : actorUid);
@@ -297,6 +310,38 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if ((m = text.match(RE_PASSIVE_HEAL))) {
     const uid = entry.actorUid ?? entry.targetUid ?? findUid(b, side, m[1]);
     return { kind: 'heal', actorUid: uid, targetUid: uid, value: Number(m[3]), hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_AFTERGLOW_HEAL))) {
+    return { kind: 'heal', actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, side, m[2]), value: Number(m[3]),
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_FURNACE_BURN))) {
+    return { kind: 'buff', actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, opposite, m[3]), value: 0, skillName: m[2], addsStatus: ['burn'],
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_FURNACE_SHIELD))) {
+    const uid = entry.actorUid ?? findUid(b, side, m[1]);
+    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: m[2],
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_BURN_STRIP))) {
+    return { kind: 'buff', actorUid: entry.actorUid ?? findUid(b, side, m[1]),
+      targetUid: entry.targetUid ?? findUid(b, opposite, m[3]), value: 0, skillName: m[2],
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_BURN_BRAND))) {
+    return { kind: 'dot', actorUid: entry.actorUid, targetUid: entry.targetUid ?? findUid(b, side, m[1]),
+      value: Number(m[3]), statusKind: 'burn', hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_SHELL_CHARGE))) {
+    return { kind: 'buff', actorUid: entry.actorUid, targetUid: entry.targetUid, value: 0, skillName: m[2],
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_SELF_BURN))) {
+    return { kind: 'thorn', actorUid: entry.actorUid, targetUid: entry.targetUid, value: 1,
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   if ((m = text.match(RE_BUFF))) {
     const actorUid = entry.actorUid ?? findUid(b, side, m[1]);

@@ -1,10 +1,24 @@
 import type { PassiveDef } from '../types';
 
 export const PASSIVES: Record<string, PassiveDef> = {
+  heat_moss: { id: 'heat_moss', name: '吸热苔', desc: '每回合首次主动使用单体治疗技能后，额外移除被治疗伙伴1层灼烧；没有灼烧也消耗本回合机会，不由吸血或被动治疗触发', kind: 'healBurnCleanse', value: 1 },
+  clean_moss: { id: 'clean_moss', name: '净苔', desc: '每回合首次主动单体治疗后，移除该伙伴1层灼烧；若此时没有灼烧，改为移除1层中毒；只移除一种，没有异常也消耗本回合机会', kind: 'healDotCleanse', value: 1 },
+  heated_carapace: { id: 'heated_carapace', name: '热壳换火', desc: '每回合开始，在上一回合灼烧结算后，消耗自身1层灼烧并获得2点护盾；没有灼烧时不触发', kind: 'burnShield', value: 2 },
+  burning_feather: { id: 'burning_feather', name: '灼羽剥甲', desc: '每回合首次攻击一个攻击前已灼烧且有护盾的敌人时，伤害前额外移除其2点护盾；多段或群攻只作用一次，不造成额外生命伤害', kind: 'burnStripShield', value: 2 },
+  red_carapace: { id: 'red_carapace', name: '赤甲炼火', desc: '每回合开始，在上一回合灼烧结算后，消耗自身最多2层灼烧，每层获得3点护盾，最多6点；没有灼烧时不触发', kind: 'burnShield', value: 3, burnConsumeMax: 2 },
+  solar_feather: { id: 'solar_feather', name: '烈日销甲', desc: '每回合首次攻击一个攻击前已灼烧且有护盾的敌人时，伤害前额外移除其4点护盾；多段或群攻只作用一次，不造成额外生命伤害', kind: 'burnStripShield', value: 4 },
+  molten_molt: { id: 'molten_molt', name: '熔蜕', desc: '每回合开始，在上一回合灼烧结算后，消耗自身最多2层灼烧，每层获得2点护盾，最多4点；没有灼烧时不触发', kind: 'burnShield', value: 2, burnConsumeMax: 2 },
+  searing_feather: { id: 'searing_feather', name: '焚风蚀甲', desc: '每回合首次攻击一个攻击前已灼烧且有护盾的敌人时，伤害前额外移除其3点护盾；多段或群攻只作用一次，不造成额外生命伤害', kind: 'burnStripShield', value: 3 },
   // —— 基础（御三家/常见野怪）——
   quick: { id: 'quick', name: '迅捷', desc: '战斗开始速度 +2', kind: 'spd', value: 2 },
   watery_regen: { id: 'watery_regen', name: '水愈', desc: '每回合开始恢复 2 点生命', kind: 'regen', value: 2 },
   heat: { id: 'heat', name: '炽热', desc: '攻击命中附加灼烧 3 层', kind: 'scorch', value: 3 },
+  coal_furnace: { id: 'coal_furnace', name: '炉火', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧1层；多段攻击只计一次', kind: 'furnace', value: 1 },
+  armored_furnace: { id: 'armored_furnace', name: '炽炉', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧2层；多段攻击只计一次', kind: 'furnace', value: 2 },
+  candle_afterglow: { id: 'candle_afterglow', name: '余温', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为生命值最低的存活伙伴回复2点生命；全队同名被动每回合一次，取最高值', kind: 'afterglow', value: 2 },
+  lantern_afterglow: { id: 'lantern_afterglow', name: '暖辉', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为生命值最低的2个存活伙伴各回复2点生命；与余温共用全队每回合一次机会，优先采用暖辉', kind: 'afterglow', value: 2, targetCount: 2 },
+  molten_furnace: { id: 'molten_furnace', name: '熔炉之心', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧2层，每次触发为自身施加1点护盾；多段攻击只计一次', kind: 'furnace', value: 2, shieldOnTrigger: 1 },
+  eternal_light: { id: 'eternal_light', name: '长明之光', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为全体存活伙伴各回复3点生命值；每只持有者独立计次，不与同类或余温、暖辉共享次数', kind: 'eternalLight', value: 3 },
   iron_guard: { id: 'iron_guard', name: '铁壁', desc: '受到的所有伤害 -1', kind: 'guard', value: 1 },
   venom_fang: { id: 'venom_fang', name: '毒牙', desc: '攻击命中附加中毒 3 层', kind: 'venom', value: 3 },
   spike: { id: 'spike', name: '尖刺', desc: '受到攻击时反伤 2 点', kind: 'thorns', value: 2 },

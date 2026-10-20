@@ -416,6 +416,97 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '成长之主的傀儡，献祭自身为成长之主提供成长值。',
     passive: 'sacrifice', tame: { difficulty: 0 }, rank: 4,
   },
+  coal: {
+    id: 'coal', name: '煤煤', emoji: '🦡',
+    baseHp: 15, baseSpd: 1, skills: ['coal_claw', 'furnace_shell'],
+    passive: 'coal_furnace', evolutions: [{ to: 'coal_guard' }],
+    desc: '背负煤块的林地小獾，以炉壳承受攻击，让敌人在余火中燃烧。',
+    tame: { difficulty: 0.75 }, rank: 1,
+  },
+  coal_guard: {
+    id: 'coal_guard', name: '炉甲獾', emoji: '🦡',
+    baseHp: 22, baseSpd: 2, skills: ['coal_claw', 'furnace_shell', 'ash_shelter'],
+    passive: 'armored_furnace',
+    evolutions: [{ to: 'furnace_beast' }],
+    desc: '煤煤的融合形态，炉甲中的余火更加炽热，也能用灰烬护住同伴。',
+    tame: { difficulty: 0.4 }, rank: 2,
+  },
+  candle: {
+    id: 'candle', name: '烛烛', emoji: '🦋', baseHp: 9, baseSpd: 5,
+    skills: ['candle_flame', 'stoke_fire'], passive: 'candle_afterglow',
+    evolutions: [{ to: 'lantern_moth' }], tame: { difficulty: 0.75 }, rank: 1,
+    desc: '腹部闪着微光的小飞蛾，为余火添薪，并将温暖送给受伤伙伴。',
+  },
+  lantern_moth: {
+    id: 'lantern_moth', name: '灯翅蛾', emoji: '🦋', baseHp: 15, baseSpd: 6,
+    skills: ['candle_flame', 'stoke_fire', 'lamp_guard'], passive: 'lantern_afterglow',
+    evolutions: [{ to: 'eternal_moth' }],
+    tame: { difficulty: 0.4 }, rank: 2,
+    desc: '烛烛的融合形态，灯笼般的尾部照亮同伴，以护灯和暖辉维系阵线。',
+  },
+  furnace_beast: {
+    id: 'furnace_beast', name: '熔炉兽', emoji: '🦡', baseHp: 31, baseSpd: 2,
+    skills: ['molten_claw', 'furnace_bastion', 'ash_shelter', 'seal_furnace'], passive: 'molten_furnace',
+    tame: { difficulty: 0.3 }, rank: 3,
+    desc: '煤煤的传奇形态，胸甲化作赤热炉膛，受击时以余火灼敌并凝成护盾，危急时封炉护住全队。',
+  },
+  eternal_moth: {
+    id: 'eternal_moth', name: '长明灵蛾', emoji: '🦋', baseHp: 23, baseSpd: 6,
+    skills: ['eternal_flame', 'blazing_fuel', 'lamp_guard', 'ember_transfer'], passive: 'eternal_light',
+    tame: { difficulty: 0.3 }, rank: 3,
+    desc: '烛烛的传奇形态，暖金翅纹与灯尾长明不灭，将燃烧敌人的余光化为全队生机。',
+  },
+  molten_larva: {
+    id: 'molten_larva', name: '熔壳虫', emoji: '🐛', baseHp: 14, baseSpd: 2,
+    skills: ['heated_shell_bump', 'molten_self_burn'], passive: 'heated_carapace',
+    evolutions: [{ to: 'molten_beetle' }],
+    tame: { difficulty: 0.7 }, rank: 1,
+    desc: '黑炭甲壳的低速幼虫，主动引火准备护盾，也能在顶撞后消耗余火换盾。剩余灼烧仍会伤害自身，可融合为熔甲虫。',
+  },
+  ember_hawk: {
+    id: 'ember_hawk', name: '焚风雏鹰', emoji: '🐣', baseHp: 10, baseSpd: 5,
+    skills: ['flame_tracing_feather', 'fire_feather'], passive: 'burning_feather',
+    evolutions: [{ to: 'searing_hawk' }],
+    tame: { difficulty: 0.75 }, rank: 1,
+    desc: '翅尖焦黑的高速幼鹰，循着火光攻击后排，优先剥开燃烧敌人的护盾，为队友创造击杀机会，可融合为焚风鹰。',
+  },
+  molten_beetle: {
+    id: 'molten_beetle', name: '熔甲虫', emoji: '🐞', baseHp: 19, baseSpd: 3,
+    skills: ['heated_shell_bump', 'molten_self_burn', 'shell_charge'], passive: 'molten_molt',
+    tame: { difficulty: 0.4 }, rank: 2,
+    evolutions: [{ to: 'molten_beast' }],
+    desc: '赤色熔线贯穿厚重甲壳的盾攻手，将自身余火转换为护盾，再以裂壳冲撞消耗护盾进攻。',
+  },
+  searing_hawk: {
+    id: 'searing_hawk', name: '焚风鹰', emoji: '🦅', baseHp: 15, baseSpd: 6,
+    skills: ['flame_tracing_feather', 'fire_feather', 'burn_brand'], passive: 'searing_feather',
+    tame: { difficulty: 0.4 }, rank: 2,
+    evolutions: [{ to: 'solar_eagle' }],
+    desc: '金纹赤羽的高速猛禽，剥开燃烧敌人的护盾，并用灼烧烙印引导伙伴命中后集中引爆余火。',
+  },
+  light_moss: {
+    id: 'light_moss', name: '光苔球', emoji: '🌱', baseHp: 12, baseSpd: 3,
+    skills: ['aqua_shot', 'lamp_guard'], passive: 'heat_moss', tame: { difficulty: 0.75 }, rank: 1,
+    evolutions: [{ to: 'moss_beast' }],
+    desc: '中心透出暖白光的淡绿苔球，主动治疗后吸走伙伴少量灼烧；过早清火也会减少熔甲伙伴的燃料。',
+  },
+  moss_beast: {
+    id: 'moss_beast', name: '光苔兽', emoji: '🌿', baseHp: 18, baseSpd: 4,
+    skills: ['aqua_shot', 'heal_light', 'burn_reversal'], passive: 'clean_moss', tame: { difficulty: 0.4 }, rank: 2,
+    desc: '背负叶簇的四足苔兽，以有限大额治疗救援伙伴，或将灼烧反转为恢复；传奇日炎灵暂未开放。',
+  },
+  molten_beast: {
+    id: 'molten_beast', name: '熔甲兽', emoji: '🪲', baseHp: 30, baseSpd: 4,
+    skills: ['heated_shell_bump', 'molten_self_burn', 'shell_charge', 'molten_quake'], passive: 'red_carapace',
+    tame: { difficulty: 0.3 }, rank: 3,
+    desc: '赤红炉腹藏在六足重甲下，将余火炼成护盾，再选择集中冲撞或震荡铺火；护盾无法抵挡自身灼烧。',
+  },
+  solar_eagle: {
+    id: 'solar_eagle', name: '烈日神鹰', emoji: '🦅', baseHp: 27, baseSpd: 7,
+    skills: ['flame_tracing_feather', 'fire_feather', 'burn_brand', 'sun_sunder'], passive: 'solar_feather',
+    tame: { difficulty: 0.3 }, rank: 3,
+    desc: '日轮般的金红羽翼掠过战场，拆解敌方护盾并转为灼烧，以烙印引导伙伴集火。',
+  },
 };
 
 /** 第一组：迅迅/泡泡/灼灼 → 选一只获得2只 */
@@ -442,9 +533,9 @@ export function fusionDepth(id: string): number {
   return depth;
 }
 
-/** 六条主要进化链每阶均需两只同形态；其他物种沿用原有需求。 */
+/** 主模式进化链每阶均需两只同形态；其他物种沿用原有需求。 */
 export function fusionNeed(id: string): number {
-  if (BASE_POOL.includes(id) || EVO1_POOL.includes(id)) return 2;
+  if (MAIN_BASE_POOL.includes(id) || MAIN_EVO1_POOL.includes(id)) return 2;
   return fusionDepth(id) + 2;
 }
 
@@ -452,3 +543,8 @@ export function fusionNeed(id: string): number {
 export const BASE_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
 export const EVO1_POOL = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
 export const EVO2_POOL = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god'];
+
+/** 主模式新增伙伴池；原六条进化链池保留用于开局与专项评估。 */
+export const MAIN_BASE_POOL = [...BASE_POOL, 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss'];
+export const MAIN_EVO1_POOL = [...EVO1_POOL, 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast'];
+export const MAIN_EVO2_POOL = [...EVO2_POOL, 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle'];

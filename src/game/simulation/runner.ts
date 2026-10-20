@@ -1,11 +1,11 @@
-import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, getActablePlayerUnits, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
+import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furnaceShellTargets, getActablePlayerUnits, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
 import { applyGrowthChoice, applySkillEnhance, getSkillEnhanceCost } from '../core/growth';
 import { FOODS } from '../data/foods';
 import { ITEMS } from '../data/items';
 import { getSkill } from '../data/skills';
 import type { BattleState, Unit } from '../types';
 import { createInitialState, gameReducer, type GameAction } from '../state/reducer';
-import { canStepTo, canTameEnemy, DIFFICULTY_CONFIG, fusionNeedCount, nextStage, type GameState, type MapNode } from '../state/game';
+import { canStepTo, canTameEnemy, DIFFICULTY_CONFIG, fusionNeedCount, evolutionLockReason, nextStage, type GameState, type MapNode } from '../state/game';
 import type { BattleSimulationSummary, SimulationConfig, SimulationResult } from './types';
 
 export const DEFAULT_SIMULATION_STEPS = { main: 2500, proficiency: 6000 } as const;
@@ -51,7 +51,8 @@ function battleStep(state: GameState): GameState {
     return dispatch(state, { type: 'PLAYER_TAME', foodId: food, enemyUid: tameTarget.uid });
   }
 
-  const usable = actor.skills.filter((id) => canUnitUseSkill(actor, id)).map(getSkill);
+  const usable = actor.skills.filter((id) => canUnitUseSkill(actor, id)
+    && (id !== 'flame_tracing_feather' || flameTracingTargets(battle, actor).length > 0)).map(getSkill);
   if (usable.length === 0) return dispatch(state, { type: 'PLAYER_REST', actorUid: actor.uid });
   const heal = usable.find((skill) => skill.kind === 'heal');
   const ally = [...battle.playerUnits].filter((unit) => unit.hp > 0).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
@@ -61,19 +62,22 @@ function battleStep(state: GameState): GameState {
 
   const offensive = usable
     .filter((skill) => skill.kind !== 'heal' && skill.target !== 'ally' && skill.target !== 'allyAll')
-    .sort((a, b) => (b.damage ?? 0) - (a.damage ?? 0));
+    .sort((a, b) => (b.damage ?? 0) + (b.id === 'shell_charge' ? Math.min(4, actor.shield) : 0)
+      - (a.damage ?? 0) - (a.id === 'shell_charge' ? Math.min(4, actor.shield) : 0));
   const chosen = offensive[0] ?? usable[0];
   if (chosen.target === 'all' || chosen.target === 'random' || chosen.target === 'self' || chosen.target === 'allyAll') {
     return dispatch(state, { type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: chosen.id });
   }
   if (chosen.target === 'ally') {
-    return dispatch(state, { type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: chosen.id, targetUid: ally?.uid });
+    const target = chosen.id === 'furnace_shell' ? furnaceShellTargets(battle, actor)[0] : ally;
+    return dispatch(state, { type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: chosen.id, targetUid: target?.uid });
   }
   const enemies = battle.enemyUnits.filter((unit) => unit.hp > 0);
   const front = enemies.filter((unit) => unit.row === 'front');
   const back = enemies.filter((unit) => unit.row === 'back');
   const reach = chosen.reach ?? 'front';
-  const pool = reach === 'direct' ? enemies : reach === 'back' ? (back.length ? back : front) : (front.length ? front : back);
+  const pool = chosen.id === 'flame_tracing_feather' ? flameTracingTargets(battle, actor)
+    : reach === 'direct' ? enemies : reach === 'back' ? (back.length ? back : front) : (front.length ? front : back);
   const target = [...pool].sort((a, b) => a.hp - b.hp)[0];
   return dispatch(state, { type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: chosen.id, targetUid: target?.uid });
 }
@@ -170,7 +174,9 @@ function specialStep(state: GameState): GameState {
   const priorities = state.runMode === 'proficiency'
     ? ['growthPoint', 'boost', 'slotUnlock', 'gold', 'item', 'recruit', 'revive']
     : ['gold', 'item', 'evolve', 'boost', 'custom', 'superevolve'];
-  const reward = priorities.map((kind) => special.rewards.find((item) => item.kind === kind)).find(Boolean) ?? special.rewards[0];
+  const available = special.rewards.filter((item) => !['evolve', 'superevolve'].includes(item.kind)
+    || state.roster.some((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId)));
+  const reward = priorities.map((kind) => available.find((item) => item.kind === kind)).find(Boolean) ?? available[0];
   return reward ? dispatch(state, { type: 'SPECIAL_CHOICE', rewardId: reward.id }) : dispatch(state, { type: 'NEXT_NODE' });
 }
 
@@ -203,7 +209,7 @@ function shopStep(state: GameState): GameState {
 function rosterStep(state: GameState): GameState {
   const target = [...state.roster].sort((a, b) => b.maxHp - a.maxHp)[0];
   if (state.specialPending?.kind === 'evolve') {
-    const evolvable = state.roster.find((unit) => nextStage(unit.speciesId));
+    const evolvable = state.roster.find((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId));
     if (evolvable) return dispatch(state, { type: 'EVOLVE_ONE', uid: evolvable.uid });
   }
   if (state.specialPending && target) {
@@ -211,7 +217,7 @@ function rosterStep(state: GameState): GameState {
   }
   if (state.runMode !== 'proficiency') {
     const primary = state.roster.find((unit) => {
-      if (!nextStage(unit.speciesId)) return false;
+      if (!nextStage(unit.speciesId) || evolutionLockReason(state, unit.speciesId)) return false;
       return state.roster.filter((candidate) => candidate.speciesId === unit.speciesId).length >= fusionNeedCount(unit.speciesId);
     });
     if (primary) return dispatch(state, { type: 'FUSE', primaryUid: primary.uid });

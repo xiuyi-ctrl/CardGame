@@ -107,6 +107,8 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
   if (level <= 0) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   const sk = SKILLS[skillId];
   if (!sk) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  if (skillId === 'heated_shell_bump') return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: level };
+  if (skillId === 'molten_self_burn') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level * 2 };
 
   // 连击类有 effects（铁壁双击/火焰连击/炼狱烈焰/龙息）：段数+1，效果值也加
   if (isMultiHitSkill(skillId) && sk.effects && sk.effects.length > 0) {
@@ -214,6 +216,9 @@ export function applySkillEnhanceReset(unit: Unit, slotIndex: number): { newUnit
 
 /** 传奇技能池（仅奇遇关「传奇招募」可获得） */
 export const LEGENDARY_SKILLS = new Set([
+  'molten_quake', 'sun_sunder',
+  'molten_claw', 'furnace_bastion', 'seal_furnace',
+  'eternal_flame', 'blazing_fuel', 'ember_transfer',
   // 原传奇宠物技能
   'iron_domain', 'iron_double',
   'poison_mist', 'toxic_bite',

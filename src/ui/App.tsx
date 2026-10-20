@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, fuseUnit, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -377,14 +377,16 @@ function PetCardFooter({
 }) {
   const isProf = state.runMode === 'proficiency';
   const stage = nextStage(unit.speciesId);
+  const lockReason = evolutionLockReason(state, unit.speciesId);
   const need = stage ? fusionNeedCount(unit.speciesId) : 0;
   const sameCount = state.roster.filter((x) => x.speciesId === unit.speciesId).length;
-  const canFuse = stage !== undefined && sameCount >= need;
+  const canFuse = stage !== undefined && !lockReason && sameCount >= need;
   return (
     <div className="unit-card-actions">
       {!isProf && (
         <button
-          title={stage ? `与同物种融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : '该宠物已是最终形态，无法融合'}
+          disabled={!!lockReason}
+          title={lockReason ?? (stage ? `与同物种融合进化为 ${getMonster(stage).name}（${sameCount}/${need}）` : '该宠物已是最终形态，无法融合')}
           onClick={(e) => {
             e.stopPropagation();
             if (!stage) {
@@ -418,6 +420,7 @@ export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: 
   const materials = [...state.roster, ...overflow].filter(unit => unit.uid !== primary.uid && unit.speciesId === primary.speciesId);
   const [materialUid, setMaterialUid] = useState(materials.length === 1 ? materials[0].uid : '');
   const material = materials.find(unit => unit.uid === materialUid);
+  const lockReason = evolutionLockReason(state, primary.speciesId);
   const evolved = useMemo(() => fuseUnit(primary), [primary]);
   if (!evolved) return null;
   const fromOverflow = !!material && overflow.some(unit => unit.uid === material.uid);
@@ -425,16 +428,19 @@ export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: 
   const materialInfo = (unit: Unit) => `生命 ${unit.hp}/${unit.maxHp} · 速度 ${unit.spd} · 强化：生命 +${unit.bonusStats?.hp ?? 0}、速度 +${unit.bonusStats?.spd ?? 0} · 诅咒：${unit.curse ? CURSE_CN[unit.curse] : '无'}`;
   return <div className="confirm-overlay" onClick={onClose}>
     <div className="confirm-box fusion-confirm" role="dialog" aria-modal="true" aria-labelledby="fusion-confirm-title" onClick={event => event.stopPropagation()}>
-      <div className="section-title" id="fusion-confirm-title">确认融合</div>
+      <div className="section-title fusion-title" id="fusion-confirm-title"><img src="/main-flow-art/icons/fuse-companion.png" alt="" />确认融合</div>
       <div className="popup-body fusion-confirm-body">
-        <section><h3>融合结果</h3><div className="fusion-pet-row"><PetIcon image={formationImage(evolved.speciesId, evolved.image)} emoji={evolved.emoji} name={evolved.name} /><div><strong>{evolved.name}</strong><p>生命 {evolved.hp}/{evolved.maxHp} · 速度 {evolved.spd}</p><p>永久强化：生命 +{evolved.bonusStats?.hp ?? 0}、速度 +{evolved.bonusStats?.spd ?? 0}；诅咒：{evolved.curse ? CURSE_CN[evolved.curse] : '无'}</p></div></div>
-          {passive && <p>新形态被动：{passive.name} · {passive.desc}</p>}
-          <div className="fusion-result-skills"><b>新形态技能</b>{evolved.skills.map(id => <SkillTag key={id} skill={getSkill(id)} />)}</div>
-        </section>
+        <div className="fusion-result-card">
+          <div className="fusion-pet-row"><PetIcon image={formationImage(evolved.speciesId, evolved.image)} emoji={evolved.emoji} name={evolved.name} /><div><h3 className="fusion-name">{evolved.name}</h3><div className="fusion-stats"><span><img src="/battle-stat-icons/life.png" alt="" />生命 <strong>{evolved.hp}/{evolved.maxHp}</strong></span><span><img src="/battle-stat-icons/speed.png" alt="" />速度 <strong>{evolved.spd}</strong></span></div></div></div>
+          {passive && <section className="fusion-detail fusion-passive"><h4>被动</h4><strong>{passive.name}</strong><p>{passive.desc}</p></section>}
+          <section className="fusion-detail"><h4>技能</h4><div className="fusion-result-skills">{evolved.skills.map(id => <SkillTag key={id} skill={getSkill(id)} />)}</div></section>
+          <div className="fusion-modifiers"><span className="fusion-modifier-label">永久强化</span><span>生命 +{evolved.bonusStats?.hp ?? 0}</span><span>速度 +{evolved.bonusStats?.spd ?? 0}</span><span className={`fusion-curse${evolved.curse ? ' has-curse' : ''}`}>诅咒：{evolved.curse ? CURSE_CN[evolved.curse] : '无'}</span></div>
+        </div>
         {materials.length > 1 && <label>融合材料 <select aria-label="融合材料" value={materialUid} onChange={event => setMaterialUid(event.target.value)}><option value="">请选择材料</option>{materials.map((unit, index) => <option key={unit.uid} value={unit.uid}>{index + 1}. {unit.name} · {overflow.some(item => item.uid === unit.uid) ? '待处理' : '队伍内'} · {materialInfo(unit)}</option>)}</select></label>}
+        {lockReason && <p role="status">{lockReason}</p>}
       </div>
-      <div className="panel-row"><button className="primary" disabled={!material || state.runMode === 'proficiency'} onClick={() => {
-        if (!material) return;
+      <div className="panel-row fusion-actions"><button className="primary" disabled={!material || !!lockReason || state.runMode === 'proficiency'} onClick={() => {
+        if (!material || lockReason) return;
         if (fromOverflow) dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: material.uid, primaryUid: primary.uid });
         else if (state.screen === 'tame-overflow') dispatch({ type: 'FUSE_IN_OVERFLOW', uid: primary.uid, materialUid: material.uid });
         else dispatch({ type: 'FUSE', primaryUid: primary.uid, materialUid: material.uid });
@@ -2239,9 +2245,10 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const focused = state.roster.find((u) => u.uid === selectedUid) ?? state.roster[0];
   const stage = focused ? nextStage(focused.speciesId) : undefined;
+  const lockReason = focused ? evolutionLockReason(state, focused.speciesId) : undefined;
   const need = stage ? fusionNeedCount(focused.speciesId) : 0;
   const sameCount = focused ? state.roster.filter((u) => u.speciesId === focused.speciesId).length : 0;
-  const canFuse = !!stage && sameCount >= need;
+  const canFuse = !!stage && !lockReason && sameCount >= need;
   const passive = focused ? getPassive(focused.passive) : undefined;
   const isProf = state.runMode === 'proficiency';
 
@@ -2288,8 +2295,8 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
           })}</div></div>
           </div>
           <div className="postbattle-detail-actions">
-            {!isProf && <><p>融合条件：{stage ? `同物种 ${sameCount} / ${need}` : '已是最终形态'}</p>
-              <button type="button" className={`postbattle-fuse ${canFuse ? '' : 'unavailable'}`} onClick={() => {
+            {!isProf && <><p>融合条件：{lockReason ?? (stage ? `同物种 ${sameCount} / ${need}` : '已是最终形态')}</p>
+              <button type="button" disabled={!!lockReason} title={lockReason} className={`postbattle-fuse ${canFuse ? '' : 'unavailable'}`} onClick={() => {
                 if (!stage) setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
                 else if (!canFuse) setConfirm({ kind: 'notice', msg: `同物种不足（${sameCount}/${need}），无法融合` });
                 else setConfirm({ kind: 'fuse', uid: focused.uid });
@@ -2590,7 +2597,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
               <div className="backpack-skills">{focused.skills.map((id, index) => <span key={`${id}-${index}`} title={getSkill(id).desc}>{getSkill(id).name}</span>)}</div>
             </div>
             <div className="backpack-pet-actions">
-              {!isProf && <p>融合条件：{stage ? `同物种 ${sameCount}/${fusionNeedCount(focused.speciesId)}` : '已是最终形态'}</p>}
+              {!isProf && <p>融合条件：{evolutionLockReason(state, focused.speciesId) ?? (stage ? `同物种 ${sameCount}/${fusionNeedCount(focused.speciesId)}` : '已是最终形态')}</p>}
               <PetCardFooter unit={focused} state={state} setConfirm={setConfirm} />
               {focused.curse && (state.inventory.purify ?? 0) > 0 && <button className="backpack-purify" onClick={() => dispatch({ type: 'USE_PURIFY', uid: focused.uid })}>净化（{state.inventory.purify}）</button>}
             </div>
@@ -2612,11 +2619,12 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
   const hasSpace = state.roster.length < getMaxRoster(state.runMode);
   const selected = state.roster.find(unit => unit.uid === selectedUid) ?? state.roster[0];
   const stage = selected ? nextStage(selected.speciesId) : undefined;
+  const lockReason = selected ? evolutionLockReason(state, selected.speciesId) : undefined;
   const need = selected && stage ? fusionNeedCount(selected.speciesId) : 0;
   const sameCount = selected ? state.roster.filter(unit => unit.speciesId === selected.speciesId).length : 0;
   const totalCount = sameCount + (state.tameOverflow ?? []).filter(unit => unit.speciesId === selected?.speciesId).length;
-  const canFuse = stage !== undefined && totalCount >= need;
-  const fuseTitle = stage ? (canFuse ? `融合进化为 ${getMonster(stage).name}（${totalCount}/${need}）` : `同物种不足（${totalCount}/${need}）`) : '该宠物已是最终形态，无法融合';
+  const canFuse = stage !== undefined && !lockReason && totalCount >= need;
+  const fuseTitle = lockReason ?? (stage ? (canFuse ? `融合进化为 ${getMonster(stage).name}（${totalCount}/${need}）` : `同物种不足（${totalCount}/${need}）`) : '该宠物已是最终形态，无法融合');
   return (
     <div className="flow-screen flow-partner-screen">
       <header className="flow-header flow-frame"><h1><FlowIcon name="new-companion" />新伙伴加入</h1><span>队伍 {state.roster.length}/{getMaxRoster(state.runMode)} · 待处理 {remaining} 只</span></header>
@@ -2643,7 +2651,7 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
         <div className="flow-actions">
           {hasSpace && <button className="flow-primary" onClick={() => dispatch({ type: 'TAME_OVERFLOW_JOIN', tameUid: tame.uid })}><FlowIcon name="new-companion" />加入队伍</button>}
           <button className="flow-primary" disabled={!selected} onClick={() => selected && setConfirm({ kind: 'replace', uid: selected.uid, gold: 5 * getMonster(selected.speciesId).rank })}><FlowIcon name="replace-companion" />替换伙伴</button>
-          {state.runMode !== 'proficiency' && <button className="flow-positive" disabled={!selected} title={fuseTitle} onClick={() => {
+          {state.runMode !== 'proficiency' && <button className="flow-positive" disabled={!selected || !!lockReason} title={fuseTitle} onClick={() => {
             if (!selected) return;
             if (!stage) setConfirm({ kind: 'notice', msg: '该宠物已是最终形态，无法融合' });
             else if (!canFuse) setConfirm({ kind: 'notice', msg: `同物种不足（${totalCount}/${need}），无法融合` });
@@ -2730,7 +2738,7 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
 function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const sp = state.map.specials[state.currentNodeId];
   if (!sp) return null;
-  const hasEvolvable = state.roster.some((u) => nextStage(u.speciesId));
+  const hasEvolvable = state.roster.some((u) => nextStage(u.speciesId) && !evolutionLockReason(state, u.speciesId));
   const rosterFull = state.roster.length >= getMaxRoster(state.runMode);
   const disabled = (r: SpecialReward) =>
     ((r.kind === 'evolve' || r.kind === 'superevolve') && !hasEvolvable) ||
@@ -2758,7 +2766,7 @@ function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
         </div>
         {!hasEvolvable && (
           <p className="flow-notice">
-            当前没有可进化的宠物，进化/超进化不可选
+            当前没有可进化的宠物，进化/超进化不可选{state.roster.some((u) => evolutionLockReason(state, u.speciesId)) ? '。传奇进化需击败第一幕首领后解锁。' : ''}
           </p>
         )}
       </main>

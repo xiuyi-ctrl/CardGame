@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateChallengeRewards, generateRewards, type GameState } from '../src/game/state/game';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
-import { BASE_POOL, EVO1_POOL } from '../src/game/data/monsters';
+import { MAIN_BASE_POOL as BASE_POOL, MAIN_EVO1_POOL as EVO1_POOL } from '../src/game/data/monsters';
 import { makeUnit } from '../src/game/core/battle';
 
 function rewardState(seed = 42, act = 1): GameState {

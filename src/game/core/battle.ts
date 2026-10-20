@@ -18,7 +18,7 @@ export const FIELD_COLS = 3;
 export const REST_SKILL_ID = 'rest';
 /** 前排倾向被动：防守/续航类，该被动生物站前排 */
 const FRONT_PASSIVES: PassiveKind[] = [
-  'hp', 'guard', 'thorns', 'regen', 'damageCap', 'thornRoyal',
+  'hp', 'guard', 'thorns', 'furnace', 'burnShield', 'regen', 'damageCap', 'thornRoyal',
   'bigHitGuard', 'spdOnHit', 'treeSpeedUp', 'lifeSpring',
   'rockShellBreak', 'rockShard', 'chainMaster', 'chainAnchor',
 ];
@@ -27,6 +27,7 @@ const BACK_PASSIVES: PassiveKind[] = [
   'power', 'frenzy', 'venom', 'scorch', 'drain', 'venomPower',
   'speedBonus', 'scorchPlus', 'poisonBreak', 'spdOnAttack',
   'tideRhythm', 'tideEcho', 'thornEntangle', 'soulSiphon', 'chainSpark',
+  'afterglow', 'eternalLight', 'burnStripShield',
 ];
 /** AI 选择行动时 softmax 温度：越小越趋向最高分，越大越随机（默认 12） */
 const SOFTMAX_TEMP = 12;
@@ -200,6 +201,9 @@ export function canUnitUseSkill(u: Unit, skillId: string): boolean {
   );
   if (sealed) return false;
   const skill = getSkill(skillId);
+  if (skillId === 'molten_self_burn' && u.hp <= 1) return false;
+  if (skillId === 'shell_charge' && u.shield <= 0) return false;
+  if (skillId === 'molten_quake' && u.shield < 3) return false;
   return !skill.growthCost || (u.growthValue ?? 0) >= skill.growthCost;
 }
 
@@ -369,6 +373,10 @@ export function createBattle(
 ): BattleState {
   const preparedPlayer = playerUnits.map((u) => {
     const c = cloneUnit(u);
+    c.furnaceTriggers = undefined;
+    c.eternalLightUsed = undefined;
+    c.burnStripUsed = undefined;
+    c.healCleanseUsed = undefined;
     if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, c.spd - 2);
     return c;
   });
@@ -382,9 +390,6 @@ export function createBattle(
     turnOrder: [],
     turnIndex: 0,
     round: 1,
-    playerAp: 0,
-    playerApMax: 0,
-    enemyAp: 0,
     phase: 'acting',
     log: [],
     pendingTame: [],
@@ -461,9 +466,6 @@ const growthMaster = [...b.enemyUnits, ...b.playerUnits].find((u) => u.speciesId
       b.playerUnits = linkPuppets(b.playerUnits);
     }
   }
-  b.playerAp = b.playerUnits.filter((u) => u.hp > 0).length;
-  b.playerApMax = b.playerAp;
-  b.enemyAp = b.enemyUnits.filter((u) => u.hp > 0).length;
   if (options?.collectTelemetry) {
     b.telemetry = [...b.playerUnits, ...b.enemyUnits].map((unit) => ({
       kind: 'battle-start',
@@ -482,7 +484,7 @@ const growthMaster = [...b.enemyUnits, ...b.playerUnits].find((u) => u.speciesId
   return checkEnd(b);
 }
 
-/** 开始新回合：重置行动标记/行动点、结算持续伤害与状态持续、重新按速度排序 */
+/** 开始新回合：重置各单位行动标记、结算持续伤害与状态持续、重新按速度排序 */
 function startRound(b: BattleState): BattleState {
   const prevRound = b.round;
   let nb = decrementBattleBuffs(b);
@@ -513,6 +515,7 @@ function startRound(b: BattleState): BattleState {
   nb = {
     ...nb,
     round: nb.round + 1,
+    afterglowUsed: undefined,
     turnOrder: computeTurnOrder(nb),
     turnIndex: 0,
     playerUnits: nb.playerUnits.map((u) => ({ ...u, statuses: u.statuses.map((s) => ({ ...s })) })),
@@ -623,9 +626,20 @@ function startRound(b: BattleState): BattleState {
   // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
   nb = {
     ...nb,
-    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun') })),
-    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun') })),
+    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, healCleanseUsed: undefined })),
+    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, healCleanseUsed: undefined })),
   };
+  // 热壳换火：必须先承受上一回合持续伤害，存活后才转换剩余燃料。
+  for (const unit of [...nb.playerUnits, ...nb.enemyUnits]) {
+    const passive = getUnitPassive(unit, nb);
+    if (unit.hp <= 0 || passive?.kind !== 'burnShield' || !isBurning(unit)) continue;
+    const layers = Math.min(passive.burnConsumeMax ?? 1, unit.statuses.find((status) => status.kind === 'burn')!.value);
+    const shield = Math.min(passive.value * layers, 99 - unit.shield);
+    nb = replaceUnit(nb, { ...consumeBurn(unit, layers), shield: unit.shield + shield });
+    const msg = `${unit.name} 的「${passive.name}」获得 ${shield} 点护盾`;
+    nb = pushLog(nb, msg, sideOf(unit), unit.uid, unit.uid, undefined, undefined,
+      spans(msg, [['actor', unit.name], ['passive', passive.name]]));
+  }
   // 清除来源已死亡的嘲讽
   const allUnits = [...nb.playerUnits, ...nb.enemyUnits];
   for (const u of allUnits) {
@@ -712,12 +726,6 @@ function startRound(b: BattleState): BattleState {
       }
     }
   }
-  nb = {
-    ...nb,
-    playerAp: nb.playerUnits.filter((u) => u.hp > 0).length,
-    playerApMax: nb.playerUnits.filter((u) => u.hp > 0).length,
-    enemyAp: nb.enemyUnits.filter((u) => u.hp > 0).length,
-  };
   return nb;
 }
 
@@ -863,6 +871,93 @@ function enemiesOf(b: BattleState, actor: Unit): Unit[] {
   return actor.isPlayer ? b.enemyUnits.filter((u) => u.hp > 0) : b.playerUnits.filter((u) => u.hp > 0);
 }
 
+/** 有同伴时指定另一名存活友方；独自上场时只给自身一份护盾。 */
+export function furnaceShellTargets(b: BattleState, actor: Unit): Unit[] {
+  const others = alliesOf(b, actor).filter((unit) => unit.uid !== actor.uid);
+  return others.length > 0 ? others : [actor];
+}
+
+export function isBurning(unit: Unit): boolean {
+  return unit.hp > 0 && unit.statuses.some((status) => status.kind === 'burn' && status.value > 0);
+}
+
+function consumeBurn(unit: Unit, amount: number): Unit {
+  return { ...unit, statuses: unit.statuses.map((status) => status.kind === 'burn'
+    ? { ...status, value: Math.max(0, status.value - amount) } : status).filter((status) => status.kind !== 'burn' || status.value > 0) };
+}
+
+/** 循焰飞羽仅在真实灼烧存在时越过前排；强制目标仍需满足射程条件。 */
+export function flameTracingTargets(b: BattleState, actor: Unit): Unit[] {
+  let pool = enemiesOf(b, actor);
+  const hasFront = pool.some((unit) => unit.row === 'front');
+  const taunt = actor.statuses.find((status) => status.kind === 'taunt');
+  const source = pool.find((unit) => unit.uid === taunt?.sourceUid);
+  if (source) pool = [source];
+  else if (getUnitPassive(actor, b)?.kind === 'bloodScent' && pool.length > 0) {
+    pool = [pool.reduce((lowest, unit) => unit.hp < lowest.hp ? unit : lowest)];
+  }
+  return pool.filter((unit) => !hasFront || unit.row === 'front' || isBurning(unit));
+}
+
+/** 添薪可跨前后排，但仍服从嘲讽与嗜血目标限制，不能给未燃烧目标点火。 */
+export function requiresBurningTarget(skillId: string): boolean {
+  return ['stoke_fire', 'blazing_fuel', 'ember_transfer'].includes(skillId);
+}
+
+export function stokeFireTargets(b: BattleState, actor: Unit, skillId = 'stoke_fire'): Unit[] {
+  let targets = enemiesOf(b, actor);
+  if (skillId === 'ember_transfer' && targets.length < 2) return [];
+  const taunt = actor.statuses.find((status) => status.kind === 'taunt');
+  const source = targets.find((unit) => unit.uid === taunt?.sourceUid);
+  if (source) targets = [source];
+  else if (getUnitPassive(actor)?.kind === 'bloodScent' && targets.length > 0) {
+    targets = [targets.reduce((lowest, unit) => unit.hp < lowest.hp ? unit : lowest)];
+  }
+  return targets.filter(isBurning);
+}
+
+function applyAfterglow(b: BattleState, actor: Unit): BattleState {
+  const side = actor.isPlayer ? 'player' : 'enemy';
+  if (b.afterglowUsed?.[side]) return b;
+  const allies = alliesOf(b, actor).filter((unit) => unit.hp > 0);
+  const holders = allies.map((unit) => ({ unit, passive: getUnitPassive(unit, b) }))
+    .filter(({ passive }) => passive?.kind === 'afterglow')
+    .sort((a, c) => c.passive!.value - a.passive!.value || (c.passive!.targetCount ?? 1) - (a.passive!.targetCount ?? 1));
+  if (holders.length === 0) return b;
+  const { unit: holder, passive } = holders[0];
+  let nb: BattleState = { ...b, afterglowUsed: { ...b.afterglowUsed, [side]: true } };
+  const targets = [...allies].sort((a, c) => a.hp - c.hp).slice(0, passive!.targetCount ?? 1);
+  // 首次符合条件的攻击即消耗机会，满血时不储存治疗，也不复活阵亡伙伴。
+  for (const target of targets) {
+    const amount = Math.min(passive!.value, getEffectiveMaxHp(target) - target.hp);
+    if (amount <= 0) continue;
+    nb = replaceUnit(nb, { ...target, hp: target.hp + amount });
+    const msg = `${holder.name} 的「${passive!.name}」治愈 ${target.name} ${amount} 点生命`;
+    nb = pushLog(nb, msg, sideOf(holder), holder.uid, target.uid, undefined, undefined,
+      spans(msg, [['actor', holder.name], ['passive', passive!.name], ['target', target.name], ['heal', String(amount)]]));
+  }
+  return nb;
+}
+
+/** 长明之光逐只持有者独立结算，不使用余温/暖辉的阵营共享标记。 */
+function applyEternalLight(b: BattleState, actor: Unit): BattleState {
+  let nb = b;
+  const holders = alliesOf(b, actor).filter((unit) => !unit.eternalLightUsed && getUnitPassive(unit, b)?.kind === 'eternalLight');
+  for (const holder of holders) {
+    const passive = getUnitPassive(holder, nb)!;
+    nb = replaceUnit(nb, { ...actorFromId(nb, holder.uid)!, eternalLightUsed: true });
+    for (const target of alliesOf(nb, actor)) {
+      const amount = Math.min(passive.value, getEffectiveMaxHp(target) - target.hp);
+      if (amount <= 0) continue;
+      nb = replaceUnit(nb, { ...target, hp: target.hp + amount });
+      const msg = `${holder.name} 的「${passive.name}」治愈 ${target.name} ${amount} 点生命`;
+      nb = pushLog(nb, msg, sideOf(holder), holder.uid, target.uid, undefined, undefined,
+        spans(msg, [['actor', holder.name], ['passive', passive.name], ['target', target.name], ['heal', String(amount)]]));
+    }
+  }
+  return nb;
+}
+
 function checkEnd(b: BattleState): BattleState {
   // 车轮战：场上某侧全灭但还有后备 → 不立即换人，标记 pendingSwap 等待死亡动画播完，
   // 由 UI/测试通过 GAUNTLET_SWAP（performGauntletSwap）按序顶替；无后备才真正结算胜负
@@ -897,8 +992,8 @@ function markBattleEnd(b: BattleState, result: 'won' | 'lost'): BattleState {
 }
 
 /** 车轮战：场上一方全灭且仍有替补时，由 UI/测试在死亡动画播完后调用——换下阵亡单位、按序顶替替补并写日志。
- *  仅敌方换人时本回合继续（保留玩家剩余行动点，AP 已尽则自动结束回合）；
- *  我方换人说明上一回合结算已结束，直接开启新回合让替补获得行动点。 */
+ *  仅敌方换人时保留玩家尚未使用的行动；已全部结算则进入新回合。
+ *  我方换人说明上一回合结算已结束，直接开启新回合让替补获得基础行动。 */
 export function performGauntletSwap(b: BattleState): BattleState {
   let nb = b;
   const g = b.gauntlet;
@@ -942,7 +1037,7 @@ export function performGauntletSwap(b: BattleState): BattleState {
     nb = startRound(nb);
     return checkEnd(nb);
   }
-  if (nb.playerAp <= 0) return playerEndTurn(nb);
+  if (!playerHasMove(nb) && Object.keys(nb.orders ?? {}).length === 0) return playerEndTurn(nb);
   return nb;
 }
 
@@ -967,6 +1062,25 @@ function rngPick<T>(b: BattleState, arr: T[]): { pick?: T; battle: BattleState }
  * - all 群攻 / random 随机 / self / ally 不受前排限制
  */
 function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): { targets: Unit[]; battle: BattleState } {
+  if (skill.id === 'burn_reversal' && explicitTarget && !alliesOf(b, actor).some((unit) => unit.uid === explicitTarget)) return { targets: [], battle: b };
+  if (skill.id === 'burn_brand' && explicitTarget && !enemiesOf(b, actor).some((unit) => unit.uid === explicitTarget)) return { targets: [], battle: b };
+  if (skill.id === 'flame_tracing_feather') {
+    const pool = flameTracingTargets(b, actor);
+    if (explicitTarget) return { targets: pool.filter((unit) => unit.uid === explicitTarget), battle: b };
+    const result = rngPick(b, pool);
+    return { targets: result.pick ? [result.pick] : [], battle: result.battle };
+  }
+  if (skill.id === 'furnace_shell') {
+    const pool = furnaceShellTargets(b, actor);
+    const other = explicitTarget ? pool.find((unit) => unit.uid === explicitTarget) : pool[0];
+    return { targets: other && other.uid !== actor.uid ? [actor, other] : [actor], battle: b };
+  }
+  if (requiresBurningTarget(skill.id)) {
+    const pool = stokeFireTargets(b, actor, skill.id);
+    if (explicitTarget) return { targets: pool.filter((unit) => unit.uid === explicitTarget), battle: b };
+    const result = rngPick(b, pool);
+    return { targets: result.pick ? [result.pick] : [], battle: result.battle };
+  }
   const enemies = enemiesOf(b, actor);
   const allies = alliesOf(b, actor);
   const front = enemies.filter((u) => u.row === 'front');
@@ -1170,7 +1284,8 @@ function selectEnemyAction(
   // 技能封印：被封印的技能排除出候选池（避免 AI 选到被封印技能导致行动被吞）
   const skills = actor.skills
     .map(getSkill)
-    .filter((s) => canUnitUseSkill(actor, s.id));
+    .filter((s) => canUnitUseSkill(actor, s.id) && (!requiresBurningTarget(s.id) || stokeFireTargets(b, actor, s.id).length > 0)
+      && (s.id !== 'flame_tracing_feather' || flameTracingTargets(b, actor).length > 0));
   if (skills.length === 0) return undefined;
   const candidates: { kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
   const hpRatio = actor.hp / actor.maxHp;
@@ -1192,6 +1307,14 @@ function selectEnemyAction(
           candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 75 });
         }
         continue;
+      }
+      if (hs.id === 'burn_reversal') {
+        for (const ally of allies.filter(isBurning)) {
+          // 生命安全时不为纯净化而清掉自燃换盾伙伴的燃料。
+          if (getUnitPassive(ally, b)?.kind === 'burnShield' && ally.hp / ally.maxHp > 0.55) continue;
+          const layers = Math.min(3, ally.statuses.find(s => s.kind === 'burn')?.value ?? 0);
+          candidates.push({ kind: 'heal', skill: hs, targetUid: ally.uid, score: 30 + layers * 8 + (ally.hp < ally.maxHp ? 10 : 0) });
+        }
       }
       if (hs.target === 'allyAll') {
         const injuredAllies = allies.filter((u) => u.hp / u.maxHp < 0.8);
@@ -1238,6 +1361,22 @@ function selectEnemyAction(
   }
   const buffSkills = skills.filter((s) => s.kind === 'buff' && s.target !== 'allyAll');
   for (const bs of buffSkills) {
+    if (bs.id === 'furnace_shell') {
+      const target = furnaceShellTargets(b, actor).sort((a, c) => a.hp / a.maxHp - c.hp / c.maxHp)[0];
+      if ((actor.shield < 3 || target.shield < 3) && rngVal1 < 0.6) {
+        candidates.push({ kind: 'buff', skill: bs, targetUid: target.uid, score: hpRatio < 0.5 ? 60 : 40 });
+      }
+      continue;
+    }
+    if (bs.id === 'ash_shelter') {
+      const ally = alliesOf(b, actor).filter((unit) => unit.shield < 4)
+        .sort((a, c) => a.hp / a.maxHp - c.hp / c.maxHp)[0];
+      if (ally && rngVal1 < 0.6) {
+        const burningEnemy = enemies.some((unit) => unit.statuses.some((status) => status.kind === 'burn'));
+        candidates.push({ kind: 'buff', skill: bs, targetUid: ally.uid, score: ally.hp / ally.maxHp < 0.5 ? 60 : burningEnemy ? 50 : 35 });
+      }
+      continue;
+    }
     if (bs.id === 'spore_shield' && !actor.statuses.some((s) => s.kind === 'sporeShield')) {
       if (hpRatio < 0.5 && rngVal1 < 0.55) {
         candidates.push({ kind: 'buff', skill: bs, score: 55 });
@@ -1406,8 +1545,14 @@ function selectEnemyAction(
       else if (hpRatio > 0.5) limitedBonus += 15;
       if (nType === 'guardian' && hpRatio < 0.5) limitedBonus += 20;
     }
-    const scoredTargets = targetPool.map((t) => {
+    const attackTargets = atk.id === 'flame_tracing_feather' ? flameTracingTargets(b, actor) : targetPool;
+    const scoredTargets = attackTargets.map((t) => {
       let tScore = 0;
+      if (atk.id === 'shell_charge') tScore += Math.min(4, actor.shield) * 3;
+      if (atk.id === 'sun_sunder') {
+        const passiveStrip = actorPassive?.kind === 'burnStripShield' && !actor.burnStripUsed && isBurning(t) ? actorPassive.value : 0;
+        tScore += Math.min(4, Math.max(0, t.shield - passiveStrip)) * 3;
+      }
       const lowHpBonus = currentAct >= 2 ? 12 : 8;
       if (t.hp / t.maxHp < 0.3) tScore += lowHpBonus;
       const hasHealSkill = t.skills.some((id) => getSkill(id)?.kind === 'heal');
@@ -1469,6 +1614,24 @@ function selectEnemyAction(
   }
   // ─── 4b. 状态技能评分（弱化/毒雾等 debuff 技能） ───
   for (const st of statusSkills) {
+    if (st.id === 'burn_brand') {
+      const target = targetPool.filter((unit) => !unit.statuses.some((status) => status.kind === 'burnBrand' && status.sourceSide === sideOf(actor)))
+        .sort((a, c) => (c.statuses.find((status) => status.kind === 'burn')?.value ?? 0) - (a.statuses.find((status) => status.kind === 'burn')?.value ?? 0))[0];
+      if (target) candidates.push({ kind: 'status', skill: st, targetUid: target.uid, score: 35 + Math.min(12, target.statuses.find((status) => status.kind === 'burn')?.value ?? 0) });
+      continue;
+    }
+    if (st.id === 'molten_self_burn') {
+      const burn = actor.statuses.find((status) => status.kind === 'burn')?.value ?? 0;
+      if (hpRatio > 0.3 && actor.hp > 3 && burn < 2) {
+        candidates.push({ kind: 'status', skill: st, score: actor.shield < 2 ? 40 : 20 });
+      }
+      continue;
+    }
+    if (requiresBurningTarget(st.id)) {
+      const target = stokeFireTargets(b, actor, st.id).sort((a, c) => c.hp - a.hp)[0];
+      if (target) candidates.push({ kind: 'status', skill: st, targetUid: target.uid, score: 40 });
+      continue;
+    }
     if (st.target === 'all') {
       // 全体 debuff：对多个目标施加状态，价值随目标数提升
       const aliveEnemies = targetPool.length;
@@ -1538,7 +1701,7 @@ function selectEnemyAction(
 }
 
 function enemyAct(b: BattleState, actor: Unit): BattleState {
-  let nb = { ...b, enemyAp: b.enemyAp - 1 };
+  const nb = b;
   if (actor.statuses.some((s) => s.kind === 'stun')) {
     return markActed(pushLog(nb, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
@@ -1560,7 +1723,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
         return useSkillInner(b3, actor, getSkill(decision.skillId), target?.uid);
       }
       if (decision.kind === 'buff' && decision.skillId) {
-        return useSkillInner(b3, actor, getSkill(decision.skillId), actor.uid);
+        return useSkillInner(b3, actor, getSkill(decision.skillId), decision.targetUid ?? actor.uid);
       }
       if (decision.kind === 'status' && decision.skillId) {
         return useSkillInner(b3, actor, getSkill(decision.skillId), decision.targetUid);
@@ -1823,6 +1986,7 @@ function resolveAttack(
   if (skill.id === 'blood_fang' && tWithPassive.statuses.some((s) => s.kind === 'burn')) {
     perHitDmg += 2;
   }
+  if (skill.id === 'molten_claw' && isBurning(target)) perHitDmg += 2;
   // 暗影追猎：对生命值低于50%的目标伤害+3
   if (ap?.kind === 'shadowHunter' && target.hp / target.maxHp < 0.5) {
     perHitDmg += ap.value;
@@ -2244,6 +2408,32 @@ function resolveAttack(
     nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: [...(l.addsStatus ?? []), ...passiveAdds] } : l)) };
   }
   nb = replaceUnit(nb, t2);
+  // 炉火按一次攻击技能命中结算，不随连击段数重复触发；致死命中、反伤和持续伤害不触发。
+  const furnace = getUnitPassive(t2, nb);
+  const attacker = actorFromId(nb, actor.uid);
+  if (skill.kind === 'attack' && t2.isPlayer !== actor.isPlayer && t2.hp > 0
+    && furnace?.kind === 'furnace' && (t2.furnaceTriggers ?? 0) < 2 && attacker && attacker.hp > 0) {
+    t2 = { ...t2, furnaceTriggers: (t2.furnaceTriggers ?? 0) + 1 };
+    const shieldGain = Math.min(furnace.shieldOnTrigger ?? 0, 99 - t2.shield);
+    if (shieldGain > 0) t2 = { ...t2, shield: t2.shield + shieldGain };
+    nb = replaceUnit(nb, t2);
+    nb = replaceUnit(nb, applyStatusTo(attacker, { kind: 'burn', value: furnace.value, turns: 2 }, nb.round));
+    const msg = `${t2.name} 的「${furnace.name}」使 ${attacker.name} 灼烧 ${furnace.value} 层`;
+    nb = pushLog(nb, msg, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
+      spans(msg, [['actor', t2.name], ['passive', furnace.name], ['target', attacker.name], ['status', `灼烧 ${furnace.value} 层`]]));
+    if (shieldGain > 0) nb = pushLog(nb, `${t2.name} 的「${furnace.name}」获得 ${shieldGain} 点护盾`, sideOf(t2), t2.uid, t2.uid);
+  }
+  nb = applyDefeatedTarget(nb, t2);
+  if (skill.kind === 'attack' && actor.isPlayer !== target.isPlayer && isBurning(target) && lastHitLog !== undefined) {
+    nb = applyAfterglow(nb, actor);
+    nb = applyEternalLight(nb, actor);
+  }
+  return { battle: nb, lastHitLog, passiveAdds, didPoison };
+}
+
+/** 攻击或烙印引爆击倒目标时，共用原有死亡效果。 */
+function applyDefeatedTarget(b: BattleState, t2: Unit): BattleState {
+  let nb = b;
   // 小怪死亡日志
   if (t2.hp <= 0 && t2.speciesId.startsWith('boss_minion_')) {
     const msgDead = `${t2.name} 被击倒了`;
@@ -2294,7 +2484,30 @@ function resolveAttack(
       nb = pushLog(nb, `${t2.name} 的「献祭」触发！${master.name} 获得 3 成长值（共 ${curGV + 3}）`, sideOf(master), t2.uid, master.uid);
     }
   }
-  return { battle: nb, lastHitLog, passiveAdds, didPoison };
+  return nb;
+}
+
+function detonateBurnBrand(b: BattleState, actor: Unit, uid: string): BattleState {
+  const target = actorFromId(b, uid);
+  if (!target) return b;
+  const statuses = target.statuses.filter((status) => status.kind !== 'burnBrand' || status.sourceSide !== sideOf(actor));
+  if (target.hp <= 0) return replaceUnit(b, { ...target, statuses });
+  const layers = target.statuses.find((status) => status.kind === 'burn')?.value ?? 0;
+  let damage = layers;
+  let nb = b;
+  const passive = getUnitPassive(target, nb);
+  if (passive?.kind === 'damageCap') {
+    const dealt = nb.roundDmgMap?.[target.uid] ?? 0;
+    damage = Math.min(damage, Math.max(0, passive.value - dealt));
+    nb = { ...nb, roundDmgMap: { ...nb.roundDmgMap, [target.uid]: dealt + damage } };
+  }
+  const detonated = { ...target, hp: Math.max(0, target.hp - damage), statuses: statuses.filter((status) => status.kind !== 'burn') };
+  nb = replaceUnit(nb, detonated);
+  const msg = `${target.name} 的「灼烧烙印」引爆 ${layers} 层，受到 ${damage} 点灼烧伤害`;
+  nb = pushLog(nb, msg, sideOf(target), actor.uid, target.uid, undefined, undefined,
+    spans(msg, [['target', target.name], ['skill', '灼烧烙印'], ['status', `${layers} 层`], ['damage', String(damage)]]));
+  // 只把死亡前状态快照传给死亡回调，运行时尸体保留的是已清火状态。
+  return detonated.hp <= 0 ? applyDefeatedTarget(nb, { ...target, hp: 0, statuses }) : nb;
 }
 
 /** 玩家与敌方通用的技能结算（内部） */
@@ -2308,6 +2521,15 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (sealStatus && sealStatus.sealedSkills?.includes(skill.id)) {
     // 被封印的技能无法使用
     return markActed(pushLog(b, `${actor.name} 的「${skill.name}」被封印，无法使用`, sideOf(actor)), actor.uid);
+  }
+  if (skill.id === 'molten_self_burn' && actor.hp <= 1) {
+    return markActed(pushLog(b, `${actor.name} 的生命不足，无法使用「${skill.name}」`, sideOf(actor), actor.uid), actor.uid);
+  }
+  if (skill.id === 'shell_charge' && actor.shield <= 0) {
+    return markActed(pushLog(b, `${actor.name} 没有护盾，无法使用「${skill.name}」`, sideOf(actor), actor.uid), actor.uid);
+  }
+  if (skill.id === 'molten_quake' && actor.shield < 3) {
+    return markActed(pushLog(b, `${actor.name} 的护盾不足，无法使用「${skill.name}」`, sideOf(actor), actor.uid), actor.uid);
   }
   // 成长值消耗检查
   if (skill.growthCost) {
@@ -2348,8 +2570,42 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     };
   }
 
+  if (skill.id === 'shell_charge' || skill.id === 'molten_quake') {
+    const current = actorFromId(nb, actor.uid)!;
+    const spent = skill.id === 'molten_quake' ? 3 : Math.min(4, current.shield);
+    const shield = current.shield - spent;
+    nb = replaceUnit(nb, { ...current, shield, statuses: shield === 0 ? current.statuses.filter((status) => status.kind !== 'shield') : current.statuses });
+    nb = pushLog(nb, `${actor.name} 使用「${skill.name}」消耗 ${spent} 点护盾`, sideOf(actor), actor.uid, actor.uid);
+    if (skill.id === 'shell_charge') skill = { ...skill, damage: (skill.damage ?? 3) + spent };
+  }
+
+  if (skill.id === 'molten_self_burn') {
+    const enhanced = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+    const damaged = { ...actorFromId(nb, actor.uid)!, hp: actor.hp - 1 };
+    nb = replaceUnit(nb, damaged);
+    const msg = `${actor.name} 使用「熔火自焚」，自身损失 1 点生命`;
+    nb = pushLog(nb, msg, sideOf(actor), actor.uid, actor.uid, undefined, undefined,
+      spans(msg, [['actor', actor.name], ['skill', skill.name], ['damage', '1']]));
+    const burning = applyStatusTo(damaged, { kind: 'burn', value: 4, turns: 2 }, nb.round);
+    nb = replaceUnit(nb, { ...burning, shield: Math.min(99, burning.shield + 2 + enhanced * 2) });
+    nb = pushLog(nb, `${actor.name} 使用「熔火自焚」，强化自身`, sideOf(actor), actor.uid, actor.uid, ['burn']);
+    return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
+  }
+  if (skill.id === 'ember_transfer') {
+    const source = targets[0];
+    const destinations = enemiesOf(nb, actor).filter((unit) => unit.uid !== source.uid);
+    nb = useRng(nb, (rng, current) => {
+      const destination = destinations[Math.floor(rng * destinations.length)];
+      const burn = source.statuses.find((status) => status.kind === 'burn')!;
+      const amount = Math.min(4, burn.value);
+      const reduced = { ...source, statuses: source.statuses.map((status) => status.kind === 'burn' ? { ...status, value: status.value - amount } : status)
+        .filter((status) => status.kind !== 'burn' || status.value > 0) };
+      let moved = replaceUnit(current, reduced);
+      moved = replaceUnit(moved, applyStatusTo(destination, { kind: 'burn', value: amount, turns: 2 }, current.round));
+      return pushLog(moved, `${actor.name} 使用「余烬迁移」，${destination.name} 灼烧 ${amount} 层`, sideOf(actor), actor.uid, destination.uid, ['burn']);
+    });
   // 锁链引爆：对所有被锁链连接的敌方单位造成伤害（独立于 kind 判断，避免 attack kind 走入通用攻击分支打自身）
-  if (skill.id === 'chain_activate') {
+  } else if (skill.id === 'chain_activate') {
     const enemies = enemiesOf(nb, actor);
     const chainDmg = skill.damage ?? 5;
     for (const e of enemies) {
@@ -2371,8 +2627,15 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     const amt = baseHeal + healEnhanceBonus.healBonus;
     const addsKinds = (skill.effects ?? []).map((e) => e.kind);
     for (const t of targets) {
+      const removedBurn = skill.id === 'burn_reversal' ? Math.min(3, t.statuses.find(s => s.kind === 'burn')?.value ?? 0) : 0;
+      const treated = removedBurn > 0 ? consumeBurn(t, removedBurn) : t;
+      if (removedBurn > 0) {
+        r = replaceUnit(r, treated);
+        r = pushLog(r, `${actor.name} 的「灼烧反转」移除 ${t.name} ${removedBurn} 层灼烧`, sideOf(actor), actor.uid, t.uid);
+      }
+      const totalHeal = amt + removedBurn;
       const maxHp = getEffectiveMaxHp(t);
-      let healed = { ...t, hp: Math.min(maxHp, t.hp + amt) };
+      let healed = { ...treated, hp: Math.min(maxHp, t.hp + totalHeal) };
       // 治疗技能也可附带效果（如潮汐领域的水幕）
       for (const e of skill.effects ?? []) {
         if (e.kind === 'atkUp') {
@@ -2396,9 +2659,22 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
       }
       r = replaceUnit(r, healed);
-      const msgHeal = `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${amt} 点生命`;
+      const msgHeal = `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${totalHeal} 点生命`;
       r = pushLog(r, msgHeal, sideOf(actor), actor.uid, t.uid, addsKinds, undefined,
-        spans(msgHeal, [['actor', actor.name], ['skill', skill.name], ['target', t.name], ['heal', String(amt)]]));
+        spans(msgHeal, [['actor', actor.name], ['skill', skill.name], ['target', t.name], ['heal', String(totalHeal)]]));
+      const healer = actorFromId(r, actor.uid)!;
+      const passive = getUnitPassive(healer, r);
+      if ((skill.target === 'ally' || skill.target === 'self') && !healer.healCleanseUsed && (passive?.kind === 'healBurnCleanse' || passive?.kind === 'healDotCleanse')) {
+        r = replaceUnit(r, { ...healer, healCleanseUsed: true });
+        const target = actorFromId(r, t.uid)!;
+        const kind = target.statuses.some(s => s.kind === 'burn' && s.value > 0) ? 'burn'
+          : passive.kind === 'healDotCleanse' && target.statuses.some(s => s.kind === 'poison' && s.value > 0) ? 'poison' : undefined;
+        if (kind) {
+          const cleaned = { ...target, statuses: target.statuses.map(s => s.kind === kind ? { ...s, value: s.value - 1 } : s).filter(s => s.kind !== kind || s.value > 0) };
+          r = replaceUnit(r, cleaned);
+          r = pushLog(r, `${actor.name} 的「${passive.name}」移除 ${t.name} 1 层${kind === 'burn' ? '灼烧' : '中毒'}`, sideOf(actor), actor.uid, t.uid);
+        }
+      }
     }
     nb = r;
   } else if (skill.kind === 'buff') {
@@ -2416,7 +2692,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
         for (const e of skill.effects ?? []) {
           // 护盾效果加 effectBonus（level×2），非护盾效果只加 level×1
-          const effectValue = e.value + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceLevel);
+          const ashBonus = skill.id === 'ash_shelter' && e.kind === 'shield'
+            && enemiesOf(nb, actor).some((unit) => unit.statuses.some((status) => status.kind === 'burn' && status.value > 0)) ? 2 : 0;
+          const effectValue = e.value + ashBonus + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceLevel);
           buffed = applyStatusTo(buffed, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
           if (e.kind === 'shield') {
             buffed = { ...buffed, shield: Math.min(99, buffed.shield + effectValue) };
@@ -2675,6 +2953,10 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           affected = applyStatusTo(affected, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
         }
       }
+      if (skill.id === 'burn_brand') {
+        affected = { ...affected, statuses: affected.statuses.filter((status) => status.kind !== 'burnBrand' || status.sourceSide !== sideOf(actor))
+          .concat([{ kind: 'burnBrand', value: 1, turns: 2, appliedRound: nb.round, sourceUid: actor.uid, sourceSide: sideOf(actor) }]) };
+      }
       nb = replaceUnit(nb, affected);
     }
     // 推送日志
@@ -2693,6 +2975,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       return e.kind;
     }).join('，');
     const hitAdds = addsKinds.filter((k) => ['burn', 'poison', 'atkDown', 'spdDown', 'stun', 'fear'].includes(k));
+    if (skill.id === 'burn_brand') hitAdds.push('burnBrand');
     if (skill.target === 'all') {
       const allTargetUids = targets.filter((t) => { const u = actorFromId(nb, t.uid); return u && u.hp > 0; }).map((t) => t.uid);
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${effectDesc}`, sideOf(actor), actor.uid, undefined, hitAdds.length > 0 ? hitAdds : undefined, allTargetUids);
@@ -2705,14 +2988,46 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   } else {
     const perTarget = new Map<string, number>();
     let waterWaveHits = 0;
+    let attackHit = false;
+    const brandedHits = new Set<string>();
     for (const t of targets) {
       perTarget.set(t.uid, (perTarget.get(t.uid) ?? 0) + 1);
     }
+    const stripPassive = getUnitPassive(actor, nb);
+    if (skill.kind === 'attack' && stripPassive?.kind === 'burnStripShield' && !actor.burnStripUsed) {
+      const target = [...perTarget.keys()].map((uid) => actorFromId(nb, uid)!)
+        .filter((unit) => unit.isPlayer !== actor.isPlayer && isBurning(unit) && unit.shield > 0)
+        .sort((a, c) => c.shield - a.shield)[0];
+      if (target) {
+        const amount = Math.min(stripPassive.value, target.shield);
+        nb = replaceUnit(nb, { ...actorFromId(nb, actor.uid)!, burnStripUsed: true });
+        const stripped = { ...target, shield: target.shield - amount };
+        if (stripped.shield === 0) stripped.statuses = stripped.statuses.filter((status) => status.kind !== 'shield');
+        nb = replaceUnit(nb, stripped);
+        const msg = `${actor.name} 的「${stripPassive.name}」剥除 ${target.name} ${amount} 点护盾`;
+        nb = pushLog(nb, msg, sideOf(actor), actor.uid, target.uid, undefined, undefined,
+          spans(msg, [['actor', actor.name], ['passive', stripPassive.name], ['target', target.name]]));
+      }
+    }
     for (const [uid, count] of perTarget) {
-      const t = actorFromId(nb, uid);
+      let t = actorFromId(nb, uid);
       if (!t || t.hp <= 0) continue;
-      const result = resolveAttack(nb, actor, t, skill, count);
+      let targetSkill = skill;
+      if (skill.id === 'sun_sunder') {
+        const stripped = Math.min(4, t.shield);
+        const shield = t.shield - stripped;
+        t = { ...t, shield, statuses: shield === 0 ? t.statuses.filter((status) => status.kind !== 'shield') : t.statuses };
+        nb = replaceUnit(nb, t);
+        if (stripped > 0) nb = pushLog(nb, `${actor.name} 的「掠日破盾」剥除 ${t.name} ${stripped} 点护盾`, sideOf(actor), actor.uid, t.uid);
+        const burn = Math.floor(stripped / 2);
+        if (burn > 0) targetSkill = { ...skill, effects: [{ kind: 'burn', value: burn, turns: 2 }] };
+      }
+      const branded = skill.kind === 'attack' && actor.isPlayer !== t.isPlayer
+        && t.statuses.some((status) => status.kind === 'burnBrand' && status.sourceSide === sideOf(actor));
+      const result = resolveAttack(nb, actor, t, targetSkill, count);
       nb = result.battle;
+      attackHit ||= result.lastHitLog !== undefined;
+      if (branded && result.lastHitLog !== undefined) brandedHits.add(uid);
       if (result.didPoison) nb = applyCorruptSpread(nb, t.uid);
       if (skill.id === 'water_wave') waterWaveHits += 1;
     }
@@ -2764,6 +3079,16 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         }
       }
     }
+    if (skill.id === 'heated_shell_bump' && attackHit) {
+      const current = actorFromId(nb, actor.uid);
+      if (current && isBurning(current)) {
+        const enhanced = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
+        const amount = Math.min(2 + enhanced, 99 - current.shield);
+        nb = replaceUnit(nb, { ...consumeBurn(current, 1), shield: current.shield + amount });
+        nb = pushLog(nb, `${actor.name} 的「热壳顶撞」获得 ${amount} 点护盾`, sideOf(actor), actor.uid, actor.uid);
+      }
+    }
+    for (const uid of brandedHits) nb = detonateBurnBrand(nb, actor, uid);
     // 疾风连携被动：攻击后自身速度 +1（可叠加，持续至战斗结束）
     {
       const curActor = actorFromId(nb, actor.uid);
@@ -2828,10 +3153,10 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             return fresh && fresh.hp <= 0;
           });
           if (anyKilled) {
-            // 不标记 acted，允许再次行动
+            // 释放行动标记；技能次数和冷却仍正常消耗。
             nb = pushLog(nb, `${curActor.name} 的「暗影追猎」触发！击杀目标后获得额外行动`, sideOf(curActor), curActor.uid, curActor.uid);
-            // 直接返回，跳过 markActed
-            return nb;
+            nb = consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id);
+            return replaceUnit(nb, { ...actorFromId(nb, actor.uid)!, acted: false });
           }
         }
       }
@@ -2883,7 +3208,7 @@ export function playerEndTurn(b: BattleState): BattleState {
   if (b.phase !== 'acting') return b;
   // 车轮战：场上一方全灭待换人——先等替补动画播完（GAUNTLET_SWAP）再结算/开新回合，避免在空场上重复结算
   if (b.pendingSwap?.player || b.pendingSwap?.enemy) return b;
-  let nb: BattleState = { ...b, playerAp: 0 };
+  let nb: BattleState = { ...b };
   // 预选敌方行动：基于回合开始时的快照状态，一次性预选所有可行动敌人的行动
   const snapshot = nb;
   for (const eu of nb.enemyUnits) {
@@ -2915,10 +3240,19 @@ export function playerEndTurn(b: BattleState): BattleState {
       const order = nb.orders?.[uid];
       if (order) {
         if (order.skillId === REST_SKILL_ID) {
-          // 休息：本回合不行动（不消耗 AP）
+          // 休息：放弃本回合基础行动。
         } else {
           // useSkillInner 末尾已含 consumeSkillUse + markActed，这里不再重复扣减
-          nb = useSkillInner(nb, unit, getSkill(order.skillId), order.targetUid);
+          const skillId = !extraActionCount[uid] || canUnitUseSkill(unit, order.skillId) ? order.skillId
+            : unit.skills.find((id) => getSkill(id).kind === 'attack' && canUnitUseSkill(unit, id));
+          nb = skillId ? useSkillInner(nb, unit, getSkill(skillId), order.targetUid) : markActed(nb, uid);
+          const reUnit = actorFromId(nb, uid);
+          if (reUnit && reUnit.hp > 0 && !reUnit.acted) {
+            extraActionCount[uid] = (extraActionCount[uid] ?? 0) + 1;
+            nb = checkEnd(nb);
+            if (extraActionCount[uid] < MAX_EXTRA_ACTIONS && nb.phase === 'acting') continue;
+            nb = markActed(nb, uid);
+          }
         }
       }
       turnIdx++;
@@ -2954,6 +3288,9 @@ export function playerEndTurn(b: BattleState): BattleState {
       // 不递增 turnIdx，立即重处理该单位（再执行一轮 AI），但限制连续额外行动次数防止无限循环
       const reUnit = actorFromId(nb, uid);
       if (reUnit && reUnit.hp > 0 && !reUnit.acted) {
+        // 额外行动重新选择 AI 指令，避免重复执行已耗尽次数或进入冷却的技能。
+        const { [uid]: _previousOrder, ...remainingOrders } = nb.orders ?? {};
+        nb = { ...nb, orders: remainingOrders };
         extraActionCount[uid] = (extraActionCount[uid] ?? 0) + 1;
         if (extraActionCount[uid] >= MAX_EXTRA_ACTIONS) {
           nb = markActed(nb, uid);
@@ -2975,19 +3312,15 @@ export function playerEndTurn(b: BattleState): BattleState {
   return checkEnd(nb);
 }
 
-/** 即时行动（换位/药水）后的收尾：先结算胜负；未结束时若 AP 用尽或无可行动单位则自动进入结算 */
+/** 即时操作只检查胜负，指令仍等待玩家点击结束回合后统一结算。 */
 function afterPlayerAction(b: BattleState): BattleState {
   if (b.phase !== 'acting') return b;
   b = checkEnd(b);
   if (b.phase !== 'acting') return b;
-  // 车轮战：场上全灭待换人——停止操作，等死亡动画播完换人后再继续
-  if (b.pendingSwap?.player || b.pendingSwap?.enemy) return b;
-  const canAct = b.playerAp > 0 && b.playerUnits.some((u) => u.hp > 0 && !u.acted);
-  if (!canAct) return playerEndTurn(b);
   return b;
 }
 
-/** 玩家行动：给一只宠物下达技能指令（不立即结算）。消耗 1 AP；重复下达视为修改指令，不重复扣 AP。 */
+/** 每只宠物保留一条基础行动指令；结算前可修改或取消，不立即执行。 */
 export function playerSkill(b: BattleState, actorUid: string, skillId: string, targetUid?: string): BattleState {
   if (b.phase !== 'acting') return b;
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
@@ -2995,26 +3328,24 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   if (actor.statuses.some((s) => s.kind === 'stun')) return b;
   if (!canUnitUseSkill(actor, skillId)) return b;
   const skill = getSkill(skillId);
-  // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝（不扣 AP），避免结算时静默回退成治疗自己
+  // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝，避免结算时静默回退成治疗自己
+  if (skillId === 'flame_tracing_feather' && !flameTracingTargets(b, actor).some((unit) => unit.uid === targetUid)) return b;
   if (skill.target === 'ally' && targetUid && !b.playerUnits.some((u) => u.uid === targetUid)) return b;
+  if (skillId === 'furnace_shell' && !furnaceShellTargets(b, actor).some((unit) => unit.uid === targetUid)
+    && !(targetUid === undefined && furnaceShellTargets(b, actor).every((unit) => unit.uid === actor.uid))) return b;
+  if (requiresBurningTarget(skillId) && !stokeFireTargets(b, actor, skillId).some((unit) => unit.uid === targetUid)) return b;
   // allyAll 不需要选择目标，跳过 targetUid 校验
   const curOrder = b.orders?.[actorUid];
-  // 已下过技能指令：仅修改指令内容，不重复扣 AP/占用行动（休息指令不在此列，改技能需重新扣 AP）
-  if (actor.acted && curOrder && curOrder.skillId !== REST_SKILL_ID) {
-    return { ...b, orders: { ...b.orders, [actorUid]: { skillId, targetUid } } };
-  }
-  // 本回合已被即时行动（换位）占用：不能再下指令（休息改技能除外，见上）
+  // 换位已实际占用行动，不能再下指令；尚未执行的技能或休息指令可以替换。
   if (actor.acted && !curOrder) return b;
-  if (b.playerAp <= 0) return b;
   return {
     ...b,
-    playerAp: b.playerAp - 1,
     playerUnits: b.playerUnits.map((u) => (u.uid === actorUid ? { ...u, acted: true } : u)),
     orders: { ...(b.orders ?? {}), [actorUid]: { skillId, targetUid } },
   };
 }
 
-/** 玩家行动：让一只宠物「休息」（本回合不行动）。不消耗行动点，记入特殊指令（可再次点击取消）。 */
+/** 玩家行动：让一只宠物放弃本回合基础行动，记入休息指令（可再次点击取消）。 */
 export function playerRest(b: BattleState, actorUid: string): BattleState {
   if (b.phase !== 'acting') return b;
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
@@ -3023,7 +3354,7 @@ export function playerRest(b: BattleState, actorUid: string): BattleState {
   const curOrder = b.orders?.[actorUid];
   // 已有技能指令：与休息互斥，保持原指令
   if (curOrder && curOrder.skillId !== REST_SKILL_ID) return b;
-  // 已选择休息：再次点击取消（0 AP 无消耗，完全反悔）
+  // 已选择休息：再次点击取消，恢复待命。
   if (curOrder) {
     const { [actorUid]: _removed, ...restOrders } = b.orders ?? {};
     return {
@@ -3041,7 +3372,7 @@ export function playerRest(b: BattleState, actorUid: string): BattleState {
   };
 }
 
-/** 玩家行动：取消某只宠物已下达的技能指令（退还 1 AP、恢复未行动状态）。休息指令请用 playerRest 取消。 */
+/** 取消尚未执行的技能指令，恢复待命。休息指令请用 playerRest 取消。 */
 export function playerCancelOrder(b: BattleState, actorUid: string): BattleState {
   if (b.phase !== 'acting') return b;
   const order = b.orders?.[actorUid];
@@ -3051,15 +3382,14 @@ export function playerCancelOrder(b: BattleState, actorUid: string): BattleState
   const { [actorUid]: _removed, ...restOrders } = b.orders ?? {};
   return {
     ...b,
-    playerAp: Math.min(b.playerApMax, b.playerAp + 1),
     playerUnits: b.playerUnits.map((u) => (u.uid === actorUid ? { ...u, acted: false } : u)),
     orders: restOrders,
   };
 }
 
-/** 玩家行动：交换己方两只宠物的位置（可前后左右）。发起者消耗 1 AP 并占用行动。 */
+/** 交换己方两只宠物的位置，仅占用发起者本回合的基础行动。 */
 export function playerSwap(b: BattleState, actorUid: string, otherUid: string): BattleState {
-  if (b.phase !== 'acting' || b.playerAp <= 0) return b;
+  if (b.phase !== 'acting') return b;
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
   const other = b.playerUnits.find((u) => u.uid === otherUid);
   if (!actor || !other || actor.uid === other.uid) return b;
@@ -3068,7 +3398,6 @@ export function playerSwap(b: BattleState, actorUid: string, otherUid: string): 
   if (actor.statuses.some((s) => s.kind === 'stun')) return b;
   let nb = swapUnits(b, actor.uid, other.uid);
   nb = markActed(nb, actor.uid);
-  nb = { ...nb, playerAp: nb.playerAp - 1 };
   nb = pushLog(nb, `${actor.name} 与 ${other.name} 交换了位置`, 'player');
   return afterPlayerAction(nb);
 }
@@ -3083,7 +3412,7 @@ export function tameChance(enemy: Unit, foodId: string): number {
   return Math.min(1, food.baseTame * species.tame.difficulty * hpFactor * (1 + fails * TAME_FAIL_BONUS));
 }
 
-/** 玩家行动：喂食驯服敌人（不消耗 AP）。每次失败会提高该敌人的后续捕捉概率；残血到 1 点时必定捕捉。 */
+/** 喂食驯服不占用宠物行动。每次失败提高后续捕捉概率；残血到 1 点时必定捕捉。 */
 export function playerTame(b: BattleState, foodId: string, enemyUid: string): BattleState {
   if (b.phase !== 'acting') return b;
   const enemy = b.enemyUnits.find((u) => u.uid === enemyUid);
@@ -3150,9 +3479,9 @@ export function isTameable(enemy: Unit): boolean {
   return enemy.tameable && enemy.hp > 0 && enemy.hp / enemy.maxHp <= TAME_THRESHOLD;
 }
 
-/** 玩家是否还有可执行的行动（AP 与可行动单位都满足） */
+/** 玩家是否还有未下令、且可行动的宠物。 */
 export function playerHasMove(b: BattleState): boolean {
-  return b.phase === 'acting' && b.playerAp > 0 && getActablePlayerUnits(b).length > 0;
+  return b.phase === 'acting' && getActablePlayerUnits(b).length > 0;
 }
 
 /** 战斗药水临时效果键 */
@@ -3169,7 +3498,7 @@ const BUFF_MAP: Record<string, BuffKey> = {
 
 const BUFF_DURATION = 2; // 持续 2 回合
 
-/** 使用战斗药水：给指定单位加buff/debuff。不消耗行动点、不占用宠物行动（本回合宠物仍可出手） */
+/** 使用战斗药水：给指定单位加buff/debuff，不占用宠物行动。 */
 export function useBattleItem(b: BattleState, itemId: string, targetUid: string): BattleState {
   if (b.phase !== 'acting') return b;
   const key = BUFF_MAP[itemId];

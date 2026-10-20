@@ -11,11 +11,11 @@ export const TOTAL_LAYERS = 50;
 
 // ---- 生物池（模块级导出，供 growth-arena.ts 等引用） ----
 /** 一阶生物（rank 1） */
-export const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+export const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi', 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss'];
 /** 二阶生物（rank 2） */
-export const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
+export const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king', 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast'];
 /** 传奇生物（rank 3） */
-export const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god'];
+export const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god', 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle'];
 
 /** 节点类型概率表（按层进度调整） */
 interface NodeProb {
@@ -219,27 +219,34 @@ export function getGrowthEncounter(
   } else {
     maxEnemies = randInt(rng, 2, 3);
   }
-  // 按层数区间构建加权池
-  let pool: string[];
+  // 按阶级权重抽取，避免一阶新增物种改变原有阶级比例。
+  let tiers: [string[], number][];
   if (layer <= 10) {
     // 1~10层：纯一阶
-    pool = TIER1;
+    tiers = [[TIER1, 1]];
   } else if (layer <= 25) {
     // 11~25层：一阶 60% + 二阶 40%
-    pool = [...TIER1, ...TIER1, ...TIER1, ...TIER2, ...TIER2];
+    tiers = [[TIER1, 3], [TIER2, 2]];
   } else if (layer <= 40) {
     // 26~40层：一阶 20% + 二阶 80%
-    pool = [...TIER1, ...TIER2, ...TIER2, ...TIER2, ...TIER2];
+    tiers = [[TIER1, 1], [TIER2, 4]];
   } else {
     // 41~50层：二阶 50% + 传奇 50%
-    pool = [...TIER2, ...TIER2, ...LEGENDARY, ...LEGENDARY];
+    tiers = [[TIER2, 1], [LEGENDARY, 1]];
   }
 
   const enemies: { speciesId: string }[] = [];
-  for (let i = 0; i < maxEnemies; i++) {
-    enemies.push({ speciesId: pick(rng, pool) });
-  }
+  for (let i = 0; i < maxEnemies; i++) enemies.push({ speciesId: pickTierSpecies(tiers, rng) });
   return enemies;
+}
+
+function pickTierSpecies(tiers: [string[], number][], rng: () => number): string {
+  let roll = rng() * tiers.reduce((sum, [, weight]) => sum + weight, 0);
+  for (const [pool, weight] of tiers) {
+    if (roll < weight) return pool[Math.floor(roll / weight * pool.length)];
+    roll -= weight;
+  }
+  return tiers[tiers.length - 1][0][0];
 }
 
 /** 精英战斗遭遇：前期单精英，第一 Boss 前不出现传奇。 */
@@ -247,26 +254,26 @@ export function getGrowthEliteEncounter(
   layer: number,
   rng: () => number,
 ): { speciesId: string }[] {
-  // 按层数区间构建加权池
-  let pool: string[];
+  // 按阶级抽取，扩充二阶物种不改变原有阶级权重。
+  let tiers: [string[], number][];
   if (layer <= 15) {
     // 1~15层：纯二阶
-    pool = TIER2;
+    tiers = [[TIER2, 1]];
   } else if (layer <= 25) {
     // 16~25层：二阶 80% + 传奇 20%
-    pool = [...TIER2, ...TIER2, ...TIER2, ...TIER2, ...LEGENDARY];
+    tiers = [[TIER2, 4], [LEGENDARY, 1]];
   } else if (layer <= 40) {
-    // 26~40层：二阶 30% + 传奇 70%
-    pool = [...TIER2, ...LEGENDARY, ...LEGENDARY, ...LEGENDARY, ...LEGENDARY];
+    // 保持原代码26~40层实际权重：二阶20% + 传奇80%。
+    tiers = [[TIER2, 1], [LEGENDARY, 4]];
   } else {
     // 41~50层：双传奇组合（每场2只，均从传奇池抽取）
-    pool = LEGENDARY;
+    tiers = [[LEGENDARY, 1]];
   }
 
   const count = layer <= 10 ? 1 : 2;
   const enemies: { speciesId: string }[] = [];
   for (let i = 0; i < count; i++) {
-    enemies.push({ speciesId: pick(rng, pool) });
+    enemies.push({ speciesId: pickTierSpecies(tiers, rng) });
   }
   return enemies;
 }

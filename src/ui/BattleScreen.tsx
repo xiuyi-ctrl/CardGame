@@ -6,6 +6,10 @@ import { currentFoodList } from '../game/state/game';
 import {
   REST_SKILL_ID,
   canUnitUseSkill,
+  stokeFireTargets,
+  requiresBurningTarget,
+  furnaceShellTargets,
+  flameTracingTargets,
   isTameable,
   skillUsesLeft,
   skillCooldownLeft,
@@ -234,6 +238,14 @@ export function BattleScreen({ state, dispatch }: Props) {
       if (skill.target === 'single') {
         // 嘲讽反向限制：己方被嘲讽时，所有技能只能以嘲讽来源为目标
         const actor = battle?.playerUnits.find((u) => u.uid === pendingSkill.actorUid);
+        if (skill.id === 'flame_tracing_feather' && actor) {
+          flameTracingTargets(battle, actor).forEach((unit) => targets.add(unit.uid));
+          return targets;
+        }
+        if (requiresBurningTarget(skill.id) && actor && battle) {
+          stokeFireTargets(battle, actor, skill.id).forEach((unit) => targets.add(unit.uid));
+          return targets;
+        }
         const tauntSrc = actor?.statuses.find((s) => s.kind === 'taunt');
         if (tauntSrc?.sourceUid) {
           const src = aliveEnemies.find((u) => u.hp > 0 && u.uid === tauntSrc.sourceUid);
@@ -262,13 +274,16 @@ export function BattleScreen({ state, dispatch }: Props) {
     }
     return targets;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSkill, pendingBattleItem, battle?.rngCount]);
+  }, [pendingSkill, pendingBattleItem, battle]);
 
   const validAllyTargets = useMemo(() => {
     const targets = new Set<string>();
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
-      if (skill.target === 'ally' || skill.target === 'allyAll') alivePlayers.forEach((u) => targets.add(u.uid));
+      if (skill.id === 'furnace_shell') {
+        const actor = battle?.playerUnits.find((unit) => unit.uid === pendingSkill.actorUid);
+        if (battle && actor) furnaceShellTargets(battle, actor).forEach((unit) => targets.add(unit.uid));
+      } else if (skill.target === 'ally' || skill.target === 'allyAll') alivePlayers.forEach((u) => targets.add(u.uid));
     }
     if (swapFrom) alivePlayers.filter((u) => u.uid !== swapFrom).forEach((u) => targets.add(u.uid));
     if (pendingBattleItem) {
@@ -284,6 +299,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
       if (skill.target === 'ally') {
+        if (!validAllyTargets.has(uid)) return;
         dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
         setPendingSkill(null);
       }
@@ -340,7 +356,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (animating) return;
     if (!selected || selected.hp <= 0) return;
     const isSelected = selectedOrder?.skillId === skill.id;
-    // 已选择该技能：再次点击取消选择（退还行动点、恢复未行动状态）
+    // 已选择该技能：再次点击取消选择，恢复待命。
     if (isSelected) {
       setPendingSkill(null);
       if (pendingSkill?.skillId !== skill.id) {
@@ -527,7 +543,6 @@ export function BattleScreen({ state, dispatch }: Props) {
       <div className="hud">
         <span className="act">{state.runMode === 'proficiency' ? '熟练度远征' : `第${state.act}幕`} · 第{state.currentRow + 1}层</span>
         <span className="battle-hud-round">回合 {battle.round}</span>
-        <span className="battle-hud-ap">行动 {battle.playerAp}/{battle.playerApMax}</span>
         {battle.gauntlet && (
           <span className="chip" title="敌方轮换上阵，一只倒下另一只顶替">
             🔥 车轮战 {battle.gauntlet.current}/{battle.gauntlet.total}
@@ -627,7 +642,9 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const fullDesc = skillFullDesc(s, enhanced);
                     const sealStatus = selected.statuses.find((st) => st.kind === 'skillSeal');
                     const isSealed = !!sealStatus && (sealStatus.sealedSkills ?? []).includes(s.id);
-                    const unavailable = !canUnitUseSkill(selected, s.id);
+                    const unavailable = !canUnitUseSkill(selected, s.id)
+                      || (s.id === 'flame_tracing_feather' && !isActive && flameTracingTargets(battle, selected).length === 0)
+                      || (requiresBurningTarget(s.id) && !isActive && stokeFireTargets(battle, selected, s.id).length === 0);
                     return (
                       <button
                         key={s.id}
@@ -664,7 +681,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                       }
                     >
                       <span className="battle-skill-copy"><span className="skill-btn-head">休息</span><span className="skill-desc">
-                        {selectedOrder?.skillId === 'rest' ? '已选择' : '0 AP'}
+                        {selectedOrder?.skillId === 'rest' ? '已选择' : '放弃本回合行动'}
                       </span></span>
                     </button>
                   </div>
@@ -690,12 +707,11 @@ export function BattleScreen({ state, dispatch }: Props) {
                     setSwapFrom(selected.uid);
                   }}
                   disabled={!selected || alivePlayers.length < 2 || selected.acted || animating}
-                  title="与另一只己方宠物交换位置（1 行动点）"
+                  title="与另一只己方宠物交换位置（占用发起者本回合行动）"
                 ><BattleActionIcon kind="swap" />换位</button>
               </div>
               <div className="hint-text">{hint}</div>
               <div className="end-row">
-                <span className="end-ap">⚡ {battle.playerAp}/{battle.playerApMax}</span>
                 <div className="anim-controls">
                   {animating && <button className="anim-skip-btn" onClick={skipAnim} aria-label="跳过动画" title="跳过动画"><UiSymbol name="arrow-right" /></button>}
                   <button

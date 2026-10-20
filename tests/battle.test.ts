@@ -460,21 +460,19 @@ describe('splitDamage（连击拆段）', () => {
 });
 
 describe('休息（本回合不行动）', () => {
-  it('休息写入特殊指令、标记已行动、不消耗行动点', () => {
+  it('休息写入特殊指令、占用本回合基础行动', () => {
     const b = createBattle(
       [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
       [{ speciesId: 'kiki' }, { speciesId: 'mimi' }],
       1,
     );
     const actor = b.playerUnits[0];
-    const apBefore = b.playerAp;
     const after = playerRest(b, actor.uid);
-    expect(after.playerAp).toBe(apBefore);
     expect(after.playerUnits[0].acted).toBe(true);
     expect(after.orders?.[actor.uid]).toEqual({ skillId: REST_SKILL_ID });
   });
 
-  it('已选择休息后再次点击取消（不消耗行动点、恢复未行动）', () => {
+  it('已选择休息后再次点击取消，恢复待命', () => {
     const b = createBattle(
       [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
       [{ speciesId: 'kiki' }, { speciesId: 'mimi' }],
@@ -483,18 +481,15 @@ describe('休息（本回合不行动）', () => {
     const actor = b.playerUnits[0];
     const rested = playerRest(b, actor.uid);
     const after = playerRest(rested, actor.uid);
-    expect(after.playerAp).toBe(b.playerAp);
     expect(after.playerUnits[0].acted).toBe(false);
     expect(after.orders?.[actor.uid]).toBeUndefined();
   });
 
-  it('休息后改点技能需重新扣 1 行动点（防免费改指令）', () => {
+  it('休息后可改点技能，仍仅保留一条指令', () => {
     const b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 2);
     const actor = b.playerUnits[0];
     const rested = playerRest(b, actor.uid);
-    const apBefore = rested.playerAp;
     const after = playerSkill(rested, actor.uid, actor.skills[0], b.enemyUnits[0].uid);
-    expect(after.playerAp).toBe(apBefore - 1);
     expect(after.orders?.[actor.uid]?.skillId).toBe(actor.skills[0]);
   });
 
@@ -551,7 +546,7 @@ describe('休息（本回合不行动）', () => {
 });
 
 describe('取消已选指令', () => {
-  it('取消技能指令：清空指令、恢复未行动、退还 1 行动点', () => {
+  it('取消技能指令：清空指令、恢复待命', () => {
     const b = createBattle(
       [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
       [{ speciesId: 'kiki' }],
@@ -559,15 +554,13 @@ describe('取消已选指令', () => {
     );
     const actor = b.playerUnits[0];
     const ordered = playerSkill(b, actor.uid, actor.skills[0], b.enemyUnits[0].uid);
-    expect(ordered.playerAp).toBe(1);
     const after = playerCancelOrder(ordered, actor.uid);
-    expect(after.playerAp).toBe(2);
     expect(after.playerUnits[0].acted).toBe(false);
     expect(after.orders?.[actor.uid]).toBeUndefined();
     expect(after.phase).toBe('acting');
   });
 
-  it('取消后可重新下达技能指令（再次正常扣行动点）', () => {
+  it('取消后可重新下达技能指令，占用该宠物行动', () => {
     const b = createBattle(
       [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
       [{ speciesId: 'kiki' }],
@@ -575,7 +568,6 @@ describe('取消已选指令', () => {
     );
     const actor = b.playerUnits[0];
     const after = playerSkill(playerCancelOrder(playerSkill(b, actor.uid, actor.skills[0], b.enemyUnits[0].uid), actor.uid), actor.uid, actor.skills[1], b.enemyUnits[0].uid);
-    expect(after.playerAp).toBe(1);
     expect(after.orders?.[actor.uid]?.skillId).toBe(actor.skills[1]);
     expect(after.playerUnits[0].acted).toBe(true);
   });
@@ -592,7 +584,6 @@ describe('取消已选指令', () => {
     const after = playerCancelOrder(nb, second.uid);
     expect(after.orders?.[first.uid]).toBeDefined();
     expect(after.orders?.[second.uid]).toBeUndefined();
-    expect(after.playerAp).toBe(1);
     expect(after.playerUnits.find((u) => u.uid === second.uid)!.acted).toBe(false);
   });
 
@@ -654,27 +645,24 @@ describe('专属被动', () => {
   });
 });
 
-describe('行动点与前后排', () => {
-  it('初始行动点 = 存活出战数；每回合重置', () => {
+describe('每只宠物基础行动与前后排', () => {
+  it('初始每只存活宠物都可行动', () => {
     const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
     const b = createBattle(players, [{ speciesId: 'kiki' }, { speciesId: 'pipi' }], 1);
-    expect(b.playerAp).toBe(2);
-    expect(b.enemyAp).toBe(2);
+    expect(getActablePlayerUnits(b)).toHaveLength(2);
     expect(playerHasMove(b)).toBe(true);
   });
 
-  it('下指令消耗 1 AP；结束回合结算后进入新回合重置 AP', () => {
+  it('下指令占用该宠物行动；结算后新回合恢复行动', () => {
     const players = [makeUnit('momo', true, 0, false)];
     const b = createBattle(players, [{ speciesId: 'kiki' }], 1);
-    expect(b.playerAp).toBe(1);
     const ordered = playerSkill(b, b.playerUnits[0].uid, b.playerUnits[0].skills[0], b.enemyUnits[0].uid);
-    // 1 AP 用完 → 指令已下达，等待结算
-    expect(ordered.playerAp).toBe(0);
+    // 指令已下达，等待手动结算。
+    expect(playerHasMove(ordered)).toBe(false);
     expect(ordered.playerUnits[0].acted).toBe(true);
     const after = playerEndTurn(ordered);
-    // 结算完成 → 敌方行动 + 新回合，AP 重置
+    // 结算完成 → 敌方行动 + 新回合，恢复基础行动。
     expect(after.phase).toBe('acting');
-    expect(after.playerAp).toBe(1);
     expect(after.playerUnits[0].acted).toBe(false);
   });
 
@@ -684,15 +672,12 @@ describe('行动点与前后排', () => {
     const first = b.playerUnits[0];
     const second = b.playerUnits[1];
     let nb = playerSkill(b, first.uid, first.skills[0], b.enemyUnits[0].uid);
-    expect(nb.playerAp).toBe(1);
     expect(nb.orders?.[first.uid]).toBeDefined();
-    // 同一宠物再次下达技能 = 修改指令，不重复扣 AP/不重复占用行动
+    // 同一宠物再次下达技能仅修改指令，不重复占用行动。
     const modified = playerSkill(nb, first.uid, first.skills[0], b.enemyUnits[0].uid);
-    expect(modified.playerAp).toBe(1);
     expect(modified.playerUnits.find((u) => u.uid === first.uid)!.acted).toBe(true);
     // 另一只宠物可以下指令
     nb = playerSkill(nb, second.uid, second.skills[0], b.enemyUnits[0].uid);
-    expect(nb.playerAp).toBe(0);
     expect(nb.phase).toBe('acting');
   });
 
@@ -822,7 +807,7 @@ describe('行动点与前后排', () => {
     expect(after.enemyUnits.find((u) => u.uid === back.uid)!.hp).toBeLessThan(backHp);
   });
 
-  it('换位：消耗 1 AP 交换两只己方宠物位置', () => {
+  it('换位：仅占发起者行动，交换两只己方宠物位置', () => {
     const players = [
       makeUnit('momo', true, 0, false),
       makeUnit('lulu', true, 1, false),
@@ -842,7 +827,6 @@ describe('行动点与前后排', () => {
     expect(dAfter.row).toBe('front');
     expect(aAfter.column).toBe(d.column);
     expect(dAfter.column).toBe(a.column);
-    expect(after.playerAp).toBe(b.playerAp - 1);
     expect(after.playerUnits.find((u) => u.uid === a.uid)!.acted).toBe(true);
   });
 
@@ -865,7 +849,6 @@ describe('行动点与前后排', () => {
     // 玩家结束指令阶段 → 结算（我方指令+敌方行动）→ 新回合
     const after = playerEndTurn(b);
     expect(after.round).toBeGreaterThan(r0);
-    expect(after.enemyAp).toBeGreaterThanOrEqual(0);
   });
 
   it('斗兽场/车轮战以外的战斗：敌方数量 = 玩家数量（clamp 2~4，单敌遭遇保持 1）', () => {
@@ -917,16 +900,14 @@ describe('战斗日志与动画时序', () => {
     expect(after.log.some((l) => l.text.includes('被眩晕'))).toBe(true);
   });
 
-  it('治疗等 ally 技能指向敌方会被拒绝（不扣 AP、不下指令）', () => {
+  it('治疗等 ally 技能指向敌方会被拒绝，不占行动也不下指令', () => {
     const b = createBattle([makeUnit('momo_queen', true, 0, false)], [{ speciesId: 'kiki' }], 3);
     const actor = b.playerUnits[0];
     const after = playerSkill(b, actor.uid, 'heal_light', b.enemyUnits[0].uid);
     expect(after).toBe(b);
-    expect(after.playerAp).toBe(b.playerAp);
     expect(after.orders?.[actor.uid]).toBeUndefined();
     // 合法目标（指向自己）正常下达
     const ok = playerSkill(b, actor.uid, 'heal_light', actor.uid);
-    expect(ok.playerAp).toBe(b.playerAp - 1);
     expect(ok.orders?.[actor.uid]).toBeDefined();
   });
 
@@ -1038,7 +1019,7 @@ describe('技能可用性统一校验', () => {
     }, ownedSkill)).toBe(false);
   });
 
-  it('不可用技能指令不消耗行动点且不写入指令', () => {
+  it('不可用技能不占行动且不写入指令', () => {
     const player = makeUnit('gora', true, 0, false);
     const raw = createBattle([player], [{ speciesId: 'kiki' }], 1);
     const skillId = raw.playerUnits[0].skills[0];
@@ -1046,10 +1027,9 @@ describe('技能可用性统一校验', () => {
       ...raw,
       playerUnits: raw.playerUnits.map((u) => ({ ...u, skillCooldowns: { [skillId]: 1 } })),
     };
-    const beforeAp = battle.playerAp;
     const after = playerSkill(battle, battle.playerUnits[0].uid, skillId);
 
-    expect(after.playerAp).toBe(beforeAp);
+    expect(after.playerUnits[0].acted).toBe(false);
     expect(after.orders).toEqual(battle.orders);
   });
 });

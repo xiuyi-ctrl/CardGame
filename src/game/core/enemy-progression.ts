@@ -31,6 +31,9 @@ export const ENEMY_SKILL_TIERS: EnemySkillTier[] = [
 
 /** 技能替换映射：同主题低阶 → 高阶（无映射的技能跳过） */
 export const SKILL_UPGRADES: Record<string, string> = {
+  coal_claw: 'molten_claw',
+  candle_flame: 'eternal_flame',
+  stoke_fire: 'blazing_fuel',
   punch: 'claw_smash',
   aqua_shot: 'water_cannon',
   ember: 'burn_burst',

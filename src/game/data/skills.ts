@@ -1,6 +1,102 @@
 import type { SkillDef } from '../types';
 
 export const SKILLS: Record<string, SkillDef> = {
+  burn_reversal: {
+    id: 'burn_reversal', name: '灼烧反转', desc: '为一名己方伙伴移除最多3层灼烧，再回复2加实际移除层数的生命，基础最多5点；无灼烧仍治疗2点，可选自己，冷却1回合',
+    target: 'ally', kind: 'heal', heal: 2, cooldown: 1, hideEffects: true,
+  },
+  molten_quake: {
+    id: 'molten_quake', name: '熔甲震荡', desc: '消耗自身3点护盾，对全体敌人各造成3点伤害并附加灼烧1层；至少有3点护盾才能使用，冷却1回合',
+    target: 'all', kind: 'attack', damage: 3, cooldown: 1, hideEffects: true,
+    effects: [{ kind: 'burn', value: 1, turns: 2 }],
+  },
+  sun_sunder: {
+    id: 'sun_sunder', name: '掠日破盾', desc: '攻击单个前排敌人，伤害前移除最多4点护盾，再造成4点伤害；每实际移除2点护盾附加1层灼烧，最多2层；被动剥盾不计入，冷却1回合',
+    target: 'single', reach: 'front', kind: 'attack', damage: 4, cooldown: 1,
+  },
+  shell_charge: {
+    id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多4点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；至少有1点护盾才能使用，无冷却',
+    target: 'single', reach: 'front', kind: 'attack', damage: 3,
+  },
+  burn_brand: {
+    id: 'burn_brand', name: '灼烧烙印', desc: '直接指定一名敌人，施加2层灼烧与一次性烙印；下次我方攻击命中后，一次结算目标剩余全部灼烧并清空；冷却1回合',
+    target: 'single', reach: 'direct', kind: 'status', cooldown: 1, hideEffects: true,
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
+  },
+  fire_feather: {
+    id: 'fire_feather', name: '火羽', desc: '先手，攻击单个敌人，造成5点伤害并附加灼烧2层',
+    target: 'single', kind: 'attack', damage: 5, priority: 'first', hideEffects: true,
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
+  },
+  molten_self_burn: {
+    id: 'molten_self_burn', name: '熔火自焚', desc: '自身直接失去1点生命，获得4层真实灼烧与2点护盾；生命必须大于1，无冷却，护盾不能抵挡灼烧伤害',
+    target: 'self', kind: 'status', hideEffects: true,
+  },
+  heated_shell_bump: {
+    id: 'heated_shell_bump', name: '热壳顶撞', desc: '攻击单个前排敌人，造成4点伤害；命中并承受即时反击后若自身仍存活，消耗自身1层灼烧获得2点护盾；无灼烧仍可攻击',
+    target: 'single', reach: 'front', kind: 'attack', damage: 4,
+  },
+  flame_tracing_feather: {
+    id: 'flame_tracing_feather', name: '循焰飞羽', desc: '攻击单个敌人，造成4点伤害；可以越过前排攻击已灼烧的后排，未灼烧目标仍遵守前排保护',
+    target: 'single', kind: 'attack', damage: 4,
+  },
+  coal_claw: {
+    id: 'coal_claw', name: '炭爪', desc: '攻击单个前排敌人，造成2点伤害并附加灼烧1层',
+    target: 'single', reach: 'front', kind: 'attack', damage: 2, hideEffects: true,
+    effects: [{ kind: 'burn', value: 1, turns: 2 }],
+  },
+  furnace_shell: {
+    id: 'furnace_shell', name: '炉壳', desc: '自身和指定的另一名友方各获得3点护盾；单独在场时仅自身获得3点，冷却1回合',
+    target: 'ally', kind: 'buff', cooldown: 1, hideEffects: true,
+    effects: [{ kind: 'shield', value: 3, turns: 99 }],
+  },
+  ash_shelter: {
+    id: 'ash_shelter', name: '灰烬庇护', desc: '一名己方伙伴获得4点护盾；若场上存在灼烧敌人，额外获得2点护盾',
+    target: 'ally', kind: 'buff', hideEffects: true,
+    effects: [{ kind: 'shield', value: 4, turns: 99 }],
+  },
+  candle_flame: {
+    id: 'candle_flame', name: '烛火', desc: '攻击单个敌人，造成3点伤害并附加灼烧1层',
+    target: 'single', kind: 'attack', damage: 3, hideEffects: true,
+    effects: [{ kind: 'burn', value: 1, turns: 2 }],
+  },
+  stoke_fire: {
+    id: 'stoke_fire', name: '添薪', desc: '为一个已经灼烧的敌人追加灼烧3层，不造成即时伤害',
+    target: 'single', reach: 'direct', kind: 'status', hideEffects: true,
+    effects: [{ kind: 'burn', value: 3, turns: 2 }],
+  },
+  lamp_guard: {
+    id: 'lamp_guard', name: '护灯', desc: '为一名己方伙伴回复3点生命值',
+    target: 'ally', kind: 'heal', heal: 3,
+  },
+  molten_claw: {
+    id: 'molten_claw', name: '熔岩重爪', desc: '攻击单个前排敌人，造成6点伤害；目标攻击前已灼烧时额外造成2点伤害',
+    target: 'single', reach: 'front', kind: 'attack', damage: 6,
+  },
+  furnace_bastion: {
+    id: 'furnace_bastion', name: '熔炉壁垒', desc: '自身获得8点护盾，冷却1回合',
+    target: 'self', kind: 'buff', cooldown: 1, hideEffects: true,
+    effects: [{ kind: 'shield', value: 8, turns: 99 }],
+  },
+  seal_furnace: {
+    id: 'seal_furnace', name: '封炉', desc: '全体己方伙伴各获得3点护盾，每场战斗限1次',
+    target: 'allyAll', kind: 'buff', uses: 1, hideEffects: true,
+    effects: [{ kind: 'shield', value: 3, turns: 99 }],
+  },
+  eternal_flame: {
+    id: 'eternal_flame', name: '长明烛火', desc: '攻击单个敌人，造成5点伤害并附加灼烧2层',
+    target: 'single', kind: 'attack', damage: 5, hideEffects: true,
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
+  },
+  blazing_fuel: {
+    id: 'blazing_fuel', name: '旺火', desc: '为一个已经灼烧的敌人追加灼烧5层，不造成即时伤害',
+    target: 'single', reach: 'direct', kind: 'status', hideEffects: true,
+    effects: [{ kind: 'burn', value: 5, turns: 2 }],
+  },
+  ember_transfer: {
+    id: 'ember_transfer', name: '余烬迁移', desc: '将指定敌人最多4层灼烧转移给随机另一名敌人，不增加总层数；冷却1回合',
+    target: 'single', reach: 'direct', kind: 'status', cooldown: 1,
+  },
   punch: {
     id: 'punch', name: '爪击', desc: '攻击单个敌人',
     target: 'single', kind: 'attack', damage: 5,

@@ -12,7 +12,9 @@ describe('战斗功能入口图标', () => {
   it('捕获、道具、换位使用独立图片，按钮文字与操作入口保留', () => {
     const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 42);
     const state = { ...createInitialState(), screen: 'battle' as const, battle };
-    render(createElement(BattleScreen, { state, dispatch: vi.fn() }));
+    const { container } = render(createElement(BattleScreen, { state, dispatch: vi.fn() }));
+    expect(container.querySelector('.battle-hud-ap, .end-ap')).toBeNull();
+    expect(screen.queryByText(/\bAP\b|行动点/)).toBeNull();
 
     for (const [label, name] of [['捕获', 'capture'], ['道具', 'item'], ['换位', 'swap']]) {
       const button = screen.getByRole('button', { name: label });

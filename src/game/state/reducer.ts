@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
-import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, evolutionLockReason, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -9,7 +9,7 @@ import { getItem, ITEMS } from '../data/items';
 import { getMonster, MONSTERS } from '../data/monsters';
 import { createRng, shuffle } from '../rng';
 import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, REFRESH_COST, MAX_REFRESH_COUNT, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
-import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter } from '../core/growth-map';
+import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter, TIER1 } from '../core/growth-map';
 import { getGrowthArenaEncounter } from '../data/growth-arena';
 import { buildGrowthEvent } from '../data/growth-events';
 import { getGrowthShopStock, GROWTH_SHOP_ITEMS } from '../data/growth-shop';
@@ -210,7 +210,19 @@ function emptyRunStats(): RunStats {
 /** 将旧版或字段不完整的存档迁移为当前 GameState；结构损坏时返回 null。 */
 export function migrateGameState(value: unknown): GameState | null {
   if (!isValidGameState(value)) return null;
+  let battle = value.battle;
+  if (battle) {
+    // 旧战斗存档的共享行动点不再参与行动资格判断，也不继续保存。
+    const { playerAp: _ap, playerApMax: _apMax, enemyAp: _enemyAp, ...currentBattle } = battle as BattleState & {
+      playerAp?: number; playerApMax?: number; enemyAp?: number;
+    };
+    battle = currentBattle;
+  }
   const saved = value.runStats;
+  // 兼容更新前已停在免费进化选宠页的存档：没有合法对象时退回原奇遇，避免卡住。
+  const blockedEvolution = value.screen === 'roster' && value.specialPending?.kind === 'evolve'
+    && !!value.map.specials?.[value.currentNodeId]
+    && !value.roster.some((unit) => nextStage(unit.speciesId) && !evolutionLockReason(value, unit.speciesId));
   const defaults = emptyRunStats();
   const runStats: RunStats = {
     battlesWon: saved?.battlesWon ?? defaults.battlesWon,
@@ -230,7 +242,13 @@ export function migrateGameState(value: unknown): GameState | null {
   };
   return {
     ...value,
+    battle,
     runStats,
+    screen: blockedEvolution ? 'special' : value.screen,
+    specialPending: blockedEvolution ? undefined : value.specialPending,
+    legendEvolutionUnlocked: value.legendEvolutionUnlocked || value.act >= 2 || (value.act === 1
+      && !!value.map.boss[value.currentNodeId]
+      && (value.postBattle || value.screen === 'reward' || value.screen === 'inter_act')),
     difficulty: value.difficulty ?? 'normal',
     unlocks: value.unlocks
       ? {
@@ -387,6 +405,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   const settled: GameState = {
     ...state,
     screen: overflow.length > 0 ? 'tame-overflow' : (state.runMode === 'proficiency' ? 'growth-menu' : 'reward'),
+    legendEvolutionUnlocked: state.legendEvolutionUnlocked || (state.runMode !== 'proficiency' && state.act === 1 && node?.type === 'boss'),
     roster,
     deadPets: [...prevDead, ...deadPetsList],
     field: state.field.filter((uid) => roster.some((r) => r.uid === uid)),
@@ -1181,7 +1200,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           break;
         case 'evolve':
         case 'superevolve':
-          if (!next.roster.some((u) => nextStage(u.speciesId))) return state;
+          if (!next.roster.some((u) => nextStage(u.speciesId) && !evolutionLockReason(next, u.speciesId))) return state;
           next = { ...next, screen: 'roster', specialPending: { kind: 'evolve', super: reward.kind === 'superevolve' } };
           break;
         case 'boost':
@@ -1230,7 +1249,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'EVOLVE_ONE': {
       if (state.specialPending?.kind !== 'evolve') return state;
       const target = state.roster.find((u) => u.uid === action.uid);
-      if (!target || !nextStage(target.speciesId)) return state;
+      if (!target || !nextStage(target.speciesId) || evolutionLockReason(state, target.speciesId)) return state;
       let evolved = fuseUnit(target);
       if (!evolved) return state;
       if (state.specialPending.super) {
@@ -1904,7 +1923,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'roster' && state.screen !== 'backpack') return state;
       const primary = state.roster.find((u) => u.uid === action.primaryUid);
       if (!primary) return state;
-      if (!nextStage(primary.speciesId)) return state;
+      if (!nextStage(primary.speciesId) || evolutionLockReason(state, primary.speciesId)) return state;
       const need = fusionNeedCount(primary.speciesId);
       const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
       if (same.length < need) return state;
@@ -1971,7 +1990,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!tame) return state;
       const primary = state.roster.find((u) => u.uid === action.primaryUid);
       if (!primary || primary.speciesId !== tame.speciesId) return state;
-      if (!nextStage(primary.speciesId)) return state;
+      if (!nextStage(primary.speciesId) || evolutionLockReason(state, primary.speciesId)) return state;
       const need = fusionNeedCount(primary.speciesId);
       // 同物种（现有队伍中，不含刚驯服的这只）数量 + 刚驯服的这只 = 总数，需 >= need
       const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
@@ -2027,7 +2046,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'tame-overflow') return state;
       const primary = state.roster.find((u) => u.uid === action.uid);
       if (!primary) return state;
-      if (!nextStage(primary.speciesId)) return state;
+      if (!nextStage(primary.speciesId) || evolutionLockReason(state, primary.speciesId)) return state;
       const need = fusionNeedCount(primary.speciesId);
       const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
       if (same.length < need) return state;
@@ -2715,7 +2734,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           return { ...state, toast: { msg: '队伍已满，无法招募', kind: 'warning' } };
         }
         const rng = createRng(state.seed * 1111 + state.currentRow * 104729 + hashStr(itemId));
-        const pool = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+        const pool = TIER1;
         const pick = pool[Math.floor(rng() * pool.length)];
         next = { ...next, roster: [...next.roster, makeUnit(pick, true, 0, false)], toast: { msg: `招募了 ${getMonster(pick).name}！`, kind: 'success' } };
       } else {

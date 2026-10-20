@@ -245,10 +245,9 @@ describe('车轮战（轮换上阵）', () => {
     expect(swapped.playerDown?.some((u) => u.uid === p1.uid)).toBe(true);
     expect(swapped.gauntlet?.current).toBe(1);
     expect(swapped.round).toBe(b.round + 1);
-    expect(swapped.playerAp).toBe(1);
   });
 
-  it('敌方全灭也标记 pendingSwap.enemy，换人后本回合继续（保留剩余 AP）', () => {
+  it('敌方全灭也标记 pendingSwap.enemy，换人后保留玩家未使用的行动', () => {
     const b = createBattle([makeUnit('momo_queen', true, 0, false)], [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
@@ -257,19 +256,18 @@ describe('车轮战（轮换上阵）', () => {
     const marked: BattleState = {
       ...b,
       enemyUnits: b.enemyUnits.map((u) => ({ ...u, hp: 0 })),
-      playerAp: 2,
       pendingSwap: { player: false, enemy: true },
     };
     const swapped = performGauntletSwap(marked);
     expect(swapped.enemyUnits[0].speciesId).toBe('pipi');
     expect(swapped.gauntlet?.current).toBe(2);
     expect(swapped.pendingSwap).toBeUndefined();
-    // 仅敌方换人：回合继续、玩家剩余 AP 保留（不开启新回合）
-    expect(swapped.playerAp).toBe(2);
+    // 仅敌方换人：玩家仍可行动，不开启新回合。
+    expect(swapped.playerUnits[0].acted).toBe(false);
     expect(swapped.round).toBe(b.round);
   });
 
-  it('敌方替补切入后本回合不出手，下回合才行动（本回合玩家仍有剩余 AP）', () => {
+  it('敌方替补切入后本回合不出手，下回合才行动（玩家仍可行动）', () => {
     const b = createBattle([makeUnit('momo_queen', true, 0, false)], [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
@@ -277,7 +275,6 @@ describe('车轮战（轮换上阵）', () => {
     const marked: BattleState = {
       ...b,
       enemyUnits: b.enemyUnits.map((u) => ({ ...u, hp: 0 })),
-      playerAp: 1,
       pendingSwap: { player: false, enemy: true },
     };
     const swapped = performGauntletSwap(marked);
@@ -290,7 +287,7 @@ describe('车轮战（轮换上阵）', () => {
     expect(afterEnd.log.slice(swapped.log.length).some((l) => l.text.includes('pipi 使用'))).toBe(false);
   });
 
-  it('敌方替补切入（本回合 AP 已尽）也不会立即出手，等下回合才行动', () => {
+  it('敌方替补切入（玩家行动全部结算）也不会立即出手，等下回合才行动', () => {
     const b = createBattle([makeUnit('momo_queen', true, 0, false)], [
       { speciesId: 'kiki' },
       { speciesId: 'pipi' },
@@ -298,10 +295,10 @@ describe('车轮战（轮换上阵）', () => {
     const marked: BattleState = {
       ...b,
       enemyUnits: b.enemyUnits.map((u) => ({ ...u, hp: 0 })),
-      playerAp: 0,
       pendingSwap: { player: false, enemy: true },
     };
-    // playerAp=0 → performGauntletSwap 自动结束本回合：新敌人本回合不行动，直接进入新回合
+    marked.playerUnits = marked.playerUnits.map((u) => ({ ...u, acted: true }));
+    // 玩家行动已全部结算且没有待执行指令，换人后进入新回合。
     const swapped = performGauntletSwap(marked);
     expect(swapped.enemyUnits[0].speciesId).toBe('pipi');
     expect(swapped.enemyUnits[0].acted).toBe(false); // 已进入新回合（startRound 重置）

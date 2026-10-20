@@ -3,7 +3,7 @@ import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import type { Unit } from '../game/types';
-import { nextStage, CURSE_CN, CUSTOM_PRESETS } from '../game/state/game';
+import { nextStage, evolutionLockReason, CURSE_CN, CUSTOM_PRESETS } from '../game/state/game';
 import { getMonster } from '../game/data/monsters';
 import { getPassive } from '../game/data/passives';
 import { getSkill } from '../game/data/skills';
@@ -34,8 +34,9 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
   const isEvolution = pending?.kind === 'evolve';
   const isSuper = isEvolution && pending.super;
   const focused = state.roster.find(unit => unit.uid === focusedUid)
-    ?? state.roster.find(unit => !isEvolution || nextStage(unit.speciesId)) ?? state.roster[0];
-  const evolved = focused && isEvolution ? evolutionPreview(focused) : undefined;
+    ?? state.roster.find(unit => !isEvolution || (nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId))) ?? state.roster[0];
+  const lockReason = focused && isEvolution ? evolutionLockReason(state, focused.speciesId) : undefined;
+  const evolved = focused && isEvolution && !lockReason ? evolutionPreview(focused) : undefined;
   const oldPassive = focused ? getPassive(focused.passive) : undefined;
   const newPassive = evolved ? getPassive(evolved.passive) : undefined;
   const title = isEvolution ? (isSuper ? '超进化' : '进化之光') : '属性强化 · 选择伙伴';
@@ -44,10 +45,11 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
     <main className="progression-choice-layout">
       <section className="flow-frame progression-roster"><h2>{isEvolution ? '可选进化伙伴' : '选择强化对象'}</h2>
         <div className="progression-roster-grid">{state.roster.map(unit => {
-          const eligible = !isEvolution || !!nextStage(unit.speciesId);
+          const unitLockReason = isEvolution ? evolutionLockReason(state, unit.speciesId) : undefined;
+          const eligible = !isEvolution || (!!nextStage(unit.speciesId) && !unitLockReason);
           return <button type="button" key={unit.uid} className={`progression-pet-option ${focused?.uid === unit.uid ? 'is-focused' : ''}`} disabled={!eligible}
             onMouseEnter={() => setFocusedUid(unit.uid)} onFocus={() => setFocusedUid(unit.uid)} onClick={() => dispatch(isEvolution ? { type: 'EVOLVE_ONE', uid: unit.uid } : { type: 'SPECIAL_TARGET', uid: unit.uid })}>
-            <span className="progression-pet-label">{eligible ? (isEvolution ? '可进化' : '可强化') : '最终形态'}</span>
+            <span className="progression-pet-label">{unitLockReason ? '传奇未解锁' : eligible ? (isEvolution ? '可进化' : '可强化') : '最终形态'}</span>
             <FlowPet unit={unit} /><strong>{unit.name}</strong><FlowPetStats unit={unit} />
           </button>;
         })}</div>
@@ -63,7 +65,7 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
             <p className="progression-note">保留原有强化、自创技能与诅咒。{isSuper && '以上尚未计入本次随机诅咒。'}</p>
           </> : <><div className="progression-single-pet"><FlowPet unit={focused} /><h3>{focused.name}</h3><FlowPetStats unit={focused} /></div>
             {oldPassive && <div className="flow-passive"><b>{oldPassive.name}</b><p>{oldPassive.desc}</p></div>}
-            <p className="progression-note">{isEvolution ? '该伙伴已是最终形态。' : '点击左侧伙伴后，选择生命 +5 或速度 +2。'}</p>
+            <p className="progression-note">{lockReason ?? (isEvolution ? '该伙伴已是最终形态。' : '点击左侧伙伴后，选择生命 +5 或速度 +2。')}</p>
           </>}
         </>}</div>
         {isSuper && <aside className="super-evolution-warning"><h3>随机诅咒</h3><p>进化后随机附带一种负面诅咒</p><div>{(['hpDown', 'atkDown', 'spdDown'] as const).map(curse => <span key={curse}><BuffIcon art={CURSE_ART[curse]} />{CURSE_CN[curse]}</span>)}</div></aside>}

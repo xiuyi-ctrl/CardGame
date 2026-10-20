@@ -13,10 +13,11 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   if (s.kind === 'attack') {
     const dmg = (s.damage ?? 0) + bonus.damageBonus;
+    if (s.id === 'shell_charge') return `${dmg}+护盾`;
     const hits = (s.hits ?? 1) + bonus.hitsBonus;
     return hits > 1 ? `${dmg}×${hits}` : String(dmg);
   }
-  if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}`;
+  if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}${s.id === 'burn_reversal' ? '+移除层数' : ''}`;
   if (s.kind === 'buff') {
     const shieldEffect = s.effects?.find(e => e.kind === 'shield');
     if (shieldEffect) {
@@ -30,6 +31,8 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
 function effectText(e: StatusEffect): string {
   const turns = e.turns > 0 ? `，持续 ${e.turns} 回合` : '';
   switch (e.kind) {
+    case 'burnBrand':
+      return '下次所属阵营攻击命中后引爆剩余全部灼烧并清空';
     case 'burn':
       return `灼烧 ${e.value} 层`;
     case 'poison':
@@ -100,6 +103,22 @@ function getDescEffectBonus(s: SkillDef, effectBonus: number, enhanced: number, 
 export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   let desc = s.desc;
+  if (s.id === 'burn_reversal') {
+    desc = desc.replace('回复2加', `回复${2 + bonus.healBonus}加`).replace('基础最多5点', `最多${5 + bonus.healBonus}点`).replace('仍治疗2点', `仍治疗${2 + bonus.healBonus}点`);
+  }
+  if (s.id === 'molten_self_burn' || s.id === 'heated_shell_bump') {
+    desc = desc.replace('2点护盾', `${2 + bonus.effectBonus}点护盾`);
+  }
+  if (s.id === 'heated_shell_bump' || s.id === 'flame_tracing_feather') {
+    desc = desc.replace('4点伤害', `${4 + bonus.damageBonus}点伤害`);
+  }
+  if (s.id === 'fire_feather') {
+    desc = desc.replace('5点伤害', `${5 + bonus.damageBonus}点伤害`);
+  }
+  if (s.id === 'shell_charge') desc = desc.replace('造成3加', `造成${3 + bonus.damageBonus}加`);
+  if (s.id === 'molten_quake' || s.id === 'sun_sunder') {
+    desc = desc.replace(`造成${s.damage}点伤害`, `造成${(s.damage ?? 0) + bonus.damageBonus}点伤害`);
+  }
 
   // 连击类：替换命中次数（"两次"→"三次"、"两个"→"三个"，不替换"每场限N次"）
   if (bonus.hitsBonus > 0) {
@@ -126,9 +145,9 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   const shieldEffect = s.effects?.find(e => e.kind === 'shield');
   if (shieldEffect) {
     const nv = shieldEffect.value + eff('shield');
-    desc = desc.replace(/(\d+)\s*层护盾/g, `${nv}层护盾`);
-    desc = desc.replace(/(\d+)\s*点护盾/g, `${nv}点护盾`);
-    desc = desc.replace(/(\d+)护盾/g, `${nv}护盾`);
+    desc = desc.replace(new RegExp(`\\b${shieldEffect.value}\\s*层护盾`, 'g'), `${nv}层护盾`);
+    desc = desc.replace(new RegExp(`\\b${shieldEffect.value}\\s*点护盾`, 'g'), `${nv}点护盾`);
+    desc = desc.replace(new RegExp(`\\b${shieldEffect.value}护盾`, 'g'), `${nv}护盾`);
   }
   // 灼烧/中毒/恐惧
   const dotEffect = s.effects?.find(e => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'fear');
@@ -693,7 +712,9 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
           {statuses.map((s, i) => {
             const art = STATUS_ART[s.kind];
             const descFn = STATUS_DESC[s.kind];
-            const desc = descFn ? descFn(s.value) : effectText(s);
+            const desc = s.kind === 'burnBrand'
+              ? `等待${s.sourceSide === 'player' ? '我方' : '敌方'}下一次攻击命中后，引爆剩余全部灼烧并清空；多段只引爆一次`
+              : descFn ? descFn(s.value) : effectText(s);
             const stacks = s.kind === 'burn' || s.kind === 'poison' || s.kind === 'rageThorn';
             return (
               <div key={i} className="buff-item">

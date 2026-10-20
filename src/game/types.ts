@@ -1,11 +1,13 @@
 export interface StatusEffect {
-  kind: 'burn' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
+  kind: 'burn' | 'burnBrand' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
   turns: number;
   /** 嘲讽来源：记录施加嘲讽的单位 UID，被嘲讽者只能攻击该来源 */
   sourceUid?: string;
+  /** 烙印归属，不因施法者阵亡而消失。 */
+  sourceSide?: 'player' | 'enemy';
   /** 施加时的回合号（施放回合不计入持续回合数） */
   appliedRound?: number;
   /** 技能封印：被封印的技能ID列表 */
@@ -51,6 +53,8 @@ export interface SkillDef {
 
 /** 被动技能效果类型 */
 export type PassiveKind =
+  | 'healBurnCleanse' // 首次主动单体治疗后清除灼烧
+  | 'healDotCleanse' // 首次主动单体治疗后优先清灼烧，否则清中毒
   | 'hp' // 生命加成：maxHp + value（战斗开始时生效）
   | 'spd' // 速度加成：spd + value（战斗开始时生效）
   | 'regen' // 再生：每回合开始恢复 value 点生命
@@ -61,6 +65,11 @@ export type PassiveKind =
   | 'guard' // 守护：受到的所有伤害 - value
   | 'venom' // 毒牙：攻击命中附加中毒 value（2 回合）
   | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
+  | 'furnace' // 炉火：每回合前两次受到敌方攻击技能命中后，使攻击者灼烧 value 层
+  | 'burnShield' // 热壳换火：回合开始消耗1层灼烧，获得 value 点护盾
+  | 'burnStripShield' // 灼羽剥甲：每回合首次攻击已灼烧且有盾目标时剥除 value 点护盾
+  | 'afterglow' // 余温：全队每回合首次攻击已灼烧目标后，为当前生命最低的存活伙伴回复 value 点生命，同名取最高值
+  | 'eternalLight' // 长明之光：每只持有者独立计次，每回合首次攻击已灼烧目标后全队回血
   | 'frenzy' // 狂暴：生命低于 50% 时伤害 + value
   | 'venomPower' // 蟒影：对中毒目标伤害 + value
   | 'thornRoyal' // 荆棘之躯：反伤 3，每受 3 次攻击反伤 5 并恢复 2
@@ -104,6 +113,12 @@ export interface PassiveDef {
   desc: string;
   kind: PassiveKind;
   value: number;
+  /** 余温系被动的治疗对象数量，缺省为1。 */
+  targetCount?: number;
+  /** 炉火系每次触发为自身增加的护盾，缺省为0。 */
+  shieldOnTrigger?: number;
+  /** 自燃换盾每回合可消耗的最大灼烧层数，缺省1。 */
+  burnConsumeMax?: number;
 }
 
 export interface SpeciesTame {
@@ -178,6 +193,12 @@ export interface Unit {
   tameFails?: number;
   /** 本回合是否已行动（回合内排序用） */
   acted: boolean;
+  /** 炉火本回合已触发次数，按攻击技能行动而非伤害段数计数。 */
+  furnaceTriggers?: number;
+  /** 长明之光本回合是否已触发，每只生物独立计次。 */
+  eternalLightUsed?: boolean;
+  burnStripUsed?: boolean;
+  healCleanseUsed?: boolean;
   /** 专属被动技能 id（随物种固定） */
   passive?: string;
   /** 本场战斗中各技能剩余使用次数（skillId -> 剩余次数；有限次数技能用） */
@@ -297,7 +318,7 @@ export interface BattleTelemetryEvent {
   result?: 'won' | 'lost';
 }
 
-/** 玩家给某只宠物下达的指令（指令阶段记录，结束回合后按速度统一结算）。`skillId === 'rest'` 表示「休息」（本回合不行动，不消耗 AP，可再次点击取消） */
+/** 玩家给某只宠物下达的指令（指令阶段记录，结束回合后按速度统一结算）。`skillId === 'rest'` 表示放弃本回合基础行动，可再次点击取消。 */
 export interface PlayerOrder {
   skillId: string;
   targetUid?: string;
@@ -313,13 +334,9 @@ export interface BattleState {
   turnOrder: string[];
   turnIndex: number;
   round: number;
-  /** 玩家剩余行动点数（每回合 = 场上存活宠物数，用于技能/换位/驯服/道具） */
-  playerAp: number;
-  /** 本回合行动点上限（回合开始时场上存活宠物数） */
-  playerApMax: number;
-  /** 敌方剩余行动点数（AI 每回合同样 = 场上存活数） */
-  enemyAp: number;
   phase: 'acting' | 'won' | 'lost';
+  /** 余温/暖辉按阵营共享一次触发机会，完整回合开始时重置。 */
+  afterglowUsed?: { player?: boolean; enemy?: boolean };
   log: LogEntry[];
   /** 数值平衡模拟专用；未开启采集时保持 undefined，不进入正常存档。 */
   telemetry?: BattleTelemetryEvent[];

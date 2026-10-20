@@ -9,7 +9,7 @@ describe('主模式融合材料与继承', () => {
     for (const curse of ['hpDown', 'spdDown', 'atkDown'] as const) {
       const primary = { ...makeUnit(id, true, 2, false, 'back'), hp: 1, bonusStats: { hp: 5, spd: 2 }, curse, shield: 9, skills: ['punch'], skillUses: { punch: 0 }, skillCooldowns: { punch: 3 }, statuses: [{ kind: 'burn' as const, value: 3, turns: 2 }] };
       const material = { ...makeUnit(id, true, 0, false), bonusStats: { hp: 100, spd: 100 }, curse: 'hpDown' as const };
-      const state: GameState = { ...createInitialState(), screen: 'roster', roster: [primary, material], field: [primary.uid, material.uid] };
+      const state: GameState = { ...createInitialState(), act: 2, screen: 'roster', roster: [primary, material], field: [primary.uid, material.uid] };
       const next = gameReducer(state, { type: 'FUSE', primaryUid: primary.uid, materialUid: material.uid });
       const evolved = next.roster[0];
       const species = getMonster(nextStage(id)!);
@@ -42,7 +42,7 @@ describe('主模式融合材料与继承', () => {
     const first = makeUnit('momo_queen', true, 0, false);
     const chosen = makeUnit('momo_queen', true, 2, false);
     const wrong = makeUnit('momo', true, 0, false);
-    const state: GameState = { ...createInitialState(), screen: 'backpack', roster: [primary, first, chosen, wrong], field: [primary.uid, chosen.uid] };
+    const state: GameState = { ...createInitialState(), act: 2, screen: 'backpack', roster: [primary, first, chosen, wrong], field: [primary.uid, chosen.uid] };
     for (const materialUid of [primary.uid, wrong.uid, 'missing']) {
       expect(gameReducer(state, { type: 'FUSE', primaryUid: primary.uid, materialUid })).toBe(state);
     }
@@ -56,7 +56,7 @@ describe('主模式融合材料与继承', () => {
   it('满员使用待处理二阶材料进化，不消耗其他伙伴，计入融合统计', () => {
     const primary = makeUnit('momo_queen', true, 1, false);
     const material = makeUnit('momo_queen', false, 0, false);
-    const state: GameState = { ...createInitialState(), screen: 'tame-overflow', roster: [primary, ...Array.from({ length: 7 }, () => makeUnit('kiki', true, 0, false))], field: [primary.uid], tameOverflow: [material], tameOverflowReturn: 'roster', postBattle: true };
+    const state: GameState = { ...createInitialState(), act: 2, screen: 'tame-overflow', roster: [primary, ...Array.from({ length: 7 }, () => makeUnit('kiki', true, 0, false))], field: [primary.uid], tameOverflow: [material], tameOverflowReturn: 'roster', postBattle: true };
     const next = gameReducer(state, { type: 'TAME_OVERFLOW_FUSE', primaryUid: primary.uid, tameUid: material.uid });
     expect(next.roster).toHaveLength(8);
     expect(next.roster[0].speciesId).toBe('momo_god');
@@ -70,7 +70,7 @@ describe('主模式融合材料与继承', () => {
     const primary = makeUnit('momo_queen', true, 1, false);
     const material = makeUnit('momo_queen', true, 0, false);
     const pending = makeUnit('fifi', false, 0, false);
-    const state: GameState = { ...createInitialState(), screen: 'tame-overflow', roster: [primary, material], field: [primary.uid, material.uid], tameOverflow: [pending] };
+    const state: GameState = { ...createInitialState(), act: 2, screen: 'tame-overflow', roster: [primary, material], field: [primary.uid, material.uid], tameOverflow: [pending] };
     expect(gameReducer(state, { type: 'FUSE_IN_OVERFLOW', uid: primary.uid, materialUid: 'missing' })).toBe(state);
     const next = gameReducer(state, { type: 'FUSE_IN_OVERFLOW', uid: primary.uid, materialUid: material.uid });
     expect(next.roster).toHaveLength(1);
@@ -82,7 +82,7 @@ describe('主模式融合材料与继承', () => {
   it('熟练度不能调用主模式常规融合，旧存档仍可按新材料规则融合', () => {
     const primary = makeUnit('momo_queen', true, 0, false);
     const material = makeUnit('momo_queen', true, 1, false);
-    const state: GameState = { ...createInitialState(), screen: 'roster', roster: [primary, material] };
+    const state: GameState = { ...createInitialState(), act: 2, screen: 'roster', roster: [primary, material] };
     const prof = { ...state, runMode: 'proficiency' as const };
     expect(gameReducer(prof, { type: 'FUSE', primaryUid: primary.uid })).toBe(prof);
     const loaded = gameReducer(createInitialState(), { type: 'LOAD_GAME', state: JSON.parse(JSON.stringify(state)) });

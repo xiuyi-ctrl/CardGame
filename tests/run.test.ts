@@ -76,7 +76,7 @@ describe('成长与融合', () => {
   it('二阶融合只需要两只同形态，额外伙伴不消耗', () => {
     const a = makeUnit('momo_queen', true, 0, false);
     const b = makeUnit('momo_queen', true, 1, false);
-    let s: GameState = { ...createInitialState(), screen: 'roster', roster: [a, b], field: [a.uid, b.uid] };
+    let s: GameState = { ...createInitialState(), act: 2, screen: 'roster', roster: [a, b], field: [a.uid, b.uid] };
     // 两只即可进化
     const two = dispatch(s, { type: 'FUSE', primaryUid: a.uid });
     expect(two.roster.map((u) => u.speciesId)).toEqual(['momo_god']);
@@ -89,8 +89,22 @@ describe('成长与融合', () => {
 });
 
 describe('地图生成', () => {
-  it('层数按幕递进（幕1 8~10、幕2 10~12、幕3 12~14），首层单战斗、末层 2~3 个首领（遵循寻路），且每幕含商店/事件', () => {
-    const LAYER_RANGES: Record<number, [number, number]> = { 1: [8, 10], 2: [10, 12], 3: [12, 14] };
+  it('第一幕11~13层覆盖多个种子并保持确定性', () => {
+    const lengths = new Set<number>();
+    for (let seed = 0; seed < 100; seed++) {
+      const map = generateMap(seed, 1);
+      expect(map.layers.length).toBeGreaterThanOrEqual(11);
+      expect(map.layers.length).toBeLessThanOrEqual(13);
+      expect(map).toEqual(generateMap(seed, 1));
+      lengths.add(map.layers.length);
+      expect(map.layers.slice(-3, -1).some(row => row.some(node => node.type === 'shop'))).toBe(true);
+      expect(map.layers.at(-1)!.every(node => node.type === 'boss')).toBe(true);
+    }
+    expect([...lengths].sort((a, b) => a - b)).toEqual([11, 12, 13]);
+  });
+
+  it('第一幕扩展至11~13层，第二幕10~12、第三幕12~14；首层单战斗、末层2~3个首领（遵循寻路），每幕含商店/事件', () => {
+    const LAYER_RANGES: Record<number, [number, number]> = { 1: [11, 13], 2: [10, 12], 3: [12, 14] };
     for (let act = 1; act <= 3; act++) {
       const map = generateMap(42, act);
       const [lo, hi] = LAYER_RANGES[act];
@@ -234,7 +248,7 @@ describe('地图生成', () => {
     } else {
       s = { ...s, screen: 'event', currentRow: rowIdx, currentNodeId: evNode.id, gold: 100 };
     }
-    // 选择获得金币的选项（无金币选项时退而选择无花费的收益）
+    // 优先选择金币选项；赌局的实际净收益可能为负，按事件预生成金额核对。
     const choice =
       ev.choices.find((x) => x.kind === 'gold') ??
       ev.choices.find((x) => x.kind === 'heal') ??
@@ -242,7 +256,7 @@ describe('地图生成', () => {
     const goldBefore = s.gold;
     s = dispatch(s, { type: 'EVENT_CHOICE', choiceId: choice.id });
     expect(s.screen).toBe('map');
-    if (choice.kind === 'gold') expect(s.gold).toBeGreaterThan(goldBefore);
+    if (choice.kind === 'gold') expect(s.gold).toBe(Math.max(0, goldBefore + (choice.goldDelta ?? 0) + (choice.amount ?? 0)));
     // 伤害选项不会杀死宠物
     const damageEv = { ...ev, choices: [{ id: 'x', label: '损伤', desc: '', kind: 'damage' as const, amount: 100 }] };
     s = { ...s, screen: 'event', map: { ...s.map, events: { ...s.map.events, [s.currentNodeId]: damageEv } } };
@@ -313,7 +327,7 @@ describe('完整肉鸽流程', () => {
     let guard = 0;
     while (s.battle && s.battle.phase === 'acting' && guard < 300) {
       const b = s.battle;
-      const actable = b.playerUnits.filter((u) => u.hp > 0 && !u.acted && b.playerAp > 0);
+      const actable = b.playerUnits.filter((u) => u.hp > 0 && !u.acted);
       if (actable.length === 0) {
         s = dispatch(s, { type: 'END_TURN' });
       } else {

@@ -1534,12 +1534,6 @@ button.primary {
   padding-top: 6px;
   border-top: 1px solid var(--border);
 }
-.skill-drawer .end-ap {
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--gold);
-  white-space: nowrap;
-}
 .skill-drawer .end-turn-btn {
   padding: 6px 14px;
   border-radius: 8px;
@@ -1604,8 +1598,7 @@ button.primary {
   white-space: nowrap;
 }
 
-.battle-hud-round,
-.battle-hud-ap {
+.battle-hud-round {
   padding-left: 14px;
   border-left: 3px solid #9ca6a7;
   white-space: nowrap;
@@ -2238,7 +2231,6 @@ button.primary {
   border-color: #a1a9aa;
 }
 
-.battle-sidebar .end-ap { color: #aa7400; }
 
 .battle-sidebar .anim-speed-btn,
 .battle-sidebar .anim-skip-btn {
@@ -7073,15 +7065,43 @@ button.primary {
   :is(.confirm-box, .growth-modal) button { padding-inline: 8px; font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
-.confirm-box.fusion-confirm { width: min(620px, 94vw); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.confirm-box.fusion-confirm { width: min(760px, 94vw); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.fusion-confirm .fusion-title { justify-content: center; padding-left: 0; text-align: center; }
+.fusion-confirm .fusion-title::before { display: none; }
+.fusion-title img { width: 38px; height: 38px; margin-right: 12px; object-fit: contain; image-rendering: pixelated; }
 .fusion-confirm .fusion-confirm-body { min-height: 0; max-height: none; overflow-y: auto; display: grid; gap: 12px; }
-.fusion-confirm-body section { padding: 10px; border: 2px solid #8a979b; background: #fff9e9; }
+.fusion-result-card { padding: 12px; border: 2px solid #8a979b; background: #fff9e9; display: grid; gap: 12px; }
 .fusion-confirm h3 { margin: 0 0 8px; color: #101c2c; font-size: 17px; }
 .fusion-confirm p { margin: 6px 0; font-size: 14px; line-height: 1.5; }
-.fusion-pet-row { display: flex; align-items: center; gap: 12px; }
-.fusion-pet-row > .pet-icon-inline { width: 64px; height: 64px; flex: none; border-radius: 0; object-fit: contain; image-rendering: pixelated; }
+.fusion-pet-row { display: flex; align-items: center; gap: 22px; }
+.fusion-pet-row > .pet-icon-inline { width: clamp(80px, 14vh, 130px); height: clamp(80px, 14vh, 130px); flex: none; border-radius: 0; object-fit: contain; image-rendering: pixelated; }
 .fusion-pet-row > div { min-width: 0; }
+.fusion-confirm h3.fusion-name { margin-bottom: 12px; font: 34px/1.15 'Fusion Pixel 12px Proportional Simplified Chinese', 'Microsoft YaHei', sans-serif; }
+.fusion-stats { display: flex; flex-wrap: wrap; gap: 10px 22px; color: #101c2c; font-size: 18px; }
+.fusion-stats > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.fusion-stats img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+.fusion-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px; border: 2px solid #8a979b; }
+.fusion-detail h4 { margin: 0; padding: 4px 8px; color: #101c2c; background: #ff8a08; font-size: 16px; }
+.fusion-detail strong { color: #101c2c; }
+.fusion-confirm .fusion-passive p { flex: 1 1 180px; margin: 0; color: #536574; }
+.fusion-modifiers { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: #101c2c; font-size: 14px; }
+.fusion-modifier-label { padding: 5px 8px; background: #537c80; color: #fff9e9; font-weight: 700; }
+.fusion-curse { margin-left: auto; padding: 5px 10px; border: 1px solid #8a979b; color: #536574; }
+.fusion-curse.has-curse { border-color: #a8324b; background: #b73b54; color: #fff9e9; }
 .fusion-confirm select { display: block; width: 100%; min-width: 0; margin: 6px 0; padding: 8px; border: 2px solid #8a979b; border-radius: 0; color: #101c2c; background: #fff9e9; font-size: 14px; }
-.fusion-result-skills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.fusion-result-skills .skill-tag { border-radius: 0; border-color: #8a979b; background: #f0ebdc; color: #101c2c; }
-.fusion-result-skills .skill-num { color: #9b6100; }
+.fusion-result-skills { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fusion-result-skills .skill-tag { flex: 1; min-width: max-content; padding: 6px 8px; border-radius: 0; border-color: #c2b594; background: #f5ecd6; color: #101c2c; }
+.fusion-result-skills .skill-head { width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.fusion-result-skills .skill-icons { display: none; }
+.fusion-result-skills .skill-num { color: #101c2c; }
+.fusion-confirm .fusion-actions { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+@media (max-height: 700px), (max-width: 700px) {
+  .fusion-result-card { padding: 8px; gap: 8px; }
+  .fusion-pet-row { gap: 12px; }
+  .fusion-pet-row > .pet-icon-inline { width: 80px; height: 80px; }
+  .fusion-confirm h3.fusion-name { margin-bottom: 8px; font-size: 27px; }
+  .fusion-stats { gap: 6px 12px; font-size: 15px; }
+  .fusion-stats img { width: 24px; height: 24px; }
+  .fusion-detail { padding: 6px; gap: 6px; }
+  .fusion-modifiers { gap: 6px; font-size: 13px; }
+}

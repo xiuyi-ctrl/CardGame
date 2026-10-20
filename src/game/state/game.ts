@@ -1,6 +1,6 @@
 import type { BattleState, FoodDef, Unit } from '../types';
-import { getMonster, fusionNeed, BASE_POOL, EVO1_POOL, EVO2_POOL } from '../data/monsters';
-export { EVO2_POOL } from '../data/monsters';
+import { getMonster, fusionNeed, MAIN_BASE_POOL as BASE_POOL, MAIN_EVO1_POOL as EVO1_POOL, MAIN_EVO2_POOL as EVO2_POOL } from '../data/monsters';
+export { MAIN_EVO2_POOL as EVO2_POOL } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
 import { ITEMS, mainShopItemPool } from '../data/items';
 import { createRng, pick, randInt, shuffle, weightedPick } from '../rng';
@@ -308,6 +308,8 @@ export interface GameState {
   watchtowerPreviewNodeId?: string;
   /** 本幕已走过的节点 ID 列表（按访问顺序，用于绘制路径高亮） */
   visitedNodeIds?: string[];
+  /** 本次主模式远征击败第一幕首领后开放传奇进化；旧存档第二幕起默认开放。 */
+  legendEvolutionUnlocked?: boolean;
   /** 队伍已满（ROSTER_MAX）时捕捉溢出、等待玩家处理的宠物（替换/融合/放弃） */
   tameOverflow?: Unit[];
   /** 溢出处理完毕后返回的界面：战斗驯服→'reward'；孵化→'map'；招募→'roster' */
@@ -645,11 +647,16 @@ const ACT3_PROGRESS_MOD = [
   { threshold: -0.3, mod: [20, -10, -10, 0] },
   { threshold: 0.7, mod: [-20, 5, 15, 15] },
 ];
-const RECRUIT_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+const RECRUIT_POOL = BASE_POOL;
 
 // ---- 第 1 幕固定遭遇表（第一幕敌人.md 设计） ----
 // 普通战斗：按规模分表，加权抽取具体组合
 const ACT1_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_larva'], weight: 1 },
+  { species: ['light_moss'], weight: 1 },
+  { species: ['ember_hawk'], weight: 1 },
+  { species: ['candle'], weight: 1 },
+  { species: ['coal'], weight: 1 },
   { species: ['momo'], weight: 1 },  // S1 迅迅
   { species: ['lulu'], weight: 1 },  // S2 泡泡
   { species: ['fifi'], weight: 1 },  // S3 灼灼
@@ -658,6 +665,13 @@ const ACT1_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
   { species: ['pipi'], weight: 1 },  // S6 刺刺
 ];
 const ACT1_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_larva', 'candle'], weight: 10 },
+  { species: ['light_moss', 'coal'], weight: 10 },
+  { species: ['ember_hawk', 'coal'], weight: 10 },
+  { species: ['coal', 'lulu'], weight: 10 },
+  { species: ['candle', 'kiki'], weight: 10 },
+  { species: ['coal', 'candle'], weight: 10 },
+  { species: ['coal', 'fifi'], weight: 10 },
   { species: ['momo', 'fifi'], weight: 11 },  // D1 迅迅+灼灼
   { species: ['lulu', 'kiki'], weight: 11 },  // D2 泡泡+铁墩
   { species: ['mimi', 'pipi'], weight: 11 },  // D3 咪咪+刺刺
@@ -669,6 +683,11 @@ const ACT1_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
   { species: ['kiki', 'fifi'], weight: 12 },  // D9 铁墩+灼灼
 ];
 const ACT1_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_larva', 'lulu', 'momo'], weight: 10 },
+  { species: ['light_moss', 'molten_larva', 'momo'], weight: 10 },
+  { species: ['ember_hawk', 'coal', 'candle'], weight: 10 },
+  { species: ['coal', 'momo', 'fifi'], weight: 10 },
+  { species: ['candle', 'kiki', 'mimi'], weight: 10 },
   { species: ['fifi', 'fifi', 'momo'], weight: 12 },       // T1
   { species: ['lulu', 'lulu', 'kiki'], weight: 12 },       // T2
   { species: ['mimi', 'mimi', 'pipi'], weight: 12 },       // T3
@@ -682,6 +701,11 @@ const ACT1_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
 ];
 // 精英：6 种加权抽取
 const ACT1_ELITE_ENCOUNTERS: readonly [string, number][] = [
+  ['molten_beetle', 15],
+  ['moss_beast', 15],
+  ['searing_hawk', 15],
+  ['lantern_moth', 15],
+  ['coal_guard', 15],
   ['fifi_king', 20],   // E1 灼刃
   ['sisi', 20],        // E2 棘尾
   ['gora', 20],        // E3 铁卫
@@ -691,6 +715,11 @@ const ACT1_ELITE_ENCOUNTERS: readonly [string, number][] = [
 ];
 // 车轮战：按出场顺序排列的固定阵容表
 const ACT1_GAUNTLET_2: readonly { sequence: string[]; weight: number }[] = [
+  { sequence: ['molten_larva', 'fifi'], weight: 16 },
+  { sequence: ['light_moss', 'kiki'], weight: 16 },
+  { sequence: ['ember_hawk', 'momo'], weight: 16 },
+  { sequence: ['coal', 'momo'], weight: 16 },
+  { sequence: ['candle', 'fifi'], weight: 16 },
   { sequence: ['fifi', 'fifi'], weight: 20 },         // G1 双灼烧
   { sequence: ['lulu', 'kiki'], weight: 20 },         // G2 泡泡→铁墩
   { sequence: ['mimi', 'pipi'], weight: 18 },         // G3 咪咪→刺刺
@@ -699,6 +728,11 @@ const ACT1_GAUNTLET_2: readonly { sequence: string[]; weight: number }[] = [
   { sequence: ['pipi', 'mimi'], weight: 12 },         // G6 刺刺→咪咪
 ];
 const ACT1_GAUNTLET_3: readonly { sequence: string[]; weight: number }[] = [
+  { sequence: ['molten_larva', 'lulu', 'fifi'], weight: 16 },
+  { sequence: ['light_moss', 'coal', 'kiki'], weight: 16 },
+  { sequence: ['ember_hawk', 'coal', 'momo'], weight: 16 },
+  { sequence: ['coal', 'lulu', 'momo'], weight: 16 },
+  { sequence: ['candle', 'kiki', 'fifi'], weight: 16 },
   { sequence: ['fifi', 'mimi', 'fifi'], weight: 20 },       // G7 灼烧→毒→灼烧
   { sequence: ['lulu', 'kiki', 'lulu'], weight: 20 },       // G8 泡泡→铁墩→泡泡
   { sequence: ['pipi', 'kiki', 'pipi'], weight: 18 },       // G9 刺刺→铁墩→刺刺
@@ -714,6 +748,11 @@ const ACT2_PROGRESS_MOD = [
   { threshold: 0.7, mod: [-20, 5, 15] },     // progress > 0.7
 ];
 const ACT2_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle'], weight: 1 },
+  { species: ['moss_beast'], weight: 1 },
+  { species: ['searing_hawk'], weight: 1 },
+  { species: ['coal_guard'], weight: 1 },
+  { species: ['lantern_moth'], weight: 1 },
   { species: ['momo_queen'], weight: 1 },   // S1 迅牙
   { species: ['lulu_king'], weight: 1 },    // S2 泡泡将
   { species: ['fifi_king'], weight: 1 },    // S3 灼刃
@@ -723,6 +762,16 @@ const ACT2_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT2_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle', 'lantern_moth'], weight: 9 },
+  { species: ['moss_beast', 'molten_beetle'], weight: 9 },
+  { species: ['searing_hawk', 'coal_guard'], weight: 9 },
+  { species: ['molten_larva', 'gora'], weight: 8 },
+  { species: ['light_moss', 'gora'], weight: 8 },
+  { species: ['ember_hawk', 'fifi_king'], weight: 8 },
+  { species: ['coal_guard', 'fifi_king'], weight: 9 },
+  { species: ['lantern_moth', 'momo_queen'], weight: 9 },
+  { species: ['coal', 'coal_guard'], weight: 8 },
+  { species: ['candle', 'lantern_moth'], weight: 8 },
   { species: ['fifi_king', 'momo_queen'], weight: 10 },  // D1
   { species: ['lulu_king', 'gora'], weight: 10 },        // D2
   { species: ['mimi_king', 'sisi'], weight: 9 },         // D3
@@ -738,6 +787,16 @@ const ACT2_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT2_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle', 'lulu_king', 'momo_queen'], weight: 9 },
+  { species: ['moss_beast', 'molten_beetle', 'searing_hawk'], weight: 9 },
+  { species: ['searing_hawk', 'coal_guard', 'fifi_king'], weight: 9 },
+  { species: ['molten_larva', 'gora', 'lulu_king'], weight: 7 },
+  { species: ['light_moss', 'coal_guard', 'momo_queen'], weight: 7 },
+  { species: ['ember_hawk', 'coal_guard', 'fifi_king'], weight: 7 },
+  { species: ['coal_guard', 'fifi_king', 'momo_queen'], weight: 9 },
+  { species: ['lantern_moth', 'gora', 'mimi_king'], weight: 9 },
+  { species: ['coal', 'coal_guard', 'fifi'], weight: 7 },
+  { species: ['candle', 'lantern_moth', 'momo'], weight: 7 },
   { species: ['fifi_king', 'fifi_king', 'momo_queen'], weight: 12 },    // T1
   { species: ['lulu_king', 'lulu_king', 'gora'], weight: 12 },          // T2
   { species: ['mimi_king', 'mimi_king', 'sisi'], weight: 10 },          // T3
@@ -753,6 +812,11 @@ const ACT2_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT2_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle', 'lantern_moth', 'gora', 'momo_queen'], weight: 10 },
+  { species: ['moss_beast', 'molten_beetle', 'gora', 'momo_queen'], weight: 10 },
+  { species: ['searing_hawk', 'coal_guard', 'fifi_king', 'mimi_king'], weight: 10 },
+  { species: ['coal_guard', 'fifi_king', 'momo_queen', 'mimi_king'], weight: 10 },
+  { species: ['lantern_moth', 'gora', 'sisi', 'fifi_king'], weight: 10 },
   { species: ['fifi_king', 'fifi_king', 'momo_queen', 'mimi_king'], weight: 16 },       // F1
   { species: ['lulu_king', 'lulu_king', 'gora', 'gora'], weight: 16 },                  // F2
   { species: ['mimi_king', 'mimi_king', 'sisi', 'gora'], weight: 14 },                  // F3
@@ -766,6 +830,10 @@ const ACT2_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT2_ELITE_ENCOUNTERS: readonly { species: string; weight: number }[] = [
+  { species: 'molten_beast', weight: 16 },
+  { species: 'solar_eagle', weight: 16 },
+  { species: 'furnace_beast', weight: 16 },
+  { species: 'eternal_moth', weight: 16 },
   { species: 'gora_god', weight: 18 },     // E1 铁壁神
   { species: 'mimi_god', weight: 18 },     // E2 深渊蛇王
   { species: 'fifi_god', weight: 17 },     // E3 灼天
@@ -775,6 +843,14 @@ const ACT2_ELITE_ENCOUNTERS: readonly { species: string; weight: number }[] = [
 ];
 
 const ACT2_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle', 'lulu_king'], weight: 16 },
+  { species: ['moss_beast', 'gora'], weight: 16 },
+  { species: ['searing_hawk', 'coal_guard'], weight: 16 },
+  { species: ['molten_larva', 'gora'], weight: 16 },
+  { species: ['light_moss', 'gora'], weight: 16 },
+  { species: ['ember_hawk', 'fifi_king'], weight: 16 },
+  { species: ['coal_guard', 'fifi_king'], weight: 16 },
+  { species: ['lantern_moth', 'momo_queen'], weight: 16 },
   { species: ['fifi_king', 'fifi_king'], weight: 20 },       // G1
   { species: ['lulu_king', 'gora'], weight: 18 },            // G2
   { species: ['mimi_king', 'sisi'], weight: 18 },            // G3
@@ -784,6 +860,13 @@ const ACT2_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT2_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_larva', 'molten_beetle', 'lulu_king'], weight: 16 },
+  { species: ['light_moss', 'moss_beast', 'gora'], weight: 16 },
+  { species: ['ember_hawk', 'searing_hawk', 'coal_guard'], weight: 16 },
+  { species: ['molten_larva', 'gora', 'lulu_king'], weight: 16 },
+  { species: ['ember_hawk', 'coal_guard', 'fifi_king'], weight: 16 },
+  { species: ['coal', 'coal_guard', 'fifi_king'], weight: 16 },
+  { species: ['candle', 'lantern_moth', 'gora'], weight: 16 },
   { species: ['fifi_king', 'mimi_king', 'fifi_king'], weight: 20 },       // G7
   { species: ['lulu_king', 'gora', 'lulu_king'], weight: 18 },            // G8
   { species: ['sisi', 'gora', 'sisi'], weight: 18 },                      // G9
@@ -816,6 +899,15 @@ function weightedPickEncounterSize(rng: () => number, adjusted: number[]): { cou
 // ---- 第 3 幕固定遭遇表（第三幕敌人.md 设计） ----
 const ACT3_BASE_W = [10, 40, 45, 5]; // 1v1 / 2v2 / 3v3 / 4v4 基础权重
 const ACT3_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle'], weight: 8 },
+  { species: ['moss_beast'], weight: 8 },
+  { species: ['searing_hawk'], weight: 8 },
+  { species: ['coal_guard'], weight: 8 },
+  { species: ['lantern_moth'], weight: 8 },
+  { species: ['furnace_beast'], weight: 10 },
+  { species: ['molten_beast'], weight: 10 },
+  { species: ['solar_eagle'], weight: 10 },
+  { species: ['eternal_moth'], weight: 10 },
   { species: ['gora_god'], weight: 15 },    // S1 铁壁神
   { species: ['mimi_god'], weight: 15 },    // S2 深渊蛇王
   { species: ['fifi_god'], weight: 14 },    // S3 灼天
@@ -827,6 +919,15 @@ const ACT3_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle', 'eternal_moth'], weight: 9 },
+  { species: ['moss_beast', 'molten_beast'], weight: 9 },
+  { species: ['searing_hawk', 'furnace_beast'], weight: 9 },
+  { species: ['coal_guard', 'furnace_beast'], weight: 9 },
+  { species: ['lantern_moth', 'eternal_moth'], weight: 9 },
+  { species: ['furnace_beast', 'lulu_god'], weight: 8 },
+  { species: ['molten_beast', 'lantern_moth'], weight: 8 },
+  { species: ['solar_eagle', 'coal_guard'], weight: 8 },
+  { species: ['eternal_moth', 'gora_god'], weight: 8 },
   { species: ['fifi_king', 'fifi_god'], weight: 10 },       // D1 灼刃+灼天
   { species: ['lulu_king', 'lulu_god'], weight: 10 },       // D2 泡泡将+泡泡龙神
   { species: ['mimi_king', 'mimi_god'], weight: 9 },        // D3 蟒影+深渊蛇王
@@ -844,6 +945,14 @@ const ACT3_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle', 'eternal_moth', 'momo_god'], weight: 9 },
+  { species: ['moss_beast', 'molten_beast', 'solar_eagle'], weight: 9 },
+  { species: ['searing_hawk', 'furnace_beast', 'fifi_god'], weight: 9 },
+  { species: ['furnace_beast', 'fifi_king', 'momo_god'], weight: 9 },
+  { species: ['molten_beast', 'lantern_moth', 'momo_god'], weight: 9 },
+  { species: ['solar_eagle', 'coal_guard', 'lulu_god'], weight: 9 },
+  { species: ['eternal_moth', 'gora', 'mimi_god'], weight: 9 },
+  { species: ['coal_guard', 'lantern_moth', 'fifi_god'], weight: 8 },
   { species: ['fifi_king', 'fifi_king', 'fifi_god'], weight: 12 },         // T1
   { species: ['lulu_king', 'lulu_king', 'lulu_god'], weight: 12 },         // T2
   { species: ['mimi_king', 'mimi_king', 'mimi_god'], weight: 10 },         // T3
@@ -859,6 +968,12 @@ const ACT3_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
+  { species: ['molten_beetle', 'eternal_moth', 'gora', 'momo_god'], weight: 10 },
+  { species: ['moss_beast', 'molten_beast', 'gora', 'momo_god'], weight: 10 },
+  { species: ['searing_hawk', 'furnace_beast', 'fifi_king', 'mimi_god'], weight: 10 },
+  { species: ['furnace_beast', 'lulu_god', 'coal_guard', 'momo_queen'], weight: 10 },
+  { species: ['molten_beast', 'solar_eagle', 'lantern_moth', 'momo_queen'], weight: 10 },
+  { species: ['eternal_moth', 'gora_god', 'lantern_moth', 'fifi_king'], weight: 10 },
   { species: ['fifi_god', 'fifi_king', 'fifi_king', 'momo_queen'], weight: 14 },    // F1
   { species: ['lulu_god', 'lulu_king', 'lulu_king', 'gora'], weight: 14 },          // F2
   { species: ['mimi_god', 'mimi_king', 'mimi_king', 'sisi'], weight: 12 },          // F3
@@ -872,6 +987,9 @@ const ACT3_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_ELITE_ENCOUNTERS: readonly { species: string[]; weight: number }[] = [
+  { species: ['furnace_beast', 'lulu_god'], weight: 16 },
+  { species: ['molten_beast', 'solar_eagle'], weight: 16 },
+  { species: ['eternal_moth', 'gora_god'], weight: 16 },
   { species: ['gora_god', 'lulu_god'], weight: 20 },     // E1 铁壁神+泡泡龙神
   { species: ['mimi_god', 'fifi_god'], weight: 18 },     // E2 深渊蛇王+灼天
   { species: ['sisi_god', 'momo_god'], weight: 17 },     // E3 棘刺王+迅天
@@ -881,6 +999,10 @@ const ACT3_ELITE_ENCOUNTERS: readonly { species: string[]; weight: number }[] = 
 ];
 
 const ACT3_ARENA_ENCOUNTERS: readonly { species: string; weight: number }[] = [
+  { species: 'furnace_beast', weight: 16 },
+  { species: 'eternal_moth', weight: 16 },
+  { species: 'molten_beast', weight: 16 },
+  { species: 'solar_eagle', weight: 16 },
   { species: 'gora_god', weight: 18 },
   { species: 'mimi_god', weight: 18 },
   { species: 'fifi_god', weight: 17 },
@@ -890,6 +1012,9 @@ const ACT3_ARENA_ENCOUNTERS: readonly { species: string; weight: number }[] = [
 ];
 
 const ACT3_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
+  { species: ['furnace_beast', 'lulu_god'], weight: 16 },
+  { species: ['eternal_moth', 'momo_god'], weight: 16 },
+  { species: ['molten_beast', 'solar_eagle'], weight: 16 },
   { species: ['fifi_god', 'fifi_god'], weight: 20 },             // G1 灼天→灼天
   { species: ['lulu_god', 'gora_god'], weight: 18 },             // G2 泡泡龙神→铁壁神
   { species: ['mimi_god', 'sisi_god'], weight: 18 },             // G3 深渊蛇王→棘刺王
@@ -899,6 +1024,9 @@ const ACT3_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
+  { species: ['furnace_beast', 'fifi_god', 'gora_god'], weight: 16 },
+  { species: ['molten_beast', 'solar_eagle', 'lulu_god'], weight: 16 },
+  { species: ['eternal_moth', 'momo_god', 'mimi_god'], weight: 16 },
   { species: ['fifi_god', 'mimi_god', 'fifi_god'], weight: 20 },       // G7 灼天→深渊蛇王→灼天
   { species: ['lulu_god', 'gora_god', 'lulu_god'], weight: 18 },      // G8 泡泡龙神→铁壁神→泡泡龙神
   { species: ['sisi_god', 'gora_god', 'sisi_god'], weight: 18 },      // G9 棘刺王→铁壁神→棘刺王
@@ -908,6 +1036,10 @@ const ACT3_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_GUARDIAN_1V1: readonly { species: string; weight: number }[] = [
+  { species: 'furnace_beast', weight: 24 },
+  { species: 'molten_beast', weight: 24 },
+  { species: 'solar_eagle', weight: 24 },
+  { species: 'eternal_moth', weight: 24 },
   { species: 'gora_god', weight: 28 },
   { species: 'mimi_god', weight: 26 },
   { species: 'fifi_god', weight: 24 },
@@ -915,6 +1047,9 @@ const ACT3_GUARDIAN_1V1: readonly { species: string; weight: number }[] = [
 ];
 
 const ACT3_GUARDIAN_2V2: readonly { species: string[]; weight: number }[] = [
+  { species: ['furnace_beast', 'lulu_god'], weight: 30 },
+  { species: ['molten_beast', 'solar_eagle'], weight: 30 },
+  { species: ['eternal_moth', 'gora_god'], weight: 30 },
   { species: ['gora_god', 'lulu_god'], weight: 38 },     // W5 铁壁神+泡泡龙神
   { species: ['mimi_god', 'fifi_god'], weight: 34 },     // W6 深渊蛇王+灼天
   { species: ['sisi_god', 'momo_god'], weight: 28 },     // W7 棘刺王+迅天
@@ -1503,7 +1638,7 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
 
 export function generateMap(seed: number, act: number, difficulty?: Difficulty): RunMap {
   const rng = createRng(seed + act * 1013);
-  const LAYER_RANGES: Record<number, [number, number]> = { 1: [8, 10], 2: [10, 12], 3: [12, 14] };
+  const LAYER_RANGES: Record<number, [number, number]> = { 1: [11, 13], 2: [10, 12], 3: [12, 14] };
   const [lo, hi] = LAYER_RANGES[act] ?? LAYER_RANGES[1];
   const layerCount = randInt(rng, lo, hi);
   const encounter: Record<string, { speciesId: string }[]> = {};
@@ -1883,6 +2018,16 @@ export function nextStage(speciesId: string): string | undefined {
   return getMonster(speciesId).evolutions?.[0]?.to;
 }
 
+/** 只限制主模式传奇进化，不影响图鉴、纯属性预览及熟练度营火融合。 */
+export function evolutionLockReason(state: GameState, speciesId: string): string | undefined {
+  const target = nextStage(speciesId);
+  if (state.runMode !== 'proficiency' && state.act < 2 && !state.legendEvolutionUnlocked
+    && target && getMonster(target).rank === 3) {
+    return '击败第一幕首领后解锁传奇进化';
+  }
+  return undefined;
+}
+
 /** 融合需要的同形态数量（含主宠自身），六条主要进化链均为两只。 */
 export function fusionNeedCount(speciesId: string): number {
   return fusionNeed(speciesId);
@@ -1956,7 +2101,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
       label: '招募',
       desc: '随机一只普通宠物加入队伍',
       kind: 'recruit',
-      monsterId: pick(rng, ['kiki', 'mimi', 'pipi', 'momo', 'lulu', 'fifi']),
+      monsterId: pick(rng, RECRUIT_POOL),
     });
   }
   // 第 1 行（出发）奖励必含招募，保证前期扩员
@@ -1966,7 +2111,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
       label: '招募',
       desc: '随机一只普通宠物加入队伍',
       kind: 'recruit',
-      monsterId: pick(rng, ['kiki', 'mimi', 'pipi', 'momo', 'lulu', 'fifi']),
+      monsterId: pick(rng, RECRUIT_POOL),
     });
   }
   const shuffled = shuffle(rng, options);

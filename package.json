@@ -16,6 +16,7 @@
     "test": "vitest run",
     "dump-map": "vitest run tests/dump-map.test.ts",
     "balance": "tsx tools/balance/index.ts",
+    "balance:fusion": "tsx tools/balance/fusion.ts",
     "balance:deep": "tsx tools/balance/index.ts --seeds 1000",
     "balance:check": "tsx tools/balance/index.ts --check",
     "balance:baseline": "tsx tools/balance/index.ts --baseline",
