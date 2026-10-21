@@ -1,0 +1,91 @@
+/* 实际 Chromium 渲染验收；不使用 agent-browser，不连接用户浏览器或存档。 */
+const { app, BrowserWindow } = require('electron');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const repo = path.resolve(__dirname, '../..');
+const output = path.join(repo, 'dump/mobile-layout');
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('touch-events', 'enabled');
+app.whenReady().then(async () => {
+  const port = process.argv.includes('--desktop') ? 5199 : 5198;
+  const { createServer } = await import('vite');
+  const react = (await import('@vitejs/plugin-react')).default;
+  const server = await createServer({ root: repo, configFile: false, plugins: [{
+    name: 'preview-private-screens', enforce: 'pre',
+    transform(code, id) {
+      if (!id.replaceAll('\\', '/').endsWith('/src/ui/App.tsx')) return;
+      const names = [...code.matchAll(/^function (\w+Screen)\(/gm)].map(m => m[1]);
+      return `${code}\nexport { ${names.join(', ')} };`;
+    },
+  }, react()], server: { host: '127.0.0.1', port, strictPort: true, watch: { ignored: ['**/dump/**', '**/android/**'] } } });
+  await server.listen();
+  await fs.mkdir(output, { recursive: true });
+  const win = new BrowserWindow({ show: false, width: 640, height: 320, useContentSize: true, webPreferences: { backgroundThrottling: false, partition: `mobile-layout-${process.pid}` } });
+  const errors = [];
+  win.webContents.on('console-message', (_e, level, message) => { if (level >= 3) errors.push(message); });
+  await win.loadURL(`http://127.0.0.1:${port}/tools/mobile-layout/index.html`);
+  const js = code => win.webContents.executeJavaScript(code, true);
+  for (let i = 0; i < 100 && !await js('!!window.preview'); i++) await new Promise(r => setTimeout(r, 100));
+  const names = await js('window.preview.names');
+  if (!names) throw Error('Preview did not load');
+  const requested = process.argv.find(a => a.startsWith('--scenes='))?.slice(9).split(',');
+  const sizes = process.argv.includes('--desktop') ? [[1280, 720], [1920, 1080]] : process.argv.includes('--portrait') ? [[390, 844]] : process.argv.includes('--quick') ? [[640, 320]] : [[640, 320], [640, 360], [740, 360], [844, 390], [915, 412], [1024, 600], [390, 844]];
+  const mobile = !process.argv.includes('--desktop');
+  const results = [];
+  for (const [width, height] of sizes) {
+    win.setContentSize(width, height);
+    // Windows 最小窗口宽度和 DPI 舍入不能决定验收视口；由 Chromium 显式模拟 CSS 尺寸。
+    if (mobile) win.webContents.enableDeviceEmulation({ screenPosition: 'mobile', screenSize: { width, height }, viewPosition: { x: 0, y: 0 }, deviceScaleFactor: 1, viewSize: { width, height }, scale: 1 });
+    await new Promise(r => setTimeout(r, 50));
+    for (const name of requested ?? names) {
+      errors.length = 0;
+      try {
+        const setup = await js(`window.preview.render(${JSON.stringify(name)},${mobile})`);
+        await new Promise(r => setTimeout(r, 150));
+        if (setup) for (const step of setup.split('|')) {
+          await js(`(() => { const step = ${JSON.stringify(step)}; if(step==='file:backup') { const input=document.querySelector('input[type=file]'); const transfer=new DataTransfer(); transfer.items.add(new File([window.preview.backupJson],'preview.json',{type:'application/json'})); input.files=transfer.files; input.dispatchEvent(new Event('change',{bubbles:true})); return; } if(step.startsWith('range:')) { const el=document.querySelector('input[type=range]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,step.slice(6)); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return; } const el = step.startsWith('.') ? document.querySelector(step) : [...document.querySelectorAll('button')].find(b => b.textContent.includes(step)); if (!el) throw Error('Missing setup: ' + step); el.click(); })()`);
+          await new Promise(r => setTimeout(r, 60));
+        }
+        if (height > width) await js(`document.querySelector('.mobile-rotate-hint button')?.click()`);
+        await js('Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))])');
+        const metrics = await js(`(() => {
+          const rect = el => { const r = el.getBoundingClientRect(); return { x:r.x, y:r.y, w:r.width, h:r.height }; };
+          const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
+          const outside = el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth+1 || r.top < -1 || r.bottom > innerHeight+1; };
+          const scrollParent = el => { for(let p=el.parentElement; p && p!==document.body; p=p.parentElement) if(/auto|scroll/.test(getComputedStyle(p).overflowY) && p.scrollHeight>p.clientHeight+1) return p; return null; };
+          const masks = [...document.querySelectorAll('.confirm-overlay,.save-mgmt-overlay,.battle-overlay-mask,.growth-modal-overlay,.overlay,.mobile-system-overlay,.mobile-log-open')].filter(visible).sort((a,b)=>Number(getComputedStyle(a).zIndex||0)-Number(getComputedStyle(b).zIndex||0));
+          const topMask = masks.at(-1);
+          const buttons = [...(topMask??document).querySelectorAll('button')].filter(visible);
+          const concealed = buttons.filter(b => { if (scrollParent(b)) return false; const r=b.getBoundingClientRect(); for(let p=b.parentElement; p && p!==document.body; p=p.parentElement) { const s=getComputedStyle(p); if(!/hidden|clip/.test(s.overflowY)) continue; const a=p.getBoundingClientRect(); if(r.bottom>a.bottom+2 || r.top<a.top-2) return true; } return false; }).map(b=>({text:b.textContent.trim().slice(0,40),...rect(b)}));
+          const clipped = buttons.filter(b => outside(b) && !scrollParent(b)).map(b => ({text:b.textContent.trim().slice(0,40), ...rect(b)}));
+          const horizontal = [...document.querySelectorAll('#root *')].filter(visible).filter(el => { const r=el.getBoundingClientRect(); return (r.left < -2 || r.right > innerWidth+2) && !el.closest('.map-canvas') && !/fixed|absolute/.test(getComputedStyle(el).position) && !scrollParent(el); }).slice(0,12).map(el=>({tag:el.tagName,cls:el.className,...rect(el)}));
+          const scrolls = [...document.querySelectorAll('#root *')].filter(el=>visible(el)&&/auto|scroll/.test(getComputedStyle(el).overflowY)&&el.scrollHeight>el.clientHeight+2).map(el=>({cls:el.className,h:el.clientHeight,content:el.scrollHeight}));
+          const smallTargets = buttons.filter(b=>{const r=b.getBoundingClientRect();return r.width<43.5||r.height<43.5}).map(b=>({text:b.textContent.trim().slice(0,30),...rect(b)}));
+          const blocked = buttons.filter(b=> !b.disabled && !outside(b) && !scrollParent(b)).filter(b=>{ const r=b.getBoundingClientRect(); const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2); return hit && !b.contains(hit); }).map(b=>b.textContent.trim().slice(0,30));
+          const scrollTails = [...document.querySelectorAll('#root *')].filter(el=>visible(el)&&/auto|scroll/.test(getComputedStyle(el).overflowY)&&el.scrollHeight>el.clientHeight+2).map(el=>{ const initial=el.scrollTop; el.scrollTop=el.scrollHeight; const atEnd=Math.abs(el.scrollTop+el.clientHeight-el.scrollHeight)<=2; el.scrollTop=initial; return {cls:el.className,atEnd,usable:el.clientHeight>0}; });
+          return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,scrollTails,smallTargets,blocked,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
+        })()`);
+        const file = `${name}-${width}x${height}${mobile ? '' : '-desktop'}.png`;
+        await fs.writeFile(path.join(output, file), (await win.webContents.capturePage()).toPNG());
+        results.push({ name, width, height, file, ...metrics, errors: [...errors] });
+        console.log(`${name} ${width}x${height}: clipped=${metrics.clipped.length} concealed=${metrics.concealed.length} horizontal=${metrics.horizontal.length} errors=${errors.length}`);
+      } catch (error) { results.push({ name, width, height, error: String(error), errors: [...errors] }); console.error(name, String(error)); }
+    }
+  }
+  const reportPath = path.join(output, mobile ? 'report.json' : 'desktop-report.json');
+  const previous = process.argv.includes('--merge') ? JSON.parse(await fs.readFile(reportPath, 'utf8')) : [];
+  const merged = [...previous.filter(old=>!results.some(r=>r.name===old.name&&r.width===old.width&&r.height===old.height)), ...results];
+  await fs.writeFile(reportPath, JSON.stringify(merged, null, 2));
+  const failures = merged.filter(r => r.error || r.errors?.length || r.clipped?.length || r.concealed?.length || r.horizontal?.length
+    || (mobile && (r.smallTargets?.length || r.blocked?.length || r.scrollTails?.some(s=>!s.atEnd||!s.usable)))
+    || r.buttons === 0 || Math.abs(r.viewport?.[0] - r.width) > 1 || Math.abs(r.viewport?.[1] - r.height) > 1);
+  const cssHash = require('node:crypto').createHash('sha256').update(await fs.readFile(path.join(repo, 'src/ui/mobile.css'))).digest('hex');
+  await fs.writeFile(path.join(output, mobile ? 'run.json' : 'desktop-run.json'), JSON.stringify({ cssHash, cases: merged.length, freshCases: results.length, retainedCases: previous.length ? merged.length - results.length : 0, failures: failures.map(r=>({name:r.name,width:r.width,height:r.height})), sizes }, null, 2));
+  const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+  const rows = merged.map(r=>`<tr><td>${escape(r.name)}</td><td>${r.width}×${r.height}</td><td>${r.error ? escape(r.error) : `越界 ${r.clipped.length} / 裁切 ${r.concealed.length} / 横溢 ${r.horizontal.length} / 小触点 ${r.smallTargets.length} / 遮挡 ${r.blocked.length}`}</td><td>${r.file ? `<a href="${escape(r.file)}">截图</a>` : ''}</td></tr>`).join('');
+  await fs.writeFile(path.join(output, mobile ? 'index.html' : 'desktop.html'), `<!doctype html><meta charset="UTF-8"><title>布局验收</title><style>body{font:14px system-ui;margin:20px;background:#fff9e9;color:#101c2c}table{border-collapse:collapse}td,th{border:1px solid #8a979b;padding:6px;text-align:left}</style><h1>${mobile ? '手机' : '桌面'}实际渲染验收</h1><p>此报告检查已列出的夹具，不代表 Android 真机系统栏、字体放大或原生分享流程已经验收。</p><table><tr><th>页面／状态</th><th>CSS视口</th><th>自动几何检查</th><th>视觉证据</th></tr>${rows}</table>`);
+  console.log(`Rendered ${results.length} cases to ${output}; report=${merged.length}, failed=${failures.length}`);
+  win.destroy();
+  await server.close();
+  app.exit(failures.length ? 2 : 0);
+}).catch(error => { console.error(error); app.exit(1); });

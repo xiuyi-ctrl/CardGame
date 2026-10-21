@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BattleState, LogEntry, StatusEffect } from '../game/types';
 import { SKILLS } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
+import { PausableTimers } from './pausableTimers';
+import { useMobileLayout } from './mobile';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
 interface FxEvent {
@@ -506,7 +508,23 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const prevLen = useRef(0);
   const prevBattle = useRef<BattleState | null | undefined>(null);
   const prevStatusRef = useRef<BattleState | null | undefined>(null);
-  const timers = useRef<number[]>([]);
+  const timers = useRef(new PausableTimers());
+  const mobile = useMobileLayout();
+  useEffect(() => {
+    if (!mobile) return;
+    const update = (event?: Event) => {
+      const active = event instanceof CustomEvent ? event.detail === true : !document.hidden;
+      if (active) timers.current.resume(); else timers.current.pause();
+    };
+    update();
+    document.addEventListener('visibilitychange', update);
+    window.addEventListener('petcard-visibility', update);
+    return () => {
+      document.removeEventListener('visibilitychange', update);
+      window.removeEventListener('petcard-visibility', update);
+      timers.current.resume();
+    };
+  }, [mobile]);
   const animSpeedRef = useRef<1 | 2 | 4>(1);
   // animSpeed 变化时同步到 ref，供 useEffect 内读取
   useEffect(() => { animSpeedRef.current = animSpeed; }, [animSpeed]);
@@ -567,8 +585,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   useEffect(() => {
     if (!battle) {
       // 战斗被清空（如返回首页）：立即停止动画并重置基线，避免残留 timer/animating
-      timers.current.forEach((t) => window.clearTimeout(t));
-      timers.current = [];
+      timers.current.clear();
       prevBattle.current = null;
       prevLen.current = 0;
       setAnimating(false);
@@ -649,8 +666,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       }
     }
 
-    timers.current.forEach((t) => window.clearTimeout(t));
-    timers.current = [];
+    timers.current.clear();
     setFx({});
     setPops([]);
 
@@ -684,7 +700,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
     events.forEach((ev, i) => {
-      const t = window.setTimeout(
+      timers.current.set(
         () => {
           setRevealedLogLen((cur) => Math.max(cur, startLen + eventSrcIdx[i] + 1));
           const popId = ++popSeq;
@@ -818,7 +834,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           setThornRoyalHitsMap((p) => thornRoyalHitsAfterEvent(p ?? {}, ev));
 
           // 用各自捕获的 seq 做 clear 比对，仅当该 unit 的 fx 仍是本事件设置的才清除
-          const clear = window.setTimeout(
+          timers.current.set(
             () => {
               setFx((p) => {
                 const next = { ...p };
@@ -834,15 +850,13 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             },
             CLEAR_MS / animSpeedRef.current,
           );
-          timers.current.push(clear);
         },
         i * (STEP_MS / animSpeedRef.current),
       );
-      timers.current.push(t);
     });
 
     // 全部事件播放完后结束动画，恢复显示真实血量（此时若已分出胜负，UI 再展示结算弹窗）
-    const done = window.setTimeout(
+    timers.current.set(
       () => {
         setAnimating(false);
         setHpMap(null);
@@ -857,16 +871,14 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       },
       events.length * (STEP_MS / animSpeedRef.current) + CLEAR_MS / animSpeedRef.current,
     );
-    timers.current.push(done);
   }, [battle?.log.length]);
 
-  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+  useEffect(() => () => timers.current.clear(), []);
 
   /** 跳过当前批次所有动画：清除所有定时器，立即揭示全部日志和状态，恢复真实血量显示 */
   const skipAnim = useCallback(() => {
     if (!animating || !battle) return;
-    timers.current.forEach((t) => window.clearTimeout(t));
-    timers.current = [];
+    timers.current.clear();
     setAnimating(false);
     setFx({});
     setPops([]);

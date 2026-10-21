@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createElement } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import App from '../src/ui/App';
 import { createInitialState } from '../src/game/state/reducer';
 
@@ -23,7 +23,7 @@ describe('主界面入口', () => {
     }
   });
 
-  it('选中有记录的槽位时突出继续游戏', () => {
+  it('选中有记录的槽位时突出继续游戏', async () => {
     const saved = { ...createInitialState(), screen: 'map' as const, saveSlot: 1 };
     localStorage.setItem('petCardSave_1', JSON.stringify({ saveVersion: 1, main: saved, proficiency: null }));
     localStorage.setItem('petCardSaveSelected', '1');
@@ -31,7 +31,7 @@ describe('主界面入口', () => {
     render(createElement(App));
 
     const continueButton = screen.getByRole('button', { name: '继续游戏' });
-    expect(continueButton.hasAttribute('disabled')).toBe(false);
+    await waitFor(() => expect(continueButton.hasAttribute('disabled')).toBe(false));
     expect(continueButton.className).toContain('home-action-primary');
     expect(screen.getByRole('button', { name: '新游戏' }).className).not.toContain('home-action-primary');
   });

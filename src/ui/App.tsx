@@ -38,6 +38,8 @@ import { ShopItemIcon } from './ShopItemIcon';
 import { UiSymbol, UI_SYMBOL_IMAGES } from './UiSymbol';
 import { getMapRouteEdges } from './mapRoutes';
 import { getDecodedImage, preloadImages } from './imageCache';
+import { MobileShell, useBackAction, useMobileLayout } from './mobile';
+import { SaveBackup } from './SaveBackup';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import homeXunxun from './assets/home-xunxun.png';
 import homePaopao from './assets/home-paopao.png';
@@ -287,6 +289,7 @@ export default function App() {
           {state.toast.msg}
         </div>
       )}
+      <MobileShell state={state} dispatch={dispatch} canSave={!NO_SAVE_SCREENS.includes(state.screen)} />
     </div>
   );
 }
@@ -540,7 +543,7 @@ function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
   const [reward, setReward] = useState<'gold' | 'food'>('gold');
   const [eventType, setEventType] = useState('spring');
   return (
-    <div className="screen center-col">
+    <div className="screen center-col test-type-screen">
       <div className="hud">
         <span className="act">⚙ 自定义测试 · 选择关卡类型</span>
         <button className="home-btn" onClick={() => dispatch({ type: 'TITLE' })}>
@@ -681,7 +684,7 @@ function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   for (const u of units) countBySpecies[u.speciesId] = (countBySpecies[u.speciesId] ?? 0) + 1;
 
   return (
-    <div className="screen">
+    <div className="screen test-pick-screen">
       <div className="hud">
         <span className="act">⚙ 自定义测试 · {labelOf(tp.nodeType, 0)} · {isPlayerSide ? '选择我方出战' : '选择敌方阵容'}</span>
         <span className="chip">👥 已选 {fieldCount}/{maxSlots} 只</span>
@@ -774,7 +777,7 @@ function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   ];
   const enemyDesc = pb.encounter.map((e) => getMonster(e.speciesId).name).join('、');
   return (
-    <div className="screen center-col">
+    <div className="screen center-col test-config-screen">
       <div className="hud">
         <span className="act">⚙ 自定义测试 · {labelOf(pb.nodeType, 0)} · 配置战斗</span>
         <button className="home-btn" onClick={() => dispatch({ type: 'TITLE' })}>
@@ -816,60 +819,30 @@ function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dis
 }
 
 function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameAction>; currentSaveSlot?: number }) {
-  const [hasSave, setHasSave] = useState<boolean>(() => {
-    try {
-      for (let i = 1; i <= 6; i++) {
-        if (localStorage.getItem(`petCardSave_${i}`)) return true;
-      }
-    } catch {}
-    return false;
-  });
+  const [hasSave, setHasSave] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
   const [showSaveMgmt, setShowSaveMgmt] = useState(false);
-  const [slots, setSlots] = useState<SaveSlotInfo[]>(() => {
-    const result: SaveSlotInfo[] = [];
-    for (let i = 1; i <= 6; i++) {
-      try {
-        const json = localStorage.getItem(`petCardSave_${i}`);
-        if (json) {
-          const parsed = JSON.parse(json) as Record<string, unknown>;
-          // 新格式：{ main?, proficiency? }
-          if ('main' in parsed || 'proficiency' in parsed) {
-            const main = (parsed.main && typeof parsed.main === 'object' && 'seed' in (parsed.main as object)) ? parsed.main as unknown as GameState : null;
-            const prof = (parsed.proficiency && typeof parsed.proficiency === 'object' && 'seed' in (parsed.proficiency as object)) ? parsed.proficiency as unknown as GameState : null;
-            result.push({ slot: i, main, proficiency: prof });
-          } else if ('seed' in parsed && 'roster' in parsed) {
-            // 旧格式：直接 GameState
-            const gs = parsed as unknown as GameState;
-            if (gs.runMode === 'proficiency') {
-              result.push({ slot: i, main: null, proficiency: gs });
-            } else {
-              result.push({ slot: i, main: gs, proficiency: null });
-            }
-          } else {
-            result.push({ slot: i, main: null, proficiency: null });
-          }
-        } else {
-          result.push({ slot: i, main: null, proficiency: null });
-        }
-      } catch {
-        result.push({ slot: i, main: null, proficiency: null });
-      }
-    }
-    return result;
-  });
+  const [slots, setSlots] = useState<SaveSlotInfo[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<number | undefined>(() => {
     try { return Number(localStorage.getItem('petCardSaveSelected')) || undefined; } catch { return undefined; }
   });
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [overwriteTarget, setOverwriteTarget] = useState<number | null>(null);
   const [profConfirmSlot, setProfConfirmSlot] = useState<number | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsLoading, setSlotsLoading] = useState(true);
   const [dbgAct, setDbgAct] = useState(1);
   const [dbgRow, setDbgRow] = useState(5);
   const [dbgType, setDbgType] = useState<MapNode['type'] | 'all'>('all');
   const [dbgSeed, setDbgSeed] = useState(42);
+  useBackAction(showCodex || showSaveMgmt || showDebug || deleteTarget !== null || overwriteTarget !== null || profConfirmSlot !== null, () => {
+    if (deleteTarget !== null) setDeleteTarget(null);
+    else if (overwriteTarget !== null) setOverwriteTarget(null);
+    else if (profConfirmSlot !== null) setProfConfirmSlot(null);
+    else if (showCodex) setShowCodex(false);
+    else if (showSaveMgmt) setShowSaveMgmt(false);
+    else setShowDebug(false);
+  });
 
   function selectSlot(slot: number | undefined) {
     setSelectedSlot(slot);
@@ -895,6 +868,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
       if (!cancelled) {
         setSlots(s);
         setHasSave(s.some((x) => x.main || x.proficiency));
+        setSlotsLoading(false);
       }
     });
     return () => { cancelled = true; };
@@ -907,6 +881,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   }, [currentSaveSlot, slots]);
 
   function onNewGame() {
+    if (slotsLoading) return;
     if (selectedSlot) {
       const target = slots.find((s) => s.slot === selectedSlot);
       if (target?.main || target?.proficiency) {
@@ -933,7 +908,8 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     const slotNum = overwriteTarget;
     const unlocks = getSlotUnlocks(slots.find((slot) => slot.slot === slotNum));
     setOverwriteTarget(null);
-    void deleteSaveMode(slotNum, 'main').then(() => {
+    void deleteSaveMode(slotNum, 'main').then((success) => {
+      if (!success) return;
       setSlots((prev) => {
         const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null } : s);
         setHasSave(next.some((x) => x.main || x.proficiency));
@@ -989,7 +965,8 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     if (deleteTarget === null) return;
     const slotNum = deleteTarget;
     setDeleteTarget(null);
-    void deleteSave(slotNum).then(() => {
+    void deleteSave(slotNum).then((success) => {
+      if (!success) return;
       setSlots((prev) => {
         const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null, proficiency: null } : s);
         setHasSave(next.some((x) => x.main || x.proficiency));
@@ -1079,7 +1056,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
               <span>{hasSave === null ? '检查存档…' : selectedSlot ? '继续远征' : '请先选择存档'}</span>
               <span className="home-action-arrow" aria-hidden="true" />
             </button>
-            <button aria-label="新游戏" className={`home-action${canContinue ? '' : ' home-action-primary'}`} onClick={onNewGame}>
+            <button aria-label="新游戏" disabled={slotsLoading} className={`home-action${canContinue ? '' : ' home-action-primary'}`} onClick={onNewGame}>
               <span className="home-action-icon" aria-hidden="true"><img src={homeNewIcon} alt="" /></span>
               <span>新的远征</span>
               <span className="home-action-arrow" aria-hidden="true" />
@@ -1091,7 +1068,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
               return (
                 <button
                   className={`home-action home-action-proficiency${profLocked ? ' is-locked' : ''}`}
-                  disabled={profLocked}
+                  disabled={profLocked || slotsLoading}
                   onClick={() => {
                     if (profLocked) return;
                     // 确保有选中槽位：优先当前选中，否则选有存档的，最后选空槽
@@ -1180,6 +1157,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                 })}
               </div>
             )}
+            <SaveBackup slot={selectedSlot} onImported={() => { void listSaves().then(s => { setSlots(s); setHasSave(s.some(x => x.main || x.proficiency)); }); }} />
             <button className="big-btn" style={{ marginTop: 16 }} onClick={() => setShowSaveMgmt(false)}>关闭</button>
           </div>
         </div>
@@ -1306,12 +1284,15 @@ const CODEX_GROUPS: { key: string; label: string; match: (m: MonsterSpecies) => 
 ];
 
 function CodexScreen({ onClose }: { onClose: () => void }) {
+  const mobile = useMobileLayout();
+  const [mobileDetail, setMobileDetail] = useState(false);
+  useBackAction(mobile && mobileDetail, () => setMobileDetail(false), 1);
   useEffect(() => {
-    void preloadImages(['/formation-camp.png', homeCodexIcon, ...Object.values(MONSTERS).flatMap(species => {
+    void preloadImages(['/formation-camp.png', homeCodexIcon, ...(mobile ? [] : Object.values(MONSTERS)).flatMap(species => {
       const image = formationImage(species.id, species.image);
       return image ? [image] : [];
     })]);
-  }, []);
+  }, [mobile]);
   const groups = useMemo(
     () =>
       CODEX_GROUPS.map((g) => ({
@@ -1333,6 +1314,11 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
     el?.scrollIntoView?.({ block: 'nearest' });
   }, [selectedId]);
   const sp = getMonster(selectedId);
+  useEffect(() => {
+    if (!mobile) return;
+    const image = formationImage(sp.id, sp.image);
+    if (image) void preloadImages([image]);
+  }, [mobile, sp.id]);
   const stats = computeStats(sp.id);
   const passive = getPassive(sp.passive);
   const next = nextStage(sp.id);
@@ -1341,14 +1327,14 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
   const tameable = sp.rank !== 4;
 
   return (
-    <div className="codex-root flow-screen codex-terminal">
+    <div className={`codex-root flow-screen codex-terminal${mobileDetail ? ' codex-mobile-detail' : ''}`}>
       <header className="codex-header flow-frame">
         <h1 className="codex-title"><img src={homeCodexIcon} alt="" />生物图鉴</h1>
         <div className="codex-sub">
           查看生物属性、技能与进化
         </div>
-        <button type="button" onClick={onClose}>
-          返回
+        <button type="button" onClick={() => { if (mobile && mobileDetail) setMobileDetail(false); else onClose(); }}>
+          {mobile && mobileDetail ? '返回目录' : '返回'}
         </button>
       </header>
       <div className="codex-body">
@@ -1363,7 +1349,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
                     className={`codex-item ${m.id === selectedId ? 'selected' : ''}`}
                     aria-pressed={m.id === selectedId}
                     data-codex-id={m.id}
-                    onClick={() => setSelectedId(m.id)}
+                    onClick={() => { setSelectedId(m.id); if (mobile) setMobileDetail(true); }}
                   >
                     <span className="codex-item-emoji"><PetIcon image={formationImage(m.id, m.image)} emoji={m.emoji} name={m.name} /></span>
                     <span className="codex-item-name">{m.name}</span>
@@ -1727,6 +1713,7 @@ const MAP_KNOWN_HINTS: Record<MapNode['type'], string> = {
 };
 
 export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  useBackAction(!!(state.scoutSelecting || state.skipSelecting), () => dispatch({ type: state.scoutSelecting ? 'CANCEL_SCOUT' : 'CANCEL_SKIP' }));
   const isProficiency = state.runMode === 'proficiency';
   const isFirst = state.currentNodeId === '';
   const optionsRow = isFirst ? state.currentRow : state.currentRow + 1;
@@ -2497,10 +2484,17 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
 }
 
 function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const mobile = useMobileLayout();
+  const [mobileDetail, setMobileDetail] = useState(false);
   const [confirm, setConfirm] = useState<PetConfirm>(null);
   const [tab, setTab] = useState<'items' | 'pets'>('items');
   const [selectedItemId, setSelectedItemId] = useState('scout');
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  useBackAction(true, () => {
+    if (confirm) setConfirm(null);
+    else if (mobile && mobileDetail) setMobileDetail(false);
+    else dispatch({ type: 'CLOSE_BACKPACK' });
+  });
   const isProf = state.runMode === 'proficiency';
   const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
   const items = Object.entries(state.inventory).filter(([id, count]) => count > 0 && (FOODS[id] || ITEMS[id]) && (!isProf || growthItemIds.includes(id)));
@@ -2536,7 +2530,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const useLabel = food || battleItem ? '战斗中使用' : itemId === 'twin' ? '抵达节点时使用' : itemId === 'purify' ? '选择伙伴净化' : `使用${item?.name ?? '物品'}`;
 
   return (
-    <div className="backpack-screen">
+    <div className={`backpack-screen${mobileDetail ? ' backpack-mobile-detail' : ''}`}>
       <header className="backpack-header">
         <h1><img src={homeContinueIcon} alt="" />背包</h1>
         <div className="backpack-header-actions">
@@ -2546,8 +2540,9 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
         </div>
       </header>
       <nav className="backpack-tabs" aria-label="背包分类">
-        <button className={tab === 'items' ? 'selected' : ''} aria-pressed={tab === 'items'} onClick={() => setTab('items')}>物品</button>
-        <button className={tab === 'pets' ? 'selected' : ''} aria-pressed={tab === 'pets'} onClick={() => setTab('pets')}>伙伴</button>
+        <button className={tab === 'items' ? 'selected' : ''} aria-pressed={tab === 'items'} onClick={() => { setTab('items'); setMobileDetail(false); }}>物品</button>
+        <button className={tab === 'pets' ? 'selected' : ''} aria-pressed={tab === 'pets'} onClick={() => { setTab('pets'); setMobileDetail(false); }}>伙伴</button>
+        {mobile && mobileDetail && <button onClick={() => setMobileDetail(false)}>返回列表</button>}
       </nav>
       <main className="backpack-layout">
         <section className="backpack-storage" aria-label={tab === 'items' ? '物品收纳' : '队伍伙伴'}>
@@ -2555,7 +2550,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
           {tab === 'items' ? <div className="backpack-item-grid">
             {items.map(([id, count]) => {
               const definition = ITEMS[id] ?? FOODS[id];
-              return <button key={id} className={`backpack-item ${itemId === id ? 'selected' : ''}`} aria-pressed={itemId === id} aria-label={`查看${definition.name}，持有${count}个`} onClick={() => setSelectedItemId(id)}>
+              return <button key={id} className={`backpack-item ${itemId === id ? 'selected' : ''}`} aria-pressed={itemId === id} aria-label={`查看${definition.name}，持有${count}个`} onClick={() => { setSelectedItemId(id); if (mobile) setMobileDetail(true); }}>
                 <span className="backpack-item-count">×{count}</span>
                 {BACKPACK_ITEM_ART[id] ? <img src={BACKPACK_ITEM_ART[id]} alt="" draggable={false} /> : <span className="backpack-item-emoji">{definition.emoji}</span>}
                 <strong>{definition.name}</strong>
@@ -2567,7 +2562,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
               const unit = state.roster[index];
               if (!unit) return <div key={`empty-${index}`} className="backpack-empty-slot"><img src={homePawIcon} alt="" /><span>空位</span></div>;
               const image = formationImage(unit.speciesId, unit.image);
-              return <button key={unit.uid} className={`backpack-pet ${focused?.uid === unit.uid ? 'selected' : ''}`} aria-pressed={focused?.uid === unit.uid} aria-label={`查看${unit.name}，生命${unit.hp}/${unit.maxHp}，速度${unit.spd}`} onClick={() => setSelectedUid(unit.uid)}>
+              return <button key={unit.uid} className={`backpack-pet ${focused?.uid === unit.uid ? 'selected' : ''}`} aria-pressed={focused?.uid === unit.uid} aria-label={`查看${unit.name}，生命${unit.hp}/${unit.maxHp}，速度${unit.spd}`} onClick={() => { setSelectedUid(unit.uid); if (mobile) setMobileDetail(true); }}>
                 <span className="backpack-pet-portrait">{image ? <BattlePixelSprite src={image} name={unit.name} /> : <PixelCreature unit={unit} />}</span>
                 <strong>{unit.name}</strong>
                 <span className="backpack-pet-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{unit.hp}/{unit.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{unit.spd}</span></span>

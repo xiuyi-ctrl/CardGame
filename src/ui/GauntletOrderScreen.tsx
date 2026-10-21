@@ -5,6 +5,7 @@ import type { GameAction } from '../game/state/reducer';
 import type { Unit } from '../game/types';
 import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { UiSymbol } from './UiSymbol';
+import { useBackAction } from './mobile';
 
 const SLOT_LABELS = ['先发', '第二', '第三', '第四'];
 
@@ -22,6 +23,13 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
 
   const inSlots = (uid: string) => order.some((u) => u && u.uid === uid);
   const pool = roster.filter((u) => !inSlots(u.uid));
+  useBackAction(true, () => dispatch({ type: 'BACK_TO_MAP' }));
+  function moveOrder(from: number, to: number) {
+    if (to < 0 || to >= order.length) return;
+    const next = [...order];
+    [next[from], next[to]] = [next[to], next[from]];
+    setOrder(next);
+  }
   /** 拖拽标记：区分「点击」与「拖拽后松手」（拖拽结束不应触发 click） */
   const dragMoved = useRef(false);
 
@@ -135,6 +143,10 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
                     <span className="wheel-empty-slot"><UiSymbol name="plus" />点击下方伙伴加入，或拖入此槽</span>
                   )}
                 </div>
+                {u && <div className="touch-only wheel-touch-order">
+                  <button type="button" disabled={i === 0} aria-label={`${u.name}前移`} onClick={() => moveOrder(i, i - 1)}>前移</button>
+                  <button type="button" disabled={i === order.length - 1} aria-label={`${u.name}后移`} onClick={() => moveOrder(i, i + 1)}>后移</button>
+                </div>}
               </div>
             ))}
           </div>
