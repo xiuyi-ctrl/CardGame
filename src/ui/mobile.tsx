@@ -4,6 +4,7 @@ import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { persistSave } from './persistence';
 import { isAndroid } from './platform';
+import { MobileVersion } from './MobileVersion';
 
 const backActions: { run: () => void; priority: number }[] = [];
 
@@ -145,6 +146,7 @@ export function MobileShell({ state, dispatch, canSave }: { state: GameState; di
   }
 
   return <>
+    {isAndroid() && <MobileVersion visible={state.screen === 'title'} />}
     {mobile && !rotationDismissed && <div className="mobile-rotate-hint" role="status"><span>建议横屏游玩 · 请旋转手机</span><button onClick={() => setRotationDismissed(true)}>暂时继续当前方向</button></div>}
     {mobile && state.screen === 'battle' && <button type="button" className="mobile-menu-toggle" aria-label="打开游戏菜单" onClick={() => { setExiting(false); setMenu(true); }}>菜单</button>}
     {menu && <div className="mobile-system-overlay" role="dialog" aria-modal="true" aria-label={exiting ? '退出游戏' : '游戏菜单'}>

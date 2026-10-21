@@ -5,6 +5,9 @@ const config: CapacitorConfig = {
   appName: '驯牌远征',
   webDir: 'dist',
   android: { backgroundColor: '#101c2c' },
+  plugins: {
+    SystemBars: { hidden: true, initialViewportFitValueHint: 'cover' },
+  },
 };
 
 export default config;

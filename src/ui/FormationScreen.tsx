@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { UiSymbol } from './UiSymbol';
-import type { Dispatch, DragEvent } from 'react';
+import type { Dispatch, DragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import { FIELD_MAX, PROF_FIELD_MAX, getMaxRoster, maxFieldForEnemy } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
@@ -33,12 +33,14 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   });
   const [focusedUid, setFocusedUid] = useState<string | null>(null);
   const [placingUid, setPlacingUid] = useState<string | null>(null);
+  const [touchDraggingUid, setTouchDraggingUid] = useState<string | null>(null);
   useBackAction(true, () => {
     if (placingUid) setPlacingUid(null);
     else dispatch({ type: 'BACK_TO_MAP' });
   });
   /** 拖拽标记：区分「点击」与「拖拽后松手」（拖拽结束不应触发 click） */
   const dragMoved = useRef(false);
+  const touchDrag = useRef<{ uid: string; pointerId: number; x: number; y: number; moved: boolean } | null>(null);
 
   function markDrag() {
     dragMoved.current = true;
@@ -128,6 +130,56 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     setPositions(next);
   }
 
+  function onTouchDragStart(e: ReactPointerEvent<HTMLElement>, uid: string) {
+    if (e.pointerType === 'mouse') return;
+    touchDrag.current = { uid, pointerId: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
+  function onNativeDragStart(e: DragEvent<HTMLElement>, uid: string) {
+    if (touchDrag.current || document.documentElement.classList.contains('mobile-ui')) {
+      e.preventDefault();
+      return;
+    }
+    dragMoved.current = false;
+    e.dataTransfer.setData('text/plain', uid);
+  }
+
+  function onTouchDragMove(e: ReactPointerEvent<HTMLElement>) {
+    const drag = touchDrag.current;
+    if (!drag || drag.pointerId !== e.pointerId || drag.moved) return;
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 9) return;
+    drag.moved = true;
+    dragMoved.current = true;
+    setTouchDraggingUid(drag.uid);
+  }
+
+  function onTouchDragEnd(e: ReactPointerEvent<HTMLElement>) {
+    const drag = touchDrag.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    touchDrag.current = null;
+    if (!drag.moved) return;
+
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    const slot = target?.closest<HTMLElement>('.formation-slot');
+    if (slot?.dataset.formationRow && slot.dataset.formationColumn) {
+      moveToSlot(drag.uid, slot.dataset.formationRow as FormationRow, Number(slot.dataset.formationColumn) as 0 | 1 | 2);
+    } else if (!forceAll && target?.closest('.formation-pets') && positions[drag.uid]) {
+      const next = { ...positions };
+      delete next[drag.uid];
+      setPositions(next);
+    }
+    setTouchDraggingUid(null);
+    clearDrag();
+  }
+
+  function onTouchDragCancel(e: ReactPointerEvent<HTMLElement>) {
+    if (touchDrag.current?.pointerId !== e.pointerId) return;
+    touchDrag.current = null;
+    setTouchDraggingUid(null);
+    clearDrag();
+  }
+
   function confirm() {
     const units = fb.units
       .filter((u) => positions[u.uid])
@@ -188,6 +240,8 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                     <div
                       key={`${row}-${col}`}
                       className={`formation-slot ${isSel ? 'selected' : ''} ${u ? '' : 'empty'}`}
+                      data-formation-row={row}
+                      data-formation-column={col}
                       role="button"
                       tabIndex={0}
                       aria-label={`${label.replace(/\s/g, '')}第 ${col + 1} 位：${u ? u.name : '空位'}`}
@@ -204,12 +258,14 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                         <div
                           draggable
                           title={forceAll ? '拖拽调整站位' : '拖拽调整站位，点击放回宠物池'}
-                          onDragStart={(e) => {
-                            dragMoved.current = false;
-                            e.dataTransfer.setData('text/plain', u.uid);
-                          }}
+                          onDragStart={(e) => onNativeDragStart(e, u.uid)}
                           onDrag={markDrag}
                           onDragEnd={clearDrag}
+                          onPointerDown={(e) => onTouchDragStart(e, u.uid)}
+                          onPointerMove={onTouchDragMove}
+                          onPointerUp={onTouchDragEnd}
+                          onPointerCancel={onTouchDragCancel}
+                          className={touchDraggingUid === u.uid ? 'formation-touch-dragging' : undefined}
                         >
                           <UnitCard unit={u} battleDisplay imageOverride={FORMATION_SPRITES[u.speciesId]} />
                         </div>
@@ -229,7 +285,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
           </div>
           <div className="touch-only formation-touch-actions">
             <button type="button" disabled={!focusedUnit} onClick={() => setPlacingUid(placingUid ? null : focusedUnit?.uid ?? null)}>{placingUid ? '取消放置' : '调整站位'}</button>
-            {placingUid && <span role="status">点击目标位置放置或交换</span>}
+            {placingUid ? <span role="status">点击目标位置放置或交换</span> : <span>拖动伙伴头像调整站位</span>}
           </div>
           <div className="formation-pets" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
             {fb.units.map((u) => {
@@ -249,14 +305,17 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                   onMouseLeave={() => setFocusedUid(null)}
                   onFocus={() => setFocusedUid(u.uid)}
                   onBlur={() => setFocusedUid(null)}
-                  onDragStart={(e) => {
-                    dragMoved.current = false;
-                    e.dataTransfer.setData('text/plain', u.uid);
-                  }}
+                  onDragStart={(e) => onNativeDragStart(e, u.uid)}
                   onDrag={markDrag}
                   onDragEnd={clearDrag}
                 >
-                  <span className="formation-pet-portrait">
+                  <span
+                    className={`formation-pet-portrait ${touchDraggingUid === u.uid ? 'formation-touch-dragging' : ''}`}
+                    onPointerDown={(e) => onTouchDragStart(e, u.uid)}
+                    onPointerMove={onTouchDragMove}
+                    onPointerUp={onTouchDragEnd}
+                    onPointerCancel={onTouchDragCancel}
+                  >
                     {FORMATION_SPRITES[u.speciesId] ? <img src={FORMATION_SPRITES[u.speciesId]} alt={u.name} draggable={false} /> : <PixelCreature unit={u} />}
                   </span>
                   {positions[u.uid] && !forceAll && <span className="formation-pet-status">已上场</span>}
