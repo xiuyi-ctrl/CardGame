@@ -6,12 +6,35 @@ import { createBattle, makeUnit } from '../src/game/core/battle';
 import { createInitialState } from '../src/game/state/reducer';
 import { BattleStatusIcons, BATTLE_BUFF_ICON_IMAGES } from '../src/ui/BattleStatusIcons';
 import { BattleScreen } from '../src/ui/BattleScreen';
+import { BuffDetailPanel } from '../src/ui/components';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('战场右侧状态图标', () => {
+  it('狐火独立显示层数和上限，不与灼烧状态混淆', () => {
+    const unit = makeUnit('phantom_tail_fox', true, 0, false);
+    unit.statuses = [{ kind: 'foxFire', value: 3, turns: 0 }, { kind: 'burn', value: 2, turns: 2 }];
+    const { unmount } = render(createElement(BattleStatusIcons, { unit }));
+    expect(screen.getByAltText('狐火').title).toContain('3');
+    expect(screen.getByAltText('灼烧').title).toContain('2');
+    unmount();
+    render(createElement(BuffDetailPanel, { unit }));
+    expect(screen.getByText('狐火 3/5')).toBeTruthy();
+  });
+
+  it('日华显示当前层数并在Buff详情中说明上限与衰减', () => {
+    const unit = makeUnit('solar_spirit', true, 0, false);
+    unit.statuses = [{ kind: 'sunRadiance', value: 2, turns: 0 }];
+    const { unmount } = render(createElement(BattleStatusIcons, { unit }));
+    expect(screen.getByAltText('日华').title).toContain('2');
+    unmount();
+    render(createElement(BuffDetailPanel, { unit }));
+    expect(screen.getByText('日华 2/3')).toBeTruthy();
+    expect(screen.getByText(/日华 2\/3；增强日华灼击/)).toBeTruthy();
+  });
+
   it('按状态顺序最多显示三个，所有素材路径有效', () => {
     const unit = makeUnit('momo', true, 0, false);
     unit.statuses = [
@@ -23,7 +46,7 @@ describe('战场右侧状态图标', () => {
     render(createElement(BattleStatusIcons, { unit }));
     expect(screen.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual(['灼烧', '中毒', '技能封印']);
     expect(screen.getByAltText('灼烧').title).toContain('3');
-    expect(BATTLE_BUFF_ICON_IMAGES).toHaveLength(33);
+    expect(BATTLE_BUFF_ICON_IMAGES).toHaveLength(36);
     for (const src of BATTLE_BUFF_ICON_IMAGES) expect(existsSync(resolve('public', src.slice(1)))).toBe(true);
   });
 

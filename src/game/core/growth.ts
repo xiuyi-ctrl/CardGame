@@ -65,6 +65,7 @@ function isSpeedBuffSkill(skillId: string): boolean {
 
 /** 获取技能最大强化等级（连击/速度类最多2次，其他最多3次） */
 export function getSkillEnhanceMaxLevel(skillId: string): number {
+  if (skillId === 'burn_tail') return 0;
   if (isMultiHitSkill(skillId) || isSpeedBuffSkill(skillId)) return 2;
   return 3;
 }
@@ -216,6 +217,8 @@ export function applySkillEnhanceReset(unit: Unit, slotIndex: number): { newUnit
 
 /** 传奇技能池（仅奇遇关「传奇招募」可获得） */
 export const LEGENDARY_SKILLS = new Set([
+  'nine_tail_wildfire', 'flame_tail_shield',
+  'solar_strike', 'clean_flame_care', 'solar_heal',
   'molten_quake', 'sun_sunder',
   'molten_claw', 'furnace_bastion', 'seal_furnace',
   'eternal_flame', 'blazing_fuel', 'ember_transfer',

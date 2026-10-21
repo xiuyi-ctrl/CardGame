@@ -5,6 +5,9 @@ export type IconArt = readonly [label: string, file: string];
 export const STATUS_ART: Record<StatusEffect['kind'], IconArt> = {
   burn: ['灼烧', 'burn'],
   burnBrand: ['灼烧烙印', 'shadow-mark'],
+  sunRadiance: ['日华', 'heal-tick'],
+  foxFire: ['狐火', 'burn'],
+  foxTailGuard: ['焰尾护盾', 'shield'],
   poison: ['中毒', 'poison'],
   atkDown: ['攻击降低', 'atk-down'],
   stun: ['眩晕', 'stun'],

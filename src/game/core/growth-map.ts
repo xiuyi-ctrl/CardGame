@@ -11,11 +11,11 @@ export const TOTAL_LAYERS = 50;
 
 // ---- 生物池（模块级导出，供 growth-arena.ts 等引用） ----
 /** 一阶生物（rank 1） */
-export const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi', 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss'];
+export const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi', 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss', 'fire_fox'];
 /** 二阶生物（rank 2） */
-export const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king', 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast'];
+export const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king', 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast', 'phantom_tail_fox'];
 /** 传奇生物（rank 3） */
-export const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god', 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle'];
+export const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god', 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle', 'solar_spirit', 'nine_tail_sovereign'];
 
 /** 节点类型概率表（按层进度调整） */
 interface NodeProb {

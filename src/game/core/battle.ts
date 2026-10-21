@@ -376,7 +376,8 @@ export function createBattle(
     c.furnaceTriggers = undefined;
     c.eternalLightUsed = undefined;
     c.burnStripUsed = undefined;
-    c.healCleanseUsed = undefined;
+    c.radianceGainedThisRound = undefined;
+    c.statuses = c.statuses.filter(s => s.kind !== 'sunRadiance' && s.kind !== 'foxFire' && s.kind !== 'foxTailGuard');
     if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, c.spd - 2);
     return c;
   });
@@ -623,11 +624,19 @@ function startRound(b: BattleState): BattleState {
     }
     nb = checkEnd(nb);
   }
+  // 日华只根据上一完整回合的主动清火触发判断衰减，天然DOT不刷新机会。
+  for (const unit of [...nb.playerUnits, ...nb.enemyUnits]) {
+    if (unit.hp <= 0 || getUnitPassive(unit, nb)?.kind !== 'sunRadiance' || unit.radianceGainedThisRound) continue;
+    const layers = radianceLayers(unit);
+    if (layers <= 0) continue;
+    nb = replaceUnit(nb, { ...unit, statuses: unit.statuses.map(s => s.kind === 'sunRadiance' ? { ...s, value: layers - 1 } : s).filter(s => s.kind !== 'sunRadiance' || s.value > 0) });
+    nb = pushLog(nb, `${unit.name} 的「日华」衰减（当前 ${layers - 1}/3）`, sideOf(unit), unit.uid, unit.uid);
+  }
   // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
   nb = {
     ...nb,
-    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, healCleanseUsed: undefined })),
-    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, healCleanseUsed: undefined })),
+    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
+    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
   };
   // 热壳换火：必须先承受上一回合持续伤害，存活后才转换剩余燃料。
   for (const unit of [...nb.playerUnits, ...nb.enemyUnits]) {
@@ -639,6 +648,7 @@ function startRound(b: BattleState): BattleState {
     const msg = `${unit.name} 的「${passive.name}」获得 ${shield} 点护盾`;
     nb = pushLog(nb, msg, sideOf(unit), unit.uid, unit.uid, undefined, undefined,
       spans(msg, [['actor', unit.name], ['passive', passive.name]]));
+    nb = notifyBurnRemoved(nb, unit, layers);
   }
   // 清除来源已死亡的嘲讽
   const allUnits = [...nb.playerUnits, ...nb.enemyUnits];
@@ -746,6 +756,8 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
     const left = s.value - dmg;
     // damageCap：dot伤害也计入本回合累计伤害上限
     const p = getUnitPassive(unit);
+    const immuneBurn = s.kind === 'burn' && p?.kind === 'foxFlame';
+    if (immuneBurn) dmg = 0;
     if (p?.kind === 'damageCap') {
       const roundDmg = nb.roundDmgMap ?? {};
       const prevDmg = roundDmg[unit.uid] ?? 0;
@@ -762,6 +774,7 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
       statuses: left > 0 ? unit.statuses.map((x) => (x === s ? { ...x, value: left } : x)) : unit.statuses.filter((x) => x !== s),
     };
     nb = replaceUnit(nb, unit);
+    if (immuneBurn) nb = pushLog(nb, `${unit.name} 免疫灼烧伤害（自然消耗 ${s.value - left} 层）`, sideOf(unit), unit.uid, unit.uid);
     if (dmg > 0) {
       const dotName = s.kind === 'burn' ? '灼烧' : '中毒';
       const msgDot = `${unit.name} 受到${dotName} ${dmg} 点伤害`;
@@ -775,12 +788,12 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
 function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
-    if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield') continue;
+    if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.kind === 'sunRadiance' || s.kind === 'foxFire') continue;
     // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）、波光环（comboBoost）、暗影印记（shadowMark）、锁链连接（chainLink）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
     if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd' || s.kind === 'comboBoost' || s.kind === 'shadowMark' || s.kind === 'chainLink') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
-  u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.turns > 0);
+  u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.kind === 'sunRadiance' || s.kind === 'foxFire' || s.turns > 0);
 }
 
 export function pushLog(
@@ -799,6 +812,7 @@ export function pushLog(
   // 附加当下全员状态快照（深拷贝，防 tickStatuses 原地递减污染历史），供 UI 按动画事件回放状态层数
   const statuses: Record<string, StatusEffect[]> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) statuses[u.uid] = u.statuses.map((s) => ({ ...s }));
+  if (addsStatus?.includes('burn') && [targetUid, ...(burstTargets ?? [])].some(uid => uid && statuses[uid]?.some(s => s.kind === 'foxFire'))) addsStatus = [...new Set([...addsStatus, 'foxFire'])];
   // 附加当下全员护盾快照，供 UI 按动画事件逐步更新护盾显示
   const shields: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) shields[u.uid] = u.shield;
@@ -884,6 +898,56 @@ export function isBurning(unit: Unit): boolean {
 function consumeBurn(unit: Unit, amount: number): Unit {
   return { ...unit, statuses: unit.statuses.map((status) => status.kind === 'burn'
     ? { ...status, value: Math.max(0, status.value - amount) } : status).filter((status) => status.kind !== 'burn' || status.value > 0) };
+}
+
+export function radianceLayers(unit: Unit): number {
+  return Math.min(3, unit.statuses.find(s => s.kind === 'sunRadiance')?.value ?? 0);
+}
+
+export function foxFireLayers(unit: Unit): number {
+  return Math.min(9, unit.statuses.find(s => s.kind === 'foxFire')?.value ?? 0);
+}
+
+function addFoxFire(unit: Unit, amount: number): Unit {
+  const passive = getUnitPassive(unit);
+  const cap = passive?.kind === 'foxFlame' ? passive.value : 5;
+  const value = Math.min(cap, foxFireLayers(unit) + amount);
+  return { ...unit, statuses: unit.statuses.filter(s => s.kind !== 'foxFire').concat([{ kind: 'foxFire', value, turns: 0 }]) };
+}
+
+/** 仅由技能/被动实际清除或消耗灼烧的路径调用，绝不从DOT衰减调用。 */
+function notifyBurnRemoved(b: BattleState, target: Unit, amount: number): BattleState {
+  if (amount <= 0) return b;
+  let nb = b;
+  const allies = target.isPlayer ? b.playerUnits : b.enemyUnits;
+  for (const unit of allies) {
+    if (unit.hp <= 0 || unit.radianceGainedThisRound || getUnitPassive(unit, nb)?.kind !== 'sunRadiance') continue;
+    const layers = Math.min(3, radianceLayers(unit) + 1);
+    const holder = actorFromId(nb, unit.uid)!;
+    nb = replaceUnit(nb, { ...holder, radianceGainedThisRound: true,
+      statuses: holder.statuses.filter(s => s.kind !== 'sunRadiance').concat([{ kind: 'sunRadiance', value: layers, turns: 0 }]) });
+    nb = pushLog(nb, `${unit.name} 的「日华」充能（当前 ${layers}/3）`, sideOf(unit), unit.uid, unit.uid, ['sunRadiance']);
+  }
+  return nb;
+}
+
+/** 以技能治疗前的状态判断加成，灼烧反转尚未移除燃料时即确定。 */
+function mossHealBonus(b: BattleState, actor: Unit, target: Unit): number {
+  const passive = getUnitPassive(actor, b);
+  return passive?.kind === 'healBurnBoost' && isBurning(target) ? passive.value : 0;
+}
+
+function cleanseMossAfterHeal(b: BattleState, actor: Unit, targetUid: string): BattleState {
+  const healer = actorFromId(b, actor.uid);
+  const target = actorFromId(b, targetUid);
+  if (!healer || !target || target.hp <= 0) return b;
+  const passive = getUnitPassive(healer, b);
+  if (passive?.kind !== 'healBurnCleanse' && passive?.kind !== 'healBurnBoost' && passive?.kind !== 'sunRadiance') return b;
+  const amount = Math.min(passive.value, target.statuses.find(s => s.kind === 'burn')?.value ?? 0);
+  if (amount <= 0) return b;
+  const nb = replaceUnit(b, consumeBurn(target, amount));
+  const logged = pushLog(nb, `${actor.name} 的「${passive.name}」移除 ${target.name} ${amount} 层灼烧`, sideOf(actor), actor.uid, target.uid);
+  return notifyBurnRemoved(logged, target, amount);
 }
 
 /** 循焰飞羽仅在真实灼烧存在时越过前排；强制目标仍需满足射程条件。 */
@@ -1062,6 +1126,22 @@ function rngPick<T>(b: BattleState, arr: T[]): { pick?: T; battle: BattleState }
  * - all 群攻 / random 随机 / self / ally 不受前排限制
  */
 function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): { targets: Unit[]; battle: BattleState } {
+  if (skill.id === 'twin_tail_flames') {
+    let pool = enemiesOf(b, actor);
+    const taunt = pool.find(u => u.uid === actor.statuses.find(s => s.kind === 'taunt')?.sourceUid);
+    if (taunt) pool = [taunt];
+    else if (getUnitPassive(actor, b)?.kind === 'bloodScent') pool = [...pool].sort((a, c) => a.hp - c.hp).slice(0, 1);
+    const targets: Unit[] = [];
+    let nb = b;
+    while (targets.length < 2 && pool.length > 0) {
+      const result = rngPick(nb, pool);
+      nb = result.battle;
+      if (!result.pick) break;
+      targets.push(result.pick);
+      pool = pool.filter(u => u.uid !== result.pick!.uid);
+    }
+    return { targets, battle: nb };
+  }
   if (skill.id === 'burn_reversal' && explicitTarget && !alliesOf(b, actor).some((unit) => unit.uid === explicitTarget)) return { targets: [], battle: b };
   if (skill.id === 'burn_brand' && explicitTarget && !enemiesOf(b, actor).some((unit) => unit.uid === explicitTarget)) return { targets: [], battle: b };
   if (skill.id === 'flame_tracing_feather') {
@@ -1216,6 +1296,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
 }
 
 function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number; sourceUid?: string; sealedSkills?: string[] }, round?: number): Unit {
+  if (effect.kind === 'burn' && effect.value > 0 && unit.hp > 0 && getUnitPassive(unit)?.kind === 'foxFlame') unit = addFoxFire(unit, 1);
   const idx = unit.statuses.findIndex((s) => s.kind === effect.kind);
   if (idx >= 0) {
     const next = [...unit.statuses];
@@ -1308,7 +1389,7 @@ function selectEnemyAction(
         }
         continue;
       }
-      if (hs.id === 'burn_reversal') {
+      if (hs.id === 'burn_reversal' || hs.id === 'light_bath' || hs.id === 'clean_flame_care' || hs.id === 'solar_heal') {
         for (const ally of allies.filter(isBurning)) {
           // 生命安全时不为纯净化而清掉自燃换盾伙伴的燃料。
           if (getUnitPassive(ally, b)?.kind === 'burnShield' && ally.hp / ally.maxHp > 0.55) continue;
@@ -1549,6 +1630,8 @@ function selectEnemyAction(
     const scoredTargets = attackTargets.map((t) => {
       let tScore = 0;
       if (atk.id === 'shell_charge') tScore += Math.min(4, actor.shield) * 3;
+      if (atk.id === 'purifying_orb' && isBurning(t)) tScore += 6;
+      if (atk.id === 'solar_strike') tScore += radianceLayers(actor) * 4 + (isBurning(t) ? 6 : 0);
       if (atk.id === 'sun_sunder') {
         const passiveStrip = actorPassive?.kind === 'burnStripShield' && !actor.burnStripUsed && isBurning(t) ? actorPassive.value : 0;
         tScore += Math.min(4, Math.max(0, t.shield - passiveStrip)) * 3;
@@ -1614,6 +1697,16 @@ function selectEnemyAction(
   }
   // ─── 4b. 状态技能评分（弱化/毒雾等 debuff 技能） ───
   for (const st of statusSkills) {
+    if (st.id === 'burn_tail') {
+      const p = getUnitPassive(actor, b);
+      if (foxFireLayers(actor) < (p?.kind === 'foxFlame' ? p.value : 5)) candidates.push({ kind: 'status', skill: st, score: 55 });
+      continue;
+    }
+    if (st.id === 'illusory_flame') {
+      const p = getUnitPassive(actor, b);
+      candidates.push({ kind: 'status', skill: st, score: p?.kind === 'foxFlame' && foxFireLayers(actor) < p.value ? 45 : 15 });
+      continue;
+    }
     if (st.id === 'burn_brand') {
       const target = targetPool.filter((unit) => !unit.statuses.some((status) => status.kind === 'burnBrand' && status.sourceSide === sideOf(actor)))
         .sort((a, c) => (c.statuses.find((status) => status.kind === 'burn')?.value ?? 0) - (a.statuses.find((status) => status.kind === 'burn')?.value ?? 0))[0];
@@ -1820,11 +1913,13 @@ function applyRockShardDeath(b: BattleState, dead: Unit): BattleState {
             }
             const debuffKinds = ['burn', 'poison', 'atkDown', 'spdDown', 'taunt', 'stun', 'thorns'];
             const refreshed = actorFromId(nb, updatedBoss.uid);
+            const clearedBurn = refreshed?.statuses.find(s => s.kind === 'burn')?.value ?? 0;
             if (refreshed) {
               updatedBoss = { ...refreshed, statuses: refreshed.statuses.filter((s) => !debuffKinds.includes(s.kind)) };
             }
             nb = replaceUnit(nb, updatedBoss);
             nb = pushLog(nb, `${updatedBoss.name} 的「岩壳崩解」触发！岩壳碎裂，对全体敌人造成5点伤害！`, sideOf(updatedBoss), updatedBoss.uid, undefined, undefined, shardBurstUids);
+            nb = notifyBurnRemoved(nb, updatedBoss, clearedBurn);
           }
         }
       }
@@ -1899,6 +1994,7 @@ function resolveAttack(
   target: Unit,
   skill: SkillDef,
   count: number,
+  foxBurnBonus: number = 0,
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[]; didPoison: boolean } {
   let nb = b;
   // 技能强化：伤害加成
@@ -1987,6 +2083,8 @@ function resolveAttack(
     perHitDmg += 2;
   }
   if (skill.id === 'molten_claw' && isBurning(target)) perHitDmg += 2;
+  if (skill.id === 'purifying_orb' && isBurning(target)) perHitDmg += 2;
+  if (skill.id === 'solar_strike') perHitDmg += radianceLayers(actor) * 2;
   // 暗影追猎：对生命值低于50%的目标伤害+3
   if (ap?.kind === 'shadowHunter' && target.hp / target.maxHp < 0.5) {
     perHitDmg += ap.value;
@@ -2088,7 +2186,7 @@ function resolveAttack(
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
         // 眩晕/封印/嘲讽固定，不随强化变化；其余效果值叠加强化加成
         const fixedKinds = ['stun', 'taunt'];
-        const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + enhanceBonus.effectBonus;
+        const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + enhanceBonus.effectBonus + (e.kind === 'burn' && actor.isPlayer !== t2.isPlayer ? foxBurnBonus : 0);
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, value: effectValue, sourceUid: actor.uid } : { ...e, value: effectValue }, nb.round);
         if (e.kind === 'poison') didPoison = true;
       } else if (e.kind === 'skillSeal') {
@@ -2296,8 +2394,10 @@ function resolveAttack(
             }
             // 清除自身所有减益状态
             const debuffKinds = ['burn', 'poison', 'atkDown', 'spdDown', 'taunt', 'stun', 'thorns'];
+            const clearedBurn = (actorFromId(nb, t2.uid) ?? t2).statuses.find(s => s.kind === 'burn')?.value ?? 0;
             t2 = { ...(actorFromId(nb, t2.uid) ?? t2), statuses: (actorFromId(nb, t2.uid) ?? t2).statuses.filter((s) => !debuffKinds.includes(s.kind)) };
             nb = replaceUnit(nb, t2);
+            nb = notifyBurnRemoved(nb, t2, clearedBurn);
             nb = pushLog(nb, `${t2.name} 的「岩壳崩解」触发！岩壳碎裂，对全体敌人造成5点伤害！`, sideOf(t2), t2.uid, undefined, undefined, resolveShardBurstUids);
           }
         }
@@ -2423,6 +2523,13 @@ function resolveAttack(
       spans(msg, [['actor', t2.name], ['passive', furnace.name], ['target', attacker.name], ['status', `灼烧 ${furnace.value} 层`]]));
     if (shieldGain > 0) nb = pushLog(nb, `${t2.name} 的「${furnace.name}」获得 ${shieldGain} 点护盾`, sideOf(t2), t2.uid, t2.uid);
   }
+  const defended = actorFromId(nb, t2.uid)!;
+  if (skill.kind === 'attack' && lastHitLog !== undefined && defended.hp > 0 && defended.isPlayer !== actor.isPlayer
+    && defended.statuses.some(s => s.kind === 'foxTailGuard' && s.appliedRound === nb.round)) {
+    t2 = addFoxFire({ ...defended, statuses: defended.statuses.filter(s => s.kind !== 'foxTailGuard') }, 1);
+    nb = replaceUnit(nb, t2);
+    nb = pushLog(nb, `${t2.name} 的「焰尾护盾」获得 ${foxFireLayers(t2) - foxFireLayers(defended)} 层狐火（当前 ${foxFireLayers(t2)}）`, sideOf(t2), t2.uid, t2.uid, ['foxFire']);
+  }
   nb = applyDefeatedTarget(nb, t2);
   if (skill.kind === 'attack' && actor.isPlayer !== target.isPlayer && isBurning(target) && lastHitLog !== undefined) {
     nb = applyAfterglow(nb, actor);
@@ -2496,6 +2603,7 @@ function detonateBurnBrand(b: BattleState, actor: Unit, uid: string): BattleStat
   let damage = layers;
   let nb = b;
   const passive = getUnitPassive(target, nb);
+  if (passive?.kind === 'foxFlame') damage = 0;
   if (passive?.kind === 'damageCap') {
     const dealt = nb.roundDmgMap?.[target.uid] ?? 0;
     damage = Math.min(damage, Math.max(0, passive.value - dealt));
@@ -2507,11 +2615,13 @@ function detonateBurnBrand(b: BattleState, actor: Unit, uid: string): BattleStat
   nb = pushLog(nb, msg, sideOf(target), actor.uid, target.uid, undefined, undefined,
     spans(msg, [['target', target.name], ['skill', '灼烧烙印'], ['status', `${layers} 层`], ['damage', String(damage)]]));
   // 只把死亡前状态快照传给死亡回调，运行时尸体保留的是已清火状态。
+  nb = notifyBurnRemoved(nb, target, layers);
   return detonated.hp <= 0 ? applyDefeatedTarget(nb, { ...target, hp: 0, statuses }) : nb;
 }
 
 /** 玩家与敌方通用的技能结算（内部） */
 function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): BattleState {
+  const foxBurnBonus = foxFireLayers(actor);
   if (actor.hp <= 0) return b;
   if (actor.statuses.some((s) => s.kind === 'stun')) {
     return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
@@ -2579,6 +2689,35 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     if (skill.id === 'shell_charge') skill = { ...skill, damage: (skill.damage ?? 3) + spent };
   }
 
+  if (skill.id === 'burn_tail') {
+    const current = actorFromId(nb, actor.uid)!;
+    const empowered = addFoxFire(current, 2);
+    nb = replaceUnit(nb, empowered);
+    nb = pushLog(nb, `${actor.name} 使用「焚尾」，获得 ${foxFireLayers(empowered) - foxFireLayers(current)} 层狐火（当前 ${foxFireLayers(empowered)}）`, sideOf(actor), actor.uid, actor.uid, ['foxFire']);
+    return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
+  }
+  if (skill.id === 'flame_tail_shield') {
+    const current = actorFromId(nb, actor.uid)!;
+    const enhancement = getSkillEnhanceBonus(skill.id, getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id)));
+    const burning = applyStatusTo(current, { kind: 'burn', value: 2, turns: 2 }, nb.round);
+    const guarded = applyStatusTo({ ...burning, shield: Math.min(99, burning.shield + 4 + enhancement.effectBonus) }, { kind: 'foxTailGuard', value: 1, turns: 1 }, nb.round);
+    nb = replaceUnit(nb, guarded);
+    nb = pushLog(nb, `${actor.name} 使用「焰尾护盾」，强化自身`, sideOf(actor), actor.uid, actor.uid, ['burn', 'foxTailGuard']);
+    return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
+  }
+  if (skill.id === 'illusory_flame') {
+    const enhanced = getSkillEnhanceBonus(skill.id, getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id))).effectBonus;
+    nb = replaceUnit(nb, applyStatusTo(actorFromId(nb, actor.uid)!, { kind: 'burn', value: 2, turns: 2 }, nb.round));
+    nb = pushLog(nb, `${actor.name} 使用「虚火幻身」，${actor.name} 灼烧 2 层`, sideOf(actor), actor.uid, actor.uid, ['burn']);
+    const picked = rngPick(nb, enemiesOf(nb, actor));
+    nb = picked.battle;
+    if (picked.pick) {
+      const layers = 2 + enhanced + foxBurnBonus;
+      nb = replaceUnit(nb, applyStatusTo(picked.pick, { kind: 'burn', value: layers, turns: 2 }, nb.round));
+      nb = pushLog(nb, `${actor.name} 使用「虚火幻身」，${picked.pick.name} 灼烧 ${layers} 层`, sideOf(actor), actor.uid, picked.pick.uid, ['burn']);
+    }
+    return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
+  }
   if (skill.id === 'molten_self_burn') {
     const enhanced = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
     const damaged = { ...actorFromId(nb, actor.uid)!, hp: actor.hp - 1 };
@@ -2602,7 +2741,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         .filter((status) => status.kind !== 'burn' || status.value > 0) };
       let moved = replaceUnit(current, reduced);
       moved = replaceUnit(moved, applyStatusTo(destination, { kind: 'burn', value: amount, turns: 2 }, current.round));
-      return pushLog(moved, `${actor.name} 使用「余烬迁移」，${destination.name} 灼烧 ${amount} 层`, sideOf(actor), actor.uid, destination.uid, ['burn']);
+      moved = pushLog(moved, `${actor.name} 使用「余烬迁移」，${destination.name} 灼烧 ${amount} 层`, sideOf(actor), actor.uid, destination.uid, ['burn']);
+      return notifyBurnRemoved(moved, source, amount);
     });
   // 锁链引爆：对所有被锁链连接的敌方单位造成伤害（独立于 kind 判断，避免 attack kind 走入通用攻击分支打自身）
   } else if (skill.id === 'chain_activate') {
@@ -2628,12 +2768,13 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     const addsKinds = (skill.effects ?? []).map((e) => e.kind);
     for (const t of targets) {
       const removedBurn = skill.id === 'burn_reversal' ? Math.min(3, t.statuses.find(s => s.kind === 'burn')?.value ?? 0) : 0;
-      const treated = removedBurn > 0 ? consumeBurn(t, removedBurn) : t;
       if (removedBurn > 0) {
-        r = replaceUnit(r, treated);
+        r = replaceUnit(r, consumeBurn(t, removedBurn));
         r = pushLog(r, `${actor.name} 的「灼烧反转」移除 ${t.name} ${removedBurn} 层灼烧`, sideOf(actor), actor.uid, t.uid);
+        r = notifyBurnRemoved(r, t, removedBurn);
       }
-      const totalHeal = amt + removedBurn;
+      const treated = actorFromId(r, t.uid)!;
+      const totalHeal = amt + removedBurn + mossHealBonus(r, actor, t) + (skill.id === 'solar_heal' ? radianceLayers(actor) : 0);
       const maxHp = getEffectiveMaxHp(t);
       let healed = { ...treated, hp: Math.min(maxHp, t.hp + totalHeal) };
       // 治疗技能也可附带效果（如潮汐领域的水幕）
@@ -2662,18 +2803,20 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const msgHeal = `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${totalHeal} 点生命`;
       r = pushLog(r, msgHeal, sideOf(actor), actor.uid, t.uid, addsKinds, undefined,
         spans(msgHeal, [['actor', actor.name], ['skill', skill.name], ['target', t.name], ['heal', String(totalHeal)]]));
-      const healer = actorFromId(r, actor.uid)!;
-      const passive = getUnitPassive(healer, r);
-      if ((skill.target === 'ally' || skill.target === 'self') && !healer.healCleanseUsed && (passive?.kind === 'healBurnCleanse' || passive?.kind === 'healDotCleanse')) {
-        r = replaceUnit(r, { ...healer, healCleanseUsed: true });
-        const target = actorFromId(r, t.uid)!;
-        const kind = target.statuses.some(s => s.kind === 'burn' && s.value > 0) ? 'burn'
-          : passive.kind === 'healDotCleanse' && target.statuses.some(s => s.kind === 'poison' && s.value > 0) ? 'poison' : undefined;
-        if (kind) {
-          const cleaned = { ...target, statuses: target.statuses.map(s => s.kind === kind ? { ...s, value: s.value - 1 } : s).filter(s => s.kind !== kind || s.value > 0) };
-          r = replaceUnit(r, cleaned);
-          r = pushLog(r, `${actor.name} 的「${passive.name}」移除 ${t.name} 1 层${kind === 'burn' ? '灼烧' : '中毒'}`, sideOf(actor), actor.uid, t.uid);
+      if (skill.id === 'clean_flame_care') {
+        const current = actorFromId(r, t.uid)!;
+        const removed = Math.min(2, current.statuses.find(s => s.kind === 'burn')?.value ?? 0);
+        if (removed > 0) {
+          r = replaceUnit(r, consumeBurn(current, removed));
+          r = pushLog(r, `${actor.name} 的「净焰照护」移除 ${t.name} ${removed} 层灼烧`, sideOf(actor), actor.uid, t.uid);
+          r = notifyBurnRemoved(r, current, removed);
         }
+      }
+      r = cleanseMossAfterHeal(r, actor, t.uid);
+      if (skill.id === 'clean_flame_care' && (t.statuses.find(s => s.kind === 'burn')?.value ?? 0) > (actorFromId(r, t.uid)!.statuses.find(s => s.kind === 'burn')?.value ?? 0)) {
+        const current = actorFromId(r, t.uid)!;
+        r = replaceUnit(r, { ...current, hp: Math.min(getEffectiveMaxHp(current), current.hp + 2) });
+        r = pushLog(r, `${actor.name} 使用「净焰照护」，治愈 ${t.name} 2 点生命`, sideOf(actor), actor.uid, t.uid);
       }
     }
     nb = r;
@@ -2687,7 +2830,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         let buffed = t;
         if (skill.heal && skill.heal > 0) {
           const maxHp = getEffectiveMaxHp(buffed);
-          const healAmt = skill.heal + buffEnhanceBonus.healBonus;
+          const healAmt = skill.heal + buffEnhanceBonus.healBonus + mossHealBonus(nb, actor, buffed);
           buffed = { ...buffed, hp: Math.min(maxHp, buffed.hp + healAmt) };
         }
         for (const e of skill.effects ?? []) {
@@ -2701,12 +2844,14 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           }
         }
         nb = replaceUnit(nb, buffed);
-        const healPart = (skill.heal && skill.heal > 0) ? `，回复 ${skill.heal + buffEnhanceBonus.healBonus} 点生命` : '';
+        const buffHeal = (skill.heal ?? 0) + buffEnhanceBonus.healBonus + mossHealBonus(nb, actor, t);
+        const healPart = (skill.heal && skill.heal > 0) ? `，回复 ${buffHeal} 点生命` : '';
         const msgBuff = `${actor.name} 使用「${skill.name}」，强化${t.name === actor.name ? '自身' : t.name}${healPart}`;
         const buffSpans: [LogSpan['kind'], string][] = [['actor', actor.name], ['skill', skill.name]];
-        if (skill.heal && skill.heal > 0) buffSpans.push(['heal', `${skill.heal + buffEnhanceBonus.healBonus}`]);
+        if (skill.heal && skill.heal > 0) buffSpans.push(['heal', `${buffHeal}`]);
         nb = pushLog(nb, msgBuff, sideOf(actor), actor.uid, t.uid, undefined, undefined,
           spans(msgBuff, buffSpans));
+        if ((skill.heal ?? 0) > 0) nb = cleanseMossAfterHeal(nb, actor, t.uid);
       }
     } else {
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor), actor.uid, actor.uid);
@@ -2949,7 +3094,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         } else {
           // 眩晕/封印/嘲讽固定，不随强化变化；其余效果值叠加强化加成
           const fixedKinds = ['stun', 'skillSeal', 'taunt'];
-          const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + statusEnhanceBonus.effectBonus;
+          const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + statusEnhanceBonus.effectBonus + (e.kind === 'burn' && actor.isPlayer !== t.isPlayer ? foxBurnBonus : 0);
           affected = applyStatusTo(affected, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
         }
       }
@@ -2967,7 +3112,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         return `${label} ${val} 层`;
       }
       if (e.kind === 'poison') return `中毒 ${e.value + statusEnhanceBonus.effectBonus} 层`;
-      if (e.kind === 'burn') return `灼烧 ${e.value + statusEnhanceBonus.effectBonus} 层`;
+      if (e.kind === 'burn') return `灼烧 ${e.value + statusEnhanceBonus.effectBonus + (skill.target !== 'self' && skill.target !== 'ally' && skill.target !== 'allyAll' ? foxBurnBonus : 0)} 层`;
       if (e.kind === 'atkDown') return `降低攻击 ${e.value + statusEnhanceBonus.effectBonus} 层`;
       if (e.kind === 'spdDown') return `降低速度 ${e.value + statusEnhanceBonus.effectBonus} 层`;
       if (e.kind === 'stun') return '眩晕';
@@ -3013,6 +3158,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       let t = actorFromId(nb, uid);
       if (!t || t.hp <= 0) continue;
       let targetSkill = skill;
+      if (skill.id === 'solar_strike' && isBurning(t)) targetSkill = { ...skill, effects: [{ kind: 'burn', value: 2, turns: 2 }] };
       if (skill.id === 'sun_sunder') {
         const stripped = Math.min(4, t.shield);
         const shield = t.shield - stripped;
@@ -3024,7 +3170,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       }
       const branded = skill.kind === 'attack' && actor.isPlayer !== t.isPlayer
         && t.statuses.some((status) => status.kind === 'burnBrand' && status.sourceSide === sideOf(actor));
-      const result = resolveAttack(nb, actor, t, targetSkill, count);
+      const result = resolveAttack(nb, actor, t, targetSkill, count, foxBurnBonus);
       nb = result.battle;
       attackHit ||= result.lastHitLog !== undefined;
       if (branded && result.lastHitLog !== undefined) brandedHits.add(uid);
@@ -3058,7 +3204,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           const freshTarget = actorFromId(nb, t.uid);
           if (!freshTarget || freshTarget.hp <= 0) continue;
           if (getEffectiveSpd(freshActor) > getEffectiveSpd(freshTarget)) {
-            const result = resolveAttack(nb, freshActor, freshTarget, skill, 1);
+            const result = resolveAttack(nb, freshActor, freshTarget, skill, 1, foxBurnBonus);
             nb = result.battle;
             if (result.didPoison) nb = applyCorruptSpread(nb, freshTarget.uid);
           }
@@ -3086,6 +3232,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         const amount = Math.min(2 + enhanced, 99 - current.shield);
         nb = replaceUnit(nb, { ...consumeBurn(current, 1), shield: current.shield + amount });
         nb = pushLog(nb, `${actor.name} 的「热壳顶撞」获得 ${amount} 点护盾`, sideOf(actor), actor.uid, actor.uid);
+        nb = notifyBurnRemoved(nb, current, 1);
       }
     }
     for (const uid of brandedHits) nb = detonateBurnBrand(nb, actor, uid);
@@ -3189,9 +3336,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const healedActor = actorFromId(nb, actor.uid);
       if (healedActor && healedActor.hp > 0) {
         const maxHp = getEffectiveMaxHp(healedActor);
-        const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + healAmt) };
+        const totalHeal = healAmt + mossHealBonus(nb, actor, healedActor);
+        const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + totalHeal) };
         nb = replaceUnit(nb, healed);
-        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」恢复 ${healAmt} 点生命`, sideOf(actor), actor.uid, actor.uid);
+        nb = pushLog(nb, `${actor.name} 使用「${skill.name}」恢复 ${totalHeal} 点生命`, sideOf(actor), actor.uid, actor.uid);
+        nb = cleanseMossAfterHeal(nb, actor, actor.uid);
       }
     }
   }
@@ -3640,6 +3789,7 @@ export function getDamageBonus(u: Unit, b?: BattleState): number {
   }
   const p = getUnitPassive(u, b);
   if (p?.kind === 'power') bonus += p.value;
+  if (p?.kind === 'foxFlame' && foxFireLayers(u) >= p.value) bonus += p.fullFoxDamage ?? 0;
   if (p?.kind === 'frenzy' && u.hp / u.maxHp < 0.5) bonus += p.value;
   // 熔火狂暴：伤害 +1（与 scorch 3 叠加构成爆发形态）
   if (p?.id === 'fire_rage') bonus += 1;

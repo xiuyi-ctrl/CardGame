@@ -125,7 +125,11 @@ export function allRevealed(newStatuses: Record<string, string[]>): Record<strin
 
 const RE_ATTACK = /^(.+?) 使用「(.+?)」攻击 (.+?)，造成 (\d+) 伤害$/;
 const RE_HEAL = /^(.+?) 使用「(.+?)」(?:，治愈|恢复) (?:(.+?) )?(\d+) 点生命$/;
-const RE_MOSS_CLEANSE = /^(.+?) 的「(吸热苔|净苔|灼烧反转)」移除 (.+?) (\d+) 层(灼烧|中毒)$/;
+const RE_MOSS_CLEANSE = /^(.+?) 的「(吸热苔|净苔|澄焰|灼烧反转|净焰照护)」移除 (.+?) (\d+) 层(灼烧|中毒)$/;
+const RE_RADIANCE = /^(.+?) 的「日华」(?:充能|衰减)（当前 (\d)\/3）$/;
+const RE_FOX_IMMUNE = /^(.+?) 免疫灼烧伤害（自然消耗 (\d+) 层）$/;
+const RE_BURN_TAIL = /^(.+?) 使用「焚尾」，获得 (\d+) 层狐火（当前 (\d+)）$/;
+const RE_FOX_TAIL_GUARD = /^(.+?) 的「焰尾护盾」获得 (\d+) 层狐火（当前 (\d+)）$/;
 const RE_PASSIVE_HEAL = /^(.+?) 的「(.+?)」(?:恢复|治愈) (\d+) 点生命$/;
 const RE_FURNACE_BURN = /^(.+?) 的「(炉火|炽炉|熔炉之心)」使 (.+?) 灼烧 (\d+) 层$/;
 const RE_FURNACE_SHIELD = /^(.+?) 的「(熔炉之心|热壳换火|熔蜕|赤甲炼火|热壳顶撞)」获得 (\d+) 点护盾$/;
@@ -291,6 +295,16 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if ((m = text.match(RE_MOSS_CLEANSE))) {
     return { kind: 'buff', actorUid: entry.actorUid ?? findUid(b, side, m[1]),
       targetUid: entry.targetUid ?? findUid(b, side, m[3]), value: 0, skillName: m[2],
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_RADIANCE))) {
+    const uid = entry.actorUid ?? findUid(b, side, m[1]);
+    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: '日华', addsStatus: entry.addsStatus,
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_FOX_IMMUNE)) || (m = text.match(RE_BURN_TAIL)) || (m = text.match(RE_FOX_TAIL_GUARD))) {
+    const uid = entry.actorUid ?? findUid(b, side, m[1]);
+    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: '狐火', addsStatus: entry.addsStatus,
       hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
   if ((m = text.match(RE_HEAL))) {

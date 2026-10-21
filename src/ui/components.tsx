@@ -14,10 +14,11 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
   if (s.kind === 'attack') {
     const dmg = (s.damage ?? 0) + bonus.damageBonus;
     if (s.id === 'shell_charge') return `${dmg}+护盾`;
+    if (s.id === 'solar_strike') return `${dmg}+日华×2`;
     const hits = (s.hits ?? 1) + bonus.hitsBonus;
     return hits > 1 ? `${dmg}×${hits}` : String(dmg);
   }
-  if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}${s.id === 'burn_reversal' ? '+移除层数' : ''}`;
+  if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}${s.id === 'burn_reversal' ? '+移除层数' : s.id === 'solar_heal' ? '+日华' : ''}`;
   if (s.kind === 'buff') {
     const shieldEffect = s.effects?.find(e => e.kind === 'shield');
     if (shieldEffect) {
@@ -31,6 +32,12 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
 function effectText(e: StatusEffect): string {
   const turns = e.turns > 0 ? `，持续 ${e.turns} 回合` : '';
   switch (e.kind) {
+    case 'foxFire':
+      return `狐火 ${e.value}层；技能对敌人附加灼烧额外＋${e.value}层，战斗内不衰减`;
+    case 'foxTailGuard':
+      return '施放当回合首次被敌方攻击技能命中且存活后，额外获得1层狐火；多段只触发一次';
+    case 'sunRadiance':
+      return `日华 ${e.value}/3；增强日华灼击与日华治愈，本回合未触发充能时回合结束失去1层`;
     case 'burnBrand':
       return '下次所属阵营攻击命中后引爆剩余全部灼烧并清空';
     case 'burn':
@@ -115,6 +122,11 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   if (s.id === 'fire_feather') {
     desc = desc.replace('5点伤害', `${5 + bonus.damageBonus}点伤害`);
   }
+  if (s.id === 'purifying_orb') desc = desc.replace('3点伤害', `${3 + bonus.damageBonus}点伤害`);
+  if (s.id === 'solar_strike') desc = desc.replace('造成3加', `造成${3 + bonus.damageBonus}加`);
+  if (s.id === 'solar_heal') desc = desc.replace('回复3加', `回复${3 + bonus.healBonus}加`);
+  if (s.id === 'sealed_style_foxfire' || s.id === 'twin_tail_flames' || s.id === 'nine_tail_wildfire') desc = desc.replace('3点伤害', `${3 + bonus.damageBonus}点伤害`);
+  if (s.id === 'illusory_flame') desc = desc.replace('敌人附加灼烧2层', `敌人附加灼烧${2 + bonus.effectBonus}层`);
   if (s.id === 'shell_charge') desc = desc.replace('造成3加', `造成${3 + bonus.damageBonus}加`);
   if (s.id === 'molten_quake' || s.id === 'sun_sunder') {
     desc = desc.replace(`造成${s.damage}点伤害`, `造成${(s.damage ?? 0) + bonus.damageBonus}点伤害`);
@@ -353,11 +365,15 @@ export function PassiveBadge({ unit, stacksOverride, rockShellHitsOverride, thor
   const rockHits = p.kind === 'rockShellBreak' ? (rockShellHitsOverride ?? unit.rockShellHits ?? 0) : undefined;
   const thornHits = p.kind === 'thornRoyal' ? (thornsHitCountOverride ?? unit.thornsHitCount ?? 0) : undefined;
   const formLabel = unit.altPassive ? (unit.passive === unit.altPassive ? '【爆发】' : '【熔岩】') : '';
+  const radiance = p.kind === 'sunRadiance' ? unit.statuses.find(s => s.kind === 'sunRadiance')?.value ?? 0 : undefined;
+  const foxFire = p.kind === 'foxFlame' ? unit.statuses.find(s => s.kind === 'foxFire')?.value ?? 0 : undefined;
   return (
     <span className="passive-badge" title={`被动「${p.name}」：${p.desc}`}>
       💠{p.name}{formLabel}{showStacks ? ` ×${stacks}` : ''}{followStacks > 0 ? ` ×${followStacks}` : ''}{soulStacks > 0 ? ` 💀×${soulStacks}` : ''}
       {rockHits !== undefined && p.value !== undefined ? ` ${rockHits}/${p.value}` : ''}
       {thornHits !== undefined && p.value !== undefined ? ` ${thornHits % p.value}/${p.value}` : ''}
+      {radiance !== undefined ? ` 日华 ${radiance}/3` : ''}
+      {foxFire !== undefined ? ` 狐火 ${foxFire}/${p.value}` : ''}
     </span>
   );
 }
@@ -649,6 +665,8 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
   // 计算被动当前层数/加成（仅动态计数显示数字，固定效果数值在描述文字中）
   const passiveStacks = (() => {
     if (!passive) return null;
+    if (passive.kind === 'sunRadiance') return `日华 ${unit.statuses.find(s => s.kind === 'sunRadiance')?.value ?? 0}/3`;
+    if (passive.kind === 'foxFlame') return `狐火 ${unit.statuses.find(s => s.kind === 'foxFire')?.value ?? 0}/${passive.value}`;
     // 速度叠加类被动：显示战斗中累计层数（被动层数随攻击/受击逐段递增）
     if (passive.kind === 'speedBonus' || passive.kind === 'spdOnHit' || passive.kind === 'treeSpeedUp' || passive.kind === 'spdOnAttack') {
       const stacks = stacksOverride ?? unit.passiveSpdStacks ?? 0;

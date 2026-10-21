@@ -1,6 +1,50 @@
 import type { SkillDef } from '../types';
 
 export const SKILLS: Record<string, SkillDef> = {
+  nine_tail_wildfire: {
+    id: 'nine_tail_wildfire', name: '九尾燎原', desc: '对全体敌人各造成3点伤害并附加灼烧1层，冷却1回合',
+    target: 'all', kind: 'attack', damage: 3, cooldown: 1, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
+  },
+  flame_tail_shield: {
+    id: 'flame_tail_shield', name: '焰尾护盾', desc: '自身获得灼烧2层与4点护盾；施放当回合首次被敌方攻击技能命中且存活后，额外获得1层狐火，多段只触发一次，冷却1回合',
+    target: 'self', kind: 'buff', cooldown: 1, hideEffects: true, effects: [{ kind: 'shield', value: 4, turns: 99 }],
+  },
+  sealed_style_foxfire: {
+    id: 'sealed_style_foxfire', name: '破式狐火', desc: '攻击单个敌人，造成3点伤害并附加灼烧1层；普通前排保护，不附带封技效果',
+    target: 'single', kind: 'attack', damage: 3, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
+  },
+  illusory_flame: {
+    id: 'illusory_flame', name: '虚火幻身', desc: '为自身附加灼烧2层，并为随机一名存活敌人附加灼烧2层；狐火只增强敌方附火，按施放前层数计算；不提供虚火减伤或封技，无冷却',
+    target: 'self', kind: 'status', hideEffects: true,
+  },
+  twin_tail_flames: {
+    id: 'twin_tail_flames', name: '双尾扫焰', desc: '随机选择两名不同敌人，各造成3点伤害并附加灼烧1层；只有一名合法敌人时只攻击一次，无冷却',
+    target: 'random', kind: 'attack', damage: 3, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
+  },
+  burn_tail: {
+    id: 'burn_tail', name: '焚尾', desc: '立即获得2层狐火，不超过自身上限；每场限1次，占用一次基础行动',
+    target: 'self', kind: 'status', uses: 1,
+  },
+  solar_strike: {
+    id: 'solar_strike', name: '日华灼击', desc: '攻击单个敌人，造成3加日华层数乘2的伤害；目标攻击前已灼烧时附加灼烧2层',
+    target: 'single', kind: 'attack', damage: 3,
+  },
+  clean_flame_care: {
+    id: 'clean_flame_care', name: '净焰照护', desc: '为指定一名己方伙伴回复6点生命，移除最多2层灼烧；若本次技能或治疗被动实际移除了灼烧，再回复2点生命；每场限3次',
+    target: 'ally', kind: 'heal', heal: 6, uses: 3,
+  },
+  solar_heal: {
+    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命，可选自己',
+    target: 'ally', kind: 'heal', heal: 3,
+  },
+  light_bath: {
+    id: 'light_bath', name: '光浴', desc: '为指定的一名己方伙伴回复3点生命值，可选自己',
+    target: 'ally', kind: 'heal', heal: 3,
+  },
+  purifying_orb: {
+    id: 'purifying_orb', name: '净光球', desc: '攻击单个敌人，造成3点伤害；目标攻击前已灼烧时额外造成2点伤害',
+    target: 'single', kind: 'attack', damage: 3,
+  },
   burn_reversal: {
     id: 'burn_reversal', name: '灼烧反转', desc: '为一名己方伙伴移除最多3层灼烧，再回复2加实际移除层数的生命，基础最多5点；无灼烧仍治疗2点，可选自己，冷却1回合',
     target: 'ally', kind: 'heal', heal: 2, cooldown: 1, hideEffects: true,

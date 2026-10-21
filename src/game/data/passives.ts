@@ -1,8 +1,12 @@
 import type { PassiveDef } from '../types';
 
 export const PASSIVES: Record<string, PassiveDef> = {
-  heat_moss: { id: 'heat_moss', name: '吸热苔', desc: '每回合首次主动使用单体治疗技能后，额外移除被治疗伙伴1层灼烧；没有灼烧也消耗本回合机会，不由吸血或被动治疗触发', kind: 'healBurnCleanse', value: 1 },
-  clean_moss: { id: 'clean_moss', name: '净苔', desc: '每回合首次主动单体治疗后，移除该伙伴1层灼烧；若此时没有灼烧，改为移除1层中毒；只移除一种，没有异常也消耗本回合机会', kind: 'healDotCleanse', value: 1 },
+  nine_tail_heart: { id: 'nine_tail_heart', name: '九尾焰心', desc: '免疫灼烧伤害，每次被附加灼烧获得1层狐火，上限9层；每层使技能对敌人附加的灼烧额外增加1层，狐火满9层时技能直接伤害＋1；按施放前层数计算，不增强自身点火或被动附火', kind: 'foxFlame', value: 9, fullFoxDamage: 1 },
+  fox_flame_body: { id: 'fox_flame_body', name: '狐火之躯', desc: '免疫灼烧伤害，每次被附加灼烧时获得1层狐火，上限3层；每层使自身技能对敌人附加的灼烧额外增加1层，不增强自身点火或被动附火。狐火战斗内不衰减', kind: 'foxFlame', value: 3 },
+  twin_fox_flame: { id: 'twin_fox_flame', name: '双尾狐焰', desc: '免疫灼烧伤害，每次被附加灼烧时获得1层狐火，上限5层；每层使自身技能对敌人附加的灼烧额外增加1层，不增强自身点火或被动附火。狐火战斗内不衰减', kind: 'foxFlame', value: 5 },
+  clear_flame: { id: 'clear_flame', name: '澄焰', desc: '每次技能治疗后移除目标最多3层灼烧；每回合首次有友方灼烧被技能或被动移除时获得1层日华，上限3层，每只持有者独立计次；灼烧自然结算不触发。本回合未触发充能时，回合结束失去1层日华', kind: 'sunRadiance', value: 3 },
+  heat_moss: { id: 'heat_moss', name: '吸热苔', desc: '每次以技能施加治疗后，移除该伙伴最多2层灼烧；不限每回合次数，不移除中毒，不由道具、被动恢复或吸血触发', kind: 'healBurnCleanse', value: 2 },
+  clean_moss: { id: 'clean_moss', name: '净苔', desc: '每次以技能施加治疗后，移除目标最多2层灼烧；为治疗前已灼烧的友方提供治疗时，治疗量额外增加2点，灼烧反转按清火前判断；不限每回合次数，不移除中毒', kind: 'healBurnBoost', value: 2 },
   heated_carapace: { id: 'heated_carapace', name: '热壳换火', desc: '每回合开始，在上一回合灼烧结算后，消耗自身1层灼烧并获得2点护盾；没有灼烧时不触发', kind: 'burnShield', value: 2 },
   burning_feather: { id: 'burning_feather', name: '灼羽剥甲', desc: '每回合首次攻击一个攻击前已灼烧且有护盾的敌人时，伤害前额外移除其2点护盾；多段或群攻只作用一次，不造成额外生命伤害', kind: 'burnStripShield', value: 2 },
   red_carapace: { id: 'red_carapace', name: '赤甲炼火', desc: '每回合开始，在上一回合灼烧结算后，消耗自身最多2层灼烧，每层获得3点护盾，最多6点；没有灼烧时不触发', kind: 'burnShield', value: 3, burnConsumeMax: 2 },

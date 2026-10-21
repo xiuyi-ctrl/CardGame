@@ -484,16 +484,39 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     evolutions: [{ to: 'solar_eagle' }],
     desc: '金纹赤羽的高速猛禽，剥开燃烧敌人的护盾，并用灼烧烙印引导伙伴命中后集中引爆余火。',
   },
+  fire_fox: {
+    id: 'fire_fox', name: '火狐', emoji: '🦊', baseHp: 11, baseSpd: 4,
+    skills: ['sealed_style_foxfire', 'illusory_flame'], passive: 'fox_flame_body', tame: { difficulty: 0.7 }, rank: 1,
+    evolutions: [{ to: 'phantom_tail_fox' }],
+    desc: '将自身灼烧化为狐火的灵巧幼狐，免疫灼烧伤害，以自燃逐渐强化点火能力；仍会受到直接攻击与中毒伤害。',
+  },
+  phantom_tail_fox: {
+    id: 'phantom_tail_fox', name: '幻尾火狐', emoji: '🦊', baseHp: 16, baseSpd: 5,
+    skills: ['twin_tail_flames', 'illusory_flame', 'burn_tail'], passive: 'twin_fox_flame', tame: { difficulty: 0.4 }, rank: 2,
+    evolutions: [{ to: 'nine_tail_sovereign' }],
+    desc: '双尾间燃起多重狐火，随机向不同敌人扫出火焰；焚尾可快速积累狐火，但每场只有一次机会。',
+  },
+  nine_tail_sovereign: {
+    id: 'nine_tail_sovereign', name: '九尾炎尊', emoji: '🦊', baseHp: 28, baseSpd: 6,
+    skills: ['twin_tail_flames', 'burn_tail', 'nine_tail_wildfire', 'flame_tail_shield'], passive: 'nine_tail_heart', tame: { difficulty: 0.3 }, rank: 3,
+    desc: '九尾环绕焰心，借自燃和承受攻击积攒最多九层狐火；满层后灼烧铺场与直接攻击一同增强。',
+  },
   light_moss: {
     id: 'light_moss', name: '光苔球', emoji: '🌱', baseHp: 12, baseSpd: 3,
-    skills: ['aqua_shot', 'lamp_guard'], passive: 'heat_moss', tame: { difficulty: 0.75 }, rank: 1,
+    skills: ['aqua_shot', 'light_bath'], passive: 'heat_moss', tame: { difficulty: 0.75 }, rank: 1,
     evolutions: [{ to: 'moss_beast' }],
-    desc: '中心透出暖白光的淡绿苔球，主动治疗后吸走伙伴少量灼烧；过早清火也会减少熔甲伙伴的燃料。',
+    desc: '中心透出暖白光的淡绿苔球，以光浴恢复伙伴生命，每次治疗后吸走最多两层灼烧；过早清火也会减少熔甲伙伴的燃料。',
   },
   moss_beast: {
     id: 'moss_beast', name: '光苔兽', emoji: '🌿', baseHp: 18, baseSpd: 4,
-    skills: ['aqua_shot', 'heal_light', 'burn_reversal'], passive: 'clean_moss', tame: { difficulty: 0.4 }, rank: 2,
-    desc: '背负叶簇的四足苔兽，以有限大额治疗救援伙伴，或将灼烧反转为恢复；传奇日炎灵暂未开放。',
+    skills: ['light_bath', 'burn_reversal', 'purifying_orb'], passive: 'clean_moss', tame: { difficulty: 0.4 }, rank: 2,
+    evolutions: [{ to: 'solar_spirit' }],
+    desc: '背负叶簇的四足苔兽，为燃烧伙伴提供更强治疗并清除余火，也能以净光球攻击燃烧敌人。',
+  },
+  solar_spirit: {
+    id: 'solar_spirit', name: '日炎灵', emoji: '☀️', baseHp: 26, baseSpd: 5,
+    skills: ['burn_reversal', 'solar_strike', 'clean_flame_care', 'solar_heal'], passive: 'clear_flame', tame: { difficulty: 0.3 }, rank: 3,
+    desc: '披着叶之斗篷的暖光灵体，将伙伴被移除的余火凝成日华，增强攻击与治疗；未能持续清火时，日华逐渐消退。',
   },
   molten_beast: {
     id: 'molten_beast', name: '熔甲兽', emoji: '🪲', baseHp: 30, baseSpd: 4,
@@ -545,6 +568,6 @@ export const EVO1_POOL = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora'
 export const EVO2_POOL = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god'];
 
 /** 主模式新增伙伴池；原六条进化链池保留用于开局与专项评估。 */
-export const MAIN_BASE_POOL = [...BASE_POOL, 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss'];
-export const MAIN_EVO1_POOL = [...EVO1_POOL, 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast'];
-export const MAIN_EVO2_POOL = [...EVO2_POOL, 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle'];
+export const MAIN_BASE_POOL = [...BASE_POOL, 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss', 'fire_fox'];
+export const MAIN_EVO1_POOL = [...EVO1_POOL, 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast', 'phantom_tail_fox'];
+export const MAIN_EVO2_POOL = [...EVO2_POOL, 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle', 'solar_spirit', 'nine_tail_sovereign'];

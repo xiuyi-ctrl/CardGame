@@ -1,5 +1,5 @@
 export interface StatusEffect {
-  kind: 'burn' | 'burnBrand' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
+  kind: 'burn' | 'burnBrand' | 'sunRadiance' | 'foxFire' | 'foxTailGuard' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -53,8 +53,10 @@ export interface SkillDef {
 
 /** 被动技能效果类型 */
 export type PassiveKind =
-  | 'healBurnCleanse' // 首次主动单体治疗后清除灼烧
-  | 'healDotCleanse' // 首次主动单体治疗后优先清灼烧，否则清中毒
+  | 'healBurnCleanse' // 技能施加治疗后清除灼烧
+  | 'healBurnBoost' // 为灼烧目标施加技能治疗时增量，治疗后清除灼烧
+  | 'sunRadiance' // 技能治疗后清火，友方被移除灼烧时每回合首次积攒日华
+  | 'foxFlame' // 免疫灼烧伤害，被附加灼烧获得狐火，value为层数上限
   | 'hp' // 生命加成：maxHp + value（战斗开始时生效）
   | 'spd' // 速度加成：spd + value（战斗开始时生效）
   | 'regen' // 再生：每回合开始恢复 value 点生命
@@ -119,6 +121,8 @@ export interface PassiveDef {
   shieldOnTrigger?: number;
   /** 自燃换盾每回合可消耗的最大灼烧层数，缺省1。 */
   burnConsumeMax?: number;
+  /** 狐火达到本被动上限时的技能直接伤害加成，缺省0。 */
+  fullFoxDamage?: number;
 }
 
 export interface SpeciesTame {
@@ -198,7 +202,7 @@ export interface Unit {
   /** 长明之光本回合是否已触发，每只生物独立计次。 */
   eternalLightUsed?: boolean;
   burnStripUsed?: boolean;
-  healCleanseUsed?: boolean;
+  radianceGainedThisRound?: boolean;
   /** 专属被动技能 id（随物种固定） */
   passive?: string;
   /** 本场战斗中各技能剩余使用次数（skillId -> 剩余次数；有限次数技能用） */

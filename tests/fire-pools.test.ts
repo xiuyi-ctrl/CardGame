@@ -97,7 +97,7 @@ describe('灼烧新生物与技能完整投放', () => {
       expect(LEGENDARY_SKILLS.has(id)).toBe(true);
       expect(normal).not.toContain(id);
     }
-    expect(LEGENDARY_SKILLS.size).toBe(37);
+    expect(LEGENDARY_SKILLS.size).toBe(42);
     expect(getRandomSkillChoices(unit, normal.length, createRng(1))).toEqual(expect.arrayContaining(ordinarySkills));
     expect(getRandomLegendarySkillChoices(unit, 100, createRng(1))).toEqual(expect.arrayContaining(legendarySkills));
     const learned = { ...unit, skills: [...ordinarySkills, ...legendarySkills] };

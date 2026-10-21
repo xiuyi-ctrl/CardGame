@@ -654,6 +654,7 @@ const RECRUIT_POOL = BASE_POOL;
 const ACT1_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_larva'], weight: 1 },
   { species: ['light_moss'], weight: 1 },
+  { species: ['fire_fox'], weight: 1 },
   { species: ['ember_hawk'], weight: 1 },
   { species: ['candle'], weight: 1 },
   { species: ['coal'], weight: 1 },
@@ -667,6 +668,7 @@ const ACT1_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
 const ACT1_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_larva', 'candle'], weight: 10 },
   { species: ['light_moss', 'coal'], weight: 10 },
+  { species: ['fire_fox', 'light_moss'], weight: 10 },
   { species: ['ember_hawk', 'coal'], weight: 10 },
   { species: ['coal', 'lulu'], weight: 10 },
   { species: ['candle', 'kiki'], weight: 10 },
@@ -685,6 +687,7 @@ const ACT1_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
 const ACT1_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_larva', 'lulu', 'momo'], weight: 10 },
   { species: ['light_moss', 'molten_larva', 'momo'], weight: 10 },
+  { species: ['fire_fox', 'coal', 'momo'], weight: 10 },
   { species: ['ember_hawk', 'coal', 'candle'], weight: 10 },
   { species: ['coal', 'momo', 'fifi'], weight: 10 },
   { species: ['candle', 'kiki', 'mimi'], weight: 10 },
@@ -703,6 +706,7 @@ const ACT1_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
 const ACT1_ELITE_ENCOUNTERS: readonly [string, number][] = [
   ['molten_beetle', 15],
   ['moss_beast', 15],
+  ['phantom_tail_fox', 15],
   ['searing_hawk', 15],
   ['lantern_moth', 15],
   ['coal_guard', 15],
@@ -717,6 +721,7 @@ const ACT1_ELITE_ENCOUNTERS: readonly [string, number][] = [
 const ACT1_GAUNTLET_2: readonly { sequence: string[]; weight: number }[] = [
   { sequence: ['molten_larva', 'fifi'], weight: 16 },
   { sequence: ['light_moss', 'kiki'], weight: 16 },
+  { sequence: ['fire_fox', 'kiki'], weight: 16 },
   { sequence: ['ember_hawk', 'momo'], weight: 16 },
   { sequence: ['coal', 'momo'], weight: 16 },
   { sequence: ['candle', 'fifi'], weight: 16 },
@@ -730,6 +735,7 @@ const ACT1_GAUNTLET_2: readonly { sequence: string[]; weight: number }[] = [
 const ACT1_GAUNTLET_3: readonly { sequence: string[]; weight: number }[] = [
   { sequence: ['molten_larva', 'lulu', 'fifi'], weight: 16 },
   { sequence: ['light_moss', 'coal', 'kiki'], weight: 16 },
+  { sequence: ['fire_fox', 'candle', 'kiki'], weight: 16 },
   { sequence: ['ember_hawk', 'coal', 'momo'], weight: 16 },
   { sequence: ['coal', 'lulu', 'momo'], weight: 16 },
   { sequence: ['candle', 'kiki', 'fifi'], weight: 16 },
@@ -750,6 +756,7 @@ const ACT2_PROGRESS_MOD = [
 const ACT2_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle'], weight: 1 },
   { species: ['moss_beast'], weight: 1 },
+  { species: ['phantom_tail_fox'], weight: 1 },
   { species: ['searing_hawk'], weight: 1 },
   { species: ['coal_guard'], weight: 1 },
   { species: ['lantern_moth'], weight: 1 },
@@ -764,9 +771,11 @@ const ACT2_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
 const ACT2_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle', 'lantern_moth'], weight: 9 },
   { species: ['moss_beast', 'molten_beetle'], weight: 9 },
+  { species: ['phantom_tail_fox', 'moss_beast'], weight: 9 },
   { species: ['searing_hawk', 'coal_guard'], weight: 9 },
   { species: ['molten_larva', 'gora'], weight: 8 },
   { species: ['light_moss', 'gora'], weight: 8 },
+  { species: ['fire_fox', 'gora'], weight: 8 },
   { species: ['ember_hawk', 'fifi_king'], weight: 8 },
   { species: ['coal_guard', 'fifi_king'], weight: 9 },
   { species: ['lantern_moth', 'momo_queen'], weight: 9 },
@@ -789,9 +798,11 @@ const ACT2_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
 const ACT2_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle', 'lulu_king', 'momo_queen'], weight: 9 },
   { species: ['moss_beast', 'molten_beetle', 'searing_hawk'], weight: 9 },
+  { species: ['phantom_tail_fox', 'moss_beast', 'gora'], weight: 9 },
   { species: ['searing_hawk', 'coal_guard', 'fifi_king'], weight: 9 },
   { species: ['molten_larva', 'gora', 'lulu_king'], weight: 7 },
   { species: ['light_moss', 'coal_guard', 'momo_queen'], weight: 7 },
+  { species: ['fire_fox', 'coal_guard', 'momo_queen'], weight: 7 },
   { species: ['ember_hawk', 'coal_guard', 'fifi_king'], weight: 7 },
   { species: ['coal_guard', 'fifi_king', 'momo_queen'], weight: 9 },
   { species: ['lantern_moth', 'gora', 'mimi_king'], weight: 9 },
@@ -814,6 +825,7 @@ const ACT2_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
 const ACT2_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle', 'lantern_moth', 'gora', 'momo_queen'], weight: 10 },
   { species: ['moss_beast', 'molten_beetle', 'gora', 'momo_queen'], weight: 10 },
+  { species: ['phantom_tail_fox', 'moss_beast', 'gora', 'momo_queen'], weight: 10 },
   { species: ['searing_hawk', 'coal_guard', 'fifi_king', 'mimi_king'], weight: 10 },
   { species: ['coal_guard', 'fifi_king', 'momo_queen', 'mimi_king'], weight: 10 },
   { species: ['lantern_moth', 'gora', 'sisi', 'fifi_king'], weight: 10 },
@@ -832,6 +844,8 @@ const ACT2_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
 const ACT2_ELITE_ENCOUNTERS: readonly { species: string; weight: number }[] = [
   { species: 'molten_beast', weight: 16 },
   { species: 'solar_eagle', weight: 16 },
+  { species: 'solar_spirit', weight: 16 },
+  { species: 'nine_tail_sovereign', weight: 16 },
   { species: 'furnace_beast', weight: 16 },
   { species: 'eternal_moth', weight: 16 },
   { species: 'gora_god', weight: 18 },     // E1 铁壁神
@@ -845,9 +859,11 @@ const ACT2_ELITE_ENCOUNTERS: readonly { species: string; weight: number }[] = [
 const ACT2_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle', 'lulu_king'], weight: 16 },
   { species: ['moss_beast', 'gora'], weight: 16 },
+  { species: ['phantom_tail_fox', 'gora'], weight: 16 },
   { species: ['searing_hawk', 'coal_guard'], weight: 16 },
   { species: ['molten_larva', 'gora'], weight: 16 },
   { species: ['light_moss', 'gora'], weight: 16 },
+  { species: ['fire_fox', 'gora'], weight: 16 },
   { species: ['ember_hawk', 'fifi_king'], weight: 16 },
   { species: ['coal_guard', 'fifi_king'], weight: 16 },
   { species: ['lantern_moth', 'momo_queen'], weight: 16 },
@@ -862,6 +878,7 @@ const ACT2_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
 const ACT2_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_larva', 'molten_beetle', 'lulu_king'], weight: 16 },
   { species: ['light_moss', 'moss_beast', 'gora'], weight: 16 },
+  { species: ['fire_fox', 'phantom_tail_fox', 'gora'], weight: 16 },
   { species: ['ember_hawk', 'searing_hawk', 'coal_guard'], weight: 16 },
   { species: ['molten_larva', 'gora', 'lulu_king'], weight: 16 },
   { species: ['ember_hawk', 'coal_guard', 'fifi_king'], weight: 16 },
@@ -901,12 +918,15 @@ const ACT3_BASE_W = [10, 40, 45, 5]; // 1v1 / 2v2 / 3v3 / 4v4 基础权重
 const ACT3_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle'], weight: 8 },
   { species: ['moss_beast'], weight: 8 },
+  { species: ['phantom_tail_fox'], weight: 8 },
   { species: ['searing_hawk'], weight: 8 },
   { species: ['coal_guard'], weight: 8 },
   { species: ['lantern_moth'], weight: 8 },
   { species: ['furnace_beast'], weight: 10 },
   { species: ['molten_beast'], weight: 10 },
   { species: ['solar_eagle'], weight: 10 },
+  { species: ['solar_spirit'], weight: 10 },
+  { species: ['nine_tail_sovereign'], weight: 10 },
   { species: ['eternal_moth'], weight: 10 },
   { species: ['gora_god'], weight: 15 },    // S1 铁壁神
   { species: ['mimi_god'], weight: 15 },    // S2 深渊蛇王
@@ -921,12 +941,15 @@ const ACT3_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
 const ACT3_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle', 'eternal_moth'], weight: 9 },
   { species: ['moss_beast', 'molten_beast'], weight: 9 },
+  { species: ['phantom_tail_fox', 'solar_spirit'], weight: 9 },
   { species: ['searing_hawk', 'furnace_beast'], weight: 9 },
   { species: ['coal_guard', 'furnace_beast'], weight: 9 },
   { species: ['lantern_moth', 'eternal_moth'], weight: 9 },
   { species: ['furnace_beast', 'lulu_god'], weight: 8 },
   { species: ['molten_beast', 'lantern_moth'], weight: 8 },
   { species: ['solar_eagle', 'coal_guard'], weight: 8 },
+  { species: ['solar_spirit', 'molten_beetle'], weight: 8 },
+  { species: ['nine_tail_sovereign', 'moss_beast'], weight: 8 },
   { species: ['eternal_moth', 'gora_god'], weight: 8 },
   { species: ['fifi_king', 'fifi_god'], weight: 10 },       // D1 灼刃+灼天
   { species: ['lulu_king', 'lulu_god'], weight: 10 },       // D2 泡泡将+泡泡龙神
@@ -947,10 +970,13 @@ const ACT3_ENCOUNTERS_2V2: readonly { species: string[]; weight: number }[] = [
 const ACT3_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle', 'eternal_moth', 'momo_god'], weight: 9 },
   { species: ['moss_beast', 'molten_beast', 'solar_eagle'], weight: 9 },
+  { species: ['phantom_tail_fox', 'solar_spirit', 'solar_eagle'], weight: 9 },
   { species: ['searing_hawk', 'furnace_beast', 'fifi_god'], weight: 9 },
   { species: ['furnace_beast', 'fifi_king', 'momo_god'], weight: 9 },
   { species: ['molten_beast', 'lantern_moth', 'momo_god'], weight: 9 },
   { species: ['solar_eagle', 'coal_guard', 'lulu_god'], weight: 9 },
+  { species: ['solar_spirit', 'molten_beast', 'searing_hawk'], weight: 9 },
+  { species: ['nine_tail_sovereign', 'solar_spirit', 'gora'], weight: 9 },
   { species: ['eternal_moth', 'gora', 'mimi_god'], weight: 9 },
   { species: ['coal_guard', 'lantern_moth', 'fifi_god'], weight: 8 },
   { species: ['fifi_king', 'fifi_king', 'fifi_god'], weight: 12 },         // T1
@@ -970,9 +996,12 @@ const ACT3_ENCOUNTERS_3V3: readonly { species: string[]; weight: number }[] = [
 const ACT3_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle', 'eternal_moth', 'gora', 'momo_god'], weight: 10 },
   { species: ['moss_beast', 'molten_beast', 'gora', 'momo_god'], weight: 10 },
+  { species: ['phantom_tail_fox', 'solar_spirit', 'gora', 'momo_god'], weight: 10 },
   { species: ['searing_hawk', 'furnace_beast', 'fifi_king', 'mimi_god'], weight: 10 },
   { species: ['furnace_beast', 'lulu_god', 'coal_guard', 'momo_queen'], weight: 10 },
   { species: ['molten_beast', 'solar_eagle', 'lantern_moth', 'momo_queen'], weight: 10 },
+  { species: ['solar_spirit', 'molten_beast', 'searing_hawk', 'momo_queen'], weight: 10 },
+  { species: ['nine_tail_sovereign', 'solar_spirit', 'gora', 'momo_queen'], weight: 10 },
   { species: ['eternal_moth', 'gora_god', 'lantern_moth', 'fifi_king'], weight: 10 },
   { species: ['fifi_god', 'fifi_king', 'fifi_king', 'momo_queen'], weight: 14 },    // F1
   { species: ['lulu_god', 'lulu_king', 'lulu_king', 'gora'], weight: 14 },          // F2
@@ -987,6 +1016,8 @@ const ACT3_ENCOUNTERS_4V4: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_ELITE_ENCOUNTERS: readonly { species: string[]; weight: number }[] = [
+  { species: ['nine_tail_sovereign', 'solar_spirit'], weight: 16 },
+  { species: ['solar_spirit', 'molten_beast'], weight: 16 },
   { species: ['furnace_beast', 'lulu_god'], weight: 16 },
   { species: ['molten_beast', 'solar_eagle'], weight: 16 },
   { species: ['eternal_moth', 'gora_god'], weight: 16 },
@@ -999,6 +1030,8 @@ const ACT3_ELITE_ENCOUNTERS: readonly { species: string[]; weight: number }[] = 
 ];
 
 const ACT3_ARENA_ENCOUNTERS: readonly { species: string; weight: number }[] = [
+  { species: 'nine_tail_sovereign', weight: 16 },
+  { species: 'solar_spirit', weight: 16 },
   { species: 'furnace_beast', weight: 16 },
   { species: 'eternal_moth', weight: 16 },
   { species: 'molten_beast', weight: 16 },
@@ -1012,6 +1045,8 @@ const ACT3_ARENA_ENCOUNTERS: readonly { species: string; weight: number }[] = [
 ];
 
 const ACT3_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
+  { species: ['nine_tail_sovereign', 'solar_spirit'], weight: 16 },
+  { species: ['solar_spirit', 'molten_beast'], weight: 16 },
   { species: ['furnace_beast', 'lulu_god'], weight: 16 },
   { species: ['eternal_moth', 'momo_god'], weight: 16 },
   { species: ['molten_beast', 'solar_eagle'], weight: 16 },
@@ -1024,6 +1059,8 @@ const ACT3_GAUNTLET_2: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
+  { species: ['nine_tail_sovereign', 'solar_spirit', 'gora_god'], weight: 16 },
+  { species: ['solar_spirit', 'solar_eagle', 'gora_god'], weight: 16 },
   { species: ['furnace_beast', 'fifi_god', 'gora_god'], weight: 16 },
   { species: ['molten_beast', 'solar_eagle', 'lulu_god'], weight: 16 },
   { species: ['eternal_moth', 'momo_god', 'mimi_god'], weight: 16 },
@@ -1036,6 +1073,8 @@ const ACT3_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
 ];
 
 const ACT3_GUARDIAN_1V1: readonly { species: string; weight: number }[] = [
+  { species: 'nine_tail_sovereign', weight: 24 },
+  { species: 'solar_spirit', weight: 24 },
   { species: 'furnace_beast', weight: 24 },
   { species: 'molten_beast', weight: 24 },
   { species: 'solar_eagle', weight: 24 },
@@ -1047,6 +1086,8 @@ const ACT3_GUARDIAN_1V1: readonly { species: string; weight: number }[] = [
 ];
 
 const ACT3_GUARDIAN_2V2: readonly { species: string[]; weight: number }[] = [
+  { species: ['nine_tail_sovereign', 'solar_spirit'], weight: 30 },
+  { species: ['solar_spirit', 'molten_beast'], weight: 30 },
   { species: ['furnace_beast', 'lulu_god'], weight: 30 },
   { species: ['molten_beast', 'solar_eagle'], weight: 30 },
   { species: ['eternal_moth', 'gora_god'], weight: 30 },
