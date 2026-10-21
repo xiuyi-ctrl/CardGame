@@ -3,12 +3,14 @@ import type { Dispatch, DragEvent, ReactNode } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import type { Unit } from '../game/types';
-import { recomputeStats } from '../game/state/game';
+import { CURSE_CN, recomputeStats } from '../game/state/game';
 import { getMonster } from '../game/data/monsters';
 import { getPassive } from '../game/data/passives';
 import { getSkill } from '../game/data/skills';
 import { getMaxSkillSlots, getSkillEnhanceLevel } from '../game/core/growth';
-import { skillBrief, skillFullDesc } from './components';
+import { skillBrief, skillFullDesc, BattlePixelSprite, PixelCreature } from './components';
+import { BuffIcon, CURSE_ART } from './BuffIcon';
+import { FORMATION_SPRITES } from './formationSprites';
 import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { MapNodeIcon } from './MapNodeIcon';
 import { UiSymbol } from './UiSymbol';
@@ -112,6 +114,10 @@ export function SpecialTargetScreen({ state, dispatch }: Props) {
   const pending = state.specialPending;
   const unit = state.roster.find(candidate => candidate.uid === focusedUid) ?? state.roster[0];
   const passive = unit ? getPassive(unit.passive) : undefined;
+  const isArena = pending?.kind === 'arena';
+  const arenaSprite = unit
+    ? FORMATION_SPRITES[unit.speciesId] ?? (unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image)
+    : undefined;
   const amount = pending && 'amount' in pending ? pending.amount ?? 1 : 1;
   let title = '选择伙伴'; let instruction = ''; let preview: ReactNode;
   if (pending?.kind === 'eventBoostHp' || pending?.kind === 'eventBoostSpd') {
@@ -136,8 +142,25 @@ export function SpecialTargetScreen({ state, dispatch }: Props) {
     title = '斗兽场 · 选择出战伙伴'; instruction = '选择一只伙伴参加1v1单挑'; preview = <p className="camp-danger">点击伙伴直接出战，无法驯服敌人</p>;
   }
   return <div className="flow-screen camp-screen camp-special-screen"><CampHeader title={title} subtitle={instruction} />
-    <main className="camp-special-layout"><section className="flow-frame camp-special-roster"><h2>队伍伙伴</h2><div className="camp-special-grid camp-scroll">{state.roster.map(candidate => <button type="button" key={candidate.uid} className={`camp-roster-card ${unit?.uid === candidate.uid ? 'is-focused' : ''}`} onMouseEnter={() => setFocusedUid(candidate.uid)} onFocus={() => setFocusedUid(candidate.uid)} onClick={() => dispatch({ type: 'SPECIAL_TARGET', uid: candidate.uid })}><FlowPet unit={candidate} /><strong>{candidate.name}</strong><FlowPetStats unit={candidate} /></button>)}</div></section>
-      <section className="flow-frame camp-special-preview"><h2>效果预览</h2><div className="camp-scroll">{unit && <><div className="camp-preview-pet"><FlowPet unit={unit} /><h3>{unit.name}</h3></div><div className="camp-effect-preview">{preview}</div><MobileDetails label={`${unit.name}技能与被动`}>{passive && <section><h3>被动特性</h3><p><b>{passive.name}</b>：{passive.desc}</p></section>}<section><h3>技能</h3><div className="flow-skill-chips">{unit.skills.map((id, index) => <span key={`${id}-${index}`}>{getSkill(id).name}</span>)}</div></section></MobileDetails></>}</div></section></main>
+    <main className="camp-special-layout"><section className="flow-frame camp-special-roster"><h2>队伍伙伴</h2><div className="camp-special-grid">{state.roster.map(candidate => <button type="button" key={candidate.uid} className={`camp-roster-card ${unit?.uid === candidate.uid ? 'is-focused' : ''}`} onMouseEnter={() => setFocusedUid(candidate.uid)} onFocus={() => setFocusedUid(candidate.uid)} onClick={() => dispatch({ type: 'SPECIAL_TARGET', uid: candidate.uid })}><FlowPet unit={candidate} /><strong>{candidate.name}</strong><FlowPetStats unit={candidate} /></button>)}</div></section>
+      {isArena
+        ? <aside className="postbattle-detail camp-arena-detail" aria-label="伙伴详情">
+          {unit ? <div className="postbattle-detail-body">
+            <div className="postbattle-detail-heading"><h2>{unit.name}</h2><span>{unit.hp < unit.maxHp ? '生命未满' : '状态良好'}</span></div>
+            <div className="postbattle-detail-portrait">{arenaSprite ? <BattlePixelSprite src={arenaSprite} name={unit.name} /> : <PixelCreature unit={unit} />}</div>
+            <div className="postbattle-detail-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{unit.hp}/{unit.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{unit.spd}</span></div>
+            {unit.curse && <p className="postbattle-curse"><BuffIcon art={CURSE_ART[unit.curse]} /> {CURSE_CN[unit.curse]}</p>}
+            {unit.bonusStats && (unit.bonusStats.hp || unit.bonusStats.spd) &&
+              <p className="postbattle-bonus">属性强化：生命 +{unit.bonusStats.hp ?? 0} · 速度 +{unit.bonusStats.spd ?? 0}</p>}
+            <div className="postbattle-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
+            <div className="postbattle-skills"><h3>技能</h3><div>{unit.skills.map((id, index) => {
+              const skill = getSkill(id);
+              return <span key={`${id}-${index}`} title={skill.desc}>{skill.name}</span>;
+            })}</div></div>
+          </div> : <p className="postbattle-no-pets">没有存活伙伴。</p>}
+        </aside>
+        : <section className="flow-frame camp-special-preview"><h2>效果预览</h2><div className="camp-scroll">{unit && <><div className="camp-preview-pet"><FlowPet unit={unit} /><h3>{unit.name}</h3></div><div className="camp-effect-preview">{preview}</div><MobileDetails label={`${unit.name}技能与被动`}>{passive && <section><h3>被动特性</h3><p><b>{passive.name}</b>：{passive.desc}</p></section>}<section><h3>技能</h3><div className="flow-skill-chips">{unit.skills.map((id, index) => <span key={`${id}-${index}`}>{getSkill(id).name}</span>)}</div></section></MobileDetails></>}</div></section>}
+    </main>
     <footer className="flow-frame camp-instruction">{pending?.kind === 'arena' ? '点击伙伴直接出战' : pending?.kind === 'eventBoostHp' || pending?.kind === 'eventBoostSpd' || pending?.kind === 'eventResetGrowth' || pending?.kind === 'growthPoint' || pending?.kind === 'arena3Exhibition' ? '点击伙伴直接应用效果' : '点击伙伴进入技能选择'}</footer>
   </div>;
 }

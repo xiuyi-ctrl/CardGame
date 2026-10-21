@@ -98,9 +98,7 @@
 .flow-act-stats img { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; }
 .flow-act-stats > div > span { font-size: 14px; }
 .flow-act-stats strong { margin-left: auto; color: #096a75; font-size: 24px; }
-.flow-expedition-log, .flow-highlights, .flow-team { grid-column: 1 / -1; }
-.flow-expedition-log { padding: 10px; background: #f0ecdd; color: #52636c; font-size: 14px; }
-.flow-highlights { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; color: #996400; font-size: 13px; }
+.flow-team { grid-column: 1 / -1; }
 .flow-team { min-width: 0; text-align: center; }
 .flow-team h2 { font-size: 18px; margin-bottom: 8px; }
 .flow-team > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; }

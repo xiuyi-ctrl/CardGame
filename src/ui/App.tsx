@@ -2839,79 +2839,6 @@ const ACT_THEMES = [
   { emoji: '⚔️', name: '终局之前', flavor: '火焰与铁链的咆哮在身后沉寂。前方，是远征的终点——或是一切湮灭的起点。' },
 ];
 
-function getHighlights(stats: NonNullable<GameState['runStats']>, snap: NonNullable<NonNullable<GameState['runStats']>['actSnapshot']>, roster: Unit[]): string[] {
-  const highlights: string[] = [];
-  const tamed = stats.petsTamed - snap.petsTamed;
-
-  // 检测传奇品质驯服（rank 3）
-  const legendaryTamed = roster.filter((u) => {
-    const sp = getMonster(u.speciesId);
-    return sp && sp.rank === 3;
-  });
-  if (legendaryTamed.length > 0) {
-    const names = legendaryTamed.map((u) => u.name).join('、');
-    highlights.push(`成功驯服了传奇品质的【${names}】，远征路上的强援`);
-  } else if (tamed >= 3) {
-    highlights.push(`成功驯服了 ${tamed} 只宠物，队伍不断壮大`);
-  } else if (tamed > 0) {
-    highlights.push(`驯服了 ${tamed} 只新宠物`);
-  }
-
-  const lost = stats.petsLost - snap.petsLost;
-  if (lost === 0 && tamed > 0) highlights.push('无损驯服，完美执行');
-  if (lost > 0) highlights.push(`${lost} 只宠物在战斗中倒下，它们的牺牲不会被遗忘`);
-
-  const gold = (stats.goldEarned - snap.goldEarned);
-  if (gold >= 100) highlights.push(`积累了 ${gold} 金币，财源广进`);
-  else if (gold >= 60) highlights.push(`积累了 ${gold} 金币，经济充裕`);
-
-  const turns = stats.turnsPlayed - snap.turnsPlayed;
-  const battles = stats.battlesWon - snap.battlesWon;
-  if (turns <= 20 && battles >= 3) highlights.push('高效率推进，速战速决');
-
-  if (stats.圣果Used - (snap.圣果Used ?? 0) > 0) highlights.push('圣果发挥了作用，这份馈赠铭记于心');
-
-  if (highlights.length === 0) highlights.push('一路平稳，远征的考验永远在下一座山丘之后');
-  return highlights.slice(0, 3);
-}
-
-/** 远征日志：根据本幕关键事件生成叙事文本 */
-function getExpeditionLog(stats: NonNullable<GameState['runStats']>, snap: NonNullable<NonNullable<GameState['runStats']>['actSnapshot']>, roster: Unit[], act: number): string {
-  const actNames = ['', '翠绿之径', '暗影沼泽', '火焰山脉'];
-  const actName = actNames[act] ?? '未知之地';
-
-  // 优先级1：驯服传奇宠物
-  const legendaryTamed = roster.filter((u) => {
-    const sp = getMonster(u.speciesId);
-    return sp && sp.rank === 3;
-  });
-  if (legendaryTamed.length > 0) {
-    const u = legendaryTamed[0];
-    return `在${actName}的深处，我以一枚圣果赢得了【${u.name}】的信任。它眼中的光芒，将照亮前路。`;
-  }
-
-  // 优先级2：宠物阵亡
-  const lost = stats.petsLost - snap.petsLost;
-  if (lost > 0) {
-    return `${lost}只伙伴在${actName}的最后一战中倒下。它们的盾牌已碎，但它们的意志将与我同行。`;
-  }
-
-  // 优先级3：高效率通关
-  const turns = stats.turnsPlayed - snap.turnsPlayed;
-  const battles = stats.battlesWon - snap.battlesWon;
-  if (turns <= 20 && battles >= 3) {
-    return `穿越${actName}的过程出奇顺利，每一次决策都精准到位。强者的道路，从不拖泥带水。`;
-  }
-
-  // 兜底
-  const defaults = [
-    `一路平静地走过了${actName}，但我深知——远征的真正考验，永远在下一座山丘之后。`,
-    `${actName}的风声渐歇，前方的路尚在雾中。整顿行装，继续前行。`,
-    `离开了${actName}，身后留下的是战斗的痕迹。前方，是更深处的回响。`,
-  ];
-  return defaults[act % defaults.length];
-}
-
 function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const stats = state.runStats;
   const snap = stats?.actSnapshot;
@@ -2929,8 +2856,6 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const nextName = actNames[state.act + 1] ?? `第${state.act + 1}幕`;
   const theme = ACT_THEMES[state.act] ?? ACT_THEMES[1];
   const rating = stats ? computeRating(stats, state.roster.length, state.act) : null;
-  const highlights = snap ? getHighlights(stats!, snap, state.roster) : [];
-  const expeditionLog = snap ? getExpeditionLog(stats!, snap, state.roster, state.act) : '';
   return (
     <div className="flow-screen flow-report-screen flow-interact-screen">
       <main className="flow-report flow-frame">
@@ -2948,13 +2873,7 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
         <div><FlowIcon name="turn-hourglass" /><span>行动回合</span><strong>{actStats.turns}</strong></div>
         <div><FlowIcon name="party-completeness" /><span>当前伙伴</span><strong>{state.roster.length}</strong></div>
       </div>
-      <MobileDetails label="远征记录与队伍">{expeditionLog && <p className="flow-expedition-log">{expeditionLog}</p>}
-      {highlights.length > 0 && (
-        <div className="flow-highlights">
-          {highlights.map((h, i) => <p key={i}>{h}</p>)}
-        </div>
-      )}
-      <FlowTeam units={state.roster} /></MobileDetails>
+      <MobileDetails label="队伍快照"><FlowTeam units={state.roster} /></MobileDetails>
       </div>
       <footer className="flow-actions"><button className="flow-primary" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>远征{nextName} <UiSymbol name="arrow-right" /></button></footer>
       </main>

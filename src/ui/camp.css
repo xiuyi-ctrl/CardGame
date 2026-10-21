@@ -91,7 +91,7 @@
 .camp-special-screen { grid-template-rows: auto minmax(0, 1fr) auto; }
 .camp-special-layout { min-height: 0; display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 18px; }
 .camp-special-roster, .camp-special-preview { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; padding: 8px; }
-.camp-special-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(180px, 1fr); gap: 10px; padding: 4px; }
+.camp-special-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 8px; padding: 4px; }
 .camp-special-preview > .camp-scroll { display: flex; flex-direction: column; gap: 14px; }
 .camp-special-preview > .camp-scroll > * { flex-shrink: 0; }
 .camp-preview-pet { text-align: center; }
@@ -100,6 +100,7 @@
 .camp-special-preview section { border: 2px solid #a4b0ac; padding: 8px; }
 .camp-special-preview section h3 { margin-bottom: 8px; }
 .camp-special-preview p { color: #52636c; font-size: 15px; }
+.camp-arena-detail { min-height: 0; }
 .camp-effect-preview { display: flex; flex-direction: column; gap: 10px; }
 .camp-effect-preview p { color: #101c2c; font-size: 18px; }
 .camp-effect-preview b { color: #096a75; }
@@ -135,7 +136,7 @@
   .camp-skill-name { font-size: 21px; }
   .camp-screen .camp-skill-card { padding: 10px; gap: 8px; }
   .camp-skill-desc { font-size: 14px; }
-  .camp-special-grid { grid-auto-rows: minmax(160px, 1fr); }
+  .camp-special-grid { gap: 6px; }
   .camp-learning-cards .camp-skill-name { font-size: 23px; }
   .camp-learning-panel, .camp-learning-target { padding: 4px; gap: 10px; }
 }
@@ -158,7 +159,7 @@
   .camp-inherit-footer > div { flex-wrap: wrap; }
   .camp-inherit-footer button { min-width: 0; flex: 1; font-size: 16px; }
   .camp-inherit-footer span { order: 1; width: 100%; }
-  .camp-special-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .camp-special-grid { gap: 5px; }
   .camp-learning-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); }
   .camp-learning-cards { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(170px, auto); }
 }
