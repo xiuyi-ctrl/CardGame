@@ -8,7 +8,7 @@ import { createInitialState } from '../src/game/state/reducer';
 import { BattleScreen } from '../src/ui/BattleScreen';
 import type { StatusEffect } from '../src/game/types';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 function setup(skillId = 'punch', options: { taunt?: boolean; bloodScent?: boolean; burnBack?: boolean } = {}) {
   const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }, { speciesId: 'pipi' }], 42);
@@ -47,6 +47,7 @@ describe('战斗攻击目标准星', () => {
     fireEvent.click(skill);
     const ally = screen.getByRole('button', { name: /迅迅，右键或按菜单键查看我方生物 Buff/ });
     expect(ally.classList.contains('attack-target')).toBe(false);
+    expect(ally.classList.contains('ally-target')).toBe(true);
     fireEvent.click(ally);
     expect(dispatch).toHaveBeenCalledWith({ type: 'PLAYER_SKILL', actorUid: battle.playerUnits[0].uid, skillId: 'burn_reversal', targetUid: battle.playerUnits[1].uid });
   });
@@ -97,6 +98,10 @@ describe('战斗攻击目标准星', () => {
     const actorSlot = screen.getByRole('button', { name: /煤煤，右键或按菜单键查看我方生物 Buff/ });
     fireEvent.click(actorSlot);
     fireEvent.click(screen.getByRole('button', { name: /^炉壳/ }));
+    expect(actorSlot.classList.contains('ally-target-blocked')).toBe(true);
+    expect(actorSlot.classList.contains('valid-target')).toBe(false);
+    expect(actorSlot.querySelector('.unit-card')?.classList.contains('valid-target')).toBe(false);
+    expect(actorSlot.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(actorSlot);
     expect(dispatch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /铁墩，右键或按菜单键查看我方生物 Buff/ }));
@@ -175,6 +180,34 @@ describe('战斗攻击目标准星', () => {
     expect(frontSlot.classList.contains('attack-target')).toBe(true);
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(frontSlot.classList.contains('attack-target')).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('电脑与手机的友方技能区分存活和阵亡目标，并可取消 mobile=%s', (mobile) => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const units = [makeUnit('lulu', true, 0, false), makeUnit('momo', true, 1, false), makeUnit('kiki', true, 2, false)];
+    const battle = createBattle(units, [{ speciesId: 'momo' }], 42);
+    battle.playerUnits[0].skills = ['heal_light'];
+    battle.playerUnits[0].hp -= 1;
+    battle.playerUnits[2].hp = 0;
+    const dispatch = vi.fn();
+    render(createElement(BattleScreen, { state: { ...createInitialState(), screen: 'battle', battle }, dispatch }));
+    const actor = screen.getByRole('button', { name: /泡泡，右键或按菜单键查看我方/ });
+    const dead = screen.getByRole('button', { name: /铁墩，右键或按菜单键查看我方/ });
+    fireEvent.click(actor);
+    const skill = screen.getByRole('button', { name: /^愈光/ });
+    fireEvent.click(skill);
+    expect(document.querySelectorAll('.ally-target')).toHaveLength(2);
+    expect(dead.classList.contains('ally-target-blocked')).toBe(true);
+    expect(skill.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(dead);
+    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.querySelectorAll('.ally-target, .ally-target-blocked')).toHaveLength(0);
+    expect(actor.classList.contains('selected')).toBe(true);
+    fireEvent.click(skill);
+    fireEvent.click(skill);
+    expect(document.querySelectorAll('.ally-target, .ally-target-blocked')).toHaveLength(0);
     expect(dispatch).not.toHaveBeenCalled();
   });
 

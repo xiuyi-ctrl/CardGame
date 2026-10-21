@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { UiSymbol } from './UiSymbol';
+import { MobileDetails, MobileUnitAbilities } from './MobileDetails';
 import type { Dispatch, DragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import { FIELD_MAX, PROF_FIELD_MAX, getMaxRoster, maxFieldForEnemy } from '../game/state/game';
@@ -329,7 +330,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                     </div>
                   </div>
                 </div>
-                <div className="formation-detail-ability formation-detail-passive">
+                <MobileDetails label={`${focusedUnit.name}技能与被动`} details={<MobileUnitAbilities unit={focusedUnit} />}><div className="formation-detail-ability formation-detail-passive">
                   <div><span className="formation-ability-tag passive">被动</span><strong>{focusedUnit.passive ? getPassive(focusedUnit.passive)?.name ?? '无' : '无'}</strong></div>
                   <p title={focusedUnit.passive ? getPassive(focusedUnit.passive)?.desc ?? '无被动效果' : '无被动效果'}>{focusedUnit.passive ? getPassive(focusedUnit.passive)?.desc ?? '无被动效果' : '无被动效果'}</p>
                 </div>
@@ -338,7 +339,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                   <div className="formation-skill-tags">
                     {focusedUnit.skills.map((id) => <span className="formation-skill-tag" key={id}>{getSkill(id).name}</span>)}
                   </div>
-                </div>
+                </div></MobileDetails>
               </>
             ) : <span className="formation-detail-empty">悬停或聚焦生物查看详情</span>}
           </div>

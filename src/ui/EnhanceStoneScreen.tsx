@@ -7,6 +7,7 @@ import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { TrainingWorkbench } from './ProficiencyArt';
+import { MobileDetails } from './MobileDetails';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import {
   getSkillEnhanceLevel,
@@ -49,7 +50,7 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
                       <span className="growth-skill-enhance-name">{sk.name}</span>
                       <span className="growth-skill-enhance-level">+{level}</span>
                     </div>
-                    <div className="growth-skill-enhance-row">
+                    <MobileDetails label={`${sk.name}强化对比`}><div className="growth-skill-enhance-row">
                       <span className="growth-skill-enhance-label">当前：</span>
                       <span className="growth-skill-enhance-val">{renderSkillDesc(skillId, level)}</span>
                     </div>
@@ -58,7 +59,7 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
                         <span className="growth-skill-enhance-label">强化后：</span>
                         <span className="growth-skill-enhance-val next">{renderSkillDesc(skillId, level + 1)}</span>
                       </div>
-                    )}
+                    )}</MobileDetails>
                   </div>
                 </div>
                 <div className="growth-skill-enhance-actions">

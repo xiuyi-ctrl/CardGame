@@ -1777,7 +1777,7 @@ button.primary {
 }
 .battle-field .formation-slot.inspected::after { color: #e95242; }
 
-.battle-field .enemy-area .formation-slot.attack-target::after {
+.battle-field .formation-slot:is(.attack-target, .ally-target)::after {
   --aim-corner-size: 12px;
   content: '';
   position: absolute;
@@ -1811,6 +1811,16 @@ button.primary {
 .battle-field .enemy-area .formation-slot.attack-target-blocked,
 .battle-field .enemy-area .formation-slot.attack-target-blocked .unit-card.battle-display { cursor: not-allowed; }
 .battle-field .enemy-area .formation-slot.attack-target-blocked .battle-sprite { opacity: .5; }
+
+.battle-field .player-area .formation-slot.ally-target::after { z-index: 7; width: auto; height: auto; transform: none; color: #6fe3af; opacity: 1; }
+.battle-field .player-area .formation-slot.ally-target:hover::after,
+.battle-field .player-area .formation-slot.ally-target:focus-visible::after { --aim-corner-size: 18px; color: #b0ffce; }
+.battle-field .player-area .formation-slot.ally-target,
+.battle-field .player-area .formation-slot.ally-target .unit-card.battle-display { cursor: crosshair; }
+.battle-field .player-area .formation-slot.ally-target-blocked,
+.battle-field .player-area .formation-slot.ally-target-blocked .unit-card.battle-display { cursor: not-allowed; }
+.battle-field .player-area .formation-slot.ally-target-blocked::after { display: none; }
+.battle-field .player-area .formation-slot.ally-target-blocked .battle-sprite { opacity: .4; }
 
 .battle-field .enemy-area .row-back .formation-slot {
   transform: translate(27%, -12%) scale(0.82);

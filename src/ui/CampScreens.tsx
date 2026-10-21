@@ -12,6 +12,8 @@ import { skillBrief, skillFullDesc } from './components';
 import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { MapNodeIcon } from './MapNodeIcon';
 import { UiSymbol } from './UiSymbol';
+import { MobileDetails, MobileSkillDescription } from './MobileDetails';
+import { useMobileLayout } from './mobile';
 import './camp.css';
 
 type Props = { state: GameState; dispatch: Dispatch<GameAction> };
@@ -24,11 +26,14 @@ export function CampSkillCard({ id, enhanced = 0, selected = false, disabled = f
   id: string; enhanced?: number; selected?: boolean; disabled?: boolean; label?: string; onClick: () => void;
 }) {
   const skill = getSkill(id);
-  return <button type="button" className={`camp-skill-card ${selected ? 'is-selected' : ''}`} disabled={disabled} aria-pressed={selected} onClick={onClick}>
+  const mobile = useMobileLayout();
+  const description = <MobileSkillDescription skill={skill} enhanced={enhanced} />;
+  const card = <button type="button" className={`camp-skill-card ${selected ? 'is-selected' : ''}`} disabled={disabled} aria-pressed={selected} onClick={onClick}>
     <span className="camp-skill-name">{skill.name}{enhanced > 0 && <em> +{enhanced}</em>}<b>{skillBrief(skill, enhanced)}</b></span>
-    <span className="camp-skill-desc">{skillFullDesc(skill, enhanced)}</span>
+    {!mobile && <span className="camp-skill-desc">{skillFullDesc(skill, enhanced)}</span>}
     <span className="camp-skill-notes">{skill.uses !== undefined && <span>每场限 {skill.uses} 次</span>}{!!skill.cooldown && <span>冷却 {skill.cooldown} 回合</span>}{label && <span>{label}</span>}</span>
   </button>;
+  return mobile ? <div className="mobile-skill-choice">{card}<MobileDetails label={`${skill.name}完整说明`} triggerLabel="说明">{description}</MobileDetails></div> : card;
 }
 
 export function CampRestScreen({ state, dispatch }: Props) {
@@ -132,7 +137,7 @@ export function SpecialTargetScreen({ state, dispatch }: Props) {
   }
   return <div className="flow-screen camp-screen camp-special-screen"><CampHeader title={title} subtitle={instruction} />
     <main className="camp-special-layout"><section className="flow-frame camp-special-roster"><h2>队伍伙伴</h2><div className="camp-special-grid camp-scroll">{state.roster.map(candidate => <button type="button" key={candidate.uid} className={`camp-roster-card ${unit?.uid === candidate.uid ? 'is-focused' : ''}`} onMouseEnter={() => setFocusedUid(candidate.uid)} onFocus={() => setFocusedUid(candidate.uid)} onClick={() => dispatch({ type: 'SPECIAL_TARGET', uid: candidate.uid })}><FlowPet unit={candidate} /><strong>{candidate.name}</strong><FlowPetStats unit={candidate} /></button>)}</div></section>
-      <section className="flow-frame camp-special-preview"><h2>效果预览</h2><div className="camp-scroll">{unit && <><div className="camp-preview-pet"><FlowPet unit={unit} /><h3>{unit.name}</h3></div><div className="camp-effect-preview">{preview}</div>{passive && <section><h3>被动特性</h3><p><b>{passive.name}</b>：{passive.desc}</p></section>}<section><h3>技能</h3><div className="flow-skill-chips">{unit.skills.map((id, index) => <span key={`${id}-${index}`}>{getSkill(id).name}</span>)}</div></section></>}</div></section></main>
+      <section className="flow-frame camp-special-preview"><h2>效果预览</h2><div className="camp-scroll">{unit && <><div className="camp-preview-pet"><FlowPet unit={unit} /><h3>{unit.name}</h3></div><div className="camp-effect-preview">{preview}</div><MobileDetails label={`${unit.name}技能与被动`}>{passive && <section><h3>被动特性</h3><p><b>{passive.name}</b>：{passive.desc}</p></section>}<section><h3>技能</h3><div className="flow-skill-chips">{unit.skills.map((id, index) => <span key={`${id}-${index}`}>{getSkill(id).name}</span>)}</div></section></MobileDetails></>}</div></section></main>
     <footer className="flow-frame camp-instruction">{pending?.kind === 'arena' ? '点击伙伴直接出战' : pending?.kind === 'eventBoostHp' || pending?.kind === 'eventBoostSpd' || pending?.kind === 'eventResetGrowth' || pending?.kind === 'growthPoint' || pending?.kind === 'arena3Exhibition' ? '点击伙伴直接应用效果' : '点击伙伴进入技能选择'}</footer>
   </div>;
 }

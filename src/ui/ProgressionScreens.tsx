@@ -12,6 +12,7 @@ import { persistSave } from './persistence';
 import { FlowHeader, FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { BuffIcon, CURSE_ART } from './BuffIcon';
 import { UiSymbol } from './UiSymbol';
+import { MobileDetails, MobileUnitAbilities } from './MobileDetails';
 import './progression.css';
 
 // 仅用于展示：按 fuseUnit 的属性公式计算，不调用 makeUnit，避免预览递增全局 UID。
@@ -60,9 +61,9 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
             <div className="evolution-portraits"><div><FlowPet unit={focused} /><strong>{focused.name}</strong></div><span aria-hidden="true"><UiSymbol name="arrow-right" /></span><div><FlowPet unit={evolved} /><strong>{evolved.name}</strong></div></div>
             <div className="progression-stat-change"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />最大生命</span><b>{focused.maxHp} → <em>{evolved.maxHp}</em></b></div>
             <div className="progression-stat-change"><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />速度</span><b>{focused.spd} → <em>{evolved.spd}</em></b></div>
-            <section className="progression-passive-change"><h3>被动对比</h3><p>{oldPassive?.name ?? '无'} → {newPassive?.name ?? '无'}</p>{newPassive && <p>{newPassive.desc}</p>}</section>
+            <MobileDetails label="进化后技能与被动" details={<><MobileUnitAbilities unit={evolved} /><p>保留原有强化、自创技能与诅咒。{isSuper && '以上尚未计入本次随机诅咒。'}</p></>}><section className="progression-passive-change"><h3>被动对比</h3><p>{oldPassive?.name ?? '无'} → {newPassive?.name ?? '无'}</p>{newPassive && <p>{newPassive.desc}</p>}</section>
             <section><h3>进化后技能</h3><div className="flow-skill-chips">{evolved.skills.map(id => <span key={id} title={getSkill(id).desc}>{getSkill(id).name}</span>)}</div></section>
-            <p className="progression-note">保留原有强化、自创技能与诅咒。{isSuper && '以上尚未计入本次随机诅咒。'}</p>
+            <p className="progression-note">保留原有强化、自创技能与诅咒。{isSuper && '以上尚未计入本次随机诅咒。'}</p></MobileDetails>
           </> : <><div className="progression-single-pet"><FlowPet unit={focused} /><h3>{focused.name}</h3><FlowPetStats unit={focused} /></div>
             {oldPassive && <div className="flow-passive"><b>{oldPassive.name}</b><p>{oldPassive.desc}</p></div>}
             <p className="progression-note">{lockReason ?? (isEvolution ? '该伙伴已是最终形态。' : '点击左侧伙伴后，选择生命 +5 或速度 +2。')}</p>

@@ -13,7 +13,7 @@ import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
-import { UnitCard, SkillTag, PetIcon, PixelCreature, BattlePixelSprite } from './components';
+import { UnitCard, SkillTag, PetIcon, PixelCreature, BattlePixelSprite, skillBrief } from './components';
 import { GrowthScreen } from './GrowthScreen';
 import { BlacksmithScreen } from './BlacksmithScreen';
 import { EnhanceStoneScreen } from './EnhanceStoneScreen';
@@ -39,6 +39,7 @@ import { UiSymbol, UI_SYMBOL_IMAGES } from './UiSymbol';
 import { getMapRouteEdges } from './mapRoutes';
 import { getDecodedImage, preloadImages } from './imageCache';
 import { MobileShell, useBackAction, useMobileLayout } from './mobile';
+import { MobileDetails, MobileUnitAbilities, MobileSkillDescription } from './MobileDetails';
 import { SaveBackup } from './SaveBackup';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import homeXunxun from './assets/home-xunxun.png';
@@ -1634,13 +1635,13 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
             </div>
             <div><h2>{selected.name}</h2><span className="starter-select-role">{STARTER_ROLES[selected.id]}</span><p>{selected.desc}</p></div>
           </div>
-          <div className="starter-select-abilities">
+          <MobileDetails label="技能与被动详情" details={<>{passive && <section><h3>被动 · {passive.name}</h3><p>{passive.desc}</p></section>}{selected.skills.map(id => <MobileSkillDescription key={id} skill={getSkill(id)} />)}</>} summary={<div className="mobile-ability-summary">{passive && <span>被动 · {passive.name}</span>}{selected.skills.map(id => <span key={id}>{getSkill(id).name} {skillBrief(getSkill(id))}</span>)}</div>}><div className="starter-select-abilities">
             {passive && <div className="starter-select-ability"><span className="starter-ability-icon passive" aria-hidden="true"><UiSymbol name="sparkle" /></span><strong>{passive.name}</strong><span>{passive.desc}</span></div>}
             {selected.skills.map((id) => {
               const skill = getSkill(id);
               return <div key={id} className="starter-select-ability"><span className="starter-ability-icon" aria-hidden="true"><UiSymbol name="marker-info" /></span><strong>{skill.name}</strong><span>{skill.desc}{skill.damage ? ` · ${skill.damage}${skill.hits ? `×${skill.hits}` : ''}` : skill.heal ? ` · 治疗 ${skill.heal}` : ''}</span></div>;
             })}
-          </div>
+          </div></MobileDetails>
           <button className="starter-select-confirm" onClick={confirm}>选择{selected.name}<UiSymbol name="play" /></button>
           <p className="starter-select-note">{isCompanion ? `已选主力：${getMonster(firstPick).name} ×2 · 再选一只同伴` : '可在图鉴查看进化'}</p>
         </aside>
@@ -2210,12 +2211,12 @@ function OrdinaryRosterScreen({ state, dispatch, toggleField }: { state: GameSta
         <h2>伙伴详情</h2>
         {focused ? <>
           <div className="ordinary-roster-profile"><FlowPet unit={focused} /><div><h3>{focused.name}</h3><span className="ordinary-detail-state">{state.field.includes(focused.uid) ? '已出战' : '待命'}</span><FlowPetStats unit={focused} /></div></div>
-          <div className="ordinary-roster-info">
+          <MobileDetails label={`${focused.name}技能与被动`} summary={focused.curse && <span>诅咒：{CURSE_CN[focused.curse]}</span>} details={<><MobileUnitAbilities unit={focused} /><p>诅咒：{focused.curse ? CURSE_CN[focused.curse] : '无'}</p>{focused.bonusStats && <p>属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}</>}><div className="ordinary-roster-info">
             {passive && <section className="flow-passive"><b>被动 · {passive.name}</b><p>{passive.desc}</p></section>}
             <section><h3>技能</h3><div className="flow-skill-chips">{focused.skills.map(id => <span key={id} title={getSkill(id).desc}>{getSkill(id).name}</span>)}</div></section>
             <section><h3>诅咒</h3><div className="ordinary-curse">{focused.curse ? <><BuffIcon art={CURSE_ART[focused.curse]} />{CURSE_CN[focused.curse]}</> : '无诅咒'}</div></section>
             {focused.bonusStats && (focused.bonusStats.hp || focused.bonusStats.spd) ? <p className="ordinary-bonus">属性强化：{focused.bonusStats.hp ? `生命 +${focused.bonusStats.hp} ` : ''}{focused.bonusStats.spd ? `速度 +${focused.bonusStats.spd}` : ''}</p> : null}
-          </div>
+          </div></MobileDetails>
           <footer className="ordinary-detail-actions"><PetCardFooter unit={focused} state={state} setConfirm={setConfirm} />
             <button type="button" className="flow-positive" disabled={!focused.curse || (state.inventory.purify ?? 0) <= 0} onClick={() => dispatch({ type: 'USE_PURIFY', uid: focused.uid })}>净化（{state.inventory.purify ?? 0}）</button>
           </footer>
@@ -2275,11 +2276,11 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
           {focused.curse && <p className="postbattle-curse"><BuffIcon art={CURSE_ART[focused.curse]} /> {CURSE_CN[focused.curse]}</p>}
           {focused.bonusStats && (focused.bonusStats.hp || focused.bonusStats.spd) &&
             <p className="postbattle-bonus">属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}
-          <div className="postbattle-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
+          <MobileDetails label={`${focused.name}技能与被动`} details={<><MobileUnitAbilities unit={focused} />{focused.bonusStats && <p>属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}</>}><div className="postbattle-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
           <div className="postbattle-skills"><h3>技能</h3><div>{focused.skills.map((sid, index) => {
             const skill = getSkill(sid);
             return <span key={`${sid}-${index}`} title={skill.desc}>{skill.name}</span>;
-          })}</div></div>
+          })}</div></div></MobileDetails>
           </div>
           <div className="postbattle-detail-actions">
             {!isProf && <><p>融合条件：{lockReason ?? (stage ? `同物种 ${sameCount} / ${need}` : '已是最终形态')}</p>
@@ -2357,7 +2358,7 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
             <article key={id} className={`shop-product ${soldOut ? 'is-sold' : ''} ${!soldOut && !affordable ? 'is-unaffordable' : ''}`}>
               {soldOut && <span className="shop-sold-badge">已购买</span>}
               <div className="shop-product-icon">{BACKPACK_ITEM_ART[id] ? <img src={BACKPACK_ITEM_ART[id]} alt="" draggable={false} /> : <ShopItemIcon itemId={id} />}</div>
-              <div className="shop-product-copy"><h3>{name}</h3><p>{desc}</p></div>
+              <div className="shop-product-copy"><h3>{name}</h3><MobileDetails label={`${name}说明`} triggerLabel={desc}><p>{desc}</p></MobileDetails></div>
               <span className="shop-price"><img src="/reward-icons/gold.png" alt="金币" />{price}</span>
               <button
                   type="button"
@@ -2626,8 +2627,8 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
       <div className="flow-partner-layout">
         <section className="flow-frame flow-new-partner">
           <h2>新伙伴</h2><FlowPet unit={tame} /><h3>{tame.name}</h3><FlowPetStats unit={tame} />
-          {passive && <div className="flow-passive"><b>被动 · {passive.name}</b><p>{passive.desc}</p></div>}
-          <div className="flow-skill-chips">{tame.skills.map(id => <span key={id}>{getSkill(id).name}</span>)}</div>
+          <MobileDetails label={`${tame.name}技能与被动`} details={<MobileUnitAbilities unit={tame} />}>{passive && <div className="flow-passive"><b>被动 · {passive.name}</b><p>{passive.desc}</p></div>}
+          <div className="flow-skill-chips">{tame.skills.map(id => <span key={id}>{getSkill(id).name}</span>)}</div></MobileDetails>
           <p>{hasSpace ? '队伍有空位，可以直接加入。' : '队伍已满，选择一只现有伙伴进行替换或融合。'}</p>
         </section>
         <section className="flow-frame flow-existing-partners">
@@ -2673,9 +2674,9 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
       <main className="flow-choice-panel flow-frame">
         <span className="flow-eyebrow"><FlowIcon name="event-scroll" />旅途事件</span>
         <h2>{ev.title}</h2>
-        <p className="flow-story">
+        <MobileDetails label="事件背景"><p className="flow-story">
           {ev.desc}
-        </p>
+        </p></MobileDetails>
         <div className="flow-choices">
           {ev.choices.map((c) => {
             const cost = c.goldDelta ?? 0;
@@ -2947,13 +2948,13 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
         <div><FlowIcon name="turn-hourglass" /><span>行动回合</span><strong>{actStats.turns}</strong></div>
         <div><FlowIcon name="party-completeness" /><span>当前伙伴</span><strong>{state.roster.length}</strong></div>
       </div>
-      {expeditionLog && <p className="flow-expedition-log">{expeditionLog}</p>}
+      <MobileDetails label="远征记录与队伍">{expeditionLog && <p className="flow-expedition-log">{expeditionLog}</p>}
       {highlights.length > 0 && (
         <div className="flow-highlights">
           {highlights.map((h, i) => <p key={i}>{h}</p>)}
         </div>
       )}
-      <FlowTeam units={state.roster} />
+      <FlowTeam units={state.roster} /></MobileDetails>
       </div>
       <footer className="flow-actions"><button className="flow-primary" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>远征{nextName} <UiSymbol name="arrow-right" /></button></footer>
       </main>
@@ -2966,7 +2967,7 @@ function RatingDisplay({ rating, color }: { rating: NonNullable<ReturnType<typeo
     <div className="rating-display">
       <div className="rating-grade" style={{ color: color ?? '#4ecdc4' }}>{rating.grade}</div>
       <div className="rating-score">{rating.score}分 · {rating.label}</div>
-      <div className="rating-dimensions">
+      <MobileDetails label="评分明细"><div className="rating-dimensions">
         {rating.dimensions.map((d) => (
           <div key={d.key} className="rating-dim-row">
             <span className="rating-dim-name">{d.name} ({d.weight}%)</span>
@@ -2976,7 +2977,7 @@ function RatingDisplay({ rating, color }: { rating: NonNullable<ReturnType<typeo
             <span className="rating-dim-score">{d.score} {d.grade}</span>
           </div>
         ))}
-      </div>
+      </div></MobileDetails>
     </div>
   );
 }
@@ -2989,7 +2990,7 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
       <header className="flow-report-heading"><FlowIcon name="journey-end" /><h1>远征失败</h1><p>阵亡的宠物已永远消失，但这只是旅程的开始</p></header>
       <div className="flow-report-body">
       {rating && <RatingDisplay rating={rating} color="#e05555" />}
-      <FlowTeam units={state.roster} />
+      <MobileDetails label="最终队伍"><FlowTeam units={state.roster} /></MobileDetails>
       </div>
       <footer className="flow-actions"><button onClick={() => dispatch({ type: 'TITLE' })}>
         返回首页
@@ -3037,7 +3038,7 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
           ))}
         </div>
       )}
-      <FlowTeam units={state.roster} />
+      <MobileDetails label="最终队伍"><FlowTeam units={state.roster} /></MobileDetails>
       </div>
       <footer className="flow-actions">
       <button className="flow-primary" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>

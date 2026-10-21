@@ -6,6 +6,7 @@ import { getSkillEnhanceLevel } from '../game/core/growth';
 import { CampHeader } from './CampScreens';
 import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
+import { MobileDetails } from './MobileDetails';
 import './proficiency.css';
 
 export function TrainingRoster({ units, selectedUid, disabled = false, onSelect }: { units: Unit[]; selectedUid?: string | null; disabled?: boolean; onSelect: (unit: Unit) => void }) {
@@ -37,7 +38,7 @@ export function ProficiencyReport({ state, dispatch, onRetry }: { state: GameSta
   return <div className={`flow-screen camp-screen proficiency-report-screen ${won ? 'is-victory' : 'is-defeat'}`}><main className="flow-frame proficiency-report">
     <header><FlowIcon name={won ? 'victory-crown' : 'journey-end'} /><h1>熟练度远征 · {won ? '胜利' : '失败'}</h1></header>
     <div className="camp-scroll proficiency-report-body"><section className="proficiency-report-stats"><div><span>到达层数</span><strong>{state.currentRow + 1}<small>/50</small></strong></div><div><span>总战斗场次</span><strong>{(state.runStats?.battlesWon ?? 0) + (state.runStats?.battlesLost ?? 0)}</strong></div></section>
-      <section className="proficiency-final-team"><h2>最终队伍</h2><div>{alive.map(unit => <article key={unit.uid}><h3>{unit.name}</h3><FlowPet unit={unit} /><p>剩余成长点 <b>{unit.growthPoints ?? 0}</b></p></article>)}</div>{alive.length === 0 && <p>没有幸存的伙伴</p>}</section>
+      <MobileDetails label={`最终队伍 · 存活${alive.length}只`}><section className="proficiency-final-team"><h2>最终队伍</h2><div>{alive.map(unit => <article key={unit.uid}><h3>{unit.name}</h3><FlowPet unit={unit} /><p>剩余成长点 <b>{unit.growthPoints ?? 0}</b></p></article>)}</div>{alive.length === 0 && <p>没有幸存的伙伴</p>}</section></MobileDetails>
       {best && <div className="proficiency-best"><FlowPet unit={best} /><p>最高剩余成长点：{best.name} · <b>{best.growthPoints ?? 0}点</b></p></div>}
     </div><footer>{won && <button type="button" className="flow-primary" onClick={onRetry}>重新开始</button>}<button type="button" onClick={() => dispatch({ type: 'TITLE' })}>返回主菜单</button></footer>
   </main></div>;

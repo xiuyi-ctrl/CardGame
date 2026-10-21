@@ -168,6 +168,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     else cancelTarget();
   });
   const choosingEnemyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'single';
+  const choosingAllyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'ally';
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
@@ -224,7 +225,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   }, [battle?.round, battle?.rngCount, battle?.phase]);
 
   useEffect(() => {
-    if (!inspectEnemy && !inspectAlly && !choosingEnemyTarget) return;
+    if (!inspectEnemy && !inspectAlly && !choosingEnemyTarget && !choosingAllyTarget) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -238,7 +239,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [inspectEnemy, inspectAlly, choosingEnemyTarget]);
+  }, [inspectEnemy, inspectAlly, choosingEnemyTarget, choosingAllyTarget]);
 
   // 车轮战：场上只有一只上场宠物，默认选中它，技能栏直接展示其技能（含替补轮换后自动重选）
   useEffect(() => {
@@ -532,12 +533,14 @@ export function BattleScreen({ state, dispatch }: Props) {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
     if (!u) return <div key={key} className={`${extra} empty`} aria-hidden="true" />;
     const sel = selectedUid === u.uid;
-    const clickable = validAllyTargets.has(u.uid) || u.hp > 0;
+    const clickable = choosingAllyTarget ? validAllyTargets.has(u.uid) : validAllyTargets.has(u.uid) || u.hp > 0;
+    const aimClass = choosingAllyTarget ? (validAllyTargets.has(u.uid) ? 'ally-target' : 'ally-target-blocked') : '';
     const fxInfo = fx[u.uid];
     return (
       <div
         key={key}
-        className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
+        className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''} ${aimClass}`}
+        aria-disabled={choosingAllyTarget && !clickable ? true : undefined}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
         onClickCapture={suppressLongPressClick}
         onPointerDown={event => startLongPress(event, u.uid, 'player')}
@@ -562,7 +565,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         aria-label={`${u.name}，右键或按菜单键查看我方生物 Buff${mobile ? '，手机长按查看详情' : ''}`}
         title={mobile ? '长按查看生物详情' : '右键查看我方生物 Buff'}
       >
-        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
+        <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene className={`${fxInfo?.cls ?? ''} ${clickable || (sel && !choosingAllyTarget) ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
         <BattleStatusIcons unit={shownUnit(u)} />
         {popOverlay(u.uid)}
       </div>
@@ -700,7 +703,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const limited = Number.isFinite(left);
                     const onCooldown = cd > 0;
                     const isCurrent = selectedOrder?.skillId === s.id;
-                    const isTargeting = choosingEnemyTarget && pendingSkill?.actorUid === selected.uid && pendingSkill.skillId === s.id;
+                    const isTargeting = (choosingEnemyTarget || choosingAllyTarget) && pendingSkill?.actorUid === selected.uid && pendingSkill.skillId === s.id;
                     const isActive = isCurrent || isTargeting;
                     const cannotOrder = selected.acted && !selectedOrder;
                     const slotIdx = selected.skills.indexOf(s.id);
@@ -727,6 +730,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                             <span className="skill-num" style={enhanced > 0 && !isActive ? { color: '#9f5900' } : undefined}>{skillBrief(s, enhanced)}</span>
                           </span>
                           <span className="skill-desc">{fullDesc}</span>
+                          {mobile && <span className="mobile-skill-meta">{({ single: '单敌', all: '全敌', random: '随机敌', ally: '友方', allyAll: '全队', self: '自身' })[s.target]}{s.priority === 'first' ? '·先手' : ''}{s.cooldown ? `·冷却${cd || s.cooldown}` : ''}{limited ? `·剩${left}次` : ''}{isSealed ? '·封印' : ''}</span>}
                         </span>
                       </button>
                     );
@@ -778,8 +782,8 @@ export function BattleScreen({ state, dispatch }: Props) {
                 ><BattleActionIcon kind="swap" />换位</button>
               </div>
               <div className="hint-text">{hint}</div>
-              {hasPendingTarget && <button type="button" className="touch-only mobile-cancel-target" onClick={cancelTarget}>取消选择目标</button>}
               <div className="end-row">
+                {hasPendingTarget && <button type="button" className="touch-only mobile-cancel-target" onClick={cancelTarget}>取消选择目标</button>}
                 <div className="anim-controls">
                   {animating && <button className="anim-skip-btn" onClick={skipAnim} aria-label="跳过动画" title="跳过动画"><UiSymbol name="arrow-right" /></button>}
                   <button

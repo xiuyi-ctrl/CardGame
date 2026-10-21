@@ -15,6 +15,8 @@ import { Arena3Screen } from '../../src/ui/Arena3Screen';
 import { CampFusionScreen, CampFusionSkillScreen, CampRestScreen, SpecialTargetScreen } from '../../src/ui/CampScreens';
 import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalScreen } from '../../src/ui/ProgressionScreens';
 import { MobileShell } from '../../src/ui/mobile';
+import { preloadImages } from '../../src/ui/imageCache';
+import { FORMATION_SPRITES } from '../../src/ui/formationSprites';
 import { createInitialState, gameReducer } from '../../src/game/state/reducer';
 import { createBattle, makeUnit } from '../../src/game/core/battle';
 import { ITEMS } from '../../src/game/data/items';
@@ -144,6 +146,36 @@ variant('roster-long', 'roster', { roster: stressRoster });
 variant('toast-recruit', 'roster', { toast: { msg: '招募成功！迅迅加入了队伍', kind: 'success' } });
 variant('toast-food', 'map', { toast: { msg: '获得食物：鲜肉 ×2', kind: 'success' } });
 variant('toast-long', 'shop', { toast: { msg: '购买成功！获得技能强化石，可在背包中选择伙伴强化技能；当前队伍已满，请在伙伴管理中调整阵容后继续远征。', kind: 'info' } });
+const supportBattle = createBattle(['coal', 'momo', 'kiki'].map((id, index) => makeUnit(id, true, index as 0 | 1 | 2, false)), encounter, 123);
+supportBattle.playerUnits[0].skills = ['furnace_shell', 'heal_light'];
+supportBattle.playerUnits[1].hp -= 3;
+variant('battle-ally-shield-target', 'battle', { battle: supportBattle }, '.player-area .formation-slot:not(.empty)|炉壳');
+variant('battle-ally-heal-target', 'battle', { battle: supportBattle }, '.player-area .formation-slot:not(.empty)|愈光');
+variant('starter-details', 'starter', {}, '.mobile-details-trigger');
+variant('formation-details', 'formation', {}, '.mobile-details-trigger');
+variant('roster-details', 'roster', {}, '.mobile-details-trigger');
+variant('postbattle-details', 'postbattle', {}, '.mobile-details-trigger');
+variant('shop-details', 'shop', {}, '.mobile-details-trigger');
+variant('event-details', 'event-long', {}, '.mobile-details-trigger');
+variant('evolve-details', 'evolve', {}, '.mobile-details-trigger');
+variant('rating-details', 'victory', {}, '.rating-display .mobile-details-trigger');
+variant('interact-details', 'inter_act', {}, '.mobile-details-trigger');
+variant('proficiency-team-details', 'proficiency-result', {}, '.mobile-details-trigger');
+variant('blacksmith-details', 'blacksmith', {}, '.training-pet|.mobile-details-trigger');
+variant('growth-selected', 'growth-menu', {}, '.training-pet');
+variant('growth-return', 'growth-menu', {}, '.training-pet|成长点转移|.training-transfer footer button:last-child');
+variant('skill-pick-long', 'skill-pick', { skillPick: { uid: first.uid, slot: 3, choices: ['solar_strike', 'furnace_shell', 'burn_reversal'] } });
+variant('skill-pick-details', 'skill-pick-long', {}, '.mobile-details-trigger');
+variant('fusion-skill-details', 'rest-fusion-skill', {}, '.mobile-details-trigger');
+const cursedRoster = base.roster.map((unit, index) => index ? unit : { ...unit, curse: 'atkDown' as const, bonusStats: { hp: 15, spd: 4 } });
+variant('postbattle-cursed', 'postbattle', { roster: cursedRoster });
+variant('postbattle-cursed-details', 'postbattle-cursed', {}, '.mobile-details-trigger');
+variant('roster-cursed', 'roster', { roster: cursedRoster });
+variant('tame-overflow-long', 'tame-overflow', { roster: stressRoster, tameOverflow: [stressRoster[0]] });
+variant('gauntlet-empty', 'gauntlet-order', { gauntletOrder: [] });
+const fiveSkillBattle = structuredClone(stressBattle);
+fiveSkillBattle.playerUnits[0].skills = ['flame_tail_shield', 'burn_tail', 'burn_reversal', 'furnace_shell', 'solar_strike'];
+variant('battle-five-skills', 'battle', { battle: fiveSkillBattle }, '.player-area .formation-slot');
 
 const root = createRoot(document.getElementById('root')!);
 let generation = 0;
@@ -156,15 +188,20 @@ function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
       : C === ui.DifficultyScreen ? 'screen-difficulty' : '';
   return <div className={`screen ${shell}`}>
     <C state={current} dispatch={dispatch} {...scene.extra} />
-    {current.toast && <div className={`toast ${current.toast.kind ?? 'info'}`} style={{ animation: 'none' }}>{current.toast.msg}</div>}
+    {current.toast && <div className={`toast ${current.toast.kind ?? 'info'}`}>{current.toast.msg}</div>}
     {mobile && <MobileShell state={current} dispatch={dispatch} canSave={false} />}
   </div>;
 }
 (window as any).preview = {
   names: Object.keys(registry),
+  desktopNames: Object.keys(registry).filter(name => !name.endsWith('-details') && !['save-import-confirm', 'battle-menu'].includes(name)),
   backupJson: JSON.stringify({ saveVersion: 1, main: base }),
-  render(name: string, mobile = true) {
+  async render(name: string, mobile = true) {
     if (!registry[name]?.component) throw Error(`Missing fixture: ${name}`);
+    const battle = registry[name].state.battle;
+    await preloadImages([...Object.values(FORMATION_SPRITES), ...[...registry[name].state.roster, ...(battle ? [...battle.playerUnits, ...battle.enemyUnits] : [])]
+      .map(unit => unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image)
+      .filter((src): src is string => !!src)]);
     mobileEmulation = mobile;
     // MobileShell's coarse-pointer check also exercises the real mobile activation path.
     flushSync(() => root.render(<Preview key={++generation} scene={registry[name]} mobile={mobile} />));

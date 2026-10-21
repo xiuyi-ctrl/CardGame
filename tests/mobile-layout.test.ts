@@ -53,6 +53,10 @@ describe('手机开局页面布局约束', () => {
 });
 
 describe('全界面手机布局约束', () => {
+  it('手机队伍的融合、释放、净化共享一行网格，不让嵌套工具栏挤占单格', () => {
+    expect(declarations('.mobile-ui .ordinary-detail-actions')['grid-template-columns']).toBe('repeat(3, minmax(0, 1fr))');
+    expect(declarations('.mobile-ui .ordinary-detail-actions .unit-card-actions').display).toBe('contents');
+  });
   it('布阵显式重置窄窗口的纵向布局和桌面最小高度', () => {
     expect(declarations('.mobile-ui .formation-main')).toMatchObject({ display: 'grid', 'min-height': '0', 'grid-template-rows': 'minmax(0, 1fr)' });
     expect(declarations('.mobile-ui .formation-left')['min-height']).toBe('0');
@@ -60,10 +64,11 @@ describe('全界面手机布局约束', () => {
     expect(declarations('.mobile-ui .formation-list')['grid-template-rows']).toContain('44px');
   });
 
-  it('商店四件商品两列两行，长描述滚动，购买按钮不进入描述滚动区', () => {
+  it('商店四件商品两列两行，效果说明可点开，购买按钮独立', () => {
     expect(declarations('.mobile-ui .shop-stock')).toMatchObject({ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))', 'grid-template-rows': 'repeat(2, minmax(0, 1fr))', overflow: 'hidden' });
     expect(declarations('.mobile-ui .shop-product')['min-height']).toBe('0');
-    expect(declarations('.mobile-ui .shop-product p')['overflow-y']).toBe('auto');
+    expect(declarations('.mobile-ui .shop-product p')['overflow-y']).toBe('visible');
+    expect(declarations('.mobile-ui .shop-product .mobile-details-trigger').width).toBe('100%');
     expect(declarations('.mobile-ui .shop-product .shop-buy')).toMatchObject({ 'grid-area': '1 / 3', 'min-height': '44px' });
   });
 
@@ -77,15 +82,15 @@ describe('全界面手机布局约束', () => {
   it('战后修整限制伙伴网格高度，详情正文与操作分离', () => {
     expect(declarations('.mobile-ui .postbattle-screen')['grid-template-rows']).toBe('auto minmax(0, 1fr)');
     expect(declarations('.mobile-ui .postbattle-roster-grid')['overflow-y']).toBe('auto');
-    expect(declarations('.mobile-ui .postbattle-detail-body')).toMatchObject({ flex: '1', 'min-height': '0', 'overflow-y': 'auto' });
+    expect(declarations('.mobile-ui .postbattle-detail-body')).toMatchObject({ flex: 'none', display: 'grid', 'min-height': '0', 'overflow-y': 'auto' });
     expect(declarations('.mobile-ui .postbattle-detail').overflow).toBe('hidden');
   });
 
-  it('熟练度竞技场保持三列，成长转移使用三栏且不继承隐藏伙伴列表', () => {
+  it('熟练度竞技场保持三列，成长转移聚焦单栏且返回后恢复伙伴列表', () => {
     expect(declarations('.mobile-ui .proficiency-arena-options')['grid-template-columns']).toBe('repeat(3, minmax(0, 1fr))');
     expect(declarations('.mobile-ui .proficiency-arena-options')['grid-auto-rows']).toBe('minmax(0, 1fr)');
-    expect(declarations('.mobile-ui .training-growth-layout.has-transfer')['grid-template-columns']).toBe('minmax(0, .75fr) minmax(0, 1fr) minmax(0, 1.2fr)');
-    expect(declarations('.mobile-ui .has-transfer > .training-roster').display).toBe('grid');
+    expect(declarations('.mobile-ui .training-growth-layout.has-transfer')['grid-template-columns']).toBe('minmax(0, 1fr)');
+    expect(declarations('.mobile-ui .training-growth-layout.has-transfer > :is(.training-roster, .training-growth-detail)').display).toBe('none');
   });
 
   it('地图保留情报，菜单使用标题栏预留空间，不覆盖战斗操作', () => {
@@ -103,6 +108,7 @@ describe('全界面手机布局约束', () => {
   it('手机自动提示只保留底部定位，避免同时约束上下边拉伸高度', () => {
     expect(declarations('.mobile-ui .toast')).toMatchObject({ top: 'auto', height: 'auto', 'min-height': '0' });
     expect(declarations('.mobile-ui .toast')['max-width']).toContain('100vw');
+    expect(declarations('.mobile-ui .toast').animation).not.toContain('toast-in');
   });
 
   it('独立渲染验收夹具列举所有游戏 Screen，不进入生产入口', () => {

@@ -37,7 +37,6 @@ export function MobileShell({ state, dispatch, canSave }: { state: GameState; di
   const [menu, setMenu] = useState(false);
   const [exiting, setExiting] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const [rotationDismissed, setRotationDismissed] = useState(false);
   const latest = useRef({ state, canSave });
   useLayoutEffect(() => { latest.current = { state, canSave }; });
   useLayoutEffect(() => {
@@ -147,7 +146,7 @@ export function MobileShell({ state, dispatch, canSave }: { state: GameState; di
 
   return <>
     {isAndroid() && <MobileVersion visible={state.screen === 'title'} />}
-    {mobile && !rotationDismissed && <div className="mobile-rotate-hint" role="status"><span>建议横屏游玩 · 请旋转手机</span><button onClick={() => setRotationDismissed(true)}>暂时继续当前方向</button></div>}
+    {mobile && <div className="mobile-rotate-hint" role="status"><span>请旋转手机，横屏游玩</span></div>}
     {mobile && state.screen === 'battle' && <button type="button" className="mobile-menu-toggle" aria-label="打开游戏菜单" onClick={() => { setExiting(false); setMenu(true); }}>菜单</button>}
     {menu && <div className="mobile-system-overlay" role="dialog" aria-modal="true" aria-label={exiting ? '退出游戏' : '游戏菜单'}>
       <section className="mobile-system-panel"><h2>{exiting ? '退出游戏？' : '游戏菜单'}</h2>

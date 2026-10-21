@@ -3,11 +3,11 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const repo = path.resolve(__dirname, '../..');
-const output = path.join(repo, 'dump/mobile-layout');
+const output = path.join(repo, process.argv.find(arg => arg.startsWith('--output='))?.slice(9) ?? 'dump/mobile-layout');
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('touch-events', 'enabled');
 app.whenReady().then(async () => {
-  const port = process.argv.includes('--desktop') ? 5199 : 5198;
+  const port = Number(process.argv.find(arg => arg.startsWith('--port='))?.slice(7)) || (process.argv.includes('--desktop') ? 5199 : 5198);
   const { createServer } = await import('vite');
   const react = (await import('@vitejs/plugin-react')).default;
   const server = await createServer({ root: repo, configFile: false, plugins: [{
@@ -17,20 +17,26 @@ app.whenReady().then(async () => {
       const names = [...code.matchAll(/^function (\w+Screen)\(/gm)].map(m => m[1]);
       return `${code}\nexport { ${names.join(', ')} };`;
     },
-  }, react()], server: { host: '127.0.0.1', port, strictPort: true, watch: { ignored: ['**/dump/**', '**/android/**'] } } });
+  }, react()], server: { host: '127.0.0.1', port, strictPort: true, hmr: false, watch: { ignored: ['**/*'] } } });
   await server.listen();
   await fs.mkdir(output, { recursive: true });
   const win = new BrowserWindow({ show: false, width: 640, height: 320, useContentSize: true, webPreferences: { backgroundThrottling: false, partition: `mobile-layout-${process.pid}` } });
   const errors = [];
-  win.webContents.on('console-message', (_e, level, message) => { if (level >= 3) errors.push(message); });
+  win.webContents.on('console-message', (_e, level, message) => { if (level >= 3) { errors.push(message); console.error(message); } });
   await win.loadURL(`http://127.0.0.1:${port}/tools/mobile-layout/index.html`);
-  const js = code => win.webContents.executeJavaScript(code, true);
+  win.webContents.debugger.attach('1.3');
+  await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+  const js = code => Promise.race([win.webContents.executeJavaScript(code, true), new Promise((_, reject) => { const timer = setTimeout(() => reject(Error('Renderer check timed out')), 15000); timer.unref(); })]);
   for (let i = 0; i < 100 && !await js('!!window.preview'); i++) await new Promise(r => setTimeout(r, 100));
-  const names = await js('window.preview.names');
-  if (!names) throw Error('Preview did not load');
+  const names = await js(`window.preview?.${process.argv.includes('--desktop') ? 'desktopNames' : 'names'}`);
+  if (!names) throw Error('Preview did not load: ' + errors.join('\n'));
   const requested = process.argv.find(a => a.startsWith('--scenes='))?.slice(9).split(',');
-  const sizes = process.argv.includes('--desktop') ? [[1280, 720], [1920, 1080]] : process.argv.includes('--portrait') ? [[390, 844]] : process.argv.includes('--quick') ? [[640, 320]] : [[640, 320], [640, 360], [740, 360], [844, 390], [915, 412], [1024, 600], [390, 844]];
+  const sizes = process.argv.includes('--desktop') ? [[1280, 720], [1920, 1080]] : process.argv.includes('--quick') ? [[640, 320]] : [[640, 320], [640, 360], [740, 360], [844, 390], [915, 412], [1024, 600]];
   const mobile = !process.argv.includes('--desktop');
+  const oneScreen = new Set(['title', 'difficulty-select', 'starter', 'proficiency-select', 'formation', 'gauntlet-order', 'battle', 'reward', 'recruit', 'roster', 'postbattle', 'shop', 'shop-prof', 'rest', 'rest-fusion', 'rest-fusion-skill', 'revive-select', 'event', 'special', 'custom', 'boost', 'evolve', 'special-target', 'gameover', 'victory', 'inter_act', 'chest', 'tame-overflow', 'skill-pick', 'growth-menu', 'growth-transfer', 'blacksmith', 'enhance-stone', 'enhance-reset', 'arena3', 'proficiency-result', 'save-management', 'backpack-empty', 'battle-selected', 'battle-ally-shield-target', 'battle-ally-heal-target', 'roster-long', 'toast-recruit', 'toast-long', 'growth-selected', 'growth-return', 'skill-pick-long', 'event-long', 'revive-empty', 'chest-empty', 'proficiency-lost', 'skill-replace']);
+  for (const name of ['postbattle-cursed', 'roster-cursed', 'tame-overflow-long', 'gauntlet-empty']) oneScreen.add(name);
+  oneScreen.delete('proficiency-select'); // 此页按用户要求保留原有布局与内容。
+  oneScreen.add('battle-five-skills');
   const results = [];
   for (const [width, height] of sizes) {
     win.setContentSize(width, height);
@@ -55,6 +61,39 @@ app.whenReady().then(async () => {
         }
         if (height > width) await js(`document.querySelector('.mobile-rotate-hint button')?.click()`);
         await js('Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))])');
+        const toastFrames = await js(`(async () => {
+          const toast = document.querySelector('.toast');
+          if (!toast) return [];
+          const inlineAnimation = toast.style.animation;
+          toast.style.animation = 'none';
+          void toast.offsetHeight;
+          toast.style.animation = inlineAnimation;
+          void toast.offsetHeight;
+          const animations = toast.getAnimations();
+          animations.forEach(animation => animation.pause());
+          const frames = [];
+          for (const time of [0, 16, 80, 150, 299, 320, 2200, 2350]) {
+            animations.forEach(animation => { animation.currentTime = time; });
+            await new Promise(requestAnimationFrame);
+            const rect = toast.getBoundingClientRect();
+            frames.push({ time, x: rect.x, y: rect.y, w: rect.width, h: rect.height });
+          }
+          animations.forEach(animation => { animation.currentTime = 320; });
+          await new Promise(requestAnimationFrame);
+          return frames;
+        })()`);
+        const resizeChecks = [];
+        if (mobile && process.argv.includes('--resize')) {
+          const selection = await js(`JSON.stringify([...document.querySelectorAll('[aria-pressed=true]')].map(el => el.getAttribute('aria-label') || el.textContent))`);
+          for (const [rw, rh] of [[915, 412], [740, 360], [width, height]]) {
+            win.webContents.enableDeviceEmulation({ screenPosition: 'mobile', screenSize: { width: rw, height: rh }, viewPosition: { x: 0, y: 0 }, deviceScaleFactor: 1, viewSize: { width: rw, height: rh }, scale: 1 });
+            await new Promise(r => setTimeout(r, 120));
+            const resized = await js(`(() => { const selected = JSON.stringify([...document.querySelectorAll('[aria-pressed=true]')].map(el => el.getAttribute('aria-label') || el.textContent)); return { width: innerWidth, height: innerHeight, selectionStable: selected === ${JSON.stringify(selection)}, documentOverflow: document.documentElement.scrollWidth > innerWidth + 2 }; })()`);
+            const screenshot = `${name}-runtime-${rw}x${rh}.png`;
+            await fs.writeFile(path.join(output, screenshot), (await win.webContents.capturePage()).toPNG());
+            resizeChecks.push({ ...resized, file: screenshot });
+          }
+        }
         const metrics = await js(`(() => {
           const rect = el => { const r = el.getBoundingClientRect(); return { x:r.x, y:r.y, w:r.width, h:r.height }; };
           const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
@@ -73,11 +112,14 @@ app.whenReady().then(async () => {
           const toast = document.querySelector('.toast');
           const toastBounds = toast ? rect(toast) : null;
           const toastTooLarge = toast && (outside(toast) || toast.getBoundingClientRect().height > innerHeight * .4);
-          return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,scrollTails,smallTargets,blocked,toastBounds,toastTooLarge,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
+          const rosterActions = [...document.querySelectorAll('.ordinary-detail-actions button')].filter(visible);
+          const overlappingActions = rosterActions.flatMap((a, index) => rosterActions.slice(index + 1).filter(b => { const x = a.getBoundingClientRect(), y = b.getBoundingClientRect(); return Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1; }).map(b => [a.textContent.trim(), b.textContent.trim()]));
+          const oneScreenOverflow = ${mobile && height < width && oneScreen.has(name)} && !topMask ? scrolls : [];
+          return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,oneScreenOverflow,overlappingActions,scrollTails,smallTargets,blocked,toastBounds,toastTooLarge,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
         })()`);
         const file = `${name}-${width}x${height}${mobile ? '' : '-desktop'}.png`;
         await fs.writeFile(path.join(output, file), (await win.webContents.capturePage()).toPNG());
-        results.push({ name, width, height, file, ...metrics, errors: [...errors] });
+        results.push({ name, width, height, file, ...metrics, toastFrames, resizeChecks, errors: [...errors] });
         console.log(`${name} ${width}x${height}: clipped=${metrics.clipped.length} concealed=${metrics.concealed.length} horizontal=${metrics.horizontal.length} errors=${errors.length}`);
       } catch (error) { results.push({ name, width, height, error: String(error), errors: [...errors] }); console.error(name, String(error)); }
     }
@@ -87,10 +129,13 @@ app.whenReady().then(async () => {
   const merged = [...previous.filter(old=>!results.some(r=>r.name===old.name&&r.width===old.width&&r.height===old.height)), ...results];
   await fs.writeFile(reportPath, JSON.stringify(merged, null, 2));
   const failures = merged.filter(r => r.error || r.errors?.length || r.clipped?.length || r.concealed?.length || r.horizontal?.length || r.toastTooLarge
-    || (mobile && (r.smallTargets?.length || r.blocked?.length || r.scrollTails?.some(s=>!s.atEnd||!s.usable)))
+    || r.resizeChecks?.some(check => !check.selectionStable || check.documentOverflow)
+    || r.toastFrames?.some(frame => frame.h > r.height * .4 || frame.x < -2 || frame.y < -2 || frame.x + frame.w > r.width + 2 || frame.y + frame.h > r.height + 2)
+    || (mobile && (r.smallTargets?.length || r.blocked?.length || r.overlappingActions?.length || r.oneScreenOverflow?.length || r.scrollTails?.some(s=>!s.atEnd||!s.usable)))
     || r.buttons === 0 || Math.abs(r.viewport?.[0] - r.width) > 1 || Math.abs(r.viewport?.[1] - r.height) > 1);
   const cssHash = require('node:crypto').createHash('sha256').update(await fs.readFile(path.join(repo, 'src/ui/mobile.css'))).digest('hex');
-  await fs.writeFile(path.join(output, mobile ? 'run.json' : 'desktop-run.json'), JSON.stringify({ cssHash, cases: merged.length, freshCases: results.length, retainedCases: previous.length ? merged.length - results.length : 0, failures: failures.map(r=>({name:r.name,width:r.width,height:r.height})), sizes }, null, 2));
+  const stylesHash = require('node:crypto').createHash('sha256').update(await fs.readFile(path.join(repo, 'src/ui/styles.css'))).digest('hex');
+  await fs.writeFile(path.join(output, mobile ? 'run.json' : 'desktop-run.json'), JSON.stringify({ cssHash, stylesHash, cases: merged.length, freshCases: results.length, retainedCases: previous.length ? merged.length - results.length : 0, failures: failures.map(r=>({name:r.name,width:r.width,height:r.height})), sizes }, null, 2));
   const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
   const rows = merged.map(r=>`<tr><td>${escape(r.name)}</td><td>${r.width}×${r.height}</td><td>${r.error ? escape(r.error) : `越界 ${r.clipped.length} / 裁切 ${r.concealed.length} / 横溢 ${r.horizontal.length} / 小触点 ${r.smallTargets.length} / 遮挡 ${r.blocked.length}`}</td><td>${r.file ? `<a href="${escape(r.file)}">截图</a>` : ''}</td></tr>`).join('');
   await fs.writeFile(path.join(output, mobile ? 'index.html' : 'desktop.html'), `<!doctype html><meta charset="UTF-8"><title>布局验收</title><style>body{font:14px system-ui;margin:20px;background:#fff9e9;color:#101c2c}table{border-collapse:collapse}td,th{border:1px solid #8a979b;padding:6px;text-align:left}</style><h1>${mobile ? '手机' : '桌面'}实际渲染验收</h1><p>此报告检查已列出的夹具，不代表 Android 真机系统栏、字体放大或原生分享流程已经验收。</p><table><tr><th>页面／状态</th><th>CSS视口</th><th>自动几何检查</th><th>视觉证据</th></tr>${rows}</table>`);
