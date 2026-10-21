@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { exportSave, importSave, parseDualSave } from './persistence';
 import { useMobileLayout, useBackAction } from './mobile';
 
-export function SaveBackup({ slot, onImported }: { slot?: number; onImported: () => void }) {
+export function SaveBackup({ slot, onImported, onClose }: { slot?: number; onImported: () => void; onClose: () => void }) {
   const mobile = useMobileLayout();
   const input = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ slot: number; json: string } | null>(null);
@@ -12,6 +12,7 @@ export function SaveBackup({ slot, onImported }: { slot?: number; onImported: ()
   if (!mobile) return null;
   return <div className="mobile-backup">
     <p>选择一个槽位，再备份或导入。导入会覆盖该槽位的两个模式。</p>
+    <div className="mobile-backup-actions">
     <button disabled={!slot || busy} onClick={async () => {
       if (!slot) return;
       setBusy(true);
@@ -20,6 +21,8 @@ export function SaveBackup({ slot, onImported }: { slot?: number; onImported: ()
       finally { setBusy(false); }
     }}>导出备份</button>
     <button disabled={!slot || busy} onClick={() => input.current?.click()}>导入备份</button>
+    <button onClick={onClose}>关闭</button>
+    </div>
     <input ref={input} type="file" accept=".json,application/json" hidden onChange={async event => {
       const file = event.target.files?.[0];
       event.target.value = '';

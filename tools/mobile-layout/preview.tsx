@@ -115,9 +115,9 @@ variant('backpack-empty', 'backpack', { inventory: {}, roster: [], field: [] });
 variant('codex-detail', 'codex', {}, '.codex-item');
 variant('battle-food', 'battle', {}, '捕获');
 variant('battle-items', 'battle', {}, '道具');
-variant('battle-enemy', 'battle', {}, '.enemy-area .unit-touch-info');
-variant('battle-ally', 'battle', {}, '.player-area .unit-touch-info');
-variant('battle-skills', 'battle', {}, '.player-area .formation-slot|.mobile-skill-help');
+variant('battle-enemy', 'battle', {}, 'hold:.enemy-area .formation-slot:not(.empty)');
+variant('battle-ally', 'battle', {}, 'hold:.player-area .formation-slot:not(.empty)');
+variant('battle-skills', 'battle', {}, 'hold:.player-area .formation-slot:not(.empty)');
 variant('battle-log', 'battle', {}, '战斗记录');
 variant('battle-won', 'battle', { battle: { ...registry.battle.state.battle, phase: 'won', log: [] } });
 variant('battle-lost', 'battle', { battle: { ...registry.battle.state.battle, phase: 'lost', log: [] } });
@@ -137,10 +137,13 @@ const stressRoster = ['nine_tail_sovereign', 'solar_spirit', 'furnace_beast', 'e
 const stressBattle = createBattle(stressRoster, encounter, 123);
 stressBattle.playerUnits[0].statuses = (['burn', 'poison', 'atkUp', 'atkDown', 'shield', 'spdDown', 'thorns', 'fear'] as StatusEffect['kind'][]).map(kind => ({ kind, value: 3, turns: 2 }));
 variant('battle-many-buffs', 'battle', { battle: stressBattle });
-variant('buff-detail-long', 'battle', { battle: stressBattle }, '.player-area .unit-touch-info');
+variant('buff-detail-long', 'battle', { battle: stressBattle }, 'hold:.player-area .formation-slot:not(.empty)');
 variant('battle-selected', 'battle', { battle: stressBattle }, '.player-area .formation-slot');
 variant('battle-menu', 'battle', {}, '菜单');
 variant('roster-long', 'roster', { roster: stressRoster });
+variant('toast-recruit', 'roster', { toast: { msg: '招募成功！迅迅加入了队伍', kind: 'success' } });
+variant('toast-food', 'map', { toast: { msg: '获得食物：鲜肉 ×2', kind: 'success' } });
+variant('toast-long', 'shop', { toast: { msg: '购买成功！获得技能强化石，可在背包中选择伙伴强化技能；当前队伍已满，请在伙伴管理中调整阵容后继续远征。', kind: 'info' } });
 
 const root = createRoot(document.getElementById('root')!);
 let generation = 0;
@@ -153,6 +156,7 @@ function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
       : C === ui.DifficultyScreen ? 'screen-difficulty' : '';
   return <div className={`screen ${shell}`}>
     <C state={current} dispatch={dispatch} {...scene.extra} />
+    {current.toast && <div className={`toast ${current.toast.kind ?? 'info'}`} style={{ animation: 'none' }}>{current.toast.msg}</div>}
     {mobile && <MobileShell state={current} dispatch={dispatch} canSave={false} />}
   </div>;
 }

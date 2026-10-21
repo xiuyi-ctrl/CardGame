@@ -57,7 +57,6 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .battle-field .battle-stat img { width: 16px; height: 16px; }
 .mobile-ui .battle-field .battle-sprite-emoji { font-size: clamp(32px, 8dvh, 70px); }
 .mobile-ui .battle-field .battle-status-icons { width: 14px; top: -4px; left: 96%; gap: 1px; }
-.mobile-ui .unit-touch-info { position: absolute; z-index: 8; left: 60%; top: 0; width: 44px; min-width: 44px; height: 44px; padding: 0; align-items: center; justify-content: center; border: 0; border-radius: 0; background: transparent; color: #fff9e9; font-size: 12px; text-shadow: 1px 1px #101c2c, -1px -1px #101c2c; }
 .mobile-ui .battle-sidebar { min-height: 0; padding: 5px; border-width: 2px; gap: 0; grid-template-rows: minmax(0, 1fr); }
 .mobile-ui .battle-sidebar .log-panel { display: none; }
 .mobile-ui .battle-sidebar .log-panel.mobile-log-open { display: flex; flex-direction: column; position: fixed; z-index: 1200; inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); padding: 12px; background: #fff9e9; border: 5px solid #101c2c; box-shadow: 0 0 0 100vmax #071421aa; }
@@ -65,7 +64,7 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .battle-sidebar .log-box { flex: 1; overflow-y: auto; max-height: none; }
 .mobile-ui .battle-sidebar .skill-drawer { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .mobile-ui .battle-sidebar .skill-drawer-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.mobile-ui .battle-selected-unit { min-height: 44px; grid-template-columns: 36px minmax(0, 1fr) 44px; gap: 4px; padding-bottom: 2px; border-bottom: 1px solid #8a979b; }
+.mobile-ui .battle-selected-unit { min-height: 44px; grid-template-columns: 36px minmax(0, 1fr); gap: 4px; padding-bottom: 2px; border-bottom: 1px solid #8a979b; }
 .mobile-ui .battle-selected-portrait { width: 36px; height: 36px; border-width: 1px; }
 .mobile-ui .battle-selected-stats { font-size: 14px; gap: 5px; }
 .mobile-ui .battle-selected-stats .starter-stat-icon { width: 16px; height: 16px; }
@@ -76,7 +75,6 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .battle-sidebar .battle-skill-grid .skill-btn { min-height: 44px; padding: 5px; border-width: 2px; }
 .mobile-ui .battle-sidebar .battle-skill-grid .skill-btn-head { font-size: 14px; }
 .mobile-ui .battle-sidebar .skill-btn .skill-desc { display: none; }
-.mobile-ui .mobile-skill-help { width: 44px; height: 44px; margin: 0; padding: 2px; font-size: 12px; align-items: center; justify-content: center; }
 .mobile-ui .battle-selected-portrait .battle-sprite-emoji { font-size: 28px; }
 .mobile-ui .battle-sidebar .skill-drawer-bottom { flex: none; padding-top: 3px; }
 .mobile-ui .battle-utility-row { gap: 3px; }
@@ -110,10 +108,8 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .formation-board .formation-slot { width: min(100px, 90%); height: min(110px, 90%); aspect-ratio: auto; }
 .mobile-ui .formation-board .battle-creature-stats { font-size: 14px; gap: 4px; }
 .mobile-ui .formation-board .battle-stat img { width: 16px; height: 16px; }
-.mobile-ui .formation-list { display: grid; grid-template-rows: auto auto minmax(44px, 1fr) minmax(0, .7fr) 44px; min-height: 0; margin: 0; border-width: 3px; padding: 4px; gap: 4px; overflow: hidden; }
+.mobile-ui .formation-list { display: grid; grid-template-rows: auto minmax(44px, 1fr) minmax(0, .7fr) 44px; min-height: 0; margin: 0; border-width: 3px; padding: 4px; gap: 4px; overflow: hidden; }
 .mobile-ui .formation-list-title { font-size: 16px; }
-.mobile-ui .formation-touch-actions { flex: none; align-items: center; gap: 4px; font-size: 12px; color: #101c2c; }
-.mobile-ui .formation-touch-actions button { padding: 3px; flex: none; }
 .mobile-ui .formation-board .formation-slot > div,
 .mobile-ui .formation-pet-portrait { touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 .mobile-ui .formation-touch-dragging { opacity: .62; }
@@ -585,8 +581,10 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .fusion-stats { font-size: 13px; flex-wrap: wrap; }
 .mobile-ui .save-mgmt-panel > .mobile-backup { min-height: 0; flex: none; overflow: visible; padding: 2px; }
 .mobile-ui .save-mgmt-panel .mobile-backup p { font-size: 12px; margin: 2px 0; }
-.mobile-ui .save-mgmt-panel .mobile-backup button { padding: 2px 4px; margin: 0 4px 0 0; }
-.mobile-ui .save-mgmt-panel > .big-btn { min-height: 44px; font-size: 14px; padding: 3px; margin-top: 0 !important; }
+.mobile-ui .save-mgmt-panel .mobile-backup button { padding: 2px 4px; margin: 0; }
+.mobile-ui .mobile-backup-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.mobile-ui .mobile-backup-actions button { min-width: 0; white-space: nowrap; }
+.mobile-ui .save-mgmt-panel > .big-btn { display: none; }
 .mobile-ui .save-mgmt-panel .save-grid { flex: 1; }
 .mobile-ui .save-slot-del { min-height: 44px; width: 44px; height: 44px; }
 .mobile-ui :is(.battle-overlay-head, .confirm-box > .section-title, .confirm-box > .panel-row, .save-mgmt-panel > .big-btn) { flex-shrink: 0; }
@@ -635,7 +633,8 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .screen > .hud .act { font-size: 14px; }
 html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .screen > .side-label { flex: none; font-size: 12px; }
-.mobile-ui .toast { max-width: calc(100% - 16px); bottom: 54px; font-size: 14px; }
+.mobile-ui .toast { top: auto; bottom: max(54px, env(safe-area-inset-bottom)); width: max-content; max-width: min(520px, calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px)); height: auto; min-height: 0; padding: 6px 10px; font-size: clamp(12px, 3.6dvh, 14px); line-height: 1.4; overflow-wrap: anywhere; }
+.mobile-ui .toast::before { width: 20px; height: 20px; margin-right: 6px; }
 .mobile-ui.app-inactive *, .mobile-ui.app-inactive *::before, .mobile-ui.app-inactive *::after { animation-play-state: paused !important; }
 .mobile-ui :is(.battle-skill-scroll, .formation-pets, .map-canvas, .codex-list, .codex-detail) { scrollbar-width: none; overscroll-behavior: contain; }
 .mobile-ui :is(.battle-skill-scroll, .formation-pets, .map-canvas, .codex-list, .codex-detail)::-webkit-scrollbar { display: none; }

@@ -1157,7 +1157,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                 })}
               </div>
             )}
-            <SaveBackup slot={selectedSlot} onImported={() => { void listSaves().then(s => { setSlots(s); setHasSave(s.some(x => x.main || x.proficiency)); }); }} />
+            <SaveBackup slot={selectedSlot} onClose={() => setShowSaveMgmt(false)} onImported={() => { void listSaves().then(s => { setSlots(s); setHasSave(s.some(x => x.main || x.proficiency)); }); }} />
             <button className="big-btn" style={{ marginTop: 16 }} onClick={() => setShowSaveMgmt(false)}>关闭</button>
           </div>
         </div>

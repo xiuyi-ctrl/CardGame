@@ -39,14 +39,18 @@ describe('手机触屏操作', () => {
     expect(document.documentElement.classList.contains('mobile-ui')).toBe(false);
   });
 
-  it('点击详情不下达攻击；我方手机详情包含技能，返回键优先关闭详情', () => {
+  it('长按显示技能详情且松手不下达指令，返回键优先关闭详情', async () => {
     const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 42);
     const state = { ...createInitialState(), screen: 'battle' as const, battle };
     const dispatch = vi.fn();
     render(createElement(Fragment, null,
       createElement(BattleScreen, { state, dispatch }), createElement(MobileShell, { state, dispatch, canSave: false })));
-    fireEvent.click(screen.getByRole('button', { name: /查看迅迅我方生物信息/ }));
-    expect(screen.getByRole('dialog', { name: '我方生物 Buff' }).textContent).toContain('技能');
+    const unit = screen.getByRole('button', { name: /迅迅，右键或按菜单键查看我方/ });
+    expect(screen.queryByRole('button', { name: /查看伙伴、技能与状态详情/ })).toBeNull();
+    fireEvent.pointerDown(unit, { pointerType: 'touch', isPrimary: true });
+    expect((await screen.findByRole('dialog', { name: '我方生物 Buff' })).textContent).toContain('技能');
+    fireEvent.pointerUp(unit);
+    fireEvent.click(unit);
     expect(dispatch).not.toHaveBeenCalled();
     act(() => window.dispatchEvent(new Event('petcard-back')));
     expect(screen.queryByRole('dialog', { name: '我方生物 Buff' })).toBeNull();
@@ -65,16 +69,35 @@ describe('手机触屏操作', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('布阵通过点击调整指定位置，确认沿用原动作', () => {
+  it('选择攻击目标时长按敌人仅查看详情，短按仍可确认目标', async () => {
+    const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 42);
+    const dispatch = vi.fn();
+    render(createElement(BattleScreen, { state: { ...createInitialState(), screen: 'battle', battle }, dispatch }));
+    fireEvent.click(screen.getByRole('button', { name: /迅迅，右键或按菜单键查看我方/ }));
+    fireEvent.click(document.querySelector('.battle-skill-grid .skill-btn')!);
+    const enemy = screen.getByRole('button', { name: /右键或按菜单键查看敌人信息/ });
+    fireEvent.pointerDown(enemy, { pointerType: 'touch', isPrimary: true });
+    await screen.findByRole('dialog', { name: '敌人信息' });
+    fireEvent.pointerUp(enemy);
+    fireEvent.click(enemy);
+    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '关闭敌人信息' }));
+    fireEvent.pointerDown(enemy, { pointerType: 'touch', isPrimary: true });
+    fireEvent.pointerUp(enemy);
+    fireEvent.click(enemy);
+    expect(dispatch).toHaveBeenCalled();
+  });
+
+  it('布阵保留点击上阵并移除调整站位按钮', () => {
     const units = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
     const state = { ...createInitialState(), screen: 'formation' as const, roster: units,
       formation: { units, initialField: [units[0]], encounter: [{ speciesId: 'momo' }], nodeId: '' } };
     const dispatch = vi.fn();
     render(createElement(FormationScreen, { state, dispatch }));
-    fireEvent.click(screen.getByRole('button', { name: '调整站位' }));
-    fireEvent.click(screen.getByRole('button', { name: /我方后排第 3 位/ }));
+    expect(screen.queryByRole('button', { name: '调整站位' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /泡泡，速度/ }));
     fireEvent.click(screen.getByRole('button', { name: /确认出战，当前/ }));
-    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'FORMATION_CONFIRM', units: expect.arrayContaining([expect.objectContaining({ uid: units[1].uid, row: 'back', column: 2 })]) }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'FORMATION_CONFIRM', units: expect.arrayContaining([expect.objectContaining({ uid: units[1].uid, row: 'front', column: 1 })]) }));
   });
 
   it('车轮战无需拖动可前移伙伴，不改变其数据', () => {

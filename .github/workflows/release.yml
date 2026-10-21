@@ -43,4 +43,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:GITHUB_REF_NAME" release/*.exe --generate-notes
+          $package = Get-ChildItem release/*.exe | Select-Object -First 1
+          $releaseVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          $uploadPath = "release/pet-card-rogue-$releaseVersion-windows.exe"
+          Copy-Item -LiteralPath $package.FullName -Destination $uploadPath
+          gh release create "$env:GITHUB_REF_NAME" "$uploadPath" --generate-notes

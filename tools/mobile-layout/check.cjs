@@ -43,6 +43,13 @@ app.whenReady().then(async () => {
         const setup = await js(`window.preview.render(${JSON.stringify(name)},${mobile})`);
         await new Promise(r => setTimeout(r, 150));
         if (setup) for (const step of setup.split('|')) {
+          if (step.startsWith('hold:')) {
+            const selector = JSON.stringify(step.slice(5));
+            await js(`(() => { const el = document.querySelector(${selector}); if (!el) throw Error('Missing hold target'); el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', isPrimary: true, pointerId: 1 })); })()`);
+            await new Promise(r => setTimeout(r, 500));
+            await js(`document.querySelector(${selector}).dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch', isPrimary: true, pointerId: 1 }))`);
+            continue;
+          }
           await js(`(() => { const step = ${JSON.stringify(step)}; if(step==='file:backup') { const input=document.querySelector('input[type=file]'); const transfer=new DataTransfer(); transfer.items.add(new File([window.preview.backupJson],'preview.json',{type:'application/json'})); input.files=transfer.files; input.dispatchEvent(new Event('change',{bubbles:true})); return; } if(step.startsWith('range:')) { const el=document.querySelector('input[type=range]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,step.slice(6)); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return; } const el = step.startsWith('.') ? document.querySelector(step) : [...document.querySelectorAll('button')].find(b => b.textContent.includes(step)); if (!el) throw Error('Missing setup: ' + step); el.click(); })()`);
           await new Promise(r => setTimeout(r, 60));
         }
@@ -63,7 +70,10 @@ app.whenReady().then(async () => {
           const smallTargets = buttons.filter(b=>{const r=b.getBoundingClientRect();return r.width<43.5||r.height<43.5}).map(b=>({text:b.textContent.trim().slice(0,30),...rect(b)}));
           const blocked = buttons.filter(b=> !b.disabled && !outside(b) && !scrollParent(b)).filter(b=>{ const r=b.getBoundingClientRect(); const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2); return hit && !b.contains(hit); }).map(b=>b.textContent.trim().slice(0,30));
           const scrollTails = [...document.querySelectorAll('#root *')].filter(el=>visible(el)&&/auto|scroll/.test(getComputedStyle(el).overflowY)&&el.scrollHeight>el.clientHeight+2).map(el=>{ const initial=el.scrollTop; el.scrollTop=el.scrollHeight; const atEnd=Math.abs(el.scrollTop+el.clientHeight-el.scrollHeight)<=2; el.scrollTop=initial; return {cls:el.className,atEnd,usable:el.clientHeight>0}; });
-          return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,scrollTails,smallTargets,blocked,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
+          const toast = document.querySelector('.toast');
+          const toastBounds = toast ? rect(toast) : null;
+          const toastTooLarge = toast && (outside(toast) || toast.getBoundingClientRect().height > innerHeight * .4);
+          return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,scrollTails,smallTargets,blocked,toastBounds,toastTooLarge,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
         })()`);
         const file = `${name}-${width}x${height}${mobile ? '' : '-desktop'}.png`;
         await fs.writeFile(path.join(output, file), (await win.webContents.capturePage()).toPNG());
@@ -76,7 +86,7 @@ app.whenReady().then(async () => {
   const previous = process.argv.includes('--merge') ? JSON.parse(await fs.readFile(reportPath, 'utf8')) : [];
   const merged = [...previous.filter(old=>!results.some(r=>r.name===old.name&&r.width===old.width&&r.height===old.height)), ...results];
   await fs.writeFile(reportPath, JSON.stringify(merged, null, 2));
-  const failures = merged.filter(r => r.error || r.errors?.length || r.clipped?.length || r.concealed?.length || r.horizontal?.length
+  const failures = merged.filter(r => r.error || r.errors?.length || r.clipped?.length || r.concealed?.length || r.horizontal?.length || r.toastTooLarge
     || (mobile && (r.smallTargets?.length || r.blocked?.length || r.scrollTails?.some(s=>!s.atEnd||!s.usable)))
     || r.buttons === 0 || Math.abs(r.viewport?.[0] - r.width) > 1 || Math.abs(r.viewport?.[1] - r.height) > 1);
   const cssHash = require('node:crypto').createHash('sha256').update(await fs.readFile(path.join(repo, 'src/ui/mobile.css'))).digest('hex');

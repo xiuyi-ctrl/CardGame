@@ -32,12 +32,8 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     return p;
   });
   const [focusedUid, setFocusedUid] = useState<string | null>(null);
-  const [placingUid, setPlacingUid] = useState<string | null>(null);
   const [touchDraggingUid, setTouchDraggingUid] = useState<string | null>(null);
-  useBackAction(true, () => {
-    if (placingUid) setPlacingUid(null);
-    else dispatch({ type: 'BACK_TO_MAP' });
-  });
+  useBackAction(true, () => dispatch({ type: 'BACK_TO_MAP' }));
   /** 拖拽标记：区分「点击」与「拖拽后松手」（拖拽结束不应触发 click） */
   const dragMoved = useRef(false);
   const touchDrag = useRef<{ uid: string; pointerId: number; x: number; y: number; moved: boolean } | null>(null);
@@ -87,11 +83,6 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   /** 点击场上宠物：下阵放回宠物池（模拟战强制全上时禁止） */
   function onSlotClick(row: FormationRow, col: 0 | 1 | 2) {
     if (dragMoved.current) return;
-    if (placingUid) {
-      moveToSlot(placingUid, row, col);
-      setPlacingUid(null);
-      return;
-    }
     const existing = bySlot[`${row}-${col}`];
     if (!existing || forceAll) return;
     const next = { ...positions };
@@ -102,7 +93,6 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   /** 点击伙伴卡片切换上场/下场；上场时按空位顺序自动布阵。 */
   function onListClick(uid: string) {
     if (dragMoved.current || forceAll) return;
-    if (placingUid) { setPlacingUid(uid); setFocusedUid(uid); return; }
     if (positions[uid]) {
       const next = { ...positions };
       delete next[uid];
@@ -282,10 +272,6 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
           <div className="formation-list-head">
             <div className="formation-list-title">{forceAll ? '队伍总览' : '队伍伙伴'} <small>（最多 {getMaxRoster(state.runMode)} 只）</small></div>
             <span className="formation-list-hint">{forceAll ? '全员上场' : '点击切换上场'} <UiSymbol name="sparkle" /></span>
-          </div>
-          <div className="touch-only formation-touch-actions">
-            <button type="button" disabled={!focusedUnit} onClick={() => setPlacingUid(placingUid ? null : focusedUnit?.uid ?? null)}>{placingUid ? '取消放置' : '调整站位'}</button>
-            {placingUid ? <span role="status">点击目标位置放置或交换</span> : <span>拖动伙伴头像调整站位</span>}
           </div>
           <div className="formation-pets" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
             {fb.units.map((u) => {

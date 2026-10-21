@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useBackAction } from './mobile';
-import type { Dispatch } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useBackAction, useMobileLayout } from './mobile';
+import type { Dispatch, PointerEvent as ReactPointerEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
@@ -103,6 +103,7 @@ function BattleUnitInspectPanel({ unit, speed, side, showSkills = side === 'enem
 }
 
 export function BattleScreen({ state, dispatch }: Props) {
+  const mobile = useMobileLayout();
   const battle = state.battle;
   const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed, skipAnim } = useBattleFx(battle);
   if (!battle) return null;
@@ -120,6 +121,37 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [itemOverlayOpen, setItemOverlayOpen] = useState(false);
   const [logExpanded, setLogExpanded] = useState(false);
   const [mobileLogOpen, setMobileLogOpen] = useState(false);
+  const longPress = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number; pointerId: number } | null>(null);
+  const suppressPressClick = useRef(false);
+  function cancelLongPress() {
+    if (longPress.current) clearTimeout(longPress.current.timer);
+    longPress.current = null;
+  }
+  useEffect(() => {
+    document.addEventListener('visibilitychange', cancelLongPress);
+    return () => { cancelLongPress(); document.removeEventListener('visibilitychange', cancelLongPress); };
+  }, []);
+  function startLongPress(event: ReactPointerEvent, uid: string, side: 'enemy' | 'player') {
+    if (!mobile || event.pointerType === 'mouse' || event.isPrimary === false) return;
+    cancelLongPress();
+    suppressPressClick.current = false;
+    longPress.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, timer: setTimeout(() => {
+      suppressPressClick.current = true;
+      if (side === 'enemy') setInspectEnemy(uid);
+      else { setInspectAllySkills(true); setInspectAlly(uid); }
+      longPress.current = null;
+    }, 450) };
+  }
+  function moveLongPress(event: ReactPointerEvent) {
+    const press = longPress.current;
+    if (press && (press.pointerId !== event.pointerId || Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10)) cancelLongPress();
+  }
+  function suppressLongPressClick(event: React.MouseEvent) {
+    if (!suppressPressClick.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressPressClick.current = false;
+  }
   const hasPendingTarget = !!(pendingSkill || swapFrom || pendingTame || pendingBattleItem);
   function cancelTarget() {
     setPendingSkill(null);
@@ -465,7 +497,13 @@ export function BattleScreen({ state, dispatch }: Props) {
         key={key}
         className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${aimClass}`}
         onClick={isTarget ? () => onEnemyClick(u.uid) : undefined}
-        onContextMenu={(event) => { event.preventDefault(); setInspectEnemy(u.uid); }}
+        onClickCapture={suppressLongPressClick}
+        onPointerDown={event => startLongPress(event, u.uid, 'enemy')}
+        onPointerMove={moveLongPress}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onPointerLeave={cancelLongPress}
+        onContextMenu={(event) => { event.preventDefault(); cancelLongPress(); if (mobile) suppressPressClick.current = true; setInspectEnemy(u.uid); }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
           if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
@@ -479,12 +517,11 @@ export function BattleScreen({ state, dispatch }: Props) {
         }}
         tabIndex={0}
         role="button"
-        aria-label={`${u.name}，右键或按菜单键查看敌人信息`}
-        title={choosingEnemyTarget ? (isTarget ? '点击选择攻击目标，右键查看敌人信息' : '当前技能无法攻击，右键查看敌人信息') : '右键查看敌人信息'}
+        aria-label={`${u.name}，右键或按菜单键查看敌人信息${mobile ? '，手机长按查看详情' : ''}`}
+        title={mobile ? '长按查看生物详情' : choosingEnemyTarget ? (isTarget ? '点击选择攻击目标，右键查看敌人信息' : '当前技能无法攻击，右键查看敌人信息') : '右键查看敌人信息'}
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene skillEnhancements={u.skillEnhancements} className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
         <BattleStatusIcons unit={shownUnit(u)} />
-        <button type="button" className="touch-only unit-touch-info" aria-label={`查看${u.name}敌人信息`} onClick={event => { event.stopPropagation(); setInspectEnemy(u.uid); }}>详情</button>
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
         {popOverlay(u.uid)}
       </div>
@@ -502,7 +539,13 @@ export function BattleScreen({ state, dispatch }: Props) {
         key={key}
         className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''}`}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
-        onContextMenu={(event) => { event.preventDefault(); setInspectAllySkills(false); setInspectAlly(u.uid); }}
+        onClickCapture={suppressLongPressClick}
+        onPointerDown={event => startLongPress(event, u.uid, 'player')}
+        onPointerMove={moveLongPress}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onPointerLeave={cancelLongPress}
+        onContextMenu={(event) => { event.preventDefault(); cancelLongPress(); if (mobile) suppressPressClick.current = true; setInspectAllySkills(mobile); setInspectAlly(u.uid); }}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
           if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
@@ -516,12 +559,11 @@ export function BattleScreen({ state, dispatch }: Props) {
         }}
         tabIndex={0}
         role="button"
-        aria-label={`${u.name}，右键或按菜单键查看我方生物 Buff`}
-        title="右键查看我方生物 Buff"
+        aria-label={`${u.name}，右键或按菜单键查看我方生物 Buff${mobile ? '，手机长按查看详情' : ''}`}
+        title={mobile ? '长按查看生物详情' : '右键查看我方生物 Buff'}
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene className={`${fxInfo?.cls ?? ''} ${clickable || sel ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
         <BattleStatusIcons unit={shownUnit(u)} />
-        <button type="button" className="touch-only unit-touch-info" aria-label={`查看${u.name}我方生物信息`} onClick={event => { event.stopPropagation(); setInspectAllySkills(true); setInspectAlly(u.uid); }}>详情</button>
         {popOverlay(u.uid)}
       </div>
     );
@@ -649,7 +691,6 @@ export function BattleScreen({ state, dispatch }: Props) {
                       </span>
                       <span className="battle-selected-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" /><BattleHpText hp={shownUnit(selected).hp} maxHp={selected.maxHp} /></span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{spdMap?.[selected.uid] ?? getEffectiveSpd(shownUnit(selected))}</span></span>
                     </span>
-                    <button type="button" className="touch-only mobile-skill-help" aria-label="查看伙伴、技能与状态详情" onClick={() => { setInspectAllySkills(true); setInspectAlly(selected.uid); }}>详情</button>
                   </div>
                   <div className="battle-skill-scroll">
                     <div className="battle-skill-grid">

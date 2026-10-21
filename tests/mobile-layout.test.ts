@@ -100,6 +100,11 @@ describe('全界面手机布局约束', () => {
     expect(declarations('.mobile-ui :is(.popup-body, .enemy-inspect-scroll, .battle-overlay-grid, .save-grid, .fusion-confirm-preview, .growth-modal-content, .scout-result)')['overflow-y']).toBe('auto');
   });
 
+  it('手机自动提示只保留底部定位，避免同时约束上下边拉伸高度', () => {
+    expect(declarations('.mobile-ui .toast')).toMatchObject({ top: 'auto', height: 'auto', 'min-height': '0' });
+    expect(declarations('.mobile-ui .toast')['max-width']).toContain('100vw');
+  });
+
   it('独立渲染验收夹具列举所有游戏 Screen，不进入生产入口', () => {
     expect(declarations('.mobile-ui .test-pick-screen .formation-board')['grid-template-rows']).toBe('repeat(2, minmax(120px, 1fr))');
     const game = readFileSync(new URL('../src/game/state/game.ts', import.meta.url), 'utf8');
