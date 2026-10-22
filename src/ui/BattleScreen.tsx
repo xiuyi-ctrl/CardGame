@@ -23,7 +23,7 @@ import { getSkill } from '../game/data/skills';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
-import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PetIcon, PixelCreature, BattleHpText } from './components';
+import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PixelCreature, BattleHpText } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
@@ -70,7 +70,7 @@ function enemyTargetable(skill: SkillDef, enemy: Unit, enemies: Unit[]): boolean
   return front.length > 0 ? enemy.row === 'front' : true;
 }
 
-function BattleUnitInspectPanel({ unit, speed, side, showSkills = side === 'enemy', children }: { unit: Unit; speed?: number; side: 'enemy' | 'player'; showSkills?: boolean; children?: React.ReactNode }) {
+export function BattleUnitInspectPanel({ unit, speed, side, showSkills = side === 'enemy', showBuffs = true, eyebrow, children }: { unit: Unit; speed?: number; side: 'enemy' | 'player'; showSkills?: boolean; showBuffs?: boolean; eyebrow?: string; children?: React.ReactNode }) {
   const hasBuffs = unit.shield > 0 || unit.statuses.length > 0 ||
     (!!unit.battleBuffs && Object.values(unit.battleBuffs).some(Boolean));
   return (
@@ -78,18 +78,18 @@ function BattleUnitInspectPanel({ unit, speed, side, showSkills = side === 'enem
       <div className="enemy-skill-panel-title">
         <span className="enemy-inspect-portrait"><PixelCreature unit={unit} /></span>
         <span className="enemy-inspect-identity">
-          <span className="enemy-inspect-eyebrow">{side === 'enemy' ? '敌方' : '我方'} · {unit.row === 'front' ? '前排' : '后排'}</span>
+          <span className="enemy-inspect-eyebrow">{eyebrow ?? `${side === 'enemy' ? '敌方' : '我方'} · ${unit.row === 'front' ? '前排' : '后排'}`}</span>
           <strong>{unit.name}</strong>
           <span className="enemy-inspect-stats">
             <span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" /><BattleHpText hp={unit.hp} maxHp={unit.maxHp} /></span>
             <span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{speed ?? getEffectiveSpd(unit)}</span>
-            {unit.shield > 0 && <span><BuffIcon art={STATUS_ART.shield} /> 护盾 {unit.shield}</span>}
+            {showBuffs && unit.shield > 0 && <span><BuffIcon art={STATUS_ART.shield} /> 护盾 {unit.shield}</span>}
           </span>
         </span>
       </div>
       {children}
-      {!!unit.battleBuffs?.skillSpd && <div className="enemy-inspect-permanent-buff"><BuffIcon art={BATTLE_BUFF_ART.skillSpd} /> 技能速度加成 +{unit.battleBuffs.skillSpd}</div>}
-      {!hasBuffs && <div className="enemy-inspect-no-status">当前无状态效果</div>}
+      {showBuffs && !!unit.battleBuffs?.skillSpd && <div className="enemy-inspect-permanent-buff"><BuffIcon art={BATTLE_BUFF_ART.skillSpd} /> 技能速度加成 +{unit.battleBuffs.skillSpd}</div>}
+      {showBuffs && !hasBuffs && <div className="enemy-inspect-no-status">当前无状态效果</div>}
       {showSkills && <>
         <div className="enemy-inspect-section-title">技能</div>
         <div className="enemy-inspect-skills">
@@ -174,6 +174,27 @@ export function BattleScreen({ state, dispatch }: Props) {
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
   // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）；车轮战待换人时也禁止，等替补自动上场
   const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap;
+  const previousOrders = useRef({ orders: battle.orders, round: battle.round });
+  const [orderPulse, setOrderPulse] = useState<{ actorUid: string; targetUid: string; skillId: string; seq: number } | null>(null);
+  useEffect(() => {
+    const previous = previousOrders.current;
+    previousOrders.current = { orders: battle.orders, round: battle.round };
+    if (!canAct || previous.round !== battle.round) {
+      setOrderPulse(null);
+      return;
+    }
+    const changed = Object.entries(battle.orders ?? {}).find(([uid, order]) => order.targetUid
+      && (previous.orders?.[uid]?.skillId !== order.skillId || previous.orders?.[uid]?.targetUid !== order.targetUid));
+    if (changed) {
+      const [actorUid, order] = changed;
+      setOrderPulse(current => ({ actorUid, targetUid: order.targetUid!, skillId: order.skillId, seq: (current?.seq ?? 0) + 1 }));
+    }
+  }, [battle.orders, battle.round, canAct]);
+  useEffect(() => {
+    if (!orderPulse) return;
+    const timer = setTimeout(() => setOrderPulse(null), 350);
+    return () => clearTimeout(timer);
+  }, [orderPulse]);
 
   /** 动画期间按 hpMap/statusMap 覆盖显示血量与状态，随动画事件逐步推进（状态层数随事件回放，
    *  如攻击附加灼烧 5 层→dot 结算后 2 层）；新增状态标签在对应攻击动画触发后才显示，
@@ -278,6 +299,15 @@ export function BattleScreen({ state, dispatch }: Props) {
     [selected],
   );
   const selectedOrder = selected ? battle.orders?.[selected.uid] : undefined;
+  const selectedOrderLabel = selectedOrder ? (() => {
+    if (selectedOrder.skillId === REST_SKILL_ID) return '✓ 休息';
+    const skill = getSkill(selectedOrder.skillId);
+    const targetName = (skill.target === 'single' || skill.target === 'ally')
+      ? [...battle.playerUnits, ...battle.enemyUnits].find(unit => unit.uid === selectedOrder.targetUid)?.name ?? '目标已离场'
+      : ({ all: skill.reach === 'front' ? '敌方前排优先' : skill.reach === 'back' ? '敌方后排' : '敌方全体', allyAll: '我方全体', self: '自身', random: '随机敌方' } as const)[skill.target];
+    const friendly = skill.target === 'ally' || skill.target === 'allyAll' || skill.target === 'self';
+    return <>✓ {skill.name} → <span className={`battle-order-target-${friendly ? 'ally' : 'enemy'}`}>{targetName}</span></>;
+  })() : '';
 
   const foods = currentFoodList(state);
   const battleItems = BATTLE_ITEM_IDS.map((id) => getItem(id)).filter((it) => (state.inventory[it.id] ?? 0) > 0);
@@ -486,6 +516,19 @@ export function BattleScreen({ state, dispatch }: Props) {
         </span>
       ));
 
+  const orderFeedback = (u: Unit) => {
+    if (!canAct || u.hp <= 0) return null;
+    const order = selectedUid ? battle.orders?.[selectedUid] : undefined;
+    const isTarget = !hasPendingTarget && order?.targetUid === u.uid;
+    const pulseOrder = orderPulse ? battle.orders?.[orderPulse.actorUid] : undefined;
+    const pulse = orderPulse?.targetUid === u.uid && pulseOrder?.skillId === orderPulse.skillId && pulseOrder?.targetUid === u.uid;
+    const tone = battle.playerUnits.some(unit => unit.uid === u.uid) ? 'support' : 'attack';
+    return <>
+      {isTarget && <span className={`order-target-mark order-feedback-${tone}`} aria-label="当前指令目标" />}
+      {pulse && <span key={orderPulse.seq} className={`order-confirm-ring order-feedback-${tone}`} aria-hidden="true" />}
+    </>;
+  };
+
   const enemySlot = (u: Unit | undefined, key: string, topRow: boolean) => {
     const extra = `formation-slot ${topRow ? 'slot-front' : 'slot-back'}`;
     if (!u) return <div key={key} className={`${extra} empty`} aria-hidden="true" />;
@@ -523,6 +566,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene skillEnhancements={u.skillEnhancements} className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
         <BattleStatusIcons unit={shownUnit(u)} />
+        {orderFeedback(u)}
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
         {popOverlay(u.uid)}
       </div>
@@ -567,6 +611,8 @@ export function BattleScreen({ state, dispatch }: Props) {
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene className={`${fxInfo?.cls ?? ''} ${clickable || (sel && !choosingAllyTarget) ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
         <BattleStatusIcons unit={shownUnit(u)} />
+        {orderFeedback(u)}
+        {canAct && u.hp > 0 && battle.orders?.[u.uid] && <span className="battle-order-ready">✓ 已安排</span>}
         {popOverlay(u.uid)}
       </div>
     );
@@ -577,34 +623,6 @@ export function BattleScreen({ state, dispatch }: Props) {
   const enemyFront = [visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 0), visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 1), visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 2)];
   const playerFront = [battle.playerUnits.find((u) => u.row === 'front' && u.column === 0), battle.playerUnits.find((u) => u.row === 'front' && u.column === 1), battle.playerUnits.find((u) => u.row === 'front' && u.column === 2)];
   const playerBack = [battle.playerUnits.find((u) => u.row === 'back' && u.column === 0), battle.playerUnits.find((u) => u.row === 'back' && u.column === 1), battle.playerUnits.find((u) => u.row === 'back' && u.column === 2)];
-
-  const hint = selectedOrder
-    ? selectedOrder.skillId === REST_SKILL_ID
-      ? '😴 休息已选择'
-      : (() => {
-          const sk = getSkill(selectedOrder.skillId);
-          const isSingleTarget = sk.target === 'single' || sk.target === 'ally';
-          if (isSingleTarget && selectedOrder.targetUid) {
-            const targetUnit = [...battle.playerUnits, ...battle.enemyUnits].find((u) => u.uid === selectedOrder.targetUid);
-            return `⚡ ${sk.name}技能已选择：${targetUnit?.name ?? ''}`;
-          }
-          return `⚡ ${sk.name}技能已选择`;
-        })()
-    : pendingSkill
-      ? `⚡ ${getSkill(pendingSkill.skillId).name}：请选择目标`
-      : pendingTame
-        ? '🍖 选择血量低于 40% 的敌人进行驯服'
-        : pendingBattleItem
-          ? `🧪 ${getItem(pendingBattleItem).name}：选择目标使用`
-          : swapFrom
-            ? '↔ 请选择要交换位置的己方宠物'
-            : selected
-              ? <><PetIcon image={selected.image} emoji={selected.emoji} name={selected.name} /> {selected.name}：选择技能或换位</>
-              : animating
-                ? '战斗结算中…'
-                : canAct
-                  ? '给每只宠物下达技能指令，点「⚡ 结束回合」后按速度统一结算'
-                  : '敌方行动中…';
 
   return (
     <div className="screen battle-screen">
@@ -677,7 +695,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     <span className="battle-selected-portrait"><PixelCreature unit={shownUnit(selected)} /></span>
                     <span className="battle-selected-summary">
                       <span className="who">
-                        {selected.name}
+                        <span className="battle-selected-name">{selected.name}</span>
                         {(() => {
                           const p = selected.passive && getPassive(selected.passive);
                           return p ? (
@@ -687,7 +705,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                           ) : null;
                         })()}
                         {selectedOrder ? (
-                          <span className="order-badge">⚡ 已选择</span>
+                          <span className="order-badge battle-order-summary" role="status">{selectedOrderLabel}</span>
                         ) : selected.acted ? (
                           <span className="order-badge">已行动</span>
                         ) : null}
@@ -781,7 +799,6 @@ export function BattleScreen({ state, dispatch }: Props) {
                   title="与另一只己方宠物交换位置（占用发起者本回合行动）"
                 ><BattleActionIcon kind="swap" />换位</button>
               </div>
-              <div className="hint-text">{hint}</div>
               <div className="end-row">
                 {hasPendingTarget && <button type="button" className="touch-only mobile-cancel-target" onClick={cancelTarget}>取消选择目标</button>}
                 <div className="anim-controls">

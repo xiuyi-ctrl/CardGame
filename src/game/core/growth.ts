@@ -65,7 +65,7 @@ function isSpeedBuffSkill(skillId: string): boolean {
 
 /** 获取技能最大强化等级（连击/速度类最多2次，其他最多3次） */
 export function getSkillEnhanceMaxLevel(skillId: string): number {
-  if (skillId === 'burn_tail') return 0;
+  if (skillId === 'burn_tail' || skillId === 'clean_flame_care') return 0;
   if (isMultiHitSkill(skillId) || isSpeedBuffSkill(skillId)) return 2;
   return 3;
 }
@@ -106,6 +106,7 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
   effectBonus: number;
 } {
   if (level <= 0) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  if (skillId === 'clean_flame_care') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   const sk = SKILLS[skillId];
   if (!sk) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   if (skillId === 'heated_shell_bump') return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: level };

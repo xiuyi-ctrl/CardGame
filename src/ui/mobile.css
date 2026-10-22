@@ -526,12 +526,23 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .watchtower-panel { padding: 3px; gap: 3px; }
 .mobile-ui .watchtower-layout { grid-template-columns: minmax(0, 1fr); }
 .mobile-ui .watchtower-scenery { display: none; }
-.mobile-ui .watchtower-panel > h2 { font-size: 18px; }
+.mobile-ui .watchtower-panel { grid-template-rows: auto minmax(0, 1fr) auto; }
+.mobile-ui .watchtower-panel > h2 { display: none; }
 .mobile-ui .watchtower-tabs button { padding: 3px; font-size: 14px; }
 .mobile-ui .watchtower-hint { padding: 2px; font-size: 11px; }
 .mobile-ui .watchtower-footer { gap: 2px; }
-.mobile-ui .watchtower-footer p { font-size: 10px; }
+.mobile-ui .watchtower-footer p { display: none; }
 .mobile-ui .watchtower-footer button { font-size: 16px; }
+.mobile-ui .watchtower-intel { grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr)); gap: 4px; }
+.mobile-ui .watchtower-intel-card { padding: 3px; }
+.mobile-ui .watchtower-card-heading { flex-direction: row; justify-content: center; gap: 4px; padding-bottom: 2px; }
+.mobile-ui .watchtower-card-heading > .map-node-icon { flex-shrink: 0; width: 24px; height: 24px; }
+.mobile-ui .watchtower-intel-card h3 { font-size: 16px; }
+.mobile-ui .watchtower-card-description { padding-top: 2px; gap: 0; }
+.mobile-ui .watchtower-intel-card p { font-size: 12px; line-height: 1.4; }
+.mobile-ui .watchtower-enemy-names { gap: 0 3px; font-size: 12px; }
+.mobile-ui .watchtower-enemy-names button { padding: 2px; }
+.mobile-ui .watchtower-shop-items { padding-top: 4px; gap: 3px; font-size: 12px; line-height: 1.4; }
 .mobile-ui .chest-results-panel { height: 100%; width: 100%; padding: 4px; gap: 4px; }
 .mobile-ui .chest-results-heading > img { width: 36px; height: 36px; float: left; }
 .mobile-ui .chest-results-heading h2 { font-size: 18px; }
@@ -661,7 +672,15 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .battle-skill-copy { min-width: 0; width: 100%; }
 .mobile-ui .battle-sidebar .skill-btn-head { gap: 2px; line-height: 1; }
 .mobile-ui .battle-sidebar .skill-num { font-size: 12px; }
-.mobile-ui .battle-selected-summary { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 3px; }
+.mobile-ui .battle-selected-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 3px; }
+.mobile-ui .battle-sidebar .battle-selected-summary .who { display: contents; }
+.mobile-ui .battle-selected-name { grid-column: 1; grid-row: 1; overflow-wrap: anywhere; }
+.mobile-ui .battle-selected-summary .battle-selected-stats { grid-column: 2; grid-row: 1; }
+.mobile-ui .battle-sidebar .battle-selected-summary .battle-order-summary { display: block; grid-column: 1 / -1; grid-row: 2; margin: 0; line-height: 1.15; }
+.mobile-ui .battle-sidebar:has(.battle-order-summary) .battle-selected-unit { padding-bottom: 0; }
+.mobile-ui .battle-sidebar:has(.battle-order-summary) .skill-drawer-scroll { gap: 0; }
+.mobile-ui .battle-sidebar:has(.battle-order-summary) .battle-skill-grid { row-gap: 0; }
+.mobile-ui .battle-sidebar:has(.battle-order-summary) .battle-selected-summary { row-gap: 0; }
 .mobile-ui .battle-sidebar .skill-drawer .who { font-size: 14px; line-height: 1.1; }
 .mobile-ui .battle-selected-stats { font-size: 12px; }
 .mobile-ui .battle-sidebar .battle-skill-grid .skill-btn { margin: 0; }

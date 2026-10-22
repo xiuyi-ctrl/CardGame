@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createElement } from 'react';
+import { createElement, useReducer } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { makeUnit } from '../src/game/core/battle';
-import { createInitialState } from '../src/game/state/reducer';
+import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { FormationScreen } from '../src/ui/FormationScreen';
 import { FORMATION_SPRITES } from '../src/ui/formationSprites';
 
@@ -32,6 +32,25 @@ function formationState(forceAllUnits = false) {
 }
 
 describe('战前布阵界面', () => {
+  it('拖动、下阵后返回地图再进入，保留原位及主动空位', () => {
+    const initial = formationState();
+    function Harness() {
+      const [state, dispatch] = useReducer(gameReducer, initial);
+      return state.screen === 'formation'
+        ? createElement(FormationScreen, { state, dispatch })
+        : createElement('button', { onClick: () => dispatch({ type: 'MOVE', nodeId: state.map.layers[0][0].id }) }, '再次布阵');
+    }
+    render(createElement(Harness));
+    const destination = screen.getByRole('button', { name: '我方后排第 3 位：空位' });
+    fireEvent.drop(destination, { dataTransfer: { getData: () => initial.roster[1].uid } });
+    fireEvent.click(screen.getByRole('button', { name: '我方前排第 1 位：迅迅' }));
+    fireEvent.click(screen.getByRole('button', { name: '返回地图' }));
+    fireEvent.click(screen.getByRole('button', { name: '再次布阵' }));
+    expect(screen.getByRole('button', { name: '我方前排第 1 位：空位' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '我方后排第 3 位：泡泡' })).toBeTruthy();
+    expect(document.querySelectorAll('.formation-slot:not(.empty)')).toHaveLength(1);
+  });
+
   it('六只初始生物在队伍、场上、详情和敌方情报中使用新立绘', () => {
     const species = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
     const units = species.map((id, index) => makeUnit(id, true, (index % 3) as 0 | 1 | 2, false));

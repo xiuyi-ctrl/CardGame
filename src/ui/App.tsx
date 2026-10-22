@@ -20,7 +20,7 @@ import { EnhanceStoneScreen } from './EnhanceStoneScreen';
 import { EnhanceResetScreen } from './EnhanceResetScreen';
 import { Arena3Screen } from './Arena3Screen';
 import { SkillPickScreen } from './SkillPickScreen';
-import { BattleScreen } from './BattleScreen';
+import { BattleScreen, BattleUnitInspectPanel } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { BATTLE_BUFF_ICON_IMAGES, BuffIcon, CURSE_ART } from './BuffIcon';
 import { FORMATION_SPRITES } from './formationSprites';
@@ -2402,7 +2402,7 @@ function RestFusionScreen({ state, dispatch }: { state: GameState; dispatch: Dis
     : <CampFusionScreen state={state} dispatch={dispatch} />;
 }
 
-function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   // 找到正在预览的瞭望塔节点及其所在行
   const previewId = state.watchtowerPreviewNodeId;
   const previewNode = previewId ? state.map.layers.flat().find((n) => n.id === previewId) : undefined;
@@ -2412,6 +2412,7 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   const maxRow = state.map.layers.length - 1;
   const rows = [previewRow + 1, previewRow + 2, previewRow + 3].filter((r) => r <= maxRow);
   const [selRow, setSelRow] = useState<number>(rows[0] ?? previewRow);
+  const [detailSpeciesId, setDetailSpeciesId] = useState<string | null>(null);
   const sel = rows.includes(selRow) ? selRow : rows[0] ?? previewRow;
 
   return (
@@ -2428,13 +2429,25 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
           </button>
         ))}
       </div>
-      <p className="watchtower-hint">查看后3行内某一行的全部节点情报</p>
       <div className="watchtower-intel">
         {(state.map.layers[sel] ?? []).map((n) => {
           const info = nodeInfo(state, n);
+          const combat = ['battle', 'elite', 'arena', 'gauntlet', 'corrupted', 'guardian', 'boss'].includes(n.type);
+          const enemies = n.type === 'boss' ? state.map.boss[n.id] : state.map.encounter[n.id];
+          const descriptions = n.type === 'rest' ? ['恢复伙伴生命']
+            : n.type === 'arena3' ? ['模拟战', '挑战赛', '表演赛']
+            : n.type === 'sync' || n.type === 'keydoor' ? [info.detail.replace(/^宝箱奖励：/, '').split('（')[0], n.type === 'sync' ? '二选一；持双生符可双开' : '需先击败对应守卫取得钥匙']
+            : info.detail.split(' ／ ');
           return (
             <article key={n.id} className="watchtower-intel-card">
-              <MapNodeIcon type={n.type} /><h3>{info.title}</h3><p>{info.detail}</p>
+              <header className="watchtower-card-heading"><MapNodeIcon type={n.type} /><h3>{info.title}</h3></header>
+              {n.type === 'shop' ? <dl className="watchtower-shop-items">{info.shopItems?.map((item, index) => <div key={index}><dt>{item.name}</dt><dd>{item.price} 金</dd></div>)}</dl> : combat ? <div className="watchtower-card-description">
+                <div className="watchtower-enemy-names" aria-label={`${info.title}的敌人`}>
+                  {enemies?.length ? enemies.map((enemy, index) => <button type="button" key={`${enemy.speciesId}-${index}`} aria-haspopup="dialog" onClick={() => setDetailSpeciesId(enemy.speciesId)}>{getMonster(enemy.speciesId).name}</button>) : <p>暂无敌人情报</p>}
+                </div>
+                {n.type === 'gauntlet' && <p>共 {n.gauntletSize ?? enemies?.length ?? 2} 轮</p>}
+                {n.type === 'guardian' && <p>不可驯服 · 击败获得专用钥匙</p>}
+              </div> : <div className="watchtower-card-description">{descriptions.filter(Boolean).map((text, index) => <p key={index}>{text}</p>)}</div>}
             </article>
           );
         })}
@@ -2446,8 +2459,44 @@ function WatchtowerScreen({ state, dispatch }: { state: GameState; dispatch: Dis
       </footer>
       </main>
       </div>
+      {detailSpeciesId && <WatchtowerCreatureDetails speciesId={detailSpeciesId} onClose={() => setDetailSpeciesId(null)} />}
     </div>
   );
+}
+
+function WatchtowerCreatureDetails({ speciesId, onClose }: { speciesId: string; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const species = getMonster(speciesId);
+  const stats = computeStats(speciesId);
+  const passive = getPassive(species.passive);
+  const altPassive = species.altPassive ? getPassive(species.altPassive) : undefined;
+  const unit: Unit = {
+    uid: `watchtower-${speciesId}`, speciesId, name: species.name, emoji: species.emoji, image: species.image,
+    hp: stats.maxHp, maxHp: stats.maxHp, spd: stats.spd, shield: 0, skills: [...species.skills], statuses: [],
+    column: 0, row: 'front', isPlayer: false, tameable: false, acted: false, passive: species.passive,
+  };
+  useBackAction(true, onClose, 100);
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.stopImmediatePropagation(); onClose(); }
+      if (event.key === 'Tab') { event.preventDefault(); closeRef.current?.focus(); }
+    };
+    window.addEventListener('keydown', keydown, true);
+    return () => { window.removeEventListener('keydown', keydown, true); trigger?.focus(); };
+  }, [onClose]);
+  return createPortal(<div className="battle-overlay-mask watchtower-detail-overlay" onClick={onClose}>
+    <section className="battle-overlay-panel enemy-inspect-modal" role="dialog" aria-modal="true" aria-labelledby="watchtower-detail-title" onClick={event => event.stopPropagation()}>
+      <div className="battle-overlay-head"><h2 id="watchtower-detail-title" className="battle-overlay-title">{species.name} · 生物详情</h2><button type="button" className="battle-overlay-close" ref={closeRef} onClick={onClose} aria-label="关闭生物详情"><UiSymbol name="close" /></button></div>
+      <BattleUnitInspectPanel unit={unit} side="enemy" showBuffs={false} showSkills={!species.altSkills} eyebrow="图鉴基础属性">
+        {species.desc && <p className="watchtower-creature-description">{species.desc}</p>}
+        {species.altSkills && <div className="enemy-inspect-section-title">形态一（生命大于50%）</div>}
+        {passive && <div className="buff-section"><div className="buff-section-label">被动</div><div className="buff-item"><span className="buff-name">{passive.name}</span><span className="buff-desc">{passive.desc}</span></div></div>}
+        {species.altSkills && <><div className="enemy-inspect-section-title">技能</div><div className="enemy-inspect-skills">{species.skills.map(id => <SkillTag key={id} skill={getSkill(id)} desc usesNote />)}</div><div className="enemy-inspect-section-title">形态二（生命不高于50%）</div>{altPassive && <div className="buff-section"><div className="buff-section-label">被动</div><div className="buff-item"><span className="buff-name">{altPassive.name}</span><span className="buff-desc">{altPassive.desc}</span></div></div>}<div className="enemy-inspect-section-title">技能</div><div className="enemy-inspect-skills">{species.altSkills.map(id => <SkillTag key={id} skill={getSkill(id)} desc usesNote />)}</div></>}
+      </BattleUnitInspectPanel>
+    </section>
+  </div>, document.getElementById('root') ?? document.body);
 }
 
 function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {

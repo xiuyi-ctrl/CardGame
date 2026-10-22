@@ -7,7 +7,7 @@ import { createInitialState } from '../src/game/state/reducer';
 import { BattleStatusIcons, BATTLE_BUFF_ICON_IMAGES } from '../src/ui/BattleStatusIcons';
 import { BattleScreen } from '../src/ui/BattleScreen';
 import { BuffDetailPanel } from '../src/ui/components';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -18,10 +18,15 @@ describe('战场右侧状态图标', () => {
     unit.statuses = [{ kind: 'foxFire', value: 3, turns: 0 }, { kind: 'burn', value: 2, turns: 2 }];
     const { unmount } = render(createElement(BattleStatusIcons, { unit }));
     expect(screen.getByAltText('狐火').title).toContain('3');
+    expect(screen.getByAltText('狐火').getAttribute('src')).toBe('/buff-icons/fox-fire.png');
     expect(screen.getByAltText('灼烧').title).toContain('2');
+    expect(screen.getByAltText('灼烧').getAttribute('src')).toBe('/buff-icons/burn.png');
     unmount();
     render(createElement(BuffDetailPanel, { unit }));
     expect(screen.getByText('狐火 3/5')).toBeTruthy();
+    expect(document.querySelector('img[src="/buff-icons/fox-fire.png"]')).not.toBeNull();
+    expect(BATTLE_BUFF_ICON_IMAGES).toContain('/buff-icons/fox-fire.png');
+    expect(readFileSync(resolve('public/buff-icons/fox-fire.png'))).toEqual(readFileSync(resolve('美术素材/buff-icons/fox-fire.png')));
   });
 
   it('日华显示当前层数并在Buff详情中说明上限与衰减', () => {

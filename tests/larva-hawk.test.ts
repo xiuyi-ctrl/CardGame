@@ -73,7 +73,7 @@ describe('熔壳虫与焚风雏鹰', () => {
     expect(fatal.log.some(e => e.text.includes('热壳换火'))).toBe(false);
   });
 
-  it('顶撞正常攻击，无火不换盾，有火只耗1层；反伤致死不换盾', () => {
+  it('顶撞正常攻击，无火不换盾，有火立即耗1层换盾抵挡反伤', () => {
     const b = calm('molten_larva');
     const actor = b.playerUnits[0];
     const ordinary = playerEndTurn(playerSkill(b, actor.uid, 'heated_shell_bump', b.enemyUnits[0].uid));
@@ -85,9 +85,13 @@ describe('熔壳虫与焚风雏鹰', () => {
     expect(warm.playerUnits[0].shield).toBe(2);
     expect(warm.playerUnits[0].statuses.some(s => s.kind === 'burn')).toBe(false);
     const countered = { ...burning, playerUnits: [{ ...burning.playerUnits[0], hp: 1 }], enemyUnits: burning.enemyUnits.map(u => ({ ...u, passive: 'spike' })) };
-    const dead = playerEndTurn(playerSkill(countered, actor.uid, 'heated_shell_bump', b.enemyUnits[0].uid));
-    expect(dead.playerUnits[0].hp).toBe(0);
-    expect(dead.log.some(e => e.text.includes('的「热壳顶撞」获得'))).toBe(false);
+    const guarded = playerEndTurn(playerSkill(countered, actor.uid, 'heated_shell_bump', b.enemyUnits[0].uid));
+    expect(guarded.playerUnits[0].hp).toBe(1);
+    expect(guarded.playerUnits[0].shield).toBe(0);
+    const shieldIndex = guarded.log.findIndex(e => e.text.includes('的「热壳顶撞」获得'));
+    const counterIndex = guarded.log.findIndex(e => e.text.includes('反伤'));
+    expect(shieldIndex).toBeGreaterThan(-1);
+    expect(counterIndex).toBeGreaterThan(shieldIndex);
   });
 
   it('灼羽先剥2盾再伤害，不把剩余剥盾值变成生命伤害；攻击才点火不触发', () => {

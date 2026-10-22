@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createBattle, makeUnit, playerEndTurn, playerSkill, radianceLayers, skillUsesLeft, updateUnitSkills } from '../src/game/core/battle';
-import { LEGENDARY_SKILLS, getNormalSkillPool } from '../src/game/core/growth';
+import { createBattle, getDamageBonus, getEffectiveSpd, makeUnit, playerEndTurn, playerSkill, radianceLayers, skillUsesLeft, updateUnitSkills } from '../src/game/core/battle';
+import { LEGENDARY_SKILLS, getNormalSkillPool, getSkillEnhanceMaxLevel } from '../src/game/core/growth';
+import { STATUS_ART } from '../src/ui/BuffIcon';
 import { LEGENDARY } from '../src/game/core/growth-map';
 import { MAIN_EVO2_POOL } from '../src/game/data/monsters';
 import { getSkill } from '../src/game/data/skills';
@@ -38,13 +39,13 @@ describe('日炎灵与日华', () => {
     expect(nextStage('solar_spirit')).toBeUndefined();
   });
 
-  it('反转先清3火，澄焰再清3火，日华每回合只获得一次', () => {
+  it('反转先清5火，澄焰再清3火，日华每回合只获得一次', () => {
     const b = burn(quiet(), 8);
     const after = cast(b);
     expect(radianceLayers(after.playerUnits[0])).toBe(1);
     const clean = after.log.find(e => e.text.includes('澄焰」移除'))!;
     expect(clean.text).toContain('3 层灼烧');
-    expect(clean.statuses?.[b.playerUnits[1].uid].find(s => s.kind === 'burn')?.value).toBe(2);
+    expect(clean.statuses?.[b.playerUnits[1].uid].some(s => s.kind === 'burn')).toBe(false);
     expect(after.log.filter(e => e.text.includes('日华」充能'))).toHaveLength(1);
     expect(parseEvent(after, after.log.find(e => e.text.includes('日华」充能'))!)).toMatchObject({ kind: 'buff', skillName: '日华' });
   });
@@ -117,31 +118,95 @@ describe('日炎灵与日华', () => {
     expect(radianceLayers(after.playerUnits[0])).toBe(3);
     const self = cast(burn(quiet(), 6, 0), 'burn_reversal', 0);
     expect(radianceLayers(self.playerUnits[0])).toBe(1);
-    expect(self.playerUnits[0].hp).toBe(55);
+    expect(self.playerUnits[0].hp).toBe(57);
   });
 
-  it.each([0, 1, 6])('净焰照护6治疗＋技能清2＋被动清3，有清火只追加2治疗且不递归 burn=%s', layers => {
+  it.each([0, 1, 6, 99])('净焰照护移除全部火、不治疗，有清火才随机增益并充能日华 burn=%s', layers => {
     const b = layers ? burn(quiet(), layers) : quiet();
     const after = cast(b, 'clean_flame_care');
     const heals = after.log.filter(e => e.text.includes('净焰照护」，治愈'));
-    expect(heals).toHaveLength(layers ? 2 : 1);
-    expect(heals[0].text).toContain('6 点生命');
-    if (layers) expect(heals[1].text).toContain('2 点生命');
-    expect(after.log.filter(e => e.text.includes('澄焰」移除')).length).toBe(layers > 2 ? 1 : 0);
+    expect(heals).toHaveLength(0);
+    expect(after.playerUnits[1].hp).toBe(50);
+    expect(after.playerUnits[1].statuses.some(s => s.kind === 'burn')).toBe(false);
+    expect(after.log.filter(e => e.text.includes('澄焰」移除'))).toHaveLength(0);
+    const buff = after.playerUnits[1].statuses.filter(s => s.kind === 'atkUp' || s.kind === 'windSpd');
+    expect(buff).toHaveLength(layers ? 1 : 0);
+    if (layers) {
+      expect(buff[0]).toMatchObject({ value: 2, turns: 2 });
+      const event = after.log.find(e => e.text.includes('净焰照护」，强化'))!;
+      expect(parseEvent(after, event)).toMatchObject({ kind: 'buff', targetUid: b.playerUnits[1].uid });
+      expect(event.addsStatus).toContain(buff[0].kind);
+    }
     expect(radianceLayers(after.playerUnits[0])).toBe(layers ? 1 : 0);
     expect(skillUsesLeft(after.playerUnits[0], 'clean_flame_care')).toBe(2);
   });
 
-  it('其他物种学习照护仍可清2火并追加2治疗，最多用3次；强化不增加清火与追加量', () => {
+  it('其他物种学习照护仍清除全部火且不治疗，最多3次；旧强化不增加固定增益', () => {
     let b = burn(quiet(['momo', 'momo']), 3);
     b.playerUnits[0] = updateUnitSkills(b.playerUnits[0], ['clean_flame_care']);
     b.playerUnits[0].skillEnhancements = { 0: 2 };
     b = cast(b, 'clean_flame_care');
-    expect(b.log.find(e => e.text.includes('净焰照护」，治愈'))?.text).toContain('10 点生命');
-    expect(b.log.filter(e => e.text.includes('净焰照护」，治愈'))[1].text).toContain('2 点生命');
+    expect(b.playerUnits[1].hp).toBe(50);
+    expect(b.playerUnits[1].statuses.find(s => s.kind === 'atkUp' || s.kind === 'windSpd')?.value).toBe(2);
+    expect(getSkillEnhanceMaxLevel('clean_flame_care')).toBe(0);
+    expect(skillFullDesc(getSkill('clean_flame_care'), 2)).toContain('2层');
+    expect(skillBrief(getSkill('clean_flame_care'), 2)).toBe('净化·随机增益2');
     b = cast(cast(b, 'clean_flame_care'), 'clean_flame_care');
     expect(skillUsesLeft(b.playerUnits[0], 'clean_flame_care')).toBe(0);
     expect(playerSkill(b, b.playerUnits[0].uid, 'clean_flame_care', b.playerUnits[1].uid)).toBe(b);
+  });
+
+  it('照护随机可复现，两种结果均使用对应图标，持续两个完整后续回合', () => {
+    const seen = new Set<string>();
+    for (let seed = 0; seed < 30; seed++) {
+      const b = { ...burn(quiet(), 6), seed };
+      const after = cast(b, 'clean_flame_care');
+      expect(cast(JSON.parse(JSON.stringify(b)), 'clean_flame_care')).toEqual(after);
+      const buff = after.playerUnits[1].statuses.find(s => s.kind === 'atkUp' || s.kind === 'windSpd')!;
+      seen.add(buff.kind);
+      if (buff.kind === 'atkUp') expect(getDamageBonus(after.playerUnits[1])).toBe(2);
+      else expect(getEffectiveSpd(after.playerUnits[1])).toBe(b.playerUnits[1].spd + 2);
+      const later = playerEndTurn(after);
+      expect(later.playerUnits[1].statuses.find(s => s.kind === buff.kind)?.turns).toBe(1);
+      expect(playerEndTurn(later).playerUnits[1].statuses.some(s => s.kind === buff.kind)).toBe(false);
+    }
+    expect([...seen].sort()).toEqual(['atkUp', 'windSpd']);
+    expect(STATUS_ART.atkUp[1]).toBe('atk-up');
+    expect(STATUS_ART.windSpd[1]).toBe('wind-spd');
+  });
+
+  it('照护可自用，保留其他异常，重复同类增益刷新持续时间', () => {
+    const b = burn(quiet(), 8, 0);
+    b.playerUnits[0].statuses.push({ kind: 'poison', value: 2, turns: 2 },
+      { kind: 'atkUp', value: 2, turns: 1, appliedRound: 0 }, { kind: 'windSpd', value: 2, turns: 1, appliedRound: 0 });
+    const after = cast(b, 'clean_flame_care', 0);
+    const event = after.log.find(e => e.text.includes('净焰照护」，强化'))!;
+    const kind = event.addsStatus![0];
+    expect(event.hp?.[b.playerUnits[0].uid]).toBe(50);
+    expect(event.statuses?.[b.playerUnits[0].uid].find(s => s.kind === 'poison')?.value).toBe(2);
+    expect(after.playerUnits[0].statuses.find(s => s.kind === kind)).toMatchObject({ value: 2, turns: 2 });
+    expect(radianceLayers(after.playerUnits[0])).toBe(1);
+    expect(playerSkill(b, b.playerUnits[0].uid, 'clean_flame_care', b.enemyUnits[0].uid)).toBe(b);
+  });
+
+  it('目标执行前阵亡不转移净化或抽取增益，无火也不抽取增益随机数', () => {
+    const b = burn(quiet(), 6);
+    const ordered = playerSkill(b, b.playerUnits[0].uid, 'clean_flame_care', b.playerUnits[1].uid);
+    const after = playerEndTurn({ ...ordered, playerUnits: ordered.playerUnits.map((u, i) => i === 1 ? { ...u, hp: 0 } : u) });
+    expect(after.log.some(e => e.text.includes('净焰照护」移除') || e.text.includes('净焰照护」，强化'))).toBe(false);
+    expect(cast(b, 'clean_flame_care').rngCount).toBe(cast(quiet(), 'clean_flame_care').rngCount + 1);
+  });
+
+  it('敌方照护也优先选择灼烧伙伴，不治疗并给予随机增益', () => {
+    const b = createBattle([{ ...makeUnit('momo', true, 0, false), hp: 100, maxHp: 100 }],
+      [{ speciesId: 'solar_spirit' }, { speciesId: 'momo' }], 7);
+    b.enemyUnits[0].skills = ['clean_flame_care'];
+    b.enemyUnits[1] = { ...b.enemyUnits[1], hp: 50, maxHp: 100, skills: [], statuses: [{ kind: 'burn', value: 12, turns: 2 }] };
+    const after = playerEndTurn(b);
+    expect(after.enemyUnits[1].hp).toBe(50);
+    expect(after.enemyUnits[1].statuses.some(s => s.kind === 'burn')).toBe(false);
+    expect(after.enemyUnits[1].statuses.find(s => s.kind === 'atkUp' || s.kind === 'windSpd')?.value).toBe(2);
+    expect(skillUsesLeft(after.enemyUnits[0], 'clean_flame_care')).toBe(2);
   });
 
   it('战斗存档保留日华和已充能标记，新战斗清空；日华不是中毒或虚火净化', () => {

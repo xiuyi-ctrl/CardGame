@@ -8,17 +8,27 @@
 .watchtower-scenery { min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: end; gap: 12px; padding-bottom: 15%; }
 .watchtower-scenery img { width: min(80%, 240px); height: auto; image-rendering: pixelated; filter: drop-shadow(4px 6px 0 #101c2c); }
 .watchtower-scenery span { padding: 8px 20px; border: 3px solid #101c2c; background: #fff9e9; color: #101c2c; font-size: 20px; font-weight: 800; }
-.watchtower-panel { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 14px; padding: 10px 14px; }
+.watchtower-panel { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 14px; padding: 10px 14px; }
 .watchtower-panel > h2 { text-align: center; }
 .watchtower-tabs { display: flex; gap: 10px; }
 .watchtower-tabs button { flex: 1; min-width: 0; font-size: 18px; font-weight: 800; }
-.watchtower-hint { padding: 8px; border: 2px solid #a4b0ac; background: #eeeee6; text-align: center; color: #52636c; font-size: 14px; }
 .watchtower-intel { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 10px; align-content: start; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .watchtower-intel::-webkit-scrollbar { display: none; }
 .watchtower-intel-card { min-width: 0; padding: 14px; border: 2px solid #a4b0ac; background: #fff9e9; }
-.watchtower-intel-card > .map-node-icon { width: 48px; height: 48px; margin-bottom: 8px; }
-.watchtower-intel-card h3 { font-size: 20px; line-height: 1.3; margin-bottom: 10px; overflow-wrap: anywhere; }
-.watchtower-intel-card p { color: #384a57; font-size: 15px; white-space: pre-line; }
+.watchtower-card-heading { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid #a4b0ac; text-align: center; }
+.watchtower-card-heading > .map-node-icon { width: clamp(28px, 6dvh, 48px); height: clamp(28px, 6dvh, 48px); }
+.watchtower-intel-card h3 { font-size: 20px; line-height: 1.3; margin: 0; overflow-wrap: anywhere; }
+.watchtower-card-description { padding-top: 8px; display: flex; flex-direction: column; gap: 4px; text-align: center; }
+.watchtower-shop-items { margin: 0; padding-top: 8px; display: grid; gap: 6px; font-size: 15px; color: #384a57; }
+.watchtower-shop-items > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 6px; }
+.watchtower-shop-items dt { min-width: 0; overflow-wrap: anywhere; }
+.watchtower-shop-items dd { margin: 0; color: #9a5a00; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.watchtower-intel-card p { margin: 0; color: #384a57; font-size: 15px; line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; }
+.watchtower-enemy-names { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 8px; }
+.watchtower-enemy-names button { min-height: 44px; max-width: 100%; padding: 3px 6px; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: #087c80; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.watchtower-enemy-names button:hover, .watchtower-enemy-names button:focus-visible { background: #e1efe8; }
+.watchtower-detail-overlay { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: #071421bb; }
+.watchtower-creature-description { margin: 0; color: #52636c; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .watchtower-footer { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .watchtower-footer p { color: #52636c; text-align: center; font-size: 13px; }
 .watchtower-footer button { min-height: 44px; width: min(360px, 100%); font-size: 22px; }

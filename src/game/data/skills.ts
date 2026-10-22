@@ -10,19 +10,19 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'self', kind: 'buff', cooldown: 1, hideEffects: true, effects: [{ kind: 'shield', value: 4, turns: 99 }],
   },
   sealed_style_foxfire: {
-    id: 'sealed_style_foxfire', name: '破式狐火', desc: '攻击单个敌人，造成3点伤害并附加灼烧1层；普通前排保护，不附带封技效果',
+    id: 'sealed_style_foxfire', name: '破式狐火', desc: '攻击单个敌人，造成3点伤害并附加灼烧1层',
     target: 'single', kind: 'attack', damage: 3, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   illusory_flame: {
-    id: 'illusory_flame', name: '虚火幻身', desc: '为自身附加灼烧2层，并为随机一名存活敌人附加灼烧2层；狐火只增强敌方附火，按施放前层数计算；不提供虚火减伤或封技，无冷却',
+    id: 'illusory_flame', name: '虚火幻身', desc: '为自身附加灼烧2层，并为随机一名存活敌人附加灼烧2层；按施放前层数计算',
     target: 'self', kind: 'status', hideEffects: true,
   },
   twin_tail_flames: {
-    id: 'twin_tail_flames', name: '双尾扫焰', desc: '随机选择两名不同敌人，各造成3点伤害并附加灼烧1层；只有一名合法敌人时只攻击一次，无冷却',
+    id: 'twin_tail_flames', name: '双尾扫焰', desc: '随机选择两名不同敌人，各造成3点伤害并附加灼烧1层；只有一名合法敌人时只攻击一次。',
     target: 'random', kind: 'attack', damage: 3, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   burn_tail: {
-    id: 'burn_tail', name: '焚尾', desc: '立即获得2层狐火，不超过自身上限；每场限1次，占用一次基础行动',
+    id: 'burn_tail', name: '焚尾', desc: '立即获得2层狐火，不超过自身上限；每场限1次',
     target: 'self', kind: 'status', uses: 1,
   },
   solar_strike: {
@@ -30,15 +30,15 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 3,
   },
   clean_flame_care: {
-    id: 'clean_flame_care', name: '净焰照护', desc: '为指定一名己方伙伴回复6点生命，移除最多2层灼烧；若本次技能或治疗被动实际移除了灼烧，再回复2点生命；每场限3次',
-    target: 'ally', kind: 'heal', heal: 6, uses: 3,
+    id: 'clean_flame_care', name: '净焰照护', desc: '移除指定一名己方伙伴所有灼烧；若本次技能实际移除了灼烧，等概率赋予攻击提升或速度提升2层，持续2回合；不治疗，每场限3次',
+    target: 'ally', kind: 'buff', uses: 3, hideEffects: true,
   },
   solar_heal: {
-    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命，可选自己',
+    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命',
     target: 'ally', kind: 'heal', heal: 3,
   },
   light_bath: {
-    id: 'light_bath', name: '光浴', desc: '为指定的一名己方伙伴回复3点生命值，可选自己',
+    id: 'light_bath', name: '光浴', desc: '为指定的一名己方伙伴回复3点生命值。',
     target: 'ally', kind: 'heal', heal: 3,
   },
   purifying_orb: {
@@ -46,24 +46,24 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 3,
   },
   burn_reversal: {
-    id: 'burn_reversal', name: '灼烧反转', desc: '为一名己方伙伴移除最多3层灼烧，再回复2加实际移除层数的生命，基础最多5点；无灼烧仍治疗2点，可选自己，冷却1回合',
+    id: 'burn_reversal', name: '灼烧反转', desc: '为一名己方伙伴移除最多5层灼烧，再回复2加实际移除层数的生命，基础最多7点；无灼烧仍治疗2点，可选自己，冷却1回合',
     target: 'ally', kind: 'heal', heal: 2, cooldown: 1, hideEffects: true,
   },
   molten_quake: {
-    id: 'molten_quake', name: '熔甲震荡', desc: '消耗自身3点护盾，对全体敌人各造成3点伤害并附加灼烧1层；至少有3点护盾才能使用，冷却1回合',
-    target: 'all', kind: 'attack', damage: 3, cooldown: 1, hideEffects: true,
+    id: 'molten_quake', name: '熔甲震荡', desc: '为自身施加3层灼烧，对全体敌人各造成3点伤害并附加灼烧1层；冷却1回合，每场限5次',
+    target: 'all', kind: 'attack', damage: 3, cooldown: 1, uses: 5, hideEffects: true,
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   sun_sunder: {
-    id: 'sun_sunder', name: '掠日破盾', desc: '攻击单个前排敌人，伤害前移除最多4点护盾，再造成4点伤害；每实际移除2点护盾附加1层灼烧，最多2层；被动剥盾不计入，冷却1回合',
+    id: 'sun_sunder', name: '掠日破盾', desc: '攻击单个前排敌人，伤害前移除目标所有护盾，再造成4点伤害；若本次实际移除护盾（包含被动移除），附加5层灼烧；冷却1回合',
     target: 'single', reach: 'front', kind: 'attack', damage: 4, cooldown: 1,
   },
   shell_charge: {
-    id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多4点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；至少有1点护盾才能使用，无冷却',
+    id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多4点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；至少有1点护盾才能使用',
     target: 'single', reach: 'front', kind: 'attack', damage: 3,
   },
   burn_brand: {
-    id: 'burn_brand', name: '灼烧烙印', desc: '直接指定一名敌人，施加2层灼烧与一次性烙印；下次我方攻击命中后，一次结算目标剩余全部灼烧并清空；冷却1回合',
+    id: 'burn_brand', name: '灼烧烙印', desc: '指定一名敌人，施加2层灼烧与灼烧烙印；下次我方攻击命中后，结算目标剩余全部灼烧并清空；冷却1回合',
     target: 'single', reach: 'direct', kind: 'status', cooldown: 1, hideEffects: true,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
@@ -73,15 +73,15 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   molten_self_burn: {
-    id: 'molten_self_burn', name: '熔火自焚', desc: '自身直接失去1点生命，获得4层真实灼烧与2点护盾；生命必须大于1，无冷却，护盾不能抵挡灼烧伤害',
+    id: 'molten_self_burn', name: '熔火自焚', desc: '自身直接失去1点生命，获得4层真实灼烧与2点护盾；生命必须大于1。',
     target: 'self', kind: 'status', hideEffects: true,
   },
   heated_shell_bump: {
-    id: 'heated_shell_bump', name: '热壳顶撞', desc: '攻击单个前排敌人，造成4点伤害；命中并承受即时反击后若自身仍存活，消耗自身1层灼烧获得2点护盾；无灼烧仍可攻击',
+    id: 'heated_shell_bump', name: '热壳顶撞', desc: '攻击单个前排敌人，造成4点伤害；命中后立即消耗自身1层灼烧获得2点护盾；无灼烧仍可攻击',
     target: 'single', reach: 'front', kind: 'attack', damage: 4,
   },
   flame_tracing_feather: {
-    id: 'flame_tracing_feather', name: '循焰飞羽', desc: '攻击单个敌人，造成4点伤害；可以越过前排攻击已灼烧的后排，未灼烧目标仍遵守前排保护',
+    id: 'flame_tracing_feather', name: '循焰飞羽', desc: '攻击单个敌人，造成4点伤害；可以越过前排攻击已灼烧的后排',
     target: 'single', kind: 'attack', damage: 4,
   },
   coal_claw: {

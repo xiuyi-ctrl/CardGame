@@ -106,6 +106,24 @@ window.petCard = { platform: 'preview', loadGame: async slot => slot === 1 ? JSO
 const variant = (name: string, original: string, extra = {}, setup?: string) => {
   registry[name] = { ...registry[original], state: { ...structuredClone(registry[original].state), ...extra }, setup };
 };
+const watchtowerMap = { ...base.map, layers: [
+  [{ id: 'preview-tower', type: 'watchtower', label: '瞭望塔', col: 0 }],
+  [{ id: 'preview-corrupt', type: 'corrupted', label: '被侵蚀', col: 0 }, { id: 'preview-elite', type: 'elite', label: '精英怪', col: 1 }, { id: 'preview-battle', type: 'battle', label: '遭遇战', col: 2 }, { id: 'preview-special', type: 'special', label: '神秘蛋', col: 3 }, { id: 'preview-arena', type: 'arena', label: '斗兽场', col: 4 }],
+  [{ id: 'preview-shop', type: 'shop', label: '商店', col: 0 }, { id: 'preview-event', type: 'event', label: '事件', col: 1 }, { id: 'preview-special', type: 'special', label: '神秘蛋', col: 2 }, { id: 'preview-rest', type: 'rest', label: '营火', col: 3 }, { id: 'preview-next-tower', type: 'watchtower', label: '瞭望塔', col: 4 }],
+  [{ id: 'preview-sync', type: 'sync', label: '双生宝箱', col: 0 }, { id: 'preview-keydoor', type: 'keydoor', label: '钥匙门', col: 1, guardianId: 'preview-guardian' }, { id: 'preview-guardian', type: 'guardian', label: '守卫', col: 2 }, { id: 'preview-gauntlet', type: 'gauntlet', label: '车轮战', col: 3, gauntletSize: 3 }, { id: 'preview-boss', type: 'boss', label: '首领战', col: 4 }],
+], encounter: { ...base.map.encounter,
+  'preview-corrupt': [{ speciesId: 'momo' }, { speciesId: 'momo' }, { speciesId: 'fifi' }],
+  'preview-elite': [{ speciesId: 'phantom_tail_fox' }],
+  'preview-battle': [{ speciesId: 'lulu' }, { speciesId: 'kiki' }],
+  'preview-arena': [{ speciesId: 'nine_tail_sovereign' }],
+  'preview-guardian': [{ speciesId: 'kiki' }],
+  'preview-gauntlet': [{ speciesId: 'momo' }, { speciesId: 'fifi' }, { speciesId: 'lulu' }],
+}, boss: { ...base.map.boss, 'preview-boss': [{ speciesId: 'boss_vine' }] }, events: { ...base.map.events, 'preview-event': { title: '林间旅人', desc: '交谈', choices: [{ id: 'talk', label: '营地交流', kind: 'none', desc: '交流' }, { id: 'leave', label: '继续前进', kind: 'none', desc: '离开' }] } }, specials: { ...base.map.specials, 'preview-special': { title: '神秘蛋', desc: '选择', rewards: [{ id: 'gold', kind: 'gold', amount: 30, label: '孵化它', desc: '孵化' }, { id: 'leave', kind: 'gold', amount: 1, label: '离开', desc: '离开' }] } } };
+variant('watchtower-cards', 'watchtower', { currentRow: 0, currentNodeId: 'preview-tower', watchtowerPreviewNodeId: 'preview-tower', map: watchtowerMap });
+variant('watchtower-creature-detail', 'watchtower-cards', {}, '九尾炎尊');
+variant('watchtower-utilities', 'watchtower-cards', {}, '第 3 层');
+variant('watchtower-challenges', 'watchtower-cards', {}, '第 4 层');
+variant('watchtower-training', 'watchtower-cards', { map: { ...watchtowerMap, layers: [watchtowerMap.layers[0], [{ id: 'preview-blacksmith', type: 'blacksmith', label: '铁匠铺', col: 0 }, { id: 'preview-arena3', type: 'arena3', label: '竞技场', col: 1 }]] } });
 variant('save-management', 'title', {}, '存档管理');
 variant('save-delete-confirm', 'title', {}, '存档管理|.save-slot-del');
 variant('save-overwrite-confirm', 'title', {}, '新的远征');
@@ -139,6 +157,10 @@ const stressRoster = ['nine_tail_sovereign', 'solar_spirit', 'furnace_beast', 'e
 const stressBattle = createBattle(stressRoster, encounter, 123);
 stressBattle.playerUnits[0].statuses = (['burn', 'poison', 'atkUp', 'atkDown', 'shield', 'spdDown', 'thorns', 'fear'] as StatusEffect['kind'][]).map(kind => ({ kind, value: 3, turns: 2 }));
 variant('battle-many-buffs', 'battle', { battle: stressBattle });
+const foxfireBattle = structuredClone(stressBattle);
+foxfireBattle.playerUnits[0].statuses = [{ kind: 'foxFire', value: 9, turns: 0 }, { kind: 'burn', value: 2, turns: 0 }];
+variant('battle-foxfire', 'battle', { battle: foxfireBattle });
+variant('battle-foxfire-detail', 'battle', { battle: foxfireBattle }, 'hold:.player-area .formation-slot:not(.empty)');
 variant('buff-detail-long', 'battle', { battle: stressBattle }, 'hold:.player-area .formation-slot:not(.empty)');
 variant('battle-selected', 'battle', { battle: stressBattle }, '.player-area .formation-slot');
 variant('battle-menu', 'battle', {}, '菜单');
@@ -151,6 +173,8 @@ supportBattle.playerUnits[0].skills = ['furnace_shell', 'heal_light'];
 supportBattle.playerUnits[1].hp -= 3;
 variant('battle-ally-shield-target', 'battle', { battle: supportBattle }, '.player-area .formation-slot:not(.empty)|炉壳');
 variant('battle-ally-heal-target', 'battle', { battle: supportBattle }, '.player-area .formation-slot:not(.empty)|愈光');
+variant('battle-order-attack', 'battle', {}, '.player-area .formation-slot:not(.empty)|爪击|.enemy-area .attack-target');
+variant('battle-order-support', 'battle', { battle: supportBattle }, '.player-area .formation-slot:not(.empty)|炉壳|.player-area .ally-target');
 variant('starter-details', 'starter', {}, '.mobile-details-trigger');
 variant('formation-details', 'formation', {}, '.mobile-details-trigger');
 variant('roster-details', 'roster', {}, '.mobile-details-trigger');
@@ -176,6 +200,11 @@ variant('gauntlet-empty', 'gauntlet-order', { gauntletOrder: [] });
 const fiveSkillBattle = structuredClone(stressBattle);
 fiveSkillBattle.playerUnits[0].skills = ['flame_tail_shield', 'burn_tail', 'burn_reversal', 'furnace_shell', 'solar_strike'];
 variant('battle-five-skills', 'battle', { battle: fiveSkillBattle }, '.player-area .formation-slot');
+const summaryBattle = structuredClone(fiveSkillBattle);
+summaryBattle.playerUnits[0].skills = ['clean_flame_care', 'nine_tail_wildfire', 'seal_furnace', 'leaf_needle', 'roar'];
+summaryBattle.playerUnits[1].name = '长名称的日炎灵伙伴';
+summaryBattle.orders = { [summaryBattle.playerUnits[0].uid]: { skillId: 'clean_flame_care', targetUid: summaryBattle.playerUnits[1].uid } };
+variant('battle-summary-long', 'battle', { battle: summaryBattle }, '.player-area .formation-slot');
 
 const root = createRoot(document.getElementById('root')!);
 let generation = 0;

@@ -26,7 +26,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   if (!f) return null;
   const fb = f;
 
-  /** 棋盘站位：uid -> 位置。初始放默认自动布阵的出战宠物 */
+  /** 棋盘站位：uid -> 位置。恢复上次布阵，首次进入使用默认站位。 */
   const [positions, setPositions] = useState<Record<string, FormationPosition>>(() => {
     const p: Record<string, FormationPosition> = {};
     for (const u of fb.initialField) p[u.uid] = { row: u.row, column: u.column };
@@ -38,6 +38,11 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
   /** 拖拽标记：区分「点击」与「拖拽后松手」（拖拽结束不应触发 click） */
   const dragMoved = useRef(false);
   const touchDrag = useRef<{ uid: string; pointerId: number; x: number; y: number; moved: boolean } | null>(null);
+
+  function updatePositions(next: Record<string, FormationPosition>) {
+    setPositions(next);
+    if (!fb.forceAllUnits) dispatch({ type: 'FORMATION_UPDATE', positions: next });
+  }
 
   function markDrag() {
     dragMoved.current = true;
@@ -68,7 +73,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     const key = `${row}-${col}`;
     const existing = bySlot[key];
     if (!existing && !positions[uid] && fieldCount >= maxField) return;
-    setPositions(placeUnit(positions, uid, { row, column: col }));
+    updatePositions(placeUnit(positions, uid, { row, column: col }));
   }
 
   /** 拖到棋盘格子：目标有宠物则交换，空位则移动（出战已满时空位拒绝） */
@@ -88,7 +93,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     if (!existing || forceAll) return;
     const next = { ...positions };
     delete next[existing.uid];
-    setPositions(next);
+    updatePositions(next);
   }
 
   /** 点击伙伴卡片切换上场/下场；上场时按空位顺序自动布阵。 */
@@ -97,14 +102,14 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     if (positions[uid]) {
       const next = { ...positions };
       delete next[uid];
-      setPositions(next);
+      updatePositions(next);
       setFocusedUid(uid);
       return;
     }
     if (fieldCount >= maxField) return;
     const slot = firstEmptyFormationSlot(positions);
     if (!slot) return;
-    setPositions(placeUnit(positions, uid, slot));
+    updatePositions(placeUnit(positions, uid, slot));
     setFocusedUid(uid);
   }
 
@@ -118,7 +123,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     if (!positions[uid]) return;
     const next = { ...positions };
     delete next[uid];
-    setPositions(next);
+    updatePositions(next);
   }
 
   function onTouchDragStart(e: ReactPointerEvent<HTMLElement>, uid: string) {
@@ -158,7 +163,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
     } else if (!forceAll && target?.closest('.formation-pets') && positions[drag.uid]) {
       const next = { ...positions };
       delete next[drag.uid];
-      setPositions(next);
+      updatePositions(next);
     }
     setTouchDraggingUid(null);
     clearDrag();

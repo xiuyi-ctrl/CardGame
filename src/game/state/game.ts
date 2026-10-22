@@ -1,4 +1,5 @@
 import type { BattleState, FoodDef, Unit } from '../types';
+import type { FormationPosition } from './formation';
 import { getMonster, fusionNeed, MAIN_BASE_POOL as BASE_POOL, MAIN_EVO1_POOL as EVO1_POOL, MAIN_EVO2_POOL as EVO2_POOL } from '../data/monsters';
 export { MAIN_EVO2_POOL as EVO2_POOL } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
@@ -314,10 +315,12 @@ export interface GameState {
   tameOverflow?: Unit[];
   /** 溢出处理完毕后返回的界面：战斗驯服→'reward'；孵化→'map'；招募→'roster' */
   tameOverflowReturn?: 'reward' | 'map' | 'roster';
+  /** 上次普通布阵的站位，按生物 uid 记忆；缺席位置留空，不自动补位。 */
+  lastFormation?: Record<string, FormationPosition>;
   /** 布阵：进入普通/精英/被侵蚀/守卫战斗前选择站位（FORMATION_CONFIRM 确认后创建战斗） */
   formation?: {
     units: Unit[];
-    /** 默认自动布阵的出战宠物（带站位），布阵界面棋盘初始放置它们 */
+    /** 恢复记忆站位；首次布阵时自动布阵的出战宠物。 */
     initialField: Unit[];
     encounter: { speciesId: string }[];
     nodeId: string;
@@ -508,6 +511,7 @@ export interface NodeInfo {
   icon: string;
   title: string;
   detail: string;
+  shopItems?: { name: string; price: number }[];
 }
 
 export interface ChestRoll {
@@ -610,6 +614,10 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
         icon: NODE_ICON.shop,
         title: '商店',
         detail: `本店出售：${goods}（每种限购 1 次，花 5 金可休整）`,
+        shopItems: stock.map(id => {
+          const item = FOODS[id] ?? ITEMS[id];
+          return { name: item.name, price: Math.round(item.price * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult) };
+        }),
       };
     }
     case 'event': {

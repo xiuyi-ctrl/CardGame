@@ -20,6 +20,7 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
   }
   if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}${s.id === 'burn_reversal' ? '+移除层数' : s.id === 'solar_heal' ? '+日华' : ''}`;
   if (s.kind === 'buff') {
+    if (s.id === 'clean_flame_care') return '净化·随机增益2';
     const shieldEffect = s.effects?.find(e => e.kind === 'shield');
     if (shieldEffect) {
       const val = shieldEffect.value + bonus.effectBonus;
@@ -111,7 +112,7 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   let desc = s.desc;
   if (s.id === 'burn_reversal') {
-    desc = desc.replace('回复2加', `回复${2 + bonus.healBonus}加`).replace('基础最多5点', `最多${5 + bonus.healBonus}点`).replace('仍治疗2点', `仍治疗${2 + bonus.healBonus}点`);
+    desc = desc.replace('回复2加', `回复${2 + bonus.healBonus}加`).replace('基础最多7点', `最多${7 + bonus.healBonus}点`).replace('仍治疗2点', `仍治疗${2 + bonus.healBonus}点`);
   }
   if (s.id === 'molten_self_burn' || s.id === 'heated_shell_bump') {
     desc = desc.replace('2点护盾', `${2 + bonus.effectBonus}点护盾`);

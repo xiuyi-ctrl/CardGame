@@ -1,4 +1,5 @@
 /** 布阵棋盘的站位纯逻辑（与 UI 解耦，可单测）。 */
+import type { Unit } from '../types';
 
 export type FormationRow = 'front' | 'back';
 export type FormationPosition = { row: FormationRow; column: 0 | 1 | 2 };
@@ -8,6 +9,23 @@ export const SLOT_ORDER: FormationPosition[] = [
   ...([0, 1, 2] as const).map((column) => ({ row: 'front' as const, column })),
   ...([0, 1, 2] as const).map((column) => ({ row: 'back' as const, column })),
 ];
+
+/** 仅恢复仍在队伍且存活的生物，保留空位，不自动补入其他伙伴。 */
+export function restoreFormation(
+  units: Unit[], positions: Record<string, FormationPosition>, maxCount: number,
+): Unit[] {
+  const restored: Unit[] = [];
+  const occupied = new Set<string>();
+  for (const [uid, position] of Object.entries(positions)) {
+    const unit = units.find(u => u.uid === uid && u.hp > 0);
+    if (!unit || !position || !SLOT_ORDER.some(slot => slot.row === position.row && slot.column === position.column)) continue;
+    const slot = `${position.row}-${position.column}`;
+    if (occupied.has(slot) || restored.length >= maxCount) continue;
+    occupied.add(slot);
+    restored.push({ ...unit, row: position.row, column: position.column });
+  }
+  return restored;
+}
 
 /** 按自动上阵顺序找第一个空位；六个站位全满时返回 null */
 export function firstEmptyFormationSlot(

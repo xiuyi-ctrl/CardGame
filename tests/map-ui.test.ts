@@ -94,6 +94,39 @@ describe('像素地图界面', () => {
     expect(container.querySelector('[data-node-id="route-chest"]')?.classList.contains('node-off')).toBe(false);
   });
 
+  it.each([false, true])('跳关记录连续路线，继续前进和读档后仍高亮（免费：%s）', free => {
+    const base = gameReducer(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 7 });
+    const before: GameState = {
+      ...base, screen: 'map', currentRow: 1, currentNodeId: 'skip-before', visitedNodeIds: ['skip-start', 'skip-before'],
+      inventory: { ...base.inventory, skip: 1 },
+      map: { ...base.map, layers: [
+        [{ id: 'skip-start', type: 'rest', label: '出发', col: 0 }],
+        [{ id: 'skip-before', type: 'shop', label: '商店', col: 0 }],
+        [{ id: 'skip-target', type: 'battle', label: '战斗', col: 0 }],
+        [{ id: 'skip-after', type: 'rest', label: '营火', col: 0 }],
+        [{ id: 'skip-future', type: 'rest', label: '营火', col: 0 }],
+      ] },
+    };
+    const skipped = gameReducer(before, { type: 'USE_SKIP', nodeId: 'skip-target', free });
+    expect(skipped.screen).toBe('reward');
+    expect(skipped.visitedNodeIds).toEqual(['skip-start', 'skip-before', 'skip-target']);
+    expect(before.visitedNodeIds).toEqual(['skip-start', 'skip-before']);
+    expect(skipped.inventory.skip).toBe(free ? 1 : 0);
+    const onMap = gameReducer(skipped, { type: 'NEXT_NODE' });
+    const { container, rerender } = render(createElement(MapScreen, { state: onMap, dispatch: vi.fn() }));
+    const lineKind = (from: string, to: string) => container.querySelector(`line[data-from="${from}"][data-to="${to}"]`)?.getAttribute('data-route-kind');
+    expect(lineKind('skip-before', 'skip-target')).toBe('path');
+    expect(lineKind('skip-target', 'skip-after')).toBe('near');
+    const moved = gameReducer(onMap, { type: 'MOVE', nodeId: 'skip-after' });
+    const returned = gameReducer(moved, { type: 'NEXT_NODE' });
+    const loaded = gameReducer(createInitialState(), { type: 'LOAD_GAME', state: JSON.parse(JSON.stringify(returned)) });
+    expect(loaded.visitedNodeIds).toEqual(['skip-start', 'skip-before', 'skip-target', 'skip-after']);
+    rerender(createElement(MapScreen, { state: loaded, dispatch: vi.fn() }));
+    expect(lineKind('skip-before', 'skip-target')).toBe('path');
+    expect(lineKind('skip-target', 'skip-after')).toBe('path');
+    expect(container.querySelector('line[data-from="skip-before"][data-to="skip-after"]')).toBeNull();
+  });
+
   it('历史路线不会绕过列相邻限制', () => {
     const map = generateMap(17, 1);
     const from = map.layers[1][0];

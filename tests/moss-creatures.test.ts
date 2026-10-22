@@ -116,12 +116,12 @@ describe('光苔球与光苔兽', () => {
     expect(result.log.filter(e => e.text.includes('净苔」移除'))).toHaveLength(2);
   });
 
-  it.each([0, 1, 3, 5])('反转按清火前%s层判断+2治疗，再清最多两层，不移除毒', burn => {
+  it.each([0, 1, 3, 5, 7])('反转最多清5火，按清火前%s层判断+2治疗，再由被动清最多两层，不移除毒', burn => {
     const b = ailments(quiet(), burn, 4);
     const after = cast(b);
     const heal = healing(after, '灼烧反转');
-    expect(heal.hp?.[b.playerUnits[1].uid]).toBe(52 + Math.min(3, burn) + (burn ? 2 : 0));
-    expect(heal.statuses?.[b.playerUnits[1].uid].find(s => s.kind === 'burn')?.value ?? 0).toBe(Math.max(0, burn - 3));
+    expect(heal.hp?.[b.playerUnits[1].uid]).toBe(52 + Math.min(5, burn) + (burn ? 2 : 0));
+    expect(heal.statuses?.[b.playerUnits[1].uid].find(s => s.kind === 'burn')?.value ?? 0).toBe(Math.max(0, burn - 5));
     expect(heal.statuses?.[b.playerUnits[1].uid].find(s => s.kind === 'poison')?.value).toBe(4);
     expect(skillCooldownLeft(after.playerUnits[0], 'burn_reversal')).toBe(1);
     expect(after.playerUnits[1].statuses.some(s => s.kind === 'burn')).toBe(false);
@@ -130,10 +130,11 @@ describe('光苔球与光苔兽', () => {
   it('非本系反转无净苔，强化只增加基础治疗和基础伤害', () => {
     const other = ailments(quiet('momo'), 5);
     other.playerUnits[0].skills = ['burn_reversal'];
-    expect(healing(cast(other), '灼烧反转').hp?.[other.playerUnits[1].uid]).toBe(55);
+    expect(healing(cast(other), '灼烧反转').hp?.[other.playerUnits[1].uid]).toBe(57);
     const b = ailments(quiet(), 5);
     b.playerUnits[0].skillEnhancements = { 1: 2 };
-    expect(healing(cast(b), '灼烧反转').hp?.[b.playerUnits[1].uid]).toBe(61);
+    expect(healing(cast(b), '灼烧反转').hp?.[b.playerUnits[1].uid]).toBe(63);
+    expect(skillFullDesc(getSkill('burn_reversal'), 2)).toContain('最多11点');
     expect(skillFullDesc(getSkill('burn_reversal'), 2)).toContain('回复6加');
     expect(skillBrief(getSkill('burn_reversal'), 2)).toBe('+6+移除层数');
     expect(skillFullDesc(getSkill('purifying_orb'), 2)).toContain('7点伤害');
@@ -163,8 +164,8 @@ describe('光苔球与光苔兽', () => {
     b.enemyUnits[0].skills = ['burn_reversal'];
     b.enemyUnits[0].statuses = [{ kind: 'burn', value: 5, turns: 2 }];
     const after = playerEndTurn(b);
-    expect(healing(after, '灼烧反转').hp?.[b.enemyUnits[0].uid]).toBe(12);
-    expect(after.log.some(e => e.text.includes('净苔」移除 光苔兽 2 层灼烧'))).toBe(true);
+    expect(healing(after, '灼烧反转').hp?.[b.enemyUnits[0].uid]).toBe(14);
+    expect(after.log.some(e => e.text.includes('净苔」移除'))).toBe(false);
   });
 
   it('新技能属于普通学习池，获取池、开局和阶级权重不变', () => {

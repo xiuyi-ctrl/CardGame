@@ -412,6 +412,33 @@ describe('完整肉鸽流程', () => {
     expect(s.roster.length).toBe(4);
   });
 
+  it.each([1, 2])('第%s幕结算后先进入新幕地图，保留布阵记忆，手动选节点才布阵', act => {
+    let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'lulu', seed: 11 });
+    const uid = s.roster[0].uid;
+    s = { ...s, act, screen: 'inter_act', lastFormation: { [uid]: { row: 'back', column: 2 } } };
+    const beforeGold = s.gold;
+    s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
+    expect(s.act).toBe(act + 1);
+    expect(s.screen).toBe('map');
+    expect(s.currentRow).toBe(0);
+    expect(s.currentNodeId).toBe('');
+    expect(s.visitedNodeIds).toEqual([]);
+    expect(s.formation).toBeUndefined();
+    expect(s.battle).toBeUndefined();
+    expect(s.gold).toBe(beforeGold);
+    expect(s.lastFormation).toEqual({ [uid]: { row: 'back', column: 2 } });
+    const dep = s.map.layers[0][0];
+    s = dispatch(s, { type: 'MOVE', nodeId: dep.id });
+    expect(s.screen).toBe('formation');
+    expect(s.visitedNodeIds).toEqual([dep.id]);
+    expect(s.formation!.initialField.map(u => [u.uid, u.row, u.column])).toEqual([[uid, 'back', 2]]);
+    s = dispatch(s, { type: 'BACK_TO_MAP' });
+    expect(s.screen).toBe('map');
+    expect(s.currentNodeId).toBe('');
+    s = dispatch(s, { type: 'MOVE', nodeId: dep.id });
+    expect(s.screen).toBe('formation');
+  });
+
   it('首领战胜利后进入下一层', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 11 });
     // 直接放置首领战状态
@@ -421,9 +448,9 @@ describe('完整肉鸽流程', () => {
     expect(s.screen).toBe('inter_act');
     s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
-    // 自动踏入新幕出发层（布阵界面）
-    expect(s.screen).toBe('formation');
-    expect(s.currentNodeId).toBe(s.map.layers[0][0].id);
+    // 新幕先展示地图，玩家尚未选择出发节点。
+    expect(s.screen).toBe('map');
+    expect(s.currentNodeId).toBe('');
   });
 
   it('第三层首领后通关', () => {
@@ -468,9 +495,8 @@ describe('完整肉鸽流程', () => {
     expect(s.screen).toBe('inter_act');
     s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
-    // 自动踏入出发层：visitedNodeIds 重置后包含出发节点
-    const depId = s.map.layers[0][0].id;
-    expect(s.visitedNodeIds).toEqual([depId]);
+    // 进入地图时尚未访问新幕节点。
+    expect(s.visitedNodeIds).toEqual([]);
     expect(s.visitedWatchtowers).toEqual([]);
   });
 
@@ -484,9 +510,12 @@ describe('完整肉鸽流程', () => {
     expect(s.screen).toBe('inter_act');
     s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
-    // 自动踏入新幕出发层（布阵界面）
-    expect(s.screen).toBe('formation');
+    // 先进入新幕地图，再由玩家选择出发节点。
+    expect(s.screen).toBe('map');
     const dep = s.map.layers[0][0];
+    expect(s.currentNodeId).toBe('');
+    s = dispatch(s, { type: 'MOVE', nodeId: dep.id });
+    expect(s.screen).toBe('formation');
     expect(s.currentNodeId).toBe(dep.id);
     // 通过出发层战斗
     const battle = createBattle(s.roster.filter((u) => s.field.includes(u.uid)), [{ speciesId: 'momo' }], 22);
@@ -920,9 +949,9 @@ describe('瞭望塔', () => {
     const continued = dispatch(next, { type: 'INTER_ACT_CONTINUE' });
     expect(continued.act).toBe(2);
     expect(continued.currentRow).toBe(0);
-    // 自动踏入新幕出发层（布阵界面）
-    expect(continued.screen).toBe('formation');
-    expect(continued.currentNodeId).toBe(continued.map.layers[0][0].id);
+    // 新幕先进入地图，不自动访问出发节点。
+    expect(continued.screen).toBe('map');
+    expect(continued.currentNodeId).toBe('');
   });
 });
 
@@ -1457,9 +1486,9 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     expect(s.skipSelecting).toBe(false);
     expect(s.scoutSelecting).toBe(false);
     expect(s.scoutResult).toBeUndefined();
-    // 自动踏入新幕出发层
-    expect(s.screen).toBe('formation');
-    expect(s.currentNodeId).toBe(s.map.layers[0][0].id);
+    // 新幕先展示地图。
+    expect(s.screen).toBe('map');
+    expect(s.currentNodeId).toBe('');
   });
 
   it('NEXT_NODE（普通行推进）清除 skipSelecting/scoutSelecting/scoutResult', () => {
@@ -1487,7 +1516,7 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     expect(s.scoutResult).toBeUndefined();
   });
 
-  it('NEXT_NODE 后 skipSelecting 已清，自动踏入出发层（布阵）', () => {
+  it('NEXT_NODE 后 skipSelecting 已清，下一幕先进入地图', () => {
     let s = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 102 });
     s = { ...s, currentRow: 4, currentNodeId: 'boss1', screen: 'roster' };
     s = { ...s, map: { ...s.map, boss: { boss1: [{ speciesId: 'boss_vine' }] } } };
@@ -1497,9 +1526,10 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     s = dispatch(s, { type: 'INTER_ACT_CONTINUE' });
     expect(s.act).toBe(2);
     expect(s.skipSelecting).toBe(false);
-    // 自动踏入出发层，直接进入布阵
-    expect(s.screen).toBe('formation');
-    expect(s.currentNodeId).toBe(s.map.layers[0][0].id);
+    // 出发节点尚未被选择，不创建布阵状态。
+    expect(s.screen).toBe('map');
+    expect(s.currentNodeId).toBe('');
+    expect(s.formation).toBeUndefined();
   });
 });
 

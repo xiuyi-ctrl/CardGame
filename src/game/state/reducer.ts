@@ -14,6 +14,8 @@ import { getGrowthArenaEncounter } from '../data/growth-arena';
 import { buildGrowthEvent } from '../data/growth-events';
 import { getGrowthShopStock, GROWTH_SHOP_ITEMS } from '../data/growth-shop';
 import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-special';
+import { restoreFormation } from './formation';
+import type { FormationPosition } from './formation';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
@@ -83,6 +85,7 @@ export type GameAction =
   | { type: 'END_TURN' }
   | { type: 'GAUNTLET_SWAP' }
   | { type: 'FORMATION_CONFIRM'; units: Unit[] }
+  | { type: 'FORMATION_UPDATE'; positions: Record<string, FormationPosition> }
   | { type: 'GAUNTLET_ORDER_CONFIRM'; units: Unit[] }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
@@ -528,6 +531,12 @@ function autoPosition(units: Unit[]): Unit[] {
   );
 }
 
+function initialFormation(state: GameState, maxCount: number): Unit[] {
+  return state.lastFormation === undefined
+    ? autoPosition(fieldUnits(state, maxCount))
+    : restoreFormation(state.roster, state.lastFormation, maxCount);
+}
+
 function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?: string): GameState {
   if (base.roster.length === 0) {
     return base.runMode === 'proficiency'
@@ -576,7 +585,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
       const rng = createRng(base.seed * 2731 + (base.currentLayer ?? 0) * 5039 + hashStr(node.id));
       const encounter = node.type === 'elite' ? getGrowthEliteEncounter(base.currentLayer ?? 1, rng) : getGrowthEncounter(base.currentLayer ?? 1, rng);
       const maxField = maxFieldForEnemy(encounter.length, base.runMode);
-      const initial = autoPosition(fieldUnits(base, maxField));
+      const initial = initialFormation(base, maxField);
       const options = { act: 1, nodeType: node.type as 'battle' | 'elite', difficulty: base.difficulty, untameable: true, layer: base.currentLayer ?? 1 };
       return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
     }
@@ -588,7 +597,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
       const encounter = base.map.boss[node.id];
       if (!encounter || encounter.length === 0) return { ...base, screen: 'map' };
       const maxField = maxFieldForEnemy(encounter.length, base.runMode);
-      const initial = autoPosition(fieldUnits(base, maxField));
+      const initial = initialFormation(base, maxField);
       const options = { act: 1, nodeType: 'boss' as const, difficulty: base.difficulty, untameable: true, layer, encounterHpMult: layer === 15 ? 0.95 : 1 };
       return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
     }
@@ -619,7 +628,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     const encounter = base.map.boss[node.id];
     if (!encounter || base.roster.length === 0) return { ...base, screen: 'map' };
     const maxField = maxFieldForEnemy(encounter.length, base.runMode);
-    const initial = autoPosition(fieldUnits(base, maxField));
+    const initial = initialFormation(base, maxField);
     const options = { act: base.act, nodeType: 'boss' as const, difficulty: base.difficulty };
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
   }
@@ -654,7 +663,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
     if (!encounter) return { ...base, screen: 'map' };
     if (base.roster.length === 0) return { ...base, screen: 'map' };
     const maxField = maxFieldForEnemy(encounter.length, base.runMode);
-    const initial = autoPosition(fieldUnits(base, maxField));
+    const initial = initialFormation(base, maxField);
     return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options: { untameable: true, act: base.act, nodeType: 'guardian', difficulty: base.difficulty }, prevRow, prevNodeId } };
   }
   // 钥匙门：无对应钥匙不可进入；进入时消耗钥匙并开启高级宝箱
@@ -689,7 +698,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   };
   if (base.roster.length === 0) return { ...base, screen: 'map' };
   const maxField = maxFieldForEnemy(encounter.length, base.runMode);
-  const initial = autoPosition(fieldUnits(base, maxField));
+  const initial = initialFormation(base, maxField);
   return { ...base, screen: 'formation', formation: { units: base.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow, prevNodeId } };
 }
 
@@ -939,7 +948,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const reward = choice.battleReward ?? { kind: 'gold' as const, amount: choice.goldDelta ?? 0 };
         const penalty = choice.battlePenalty ?? { percent: 15 };
         const maxField = maxFieldForEnemy(choice.battleEnemies.length, state.runMode);
-        const initial = autoPosition(fieldUnits(next, maxField));
+        const initial = initialFormation(next, maxField);
         const options = { untameable: true, act: state.act, nodeType: 'battle' as const, difficulty: state.difficulty };
         return {
           ...next,
@@ -1169,7 +1178,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'event') return state;
       // 设置 eventBattle 数据，跳转布阵界面
       const maxField = maxFieldForEnemy(action.enemies.length, state.runMode);
-      const initial = autoPosition(fieldUnits(state, maxField));
+      const initial = initialFormation(state, maxField);
       const options = { untameable: true, act: state.act, nodeType: 'battle' as const, difficulty: state.difficulty };
       return {
         ...state,
@@ -1578,10 +1587,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const skippable = new Set(['battle', 'elite', 'arena', 'gauntlet', 'corrupted']);
       if (action.free) skippable.add('boss');
       if (!skippable.has(node.type)) return state;
+      const visitedNodeIds = [...(state.visitedNodeIds ?? [])];
+      if (!visitedNodeIds.includes(node.id)) visitedNodeIds.push(node.id);
       const base: GameState = {
         ...state,
         currentRow: targetRow,
         currentNodeId: node.id,
+        visitedNodeIds,
         inventory: { ...state.inventory, skip: action.free ? inv : inv - 1 },
         runStats: action.free ? state.runStats : countItemUse(state.runStats),
       };
@@ -1609,13 +1621,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'FORMATION_UPDATE': {
+      if (state.screen !== 'formation' || !state.formation || state.formation.forceAllUnits) return state;
+      return { ...state, lastFormation: action.positions };
+    }
+
     case 'FORMATION_CONFIRM': {
       const f = state.formation;
       if (!f || action.units.length === 0) return state;
       // 事件战斗：用 eventBattle 的敌人；普通战斗：用 formation 的 encounter
       const enemySpecies = state.eventBattle ? state.eventBattle.enemies : f.encounter;
       const battle = createBattle(action.units, enemySpecies, state.seed + state.currentRow * 17, f.options);
-      return { ...state, screen: 'battle', battle, formation: undefined };
+      const lastFormation = f.forceAllUnits ? state.lastFormation
+        : Object.fromEntries(action.units.map(u => [u.uid, { row: u.row, column: u.column }]));
+      return { ...state, screen: 'battle', battle, formation: undefined, lastFormation };
     }
 
     case 'GAUNTLET_ORDER_CONFIRM': {
@@ -2349,7 +2368,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const map = generateMap(state.seed, act, state.difficulty);
       const minHpRatio = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].interActMinHpRatio;
       const roster = state.roster.map((unit) => ({ ...unit, hp: Math.max(unit.hp, Math.ceil(unit.maxHp * minHpRatio)) }));
-      const dep = map.layers[0][0];
       const runStats = state.runStats ? {
         ...state.runStats,
         lastBattleRound: 0,
@@ -2378,20 +2396,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         map,
         roster,
         currentRow: 0,
-        currentNodeId: dep ? dep.id : '',
+        currentNodeId: '',
         screen: 'map',
+        formation: undefined,
+        battle: undefined,
         runStats,
         unlocks,
         gauntletOrder: undefined,
         gauntletSize: undefined,
         postBattle: undefined,
-        visitedNodeIds: dep ? [dep.id] : [],
+        visitedNodeIds: [],
         visitedWatchtowers: [],
         skipSelecting: false,
         scoutSelecting: false,
         scoutResult: undefined,
       };
-      if (dep) return enterNode(base, dep, 0, '');
       return base;
     }
 
@@ -2403,6 +2422,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         screen: 'map',
         currentRow: prevRow ?? state.currentRow,
         currentNodeId: prevNodeId ?? state.currentNodeId,
+        lastFormation: state.lastFormation ?? (state.formation && !state.formation.forceAllUnits
+          ? Object.fromEntries(state.formation.initialField.map(u => [u.uid, { row: u.row, column: u.column }]))
+          : undefined),
         formation: undefined,
         gauntletOrder: undefined,
         gauntletSize: undefined,
@@ -2929,7 +2951,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const rng = createRng(state.seed * 3331 + (state.currentLayer ?? 0) * 7919);
         const encounter = getGrowthArenaEncounter(state.currentLayer ?? 1, rng);
         const maxField = maxFieldForEnemy(encounter.length, state.runMode);
-        const initial = autoPosition(fieldUnits(state, maxField));
+        const initial = initialFormation(state, maxField);
         const options = { act: 1, nodeType: 'arena3' as const, difficulty: state.difficulty, untameable: true, layer: state.currentLayer ?? 1 };
         return { ...state, screen: 'formation', arena3Pending: { mode: 'challenge' }, formation: { units: state.roster, initialField: initial, encounter, nodeId: node.id, options, prevRow: state.currentRow, prevNodeId: state.currentNodeId } };
       }

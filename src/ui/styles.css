@@ -1822,6 +1822,57 @@ button.primary {
 .battle-field .player-area .formation-slot.ally-target-blocked::after { display: none; }
 .battle-field .player-area .formation-slot.ally-target-blocked .battle-sprite { opacity: .4; }
 
+.battle-field .order-feedback-attack { color: #ff735b; }
+.battle-field .order-feedback-support { color: #6fe3af; }
+.battle-field .order-target-mark {
+  position: absolute;
+  z-index: 7;
+  inset: 4% 12% 24%;
+  pointer-events: none;
+  filter: drop-shadow(1px 1px 0 #0b1930);
+  background:
+    linear-gradient(currentColor, currentColor) left top / 10px 3px no-repeat,
+    linear-gradient(currentColor, currentColor) left top / 3px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) right top / 10px 3px no-repeat,
+    linear-gradient(currentColor, currentColor) right top / 3px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / 10px 3px no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / 3px 10px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 10px 3px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 3px 10px no-repeat;
+}
+.battle-field .order-confirm-ring {
+  position: absolute;
+  z-index: 7;
+  left: 20%;
+  right: 20%;
+  bottom: 24%;
+  height: 18%;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: order-confirm .35s ease-out both;
+}
+.battle-field .battle-order-ready {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  right: 2%;
+  padding: 1px 3px;
+  border: 1px solid #6fe3af;
+  background: #0b1930;
+  color: #b0ffce;
+  font: 600 12px/1.2 system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@keyframes order-confirm {
+  from { transform: scale(.7); opacity: 1; }
+  to { transform: scale(1.25); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .battle-field .order-confirm-ring { animation: none; }
+}
+
 .battle-field .enemy-area .row-back .formation-slot {
   transform: translate(27%, -12%) scale(0.82);
 }
@@ -2140,6 +2191,9 @@ button.primary {
 
 .battle-sidebar .who-passive { color: #69527d; }
 .battle-sidebar .order-badge { color: #a25d00; }
+.battle-sidebar .battle-order-summary { max-width: 100%; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+.battle-sidebar .battle-order-target-ally { color: #167e4d; }
+.battle-sidebar .battle-order-target-enemy { color: #c73832; }
 
 .battle-sidebar .battle-skill-grid {
   display: grid;

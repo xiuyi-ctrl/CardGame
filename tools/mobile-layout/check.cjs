@@ -37,6 +37,9 @@ app.whenReady().then(async () => {
   for (const name of ['postbattle-cursed', 'roster-cursed', 'tame-overflow-long', 'gauntlet-empty']) oneScreen.add(name);
   oneScreen.delete('proficiency-select'); // 此页按用户要求保留原有布局与内容。
   oneScreen.add('battle-five-skills');
+  oneScreen.add('battle-summary-long');
+  oneScreen.add('watchtower-cards');
+  for (const name of ['watchtower-utilities', 'watchtower-challenges', 'watchtower-training']) oneScreen.add(name);
   const results = [];
   for (const [width, height] of sizes) {
     win.setContentSize(width, height);
@@ -48,6 +51,11 @@ app.whenReady().then(async () => {
       try {
         const setup = await js(`window.preview.render(${JSON.stringify(name)},${mobile})`);
         await new Promise(r => setTimeout(r, 150));
+        if (name.startsWith('battle-order-')) {
+          await js('Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))])');
+          await win.webContents.capturePage();
+          await new Promise(r => setTimeout(r, 100));
+        }
         if (setup) for (const step of setup.split('|')) {
           if (step.startsWith('hold:')) {
             const selector = JSON.stringify(step.slice(5));
@@ -58,6 +66,16 @@ app.whenReady().then(async () => {
           }
           await js(`(() => { const step = ${JSON.stringify(step)}; if(step==='file:backup') { const input=document.querySelector('input[type=file]'); const transfer=new DataTransfer(); transfer.items.add(new File([window.preview.backupJson],'preview.json',{type:'application/json'})); input.files=transfer.files; input.dispatchEvent(new Event('change',{bubbles:true})); return; } if(step.startsWith('range:')) { const el=document.querySelector('input[type=range]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,step.slice(6)); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return; } const el = step.startsWith('.') ? document.querySelector(step) : [...document.querySelectorAll('button')].find(b => b.textContent.includes(step)); if (!el) throw Error('Missing setup: ' + step); el.click(); })()`);
           await new Promise(r => setTimeout(r, 60));
+        }
+        if (name.startsWith('battle-order-')) {
+          const feedback = await js(`({ ready: !!document.querySelector('.battle-order-ready'), target: !!document.querySelector('.order-target-mark'), slots: [...document.querySelectorAll('.player-area .formation-slot:not(.empty)')].map(el => el.className) })`);
+          if (!feedback.ready || !feedback.target) throw Error('Missing order feedback: ' + JSON.stringify(feedback));
+          const pulse = await js(`(() => { const ring = document.querySelector('.order-confirm-ring'); ring?.getAnimations().forEach(animation => { animation.pause(); animation.currentTime = 120; }); return !!ring; })()`);
+          if (!pulse) throw Error('Missing confirmation ring');
+          await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+          await win.webContents.capturePage();
+          await new Promise(r => setTimeout(r, 50));
+          await fs.writeFile(path.join(output, `${name}-${width}x${height}-confirm.png`), (await win.webContents.capturePage()).toPNG());
         }
         if (height > width) await js(`document.querySelector('.mobile-rotate-hint button')?.click()`);
         await js('Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))])');
@@ -99,7 +117,7 @@ app.whenReady().then(async () => {
           const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
           const outside = el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth+1 || r.top < -1 || r.bottom > innerHeight+1; };
           const scrollParent = el => { for(let p=el.parentElement; p && p!==document.body; p=p.parentElement) if(/auto|scroll/.test(getComputedStyle(p).overflowY) && p.scrollHeight>p.clientHeight+1) return p; return null; };
-          const masks = [...document.querySelectorAll('.confirm-overlay,.save-mgmt-overlay,.battle-overlay-mask,.growth-modal-overlay,.overlay,.mobile-system-overlay,.mobile-log-open')].filter(visible).sort((a,b)=>Number(getComputedStyle(a).zIndex||0)-Number(getComputedStyle(b).zIndex||0));
+          const masks = [...document.querySelectorAll('.confirm-overlay,.save-mgmt-overlay,.battle-overlay-mask,.growth-modal-overlay,.overlay,.mobile-system-overlay,.mobile-log-open,.watchtower-detail-overlay')].filter(visible).sort((a,b)=>Number(getComputedStyle(a).zIndex||0)-Number(getComputedStyle(b).zIndex||0));
           const topMask = masks.at(-1);
           const buttons = [...(topMask??document).querySelectorAll('button')].filter(visible);
           const concealed = buttons.filter(b => { if (scrollParent(b)) return false; const r=b.getBoundingClientRect(); for(let p=b.parentElement; p && p!==document.body; p=p.parentElement) { const s=getComputedStyle(p); if(!/hidden|clip/.test(s.overflowY)) continue; const a=p.getBoundingClientRect(); if(r.bottom>a.bottom+2 || r.top<a.top-2) return true; } return false; }).map(b=>({text:b.textContent.trim().slice(0,40),...rect(b)}));
