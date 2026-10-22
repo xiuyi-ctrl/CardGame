@@ -557,7 +557,9 @@ export function rollChest(seed: number, row: number, nodeId: string, keydoor: bo
     const food = getFood(foodId);
     return { gold: 0, foodId, extras: [], text: `获得 1 个${food.name}` };
   }
-  return { gold: 0, healRatio: 0.3, extras: [], text: '全体宠物恢复 30% 生命' };
+  const itemId = pick(rng, mainShopItemPool());
+  const item = ITEMS[itemId];
+  return { gold: 0, extras: [{ id: itemId, name: item.name }], text: `获得 1 个${item.name}` };
 }
 
 /** 查看单个节点的情报（侦查符 / 瞭望塔共用）：按节点类型展示敌人/货物/事件/宝箱奖励等内容 */

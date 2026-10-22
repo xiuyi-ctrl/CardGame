@@ -502,7 +502,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   return withStats;
 }
 
-/** 开启宝箱：普通双生宝箱 3 选 1（金币/食物/全体回血 30%），钥匙门为高级宝箱（金币+食物+概率道具）。结果文本进 chestResult。共用 rollChest 保证与瞭望塔/侦察符预览完全一致。 */
+/** 开启宝箱：普通双生宝箱随机金币/食物（不含圣果）/1个商店可售道具，钥匙门为高级宝箱（金币+食物+概率道具）。结果文本进 chestResult。共用 rollChest 保证与瞭望塔/侦察符预览完全一致。 */
 function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: GameState; text: string } {
   const roll = rollChest(base.seed, base.currentRow, node.id, keydoor);
   let next = base;

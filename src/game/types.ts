@@ -164,8 +164,6 @@ export interface FoodDef {
   /** 基础驯服成功率 */
   baseTame: number;
   price: number;
-  /** 奖励：驯服成功时给新怪物附加最大生命加成 */
-  hpBonus: number;
   /** 特殊道具：必定驯服（仍要求残血且可驯服） */
   guaranteed?: boolean;
   /** 是否在商店出售；特殊道具默认不售 */

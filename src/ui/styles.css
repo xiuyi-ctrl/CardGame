@@ -2169,9 +2169,10 @@ button.primary {
   flex: 1;
   overflow-y: auto;
   padding: 8px 3px 2px 0;
-  scrollbar-width: thin;
-  scrollbar-color: #9aa6a8 transparent;
+  scrollbar-width: none;
 }
+
+.battle-sidebar .battle-skill-scroll::-webkit-scrollbar { display: none; }
 
 .battle-sidebar .battle-skill-scroll .buff-detail-panel { margin-bottom: 7px; }
 .battle-sidebar .battle-skill-scroll .buff-section { flex-direction: row; flex-wrap: wrap; align-items: center; }

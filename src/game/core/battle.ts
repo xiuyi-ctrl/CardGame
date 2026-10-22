@@ -3598,8 +3598,6 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
     let after: BattleState = nb2;
     if (success) {
       const tamed = makeUnit(enemy.speciesId, true, 2, false);
-      tamed.maxHp += food.hpBonus;
-      tamed.hp = tamed.maxHp;
       after = {
         ...nb2,
         enemyUnits: nb2.enemyUnits.filter((u) => u.uid !== enemyUid),

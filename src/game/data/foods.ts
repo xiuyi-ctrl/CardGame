@@ -2,24 +2,24 @@ import type { FoodDef } from '../types';
 
 export const FOODS: Record<string, FoodDef> = {
   berry: {
-    id: 'berry', name: '浆果', emoji: '🍓', desc: '驯服成功率一般，生命加成低',
-    baseTame: 0.7, price: 5, hpBonus: 1,
+    id: 'berry', name: '浆果', emoji: '🍓', desc: '驯服成功率一般',
+    baseTame: 0.7, price: 5,
   },
   meat: {
     id: 'meat', name: '鲜肉', emoji: '🍖', desc: '驯服成功率较高',
-    baseTame: 0.85, price: 9, hpBonus: 0,
+    baseTame: 0.85, price: 9,
   },
   gem: {
-    id: 'gem', name: '秘晶', emoji: '💎', desc: '驯服成功率最高，大幅提升生命',
-    baseTame: 0.95, price: 14, hpBonus: 3,
+    id: 'gem', name: '秘晶', emoji: '💎', desc: '驯服成功率最高',
+    baseTame: 0.95, price: 14,
   },
   golden_fruit: {
     id: 'golden_fruit', name: '圣果', emoji: '🍎', desc: '必定驯服一只残血且可驯服的敌人',
-    baseTame: 1, price: 9999, hpBonus: 5, guaranteed: true, shop: false,
+    baseTame: 1, price: 9999, guaranteed: true, shop: false,
   },
   heal_potion: {
     id: 'heal_potion', name: '治疗圣水', emoji: '🧪', desc: '全队回复50%生命',
-    baseTame: 0, price: 30, hpBonus: 0, shop: false,
+    baseTame: 0, price: 30, shop: false,
   },
 };
 

@@ -29,6 +29,8 @@
 .watchtower-enemy-names button:hover, .watchtower-enemy-names button:focus-visible { background: #e1efe8; }
 .watchtower-detail-overlay { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: #071421bb; }
 .watchtower-creature-description { margin: 0; color: #52636c; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.watchtower-detail-overlay .enemy-inspect-modal .enemy-skill-panel { scrollbar-width: none; }
+.watchtower-detail-overlay .enemy-inspect-modal .enemy-skill-panel::-webkit-scrollbar { display: none; }
 .watchtower-footer { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .watchtower-footer p { color: #52636c; text-align: center; font-size: 13px; }
 .watchtower-footer button { min-height: 44px; width: min(360px, 100%); font-size: 22px; }
