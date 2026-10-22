@@ -339,7 +339,7 @@ export interface BattleState {
   turnIndex: number;
   round: number;
   phase: 'acting' | 'won' | 'lost';
-  /** 余温/暖辉按阵营共享一次触发机会，完整回合开始时重置。 */
+  /** 余温按阵营共享一次触发机会，完整回合开始时重置。 */
   afterglowUsed?: { player?: boolean; enemy?: boolean };
   log: LogEntry[];
   /** 数值平衡模拟专用；未开启采集时保持 undefined，不进入正常存档。 */

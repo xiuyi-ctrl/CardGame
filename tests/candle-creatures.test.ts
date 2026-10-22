@@ -17,7 +17,7 @@ function fire(b: BattleState, skill = 'punch', index = 0): BattleState {
   return playerEndTurn(playerSkill(b, b.playerUnits[index].uid, skill, b.enemyUnits[0].uid));
 }
 
-const warmth = (b: BattleState) => b.log.filter(entry => /的「(?:余温|暖辉)」治愈/.test(entry.text));
+const warmth = (b: BattleState) => b.log.filter(entry => /的「余温」治愈/.test(entry.text));
 
 describe('烛烛与灯翅蛾', () => {
   it('属性、固定技能组与两只一阶融合正确，二阶连接传奇形态', () => {
@@ -56,7 +56,7 @@ describe('烛烛与灯翅蛾', () => {
     expect(warmth(fire(battle, 'tail'))).toHaveLength(1);
   });
 
-  it('暖辉治疗两名不同的最低血量存活伙伴，共享上限优先采用暖辉且不治疗第三名', () => {
+  it('余温治疗两名不同的最低血量存活伙伴，共享上限取两目标版本且不治疗第三名', () => {
     const raw = passiveBattle(['candle', 'lantern_moth']);
     const corpse = { ...makeUnit('momo', true, 2, false), hp: 0 };
     const battle = { ...raw, playerUnits: [...raw.playerUnits.map((unit, i) => ({ ...unit, hp: i === 0 ? 5 : i === 1 ? 1 : 2 })), corpse] };
@@ -64,7 +64,7 @@ describe('烛烛与灯翅蛾', () => {
     expect(after.playerUnits.map(unit => unit.hp)).toEqual([5, 3, 4, 0]);
     const logs = warmth(after);
     expect(logs).toHaveLength(2);
-    expect(logs.every(entry => entry.text.includes('的「暖辉」') && entry.actorUid === battle.playerUnits[2].uid)).toBe(true);
+    expect(logs.every(entry => entry.text.includes('的「余温」') && entry.actorUid === battle.playerUnits[2].uid)).toBe(true);
     expect(new Set(logs.map(entry => entry.targetUid))).toEqual(new Set([battle.playerUnits[1].uid, battle.playerUnits[2].uid]));
     expect(logs.map(entry => parseEvent(after, entry)?.targetUid)).toEqual(logs.map(entry => entry.targetUid));
     const second = fire(after, 'double_hit');
@@ -72,7 +72,7 @@ describe('烛烛与灯翅蛾', () => {
     expect(second.playerUnits.map(unit => unit.hp)).toEqual([5, 5, 6, 0]);
   });
 
-  it('暖辉独自上场仅治疗自身一次；护灯可以治疗自身且不超过生命上限', () => {
+  it('余温独自上场仅治疗自身一次；护灯可以治疗自身且不超过生命上限', () => {
     const raw = passiveBattle(['lantern_moth']);
     const moth = { ...raw.playerUnits[1], hp: 5, skills: ['punch', 'lamp_guard'] };
     const solo = { ...raw, playerUnits: [moth] };

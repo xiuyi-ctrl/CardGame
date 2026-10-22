@@ -42,7 +42,7 @@ describe('熔炉兽与长明灵蛾', () => {
     expect(parseEvent(after, shields[0])?.kind).toBe('buff');
   });
 
-  it('熔岩重爪对燃烧目标造成8伤、否则6伤，壁垒8盾并冷却，封炉全队3盾且每场一次', () => {
+  it('熔岩重爪对燃烧目标造成8伤、否则6伤，壁垒8盾并冷却，封炉全队3盾且每场三次', () => {
     for (const burned of [false, true]) {
       const b = peacefulBattle('furnace_beast', burned);
       const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'molten_claw', b.enemyUnits[0].uid));
@@ -52,8 +52,9 @@ describe('熔炉兽与长明灵蛾', () => {
     const wall = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'furnace_bastion'));
     expect(wall.playerUnits[0].shield).toBe(8);
     expect(skillCooldownLeft(wall.playerUnits[0], 'furnace_bastion')).toBe(1);
-    const seal = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'seal_furnace'));
-    expect(seal.playerUnits.map(u => u.shield)).toEqual([3, 3]);
+    let seal = b;
+    for (let i = 0; i < 3; i++) seal = playerEndTurn(playerSkill(seal, seal.playerUnits[0].uid, 'seal_furnace'));
+    expect(seal.playerUnits.map(u => u.shield)).toEqual([9, 9]);
     expect(skillUsesLeft(seal.playerUnits[0], 'seal_furnace')).toBe(0);
     expect(playerSkill(seal, seal.playerUnits[0].uid, 'seal_furnace')).toBe(seal);
   });

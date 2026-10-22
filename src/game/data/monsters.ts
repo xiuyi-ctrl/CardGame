@@ -442,7 +442,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     skills: ['candle_flame', 'stoke_fire', 'lamp_guard'], passive: 'lantern_afterglow',
     evolutions: [{ to: 'eternal_moth' }],
     tame: { difficulty: 0.4 }, rank: 2,
-    desc: '烛烛的融合形态，灯笼般的尾部照亮同伴，以护灯和暖辉维系阵线。',
+    desc: '烛烛的融合形态，灯笼般的尾部照亮同伴，以护灯和余温维系阵线。',
   },
   furnace_beast: {
     id: 'furnace_beast', name: '熔炉兽', emoji: '🦡', baseHp: 31, baseSpd: 2,

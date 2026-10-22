@@ -1003,7 +1003,7 @@ function applyAfterglow(b: BattleState, actor: Unit): BattleState {
   return nb;
 }
 
-/** 长明之光逐只持有者独立结算，不使用余温/暖辉的阵营共享标记。 */
+/** 长明之光逐只持有者独立结算，不使用余温的阵营共享标记。 */
 function applyEternalLight(b: BattleState, actor: Unit): BattleState {
   let nb = b;
   const holders = alliesOf(b, actor).filter((unit) => !unit.eternalLightUsed && getUnitPassive(unit, b)?.kind === 'eternalLight');

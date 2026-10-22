@@ -90,7 +90,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   furnace_shell: {
-    id: 'furnace_shell', name: '炉壳', desc: '自身和指定的另一名友方各获得3点护盾；单独在场时仅自身获得3点，冷却1回合',
+    id: 'furnace_shell', name: '炉壳', desc: '自身和指定的一名友方各获得3点护盾，冷却1回合。',
     target: 'ally', kind: 'buff', cooldown: 1, hideEffects: true,
     effects: [{ kind: 'shield', value: 3, turns: 99 }],
   },
@@ -105,7 +105,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   stoke_fire: {
-    id: 'stoke_fire', name: '添薪', desc: '为一个已经灼烧的敌人追加灼烧3层，不造成即时伤害',
+    id: 'stoke_fire', name: '添薪', desc: '为一个已经灼烧的敌人追加灼烧3层。',
     target: 'single', reach: 'direct', kind: 'status', hideEffects: true,
     effects: [{ kind: 'burn', value: 3, turns: 2 }],
   },
@@ -123,8 +123,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'shield', value: 8, turns: 99 }],
   },
   seal_furnace: {
-    id: 'seal_furnace', name: '封炉', desc: '全体己方伙伴各获得3点护盾，每场战斗限1次',
-    target: 'allyAll', kind: 'buff', uses: 1, hideEffects: true,
+    id: 'seal_furnace', name: '封炉', desc: '全体己方伙伴各获得3点护盾，每场战斗限3次',
+    target: 'allyAll', kind: 'buff', uses: 3, hideEffects: true,
     effects: [{ kind: 'shield', value: 3, turns: 99 }],
   },
   eternal_flame: {
@@ -133,7 +133,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   blazing_fuel: {
-    id: 'blazing_fuel', name: '旺火', desc: '为一个已经灼烧的敌人追加灼烧5层，不造成即时伤害',
+    id: 'blazing_fuel', name: '旺火', desc: '为一个已经灼烧的敌人追加灼烧5层。',
     target: 'single', reach: 'direct', kind: 'status', hideEffects: true,
     effects: [{ kind: 'burn', value: 5, turns: 2 }],
   },
