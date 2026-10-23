@@ -28,7 +28,7 @@ describe('战后休整界面', () => {
     expect(container.querySelectorAll('.postbattle-pet')).toHaveLength(3);
     expect(container.querySelectorAll('.postbattle-empty')).toHaveLength(5);
     expect(screen.queryByText('出战阵容')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '查看泡泡，生命14/14，速度1' }));
+    fireEvent.click(screen.getByRole('button', { name: '查看泡泡，生命14/14，速度3' }));
     expect(screen.getByRole('heading', { name: '泡泡' })).toBeTruthy();
     expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SET_FIELD' }));
 

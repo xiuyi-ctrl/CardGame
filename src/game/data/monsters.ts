@@ -12,7 +12,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   lulu: {
     id: 'lulu', name: '泡泡', emoji: '🐸', image: '/03.png',
-    baseHp: 14, baseSpd: 1,
+    baseHp: 14, baseSpd: 3,
     skills: ['aqua_shot', 'water_bath'],
     desc: '开局御三家之一，血量最高的坦克型，靠持续回复磨血。',
     passive: 'watery_regen',
@@ -21,7 +21,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   fifi: {
     id: 'fifi', name: '灼灼', emoji: '🔥', image: '/02.png',
-    baseHp: 7, baseSpd: 5,
+    baseHp: 8, baseSpd: 4,
     skills: ['ember', 'double_hit'],
     desc: '开局御三家之一，灼烧刺客，但极其脆弱。',
     passive: 'heat',
@@ -48,7 +48,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   pipi: {
     id: 'pipi', name: '刺刺', emoji: '🦔', image: '/04.png',
-    baseHp: 11, baseSpd: 2,
+    baseHp: 11, baseSpd: 1,
     skills: ['weaken', 'provoke'],
     desc: '受击反伤，嘲讽敌人',
     passive: 'spike',
@@ -57,8 +57,8 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   momo_queen: {
     id: 'momo_queen', name: '迅牙', emoji: '🐹', image: '/01-1.png',
-    baseHp: 18, baseSpd: 4,
-    skills: ['leaf_needle', 'double_hit', 'shockwave'],
+    baseHp: 15, baseSpd: 4,
+    skills: ['swift_needle', 'flying_leaf', 'shockwave'],
     desc: '迅迅的融合形态，高速多段连击手，先手爆发。',
     passive: 'swift_power',
     evolutions: [{ to: 'momo_god' }],
@@ -66,7 +66,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   lulu_king: {
     id: 'lulu_king', name: '泡泡将', emoji: '🐢', image: '/03-1.png',
-    baseHp: 22, baseSpd: 2,
+    baseHp: 22, baseSpd: 4,
     skills: ['water_gun', 'heal_light', 'water_wave'],
     desc: '泡泡的融合形态，高血量的水系坦克，攻击群体并自愈。',
     passive: 'tidal_regen',
@@ -84,7 +84,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   sisi: {
     id: 'sisi', name: '棘尾', emoji: '🦂', image: '/04-1.png',
-    baseHp: 16, baseSpd: 3,
+    baseHp: 18, baseSpd: 3,
     skills: ['weaken', 'provoke', 'thorn_skill'],
     desc: '刺刺的融合形态，控制+反伤的肉盾，擅长削弱和限制敌人。',
     passive: 'hard_armor',
@@ -93,7 +93,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   gora: {
     id: 'gora', name: '铁卫', emoji: '🐊', image: '/05-1.png',
-    baseHp: 19, baseSpd: 2,
+    baseHp: 19, baseSpd: 3,
     skills: ['steel_spike', 'shield_skill', 'shield_counter'],
     desc: '铁墩的融合形态，高血铁壁，护盾防御的铁壁坦克。',
     passive: 'thick_shell',
@@ -102,7 +102,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   mimi_king: {
     id: 'mimi_king', name: '蟒影', emoji: '🐍', image: '/06-1.png',
-    baseHp: 17, baseSpd: 4,
+    baseHp: 15, baseSpd: 5,
     skills: ['poison_sting', 'shadow_strike', 'shadow_claw'],
     desc: '咪咪的融合形态，毒系影袭刺客，优先猎杀后排。',
     passive: 'venom_power',

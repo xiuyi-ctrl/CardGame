@@ -52,10 +52,15 @@ type Scene = { component: any; state: GameState; flow?: boolean; setup?: string;
 const registry: Record<string, Scene> = {};
 const add = (name: string, component: any, extra = {}, flow = true, setup?: string) => { registry[name] = { component, state: state(name, extra), flow, setup }; };
 add('title', ui.HomeScreen, {}, false);
+add('region-select', ui.RegionScreen, {}, false);
+add('region-forest', ui.RegionScreen, { region: 'emerald_forest' }, false);
+add('region-ecology', ui.RegionScreen, { region: 'emerald_forest' }, false, '查看生态详情');
+add('region-mixed-ecology', ui.RegionScreen, {}, false, '查看生态详情');
 add('difficulty-select', ui.DifficultyScreen, {}, false);
 add('starter', ui.StarterScreen, {}, false);
 add('proficiency-select', ui.ProficiencyStarterScreen, {}, false);
 add('map', ui.MapScreen, {}, false);
+add('forest-map', ui.MapScreen, { region: 'emerald_forest' }, false);
 add('formation', FormationScreen, { formation }, false);
 add('gauntlet-order', GauntletOrderScreen, { gauntletOrder: base.roster.slice(0, 4) });
 add('battle', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false);
@@ -80,6 +85,7 @@ add('special-target', SpecialTargetScreen, { specialPending: { kind: 'eventBoost
 add('gameover', ui.GameOverScreen);
 add('victory', ui.VictoryScreen);
 add('inter_act', ui.InterActScreen);
+add('forest-interact', ui.InterActScreen, { region: 'emerald_forest' });
 add('watchtower', ui.WatchtowerScreen);
 add('chest', ui.ChestScreen, { chestResult: ['左侧宝箱：金币30、浆果2', '右侧宝箱：侦查符1、全队恢复生命'] });
 add('backpack', ui.BackpackScreen, {}, false);
@@ -214,7 +220,7 @@ function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
   const C = scene.component;
   const shell = scene.flow ? 'screen-flow' : C === ui.HomeScreen ? 'screen-title' : C === ui.RewardScreen ? 'screen-reward'
     : C === ui.BackpackScreen ? 'screen-backpack' : C === ui.StarterScreen || C === ui.ProficiencyStarterScreen ? 'screen-starter'
-      : C === ui.DifficultyScreen ? 'screen-difficulty' : '';
+      : C === ui.DifficultyScreen ? 'screen-difficulty' : C === ui.RegionScreen ? 'screen-region' : '';
   return <div className={`screen ${shell}`}>
     <C state={current} dispatch={dispatch} {...scene.extra} />
     {current.toast && <div className={`toast ${current.toast.kind ?? 'info'}`}>{current.toast.msg}</div>}

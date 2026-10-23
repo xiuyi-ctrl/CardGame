@@ -1,10 +1,12 @@
 import type { BattleTelemetryEvent } from '../types';
 import type { Difficulty, MapNode } from '../state/game';
+import type { MainRegionId } from '../data/regions';
 
 export type SimulationMode = 'main' | 'proficiency';
 export type SimulationOutcome = 'victory' | 'gameover' | 'stuck' | 'error';
 
 export interface SimulationConfig {
+  region?: MainRegionId;
   mode: SimulationMode;
   difficulty: Difficulty;
   seed: number;

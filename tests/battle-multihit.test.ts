@@ -23,7 +23,7 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     const b1 = playerEndTurn(playerSkill(b0, a.uid, 'double_hit', lulu.uid));
     const logs = attackLogs(b1, a.uid, '连击');
     expect(logs.length).toBe(1);
-    expect(logs[0].text).toContain('造成 4 伤害');
+    expect(logs[0].text).toContain('造成 2 伤害');
     expect(b1.enemyUnits[0].hp).toBe(0);
   });
 
@@ -62,8 +62,30 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     const logs = attackLogs(b1, a.uid, '连击');
     expect(logs.length).toBe(2);
     expect(logs[1].addsStatus).toEqual(['burn']);
-    // 两段命中后的血量快照：14 - 4 - 4 = 6（后续敌方行动/灼烧/regen 结算不改连击日志本身）
-    expect(logs[1].hp?.[b1.enemyUnits[0].uid]).toBe(6);
+    // 两段命中后的血量快照：14 - 2 - 2 = 10（后续敌方行动/灼烧/regen 结算不改连击日志本身）
+    expect(logs[1].hp?.[b1.enemyUnits[0].uid]).toBe(10);
+    // 灼焰每段触发：第一段 3 层，第二段叠加到 6 层
+    expect(logs[0].statuses?.[b1.enemyUnits[0].uid].find((s) => s.kind === 'burn')?.value).toBe(3);
+    expect(logs[1].statuses?.[b1.enemyUnits[0].uid].find((s) => s.kind === 'burn')?.value).toBe(6);
+  });
+
+  it('灼灼/灼刃的连击与火焰连击每段触发灼烧被动', () => {
+    const fifi = makeUnit('fifi', true, 0, false);
+    const b1 = createBattle([fifi], [{ speciesId: 'lulu' }], 3);
+    const after1 = playerEndTurn(playerSkill(b1, fifi.uid, 'double_hit', b1.enemyUnits[0].uid));
+    const logs1 = attackLogs(after1, fifi.uid, '连击');
+    expect(logs1[1].statuses?.[b1.enemyUnits[0].uid].find((s) => s.kind === 'burn')?.value).toBe(4);
+
+    const fifiKing = makeUnit('fifi_king', true, 0, false);
+    const b2 = createBattle([fifiKing], [{ speciesId: 'lulu' }], 3);
+    const after2 = playerEndTurn(playerSkill(b2, fifiKing.uid, 'double_hit', b2.enemyUnits[0].uid));
+    const logs2 = attackLogs(after2, fifiKing.uid, '连击');
+    expect(logs2[1].statuses?.[b2.enemyUnits[0].uid].find((s) => s.kind === 'burn')?.value).toBe(6);
+
+    const b3 = createBattle([makeUnit('fifi_king', true, 0, false)], [{ speciesId: 'lulu' }], 3);
+    const after3 = playerEndTurn(playerSkill(b3, b3.playerUnits[0].uid, 'flame_combo', b3.enemyUnits[0].uid));
+    const logs3 = attackLogs(after3, b3.playerUnits[0].uid, '火焰连击');
+    expect(logs3[1].statuses?.[b3.enemyUnits[0].uid].find((s) => s.kind === 'burn')?.value).toBe(10);
   });
 
   it('高减伤（厚壳 -2）：多段每段都扣减伤，每段保底 1', () => {
@@ -74,8 +96,8 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     const logs = attackLogs(b1, a.uid, '连击');
     expect(logs.length).toBe(2);
     expect(logs.map((l) => l.text)).toEqual([
-      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 2 伤害`,
-      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 2 伤害`,
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
     ]);
   });
 
@@ -106,7 +128,7 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     expect(attackLogsArr[0].hp?.[a.uid]).toBe(10);
     expect(attackLogsArr[1].hp?.[a.uid]).toBe(12);
     // 两段吸血全部完成后玩家为 14（10 + 2×2）：敌方反击日志快照（扣血后）= 14 - 本次反击伤害
-    const luluAtk = b1.log.find((l) => l.text.includes(`${b0.enemyUnits[0].name} 使用「`))!;
+    const luluAtk = b1.log.find((l) => l.actorUid === b0.enemyUnits[0].uid && l.text.includes('使用「'))!;
     const luluDmg = Number(/造成 (\d+) 伤害/.exec(luluAtk.text)?.[1] ?? 0);
     expect(luluAtk.hp?.[a.uid]).toBe(14 - luluDmg);
   });
@@ -115,14 +137,14 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     const p = makeUnit('lulu', true, 0, false);
     p.spd = 1; // 让敌方先手
     const raw = createBattle([p], [{ speciesId: 'boss_crab' }], 5, { corruptDebuff: 'dmg' });
-    // 移除 createBattle 自动触发的潮汐节律 atkUp，确保伤害为基础 4 + 侵蚀 2 = 6
+    // 移除 createBattle 自动触发的潮汐节律 atkUp，确保伤害为基础 2 + 侵蚀 2 = 4
     const enemy = { ...raw.enemyUnits[0], skills: ['double_hit'], statuses: raw.enemyUnits[0].statuses.filter((s) => s.kind !== 'atkUp') };
     const b0 = { ...raw, enemyUnits: [enemy] };
     const b1 = playerEndTurn(b0);
     const logs = b1.log.filter((l) => l.text.includes('使用「连击」攻击'));
     expect(logs.map((l) => l.text)).toEqual([
-      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 6 伤害`,
-      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 6 伤害`,
+      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 4 伤害`,
+      `${enemy.name} 使用「连击」攻击 ${p.name}，造成 4 伤害`,
     ]);
   });
 });

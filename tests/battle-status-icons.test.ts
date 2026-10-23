@@ -13,6 +13,22 @@ import { resolve } from 'node:path';
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('战场右侧状态图标', () => {
+  it.each([false, true])('灼烧烙印使用专属PNG，与暗影印记区分，包含预加载与素材副本 mobile=%s', mobile => {
+    document.documentElement.classList.toggle('mobile-ui', mobile);
+    try {
+      const unit = makeUnit('momo', true, 0, false);
+      unit.statuses = [{ kind: 'burnBrand', value: 1, turns: 0, sourceSide: 'player' }, { kind: 'shadowMark', value: 1, turns: 2 }];
+      const { unmount } = render(createElement(BattleStatusIcons, { unit }));
+      expect(screen.getByAltText('灼烧烙印').getAttribute('src')).toBe('/buff-icons/burn-brand.png');
+      expect(screen.getByAltText('暗影印记').getAttribute('src')).toBe('/buff-icons/shadow-mark.png');
+      unmount();
+      render(createElement(BuffDetailPanel, { unit }));
+      expect(document.querySelector('img[src="/buff-icons/burn-brand.png"]')).not.toBeNull();
+      expect(BATTLE_BUFF_ICON_IMAGES).toContain('/buff-icons/burn-brand.png');
+      expect(readFileSync(resolve('public/buff-icons/burn-brand.png'))).toEqual(readFileSync(resolve('美术素材/buff-icons/burn-brand.png')));
+    } finally { document.documentElement.classList.remove('mobile-ui'); }
+  });
+
   it('狐火独立显示层数和上限，不与灼烧状态混淆', () => {
     const unit = makeUnit('phantom_tail_fox', true, 0, false);
     unit.statuses = [{ kind: 'foxFire', value: 3, turns: 0 }, { kind: 'burn', value: 2, turns: 2 }];

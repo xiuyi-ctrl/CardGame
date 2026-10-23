@@ -56,7 +56,7 @@ describe('火狐与幻尾火狐', () => {
     for (const u of b.playerUnits) ordered = playerSkill(ordered, u.uid, 'ember', b.enemyUnits[0].uid);
     const after = playerEndTurn(ordered);
     expect(foxFireLayers(after.enemyUnits[0])).toBe(species === 'fire_fox' ? 3 : 5);
-    expect(after.enemyUnits[0].hp).toBe(470);
+    expect(after.enemyUnits[0].hp).toBe(475);
     expect(after.log.filter(e => e.text.includes('火花」攻击'))).toHaveLength(5);
   });
 

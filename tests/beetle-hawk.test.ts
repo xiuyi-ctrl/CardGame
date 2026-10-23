@@ -124,7 +124,7 @@ describe('熔甲虫与焚风鹰', () => {
     const uid = b.enemyUnits[0].uid;
     const after = playerEndTurn(playerSkill(playerSkill(b, b.playerUnits[0].uid, 'burn_brand', uid), b.playerUnits[1].uid, 'ember', uid));
     expect(after.log.some(e => e.text.includes('引爆 9 层，受到 9'))).toBe(true);
-    expect(after.enemyUnits[0].hp).toBe(485);
+    expect(after.enemyUnits[0].hp).toBe(486);
     expect(after.playerUnits[1].hp).toBe(52);
   });
 
@@ -134,7 +134,7 @@ describe('熔甲虫与焚风鹰', () => {
     const b = withBrand(raw, 5);
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'double_hit', b.enemyUnits[0].uid));
     expect(after.log.filter(e => e.text.includes('引爆'))).toHaveLength(1);
-    expect(after.enemyUnits[0].hp).toBe(487);
+    expect(after.enemyUnits[0].hp).toBe(491);
     const group = withBrand(quiet(['momo'], ['momo', 'momo']), 5);
     group.playerUnits[0].skills = ['tail'];
     const groupResult = playerEndTurn(playerSkill(group, group.playerUnits[0].uid, 'tail'));

@@ -31,7 +31,7 @@ app.whenReady().then(async () => {
   const names = await js(`window.preview?.${process.argv.includes('--desktop') ? 'desktopNames' : 'names'}`);
   if (!names) throw Error('Preview did not load: ' + errors.join('\n'));
   const requested = process.argv.find(a => a.startsWith('--scenes='))?.slice(9).split(',');
-  const sizes = process.argv.includes('--desktop') ? [[1280, 720], [1920, 1080]] : process.argv.includes('--quick') ? [[640, 320]] : [[640, 320], [640, 360], [740, 360], [844, 390], [915, 412], [1024, 600]];
+  const sizes = process.argv.includes('--desktop') ? [[1280, 720], [1600, 900], [1920, 1080]] : process.argv.includes('--quick') ? [[640, 320]] : [[640, 320], [640, 360], [740, 360], [844, 390], [915, 412], [1024, 600]];
   const mobile = !process.argv.includes('--desktop');
   const oneScreen = new Set(['title', 'difficulty-select', 'starter', 'proficiency-select', 'formation', 'gauntlet-order', 'battle', 'reward', 'recruit', 'roster', 'postbattle', 'shop', 'shop-prof', 'rest', 'rest-fusion', 'rest-fusion-skill', 'revive-select', 'event', 'special', 'custom', 'boost', 'evolve', 'special-target', 'gameover', 'victory', 'inter_act', 'chest', 'tame-overflow', 'skill-pick', 'growth-menu', 'growth-transfer', 'blacksmith', 'enhance-stone', 'enhance-reset', 'arena3', 'proficiency-result', 'save-management', 'backpack-empty', 'battle-selected', 'battle-ally-shield-target', 'battle-ally-heal-target', 'roster-long', 'toast-recruit', 'toast-long', 'growth-selected', 'growth-return', 'skill-pick-long', 'event-long', 'revive-empty', 'chest-empty', 'proficiency-lost', 'skill-replace']);
   for (const name of ['postbattle-cursed', 'roster-cursed', 'tame-overflow-long', 'gauntlet-empty']) oneScreen.add(name);
@@ -118,7 +118,7 @@ app.whenReady().then(async () => {
           const outside = el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth+1 || r.top < -1 || r.bottom > innerHeight+1; };
           const scrollParent = el => { for(let p=el.parentElement; p && p!==document.body; p=p.parentElement) if(/auto|scroll/.test(getComputedStyle(p).overflowY) && p.scrollHeight>p.clientHeight+1) return p; return null; };
           const masks = [...document.querySelectorAll('.confirm-overlay,.save-mgmt-overlay,.battle-overlay-mask,.growth-modal-overlay,.overlay,.mobile-system-overlay,.mobile-log-open,.watchtower-detail-overlay')].filter(visible).sort((a,b)=>Number(getComputedStyle(a).zIndex||0)-Number(getComputedStyle(b).zIndex||0));
-          const topMask = masks.at(-1);
+          const topMask = document.querySelector('dialog:modal') ?? masks.at(-1);
           const buttons = [...(topMask??document).querySelectorAll('button')].filter(visible);
           const concealed = buttons.filter(b => { if (scrollParent(b)) return false; const r=b.getBoundingClientRect(); for(let p=b.parentElement; p && p!==document.body; p=p.parentElement) { const s=getComputedStyle(p); if(!/hidden|clip/.test(s.overflowY)) continue; const a=p.getBoundingClientRect(); if(r.bottom>a.bottom+2 || r.top<a.top-2) return true; } return false; }).map(b=>({text:b.textContent.trim().slice(0,40),...rect(b)}));
           const clipped = buttons.filter(b => outside(b) && !scrollParent(b)).map(b => ({text:b.textContent.trim().slice(0,40), ...rect(b)}));

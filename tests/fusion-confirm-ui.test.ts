@@ -61,7 +61,7 @@ describe('融合确认信息', () => {
     expect(container.querySelector('.fusion-stats img[src="/battle-stat-icons/speed.png"]')).toBeTruthy();
     expect(container.querySelector('.fusion-actions')).toBeTruthy();
     expect(container.querySelectorAll('.fusion-result-skills .skill-desc')).toHaveLength(0);
-    expect(Array.from(container.querySelectorAll('.fusion-result-skills .skill-name')).map(el => el.textContent)).toEqual(['叶针', '连击', '冲击波']);
+    expect(Array.from(container.querySelectorAll('.fusion-result-skills .skill-name')).map(el => el.textContent)).toEqual(['迅针', '飞叶', '冲击波']);
     fireEvent.change(screen.getByRole('combobox', { name: '融合材料' }), { target: { value: chosen.uid } });
     expect(screen.queryByText(/队伍人数|空出一个出战位置|保留主宠|将被消耗/)).toBeNull();
     expect(container.querySelectorAll('.fusion-pet-row')).toHaveLength(1);

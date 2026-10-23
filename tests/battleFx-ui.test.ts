@@ -244,6 +244,7 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
   it('StrictMode 下新增状态仍正确隐藏（useMemo 双调用不丢失新增状态差集）', () => {
     vi.useFakeTimers();
     const a = makeUnit('pipi', true, 1, false);
+    a.spd = 2; // 固定本测试的原行动顺序，不依赖刺刺平衡面板。
     const b0 = createBattle([a], [{ speciesId: 'kiki' }], 9);
     const b1 = playerEndTurn(playerSkill(b0, a.uid, 'weaken', b0.enemyUnits[0].uid));
     const enemyUid = b1.enemyUnits[0].uid;

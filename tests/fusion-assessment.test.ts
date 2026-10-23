@@ -15,7 +15,7 @@ describe('融合专项评估工具', () => {
     expect(before[0].hp).toBe(5);
     expect(empty[0].row).toBe(before[0].row);
     expect(empty[1].hp).toBe(before[2].hp);
-    expect(fusionStatBudget('momo').hpRatio).toBe(0.9);
+    expect(fusionStatBudget('momo').hpRatio).toBe(0.75);
   });
 
   it('基于实际HP快照，剔除过量伤害，不把护盾获得量写成吸收量', () => {
@@ -41,7 +41,7 @@ describe('融合专项评估工具', () => {
 
   it('首领使用实际小怪，二阶进化预算仍按两只材料评估', () => {
     expect(fusionEncounters(2).at(-1)?.enemies).toEqual(['boss_golem', 'boss_minion_rock', 'boss_minion_crystal']);
-    expect(fusionStatBudget('momo_queen')).toMatchObject({ pairHp: 36, fusedHp: 30, beforeActions: 2, afterActions: 1 });
+    expect(fusionStatBudget('momo_queen')).toMatchObject({ pairHp: 30, fusedHp: 30, beforeActions: 2, afterActions: 1 });
   });
 
   it('六条链两个阶段在首领压力下两种策略均可复现', () => {

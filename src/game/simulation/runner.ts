@@ -2,6 +2,7 @@ import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furna
 import { applyGrowthChoice, applySkillEnhance, getSkillEnhanceCost } from '../core/growth';
 import { FOODS } from '../data/foods';
 import { ITEMS } from '../data/items';
+import { MAIN_REGIONS } from '../data/regions';
 import { getSkill } from '../data/skills';
 import type { BattleState, Unit } from '../types';
 import { createInitialState, gameReducer, type GameAction } from '../state/reducer';
@@ -321,9 +322,10 @@ function finishBattle(battle: BattleState, nodeType: BattleSimulationSummary['no
   };
 }
 
-export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationConfig, 'mode' | 'seed'>): SimulationResult {
+export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationConfig, 'mode' | 'seed'>, observe?: (state: Readonly<GameState>) => void): SimulationResult {
   const config: SimulationConfig = {
     mode: input.mode,
+    ...(input.region ? { region: input.region } : {}),
     seed: input.seed,
     difficulty: input.difficulty ?? 'normal',
     maxSteps: input.maxSteps ?? DEFAULT_SIMULATION_STEPS[input.mode],
@@ -331,13 +333,14 @@ export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationCo
   };
   const startedAt = performance.now();
   resetUidSequenceForSimulation(config.seed);
-  const starter = config.mode === 'main'
+  const forest = config.mode === 'main' && config.region === 'emerald_forest';
+  const starter = forest ? MAIN_REGIONS.emerald_forest.starters[config.seed % 3] : config.mode === 'main'
     ? MAIN_STARTERS[config.seed % MAIN_STARTERS.length]
     : PROFICIENCY_STARTERS[config.seed % PROFICIENCY_STARTERS.length];
-  const companionPool = PROFICIENCY_STARTERS.filter((id) => id !== starter);
+  const companionPool = forest ? MAIN_REGIONS.emerald_forest.companions : PROFICIENCY_STARTERS.filter((id) => id !== starter);
   const companion = companionPool[Math.floor(config.seed / PROFICIENCY_STARTERS.length) % companionPool.length];
   let state = config.mode === 'main'
-    ? dispatch(createInitialState(), { type: 'START_RUN', starterId: starter, companionId: companion, seed: config.seed, difficulty: config.difficulty })
+    ? dispatch({ ...createInitialState(), region: config.region ?? 'mixed' }, { type: 'START_RUN', starterId: starter, companionId: companion, seed: config.seed, difficulty: config.difficulty })
     : dispatch(createInitialState(), { type: 'START_PROFICIENCY_PICKED', seed: config.seed, starterId: starter, companionId: companion });
   if (config.mode === 'proficiency') {
     state = { ...state, difficulty: config.difficulty, currentNodeId: '', visitedNodeIds: [] };
@@ -361,6 +364,7 @@ export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationCo
 
   try {
     while (steps < config.maxSteps) {
+      observe?.(state);
       state = withTelemetry(state, config.collectTelemetry);
       if (state.battle && state.battle.telemetry?.filter((event) => event.kind === 'battle-start').length === [...state.battle.playerUnits, ...state.battle.enemyUnits].length) {
         activeNodeType = (state.battle.nodeType as BattleSimulationSummary['nodeType']) ?? 'unknown';

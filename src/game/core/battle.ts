@@ -572,6 +572,8 @@ function startRound(b: BattleState): BattleState {
       }
       nb = replaceUnit(nb, res.unit);
     }
+    nb = checkEnd(nb);
+    if (nb.phase !== 'acting') return nb;
   }
   // 盾反清理：若 shieldCounter 已过期但 shield 状态仍存在，一并移除
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
@@ -623,6 +625,7 @@ function startRound(b: BattleState): BattleState {
       nb = pushLog(nb, `${u.name} 受到侵蚀伤害 ${dmg} 点`, sideOf(u), u.uid);
     }
     nb = checkEnd(nb);
+    if (nb.phase !== 'acting') return nb;
   }
   // 日华只根据上一完整回合的主动清火触发判断衰减，天然DOT不刷新机会。
   for (const unit of [...nb.playerUnits, ...nb.enemyUnits]) {
@@ -2090,6 +2093,7 @@ function resolveAttack(
   if (skill.id === 'molten_claw' && isBurning(target)) perHitDmg += 2;
   if (skill.id === 'purifying_orb' && isBurning(target)) perHitDmg += 2;
   if (skill.id === 'solar_strike') perHitDmg += radianceLayers(actor) * 2;
+  if (skill.id === 'flying_leaf' && getEffectiveSpd(actor) > getEffectiveSpd(target)) perHitDmg += 3;
   // 暗影追猎：对生命值低于50%的目标伤害+3
   if (ap?.kind === 'shadowHunter' && target.hp / target.maxHp < 0.5) {
     perHitDmg += ap.value;
@@ -2132,7 +2136,7 @@ function resolveAttack(
         nb = { ...nb, roundDmgMap: { ...roundDmg, [t2.uid]: prevDmg + seg } };
       }
       let remainingDmg = seg;
-      let effectiveShield = t2.shield;
+      let effectiveShield = skill.id === 'shadow_claw' ? 0 : t2.shield;
       if (shieldIgnoreLeft > 0 && effectiveShield > 0) {
         const ignored = Math.min(shieldIgnoreLeft, effectiveShield);
         effectiveShield -= ignored;
@@ -2214,6 +2218,9 @@ function resolveAttack(
           nb = pushLog(nb, `${t2.name} 的「${sealedNames}」将在下回合被封印 ${e.turns} 回合`, sideOf(t2), actor.uid, t2.uid, ['skillSeal']);
         }
       }
+    }
+    if (ap?.kind === 'scorch' && i > 0) {
+      t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
     }
     nb = replaceUnit(nb, t2);
     const hitAdds = skillEffectKinds.length > 0 ? skillEffectKinds : undefined;

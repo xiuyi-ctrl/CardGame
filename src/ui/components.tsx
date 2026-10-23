@@ -124,6 +124,8 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
     desc = desc.replace('5点伤害', `${5 + bonus.damageBonus}点伤害`);
   }
   if (s.id === 'purifying_orb') desc = desc.replace('3点伤害', `${3 + bonus.damageBonus}点伤害`);
+  if (s.id === 'flying_leaf') desc = desc.replace('造成4点伤害', `造成${4 + bonus.damageBonus}点伤害`);
+  if (s.id === 'shadow_claw') desc = desc.replace('造成6点伤害', `造成${6 + bonus.damageBonus}点伤害`);
   if (s.id === 'solar_strike') desc = desc.replace('造成3加', `造成${3 + bonus.damageBonus}加`);
   if (s.id === 'solar_heal') desc = desc.replace('回复3加', `回复${3 + bonus.healBonus}加`);
   if (s.id === 'sealed_style_foxfire' || s.id === 'twin_tail_flames' || s.id === 'nine_tail_wildfire') desc = desc.replace('3点伤害', `${3 + bonus.damageBonus}点伤害`);

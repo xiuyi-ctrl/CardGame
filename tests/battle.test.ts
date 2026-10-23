@@ -278,12 +278,12 @@ describe('驯服', () => {
         statuses: [{ kind: 'burn', value: 2, turns: 2 }],
       })),
     };
-    // 已带 2 层灼烧的目标再被火花命中：被动 +4 层、技能 +2 层 = 共 8 层；火花 6+2 伤（余烬焚身对已灼烧+2）、灼烧 8 层结算一半 4 伤
+    // 已带 2 层灼烧的目标再被火花命中：被动 +4 层、技能 +2 层 = 共 8 层；火花 5+2 伤（余烬焚身对已灼烧+2）、灼烧 8 层结算一半 4 伤
     const after = playerEndTurn(playerSkill(b, a.uid, 'ember', b.enemyUnits[0].uid));
     const burn = after.enemyUnits[0].statuses.find((s) => s.kind === 'burn');
     expect(burn).toBeDefined();
     expect(burn!.value).toBe(4);
-    expect(after.enemyUnits[0].hp).toBe(100 - 8 - 4);
+    expect(after.enemyUnits[0].hp).toBe(100 - 7 - 4);
   });
 
   it('灼烧按层数结算：每回合掉一半（向上进位）直至清空', () => {
@@ -389,7 +389,7 @@ describe('连击（多段命中）', () => {
     const hpBefore = enemy.hp;
     const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
     const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
-    expect(hpBefore - e2.hp).toBe(8); // 4×2
+    expect(hpBefore - e2.hp).toBe(4); // 2×2
   });
 
   it('连击守卫减伤对每段生效', () => {
@@ -400,10 +400,10 @@ describe('连击（多段命中）', () => {
     const hpBefore = enemy.hp;
     const after = playerEndTurn(playerSkill(b, p.uid, 'double_hit', enemy.uid));
     const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
-    expect(hpBefore - e2.hp).toBe(6); // (4-1)×2，每段都扣减伤
+    expect(hpBefore - e2.hp).toBe(2); // (2-1)×2，每段都扣减伤
   });
 
-  it('连击动画：总伤害拆成多段日志，逐段扣血（8 → 两段 4）', () => {
+  it('连击动画：总伤害拆成多段日志，逐段扣血（4 → 两段 2）', () => {
     const p = makeUnit('momo', true, 0, false);
     p.skills = ['double_hit'];
     const b = createBattle([p], [{ speciesId: 'momo' }], 5);
@@ -413,14 +413,14 @@ describe('连击（多段命中）', () => {
     const attackLogs = after.log.filter((l) => l.text.includes('使用「连击」攻击'));
     expect(attackLogs.length).toBe(2);
     expect(attackLogs.map((l) => l.text)).toEqual([
-      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 4 伤害`,
-      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 4 伤害`,
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 2 伤害`,
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 2 伤害`,
     ]);
-    // 每段日志的血量快照逐段推进：第一段 -4、第二段 -8
+    // 每段日志的血量快照逐段推进：第一段 -2、第二段 -4
     const e2 = after.enemyUnits.find((u) => u.uid === enemy.uid)!;
-    expect(hpBefore - e2.hp).toBe(8);
-    expect(attackLogs[0].hp?.[enemy.uid]).toBe(hpBefore - 4);
-    expect(attackLogs[1].hp?.[enemy.uid]).toBe(hpBefore - 8);
+    expect(hpBefore - e2.hp).toBe(4);
+    expect(attackLogs[0].hp?.[enemy.uid]).toBe(hpBefore - 2);
+    expect(attackLogs[1].hp?.[enemy.uid]).toBe(hpBefore - 4);
   });
 
   it('连击受守卫减伤时仍拆段，每段均扣减伤', () => {
@@ -432,8 +432,8 @@ describe('连击（多段命中）', () => {
     const attackLogs = after.log.filter((l) => l.text.includes('使用「连击」攻击'));
     expect(attackLogs.length).toBe(2);
     expect(attackLogs.map((l) => l.text)).toEqual([
-      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 3 伤害`,
-      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 3 伤害`,
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
+      `${p.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
     ]);
   });
 

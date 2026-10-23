@@ -7,6 +7,7 @@ import type { BattleState, Unit } from '../types';
 import { FOODS } from '../data/foods';
 import { getItem, ITEMS } from '../data/items';
 import { getMonster, MONSTERS } from '../data/monsters';
+import { MAIN_REGIONS, isMainRegionId, type MainRegionId } from '../data/regions';
 import { createRng, shuffle } from '../rng';
 import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, REFRESH_COST, MAX_REFRESH_COUNT, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter, TIER1 } from '../core/growth-map';
@@ -48,6 +49,8 @@ const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrup
 export type GameAction =
   | { type: 'START_RUN'; starterId: string; companionId: string; seed: number; difficulty?: Difficulty; relic?: string }
   | { type: 'STARTER'; saveSlot?: number; unlocks?: Unlocks }
+  | { type: 'SET_REGION'; region: MainRegionId }
+  | { type: 'BACK_TO_REGIONS'; difficulty: Difficulty; relic?: string }
   | { type: 'LOAD_GAME'; state: unknown }
   | { type: 'DELETE_SAVE'; slot: number }
   | { type: 'MOVE'; nodeId: string }
@@ -150,6 +153,7 @@ export function createInitialState(): GameState {
   const zeroSnap = { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 };
   return {
     screen: 'title',
+    region: 'mixed',
     seed: 0,
     act: 1,
     map: generateMap(0, 1),
@@ -173,9 +177,10 @@ export function createInitialState(): GameState {
 export function isValidGameState(s: unknown): s is GameState {
   if (typeof s !== 'object' || s === null) return false;
   const o = s as Record<string, unknown>;
-  const screens = ['title', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'skill-pick', 'growth-menu', 'revive-select', 'rest-fusion', 'rest-fusion-skill'];
+  const screens = ['title', 'region-select', 'starter', 'map', 'formation', 'gauntlet-order', 'battle', 'reward', 'roster', 'shop', 'rest', 'event', 'special', 'custom', 'boost', 'gameover', 'victory', 'watchtower', 'chest', 'backpack', 'tame-overflow', 'inter_act', 'test-type', 'test-pick', 'test-config', 'achievements', 'difficulty-select', 'skill-pick', 'growth-menu', 'revive-select', 'rest-fusion', 'rest-fusion-skill'];
   return (
     typeof o.seed === 'number' &&
+    (o.region === undefined || isMainRegionId(o.region)) &&
     typeof o.act === 'number' &&
     typeof o.currentRow === 'number' &&
     typeof o.currentNodeId === 'string' &&
@@ -245,6 +250,7 @@ export function migrateGameState(value: unknown): GameState | null {
   };
   return {
     ...value,
+    region: value.runMode === 'proficiency' ? undefined : value.region ?? 'mixed',
     battle,
     runStats,
     screen: blockedEvolution ? 'special' : value.screen,
@@ -275,7 +281,7 @@ export function newSeed(): number {
   return Math.floor(Math.random() * 1000000000);
 }
 
-function freshRun(starterId: string, companionId: string, seed: number, difficulty?: Difficulty, relicId?: string, saveSlot?: number, unlocks?: Unlocks): GameState {
+function freshRun(starterId: string, companionId: string, seed: number, difficulty?: Difficulty, relicId?: string, saveSlot?: number, unlocks?: Unlocks, region: MainRegionId = 'mixed'): GameState {
   const starter = makeUnit(starterId, true, 0, false);
   const starter2 = makeUnit(starterId, true, 1, false);
   const companion = makeUnit(companionId, true, 2, false);
@@ -300,10 +306,11 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
         break;
     }
   }
-  const map = generateMap(seed, 1, difficulty);
+  const map = generateMap(seed, 1, difficulty, region);
   const field = roster.slice(0, 3).map((u) => u.uid);
   return {
     screen: 'map',
+    region,
     seed,
     act: 1,
     map,
@@ -711,11 +718,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_RUN': {
       const diff = action.difficulty ?? state.difficulty ?? 'normal';
       const rel = action.relic ?? state.relics?.[0];
-      return freshRun(action.starterId, action.companionId, action.seed, diff, rel, state.saveSlot, state.unlocks);
+      const region = state.region ?? 'mixed';
+      if (region === 'emerald_forest' && (!MAIN_REGIONS[region].starters.includes(action.starterId) || !MAIN_REGIONS[region].companions.includes(action.companionId))) return state;
+      return freshRun(action.starterId, action.companionId, action.seed, diff, rel, state.saveSlot, state.unlocks, region);
     }
 
     case 'STARTER':
-      return { ...createInitialState(), screen: 'difficulty-select', saveSlot: action.saveSlot, unlocks: action.unlocks ?? { ...DEFAULT_UNLOCKS } };
+      return { ...createInitialState(), screen: 'region-select', saveSlot: action.saveSlot, unlocks: action.unlocks ?? { ...DEFAULT_UNLOCKS } };
+
+    case 'SET_REGION':
+      if (state.screen !== 'region-select' || !isMainRegionId(action.region)) return state;
+      return { ...state, region: action.region, screen: 'difficulty-select' };
 
     case 'LOAD_GAME': {
       const migrated = migrateGameState(action.state);
@@ -750,7 +763,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'DEBUG_JUMP': {
       const act = Math.max(1, Math.min(3, action.act));
       const seed = action.seed > 0 ? action.seed : 1;
-      const map = generateMap(seed, act);
+      const map = generateMap(seed, act, state.region === 'emerald_forest' ? state.difficulty : undefined, state.region ?? 'mixed');
       const row = Math.max(0, Math.min(action.row, map.layers.length - 1));
       let node: MapNode | undefined;
       if (action.nodeType && action.nodeType !== 'all') {
@@ -841,7 +854,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 非战斗类：预生成事件/奇遇/钥匙，进入对应界面时展示
       if (nodeType === 'event') {
         const eventType = action.eventType || 'spring';
-        base.map.events[nodeId] = buildEventByType(createRng(1 * 7 + 3), eventType, base.act);
+        base.map.events[nodeId] = buildEventByType(createRng(1 * 7 + 3), eventType, base.act, base.region ?? 'mixed');
       } else if (nodeType === 'special') {
         base.map.specials[nodeId] = buildSpecial(createRng(1 * 7 + 3));
       } else if (nodeType === 'keydoor') {
@@ -1141,8 +1154,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'EVENT_HATCH_PREVIEW': {
-      if (state.screen !== 'event') return state;
-      return { ...state, pendingEventHatch: { choiceId: action.choiceId, monsterId: action.monsterId } };
+      if (state.screen !== 'event' || state.pendingEventHatch) return state;
+      const choice = state.map.events[state.currentNodeId]?.choices.find(entry => entry.id === action.choiceId);
+      if (choice?.kind !== 'recruit' || !choice.monsterId || choice.monsterId !== action.monsterId) return state;
+      return { ...state, pendingEventHatch: { choiceId: choice.id, monsterId: choice.monsterId } };
     }
 
     case 'EVENT_HATCH_CONFIRM': {
@@ -2365,7 +2380,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'INTER_ACT_CONTINUE': {
       const act = state.act + 1;
-      const map = generateMap(state.seed, act, state.difficulty);
+      const map = generateMap(state.seed, act, state.difficulty, state.region ?? 'mixed');
       const minHpRatio = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].interActMinHpRatio;
       const roster = state.roster.map((unit) => ({ ...unit, hp: Math.max(unit.hp, Math.ceil(unit.maxHp * minHpRatio)) }));
       const runStats = state.runStats ? {
@@ -2439,7 +2454,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'RETRY':
-      return { ...createInitialState(), screen: 'starter', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
+      return { ...createInitialState(), screen: 'region-select', saveSlot: state.saveSlot, unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
 
     case 'CLEAR_TOAST':
       return { ...state, toast: undefined };
@@ -2456,11 +2471,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SELECT_DIFFICULTY_BACK':
       return { ...state, screen: 'difficulty-select' };
 
-    case 'SET_PRERUN_CONFIG':
-      return { ...state, difficulty: action.difficulty, relics: action.relic ? [action.relic] : [], screen: 'starter' };
+    case 'BACK_TO_REGIONS':
+    case 'SET_PRERUN_CONFIG': {
+      if (action.type === 'BACK_TO_REGIONS' && state.screen !== 'difficulty-select') return state;
+      const unlocks = state.unlocks ?? DEFAULT_UNLOCKS;
+      return { ...state,
+        difficulty: unlocks.difficulties.includes(action.difficulty) ? action.difficulty : 'normal',
+        relics: action.relic && unlocks.relics.includes(action.relic) && RELIC_ORDER.includes(action.relic) ? [action.relic] : [],
+        screen: action.type === 'BACK_TO_REGIONS' ? 'region-select' : 'starter',
+      };
+    }
 
     case 'START_PROFICIENCY': {
-      return { ...state, screen: 'proficiency-select', seed: action.seed, saveSlot: action.saveSlot, runMode: 'proficiency', unlocks: action.unlocks ?? state.unlocks };
+      return { ...state, screen: 'proficiency-select', region: undefined, seed: action.seed, saveSlot: action.saveSlot, runMode: 'proficiency', unlocks: action.unlocks ?? state.unlocks };
     }
 
     case 'START_PROFICIENCY_PICKED': {

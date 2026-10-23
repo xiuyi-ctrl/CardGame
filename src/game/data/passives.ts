@@ -16,7 +16,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   // —— 基础（御三家/常见野怪）——
   quick: { id: 'quick', name: '迅捷', desc: '战斗开始速度 +2', kind: 'spd', value: 2 },
   watery_regen: { id: 'watery_regen', name: '水愈', desc: '每回合开始恢复 2 点生命', kind: 'regen', value: 2 },
-  heat: { id: 'heat', name: '炽热', desc: '攻击命中附加灼烧 3 层', kind: 'scorch', value: 3 },
+  heat: { id: 'heat', name: '炽热', desc: '攻击命中附加灼烧 2 层', kind: 'scorch', value: 2 },
   coal_furnace: { id: 'coal_furnace', name: '炉火', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧1层；多段攻击只计一次', kind: 'furnace', value: 1 },
   armored_furnace: { id: 'armored_furnace', name: '炽炉', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧2层；多段攻击只计一次', kind: 'furnace', value: 2 },
   candle_afterglow: { id: 'candle_afterglow', name: '余温', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为生命值最低的存活伙伴回复2点生命；全队同名被动每回合一次，取最高值', kind: 'afterglow', value: 2 },
@@ -24,7 +24,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   molten_furnace: { id: 'molten_furnace', name: '熔炉之心', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧2层，每次触发为自身施加1点护盾；多段攻击只计一次', kind: 'furnace', value: 2, shieldOnTrigger: 1 },
   eternal_light: { id: 'eternal_light', name: '长明之光', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为全体存活伙伴各回复3点生命值；每只持有者独立计次，不与同类或余温共享次数', kind: 'eternalLight', value: 3 },
   iron_guard: { id: 'iron_guard', name: '铁壁', desc: '受到的所有伤害 -1', kind: 'guard', value: 1 },
-  venom_fang: { id: 'venom_fang', name: '毒牙', desc: '攻击命中附加中毒 3 层', kind: 'venom', value: 3 },
+  venom_fang: { id: 'venom_fang', name: '毒牙', desc: '攻击命中附加中毒 2 层', kind: 'venom', value: 2 },
   spike: { id: 'spike', name: '尖刺', desc: '受到攻击时反伤 2 点', kind: 'thorns', value: 2 },
 
   // —— 第一阶进化 ——
@@ -85,8 +85,8 @@ export const PASSIVES: Record<string, PassiveDef> = {
   // —— 初级一阶进化专属 ——
   swift_power: { id: 'swift_power', name: '迅力', desc: '战斗开始速度 +3', kind: 'spd', value: 3 },
   tidal_regen: { id: 'tidal_regen', name: '潮汐再生', desc: '每回合开始恢复 3 点生命', kind: 'regen', value: 3 },
-  blazing: { id: 'blazing', name: '灼焰', desc: '攻击命中附加灼烧 4 层', kind: 'scorch', value: 4 },
-  venom_power: { id: 'venom_power', name: '蟒影', desc: '对中毒目标伤害 +3', kind: 'venomPower', value: 3 },
+  blazing: { id: 'blazing', name: '灼焰', desc: '攻击命中附加灼烧 3 层', kind: 'scorch', value: 3 },
+  venom_power: { id: 'venom_power', name: '蟒影', desc: '攻击命中附加中毒 3 层', kind: 'venom', value: 3 },
 
   // —— 刺刺二阶进化专属 ——
   thorn_royal: { id: 'thorn_royal', name: '荆棘之躯', desc: '受到攻击时反伤 3 点；每受到第 3 次攻击，反伤 5 点并恢复 2 点生命', kind: 'thornRoyal', value: 3 },

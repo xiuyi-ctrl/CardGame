@@ -1,6 +1,9 @@
 import type { BattleState, FoodDef, Unit } from '../types';
 import type { FormationPosition } from './formation';
-import { getMonster, fusionNeed, MAIN_BASE_POOL as BASE_POOL, MAIN_EVO1_POOL as EVO1_POOL, MAIN_EVO2_POOL as EVO2_POOL } from '../data/monsters';
+import type { MainRegionId } from '../data/regions';
+import { MAIN_REGIONS, MIXED_ACT_BOSS_POOLS as ACT_BOSS_POOLS } from '../data/regions';
+export { MIXED_ACT_BOSS_POOLS as ACT_BOSS_POOLS } from '../data/regions';
+import { getMonster, fusionNeed } from '../data/monsters';
 export { MAIN_EVO2_POOL as EVO2_POOL } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
 import { ITEMS, mainShopItemPool } from '../data/items';
@@ -175,6 +178,7 @@ export interface RunMap {
 
 export type Screen =
   | 'title'
+  | 'region-select'
   | 'starter'
   | 'map'
   | 'formation'
@@ -255,6 +259,8 @@ export interface RewardChoice {
 
 export interface GameState {
   saveSlot?: number;
+  /** 主模式地区；旧存档缺失时迁移为 mixed，熟练度模式不使用。 */
+  region?: MainRegionId;
   screen: Screen;
   seed: number;
   act: number;
@@ -657,7 +663,6 @@ const ACT3_PROGRESS_MOD = [
   { threshold: -0.3, mod: [20, -10, -10, 0] },
   { threshold: 0.7, mod: [-20, 5, 15, 15] },
 ];
-const RECRUIT_POOL = BASE_POOL;
 
 // ---- 第 1 幕固定遭遇表（第一幕敌人.md 设计） ----
 // 普通战斗：按规模分表，加权抽取具体组合
@@ -1106,13 +1111,6 @@ const ACT3_GUARDIAN_2V2: readonly { species: string[]; weight: number }[] = [
   { species: ['sisi_god', 'momo_god'], weight: 28 },     // W7 棘刺王+迅天
 ];
 
-/** 每幕首领候选池：末层 2~3 个首领节点从对应幕的池中随机抽取（不重复）。部分首领只在指定幕出现。 */
-export const ACT_BOSS_POOLS: Record<number, string[]> = {
-  1: ['boss_vine', 'boss_crab', 'boss_dark'],
-  2: ['boss_moss', 'boss_ghost', 'boss_golem'],
-  3: ['boss_fire', 'boss_dragon', 'boss_demon'],
-};
-
 /** 中间层节点类型加权随机：越靠后精英越多，前期偏战斗/事件；奇遇关为低概率稀有节点；休整并入商人（不再生成 rest） */
 function middleNodeType(rng: () => number, progress: number, difficulty?: Difficulty): NodeType {
   const r = rng();
@@ -1159,6 +1157,79 @@ export const BOSS_MINIONS: Record<string, string[]> = {
   boss_demon: ['boss_minion_demon_imp', 'boss_minion_hellhound'],
 };
 
+/** 原组合与权重保持不变；林地仅删除含地区外生物的整组遭遇。 */
+export const MIXED_ENCOUNTER_TABLES = {
+  ACT1_ENCOUNTERS_1V1,
+  ACT1_ENCOUNTERS_2V2,
+  ACT1_ENCOUNTERS_3V3,
+  ACT1_ELITE_ENCOUNTERS,
+  ACT1_GAUNTLET_2,
+  ACT1_GAUNTLET_3,
+  ACT2_ENCOUNTERS_1V1,
+  ACT2_ENCOUNTERS_2V2,
+  ACT2_ENCOUNTERS_3V3,
+  ACT2_ENCOUNTERS_4V4,
+  ACT2_ELITE_ENCOUNTERS,
+  ACT2_GAUNTLET_2,
+  ACT2_GAUNTLET_3,
+  ACT3_ENCOUNTERS_1V1,
+  ACT3_ENCOUNTERS_2V2,
+  ACT3_ENCOUNTERS_3V3,
+  ACT3_ENCOUNTERS_4V4,
+  ACT3_ELITE_ENCOUNTERS,
+  ACT3_ARENA_ENCOUNTERS,
+  ACT3_GAUNTLET_2,
+  ACT3_GAUNTLET_3,
+  ACT3_GUARDIAN_1V1,
+  ACT3_GUARDIAN_2V2,
+};
+
+type EncounterEntry = readonly [string, number] | { species: string | string[]; weight: number } | { sequence: string[]; weight: number };
+
+function encounterSpecies(entry: EncounterEntry): readonly string[] {
+  if ('sequence' in entry) return entry.sequence;
+  if ('species' in entry) return typeof entry.species === 'string' ? [entry.species] : entry.species;
+  return [entry[0]];
+}
+
+const forestSpecies = new Set([
+  ...MAIN_REGIONS.emerald_forest.basePool,
+  ...MAIN_REGIONS.emerald_forest.evo1Pool,
+  ...MAIN_REGIONS.emerald_forest.evo2Pool,
+]);
+
+function filterForestTable<T extends EncounterEntry>(name: string, table: readonly T[]): readonly T[] {
+  const filtered = table.filter(entry => encounterSpecies(entry).every(id => forestSpecies.has(id)));
+  if (filtered.length === 0) throw new Error(`翠影林地遭遇表为空：${name}`);
+  return filtered;
+}
+
+export const FOREST_ENCOUNTER_TABLES = {
+  ACT1_ENCOUNTERS_1V1: filterForestTable('ACT1_ENCOUNTERS_1V1', ACT1_ENCOUNTERS_1V1),
+  ACT1_ENCOUNTERS_2V2: filterForestTable('ACT1_ENCOUNTERS_2V2', ACT1_ENCOUNTERS_2V2),
+  ACT1_ENCOUNTERS_3V3: filterForestTable('ACT1_ENCOUNTERS_3V3', ACT1_ENCOUNTERS_3V3),
+  ACT1_ELITE_ENCOUNTERS: filterForestTable('ACT1_ELITE_ENCOUNTERS', ACT1_ELITE_ENCOUNTERS),
+  ACT1_GAUNTLET_2: filterForestTable('ACT1_GAUNTLET_2', ACT1_GAUNTLET_2),
+  ACT1_GAUNTLET_3: filterForestTable('ACT1_GAUNTLET_3', ACT1_GAUNTLET_3),
+  ACT2_ENCOUNTERS_1V1: filterForestTable('ACT2_ENCOUNTERS_1V1', ACT2_ENCOUNTERS_1V1),
+  ACT2_ENCOUNTERS_2V2: filterForestTable('ACT2_ENCOUNTERS_2V2', ACT2_ENCOUNTERS_2V2),
+  ACT2_ENCOUNTERS_3V3: filterForestTable('ACT2_ENCOUNTERS_3V3', ACT2_ENCOUNTERS_3V3),
+  ACT2_ENCOUNTERS_4V4: filterForestTable('ACT2_ENCOUNTERS_4V4', ACT2_ENCOUNTERS_4V4),
+  ACT2_ELITE_ENCOUNTERS: filterForestTable('ACT2_ELITE_ENCOUNTERS', ACT2_ELITE_ENCOUNTERS),
+  ACT2_GAUNTLET_2: filterForestTable('ACT2_GAUNTLET_2', ACT2_GAUNTLET_2),
+  ACT2_GAUNTLET_3: filterForestTable('ACT2_GAUNTLET_3', ACT2_GAUNTLET_3),
+  ACT3_ENCOUNTERS_1V1: filterForestTable('ACT3_ENCOUNTERS_1V1', ACT3_ENCOUNTERS_1V1),
+  ACT3_ENCOUNTERS_2V2: filterForestTable('ACT3_ENCOUNTERS_2V2', ACT3_ENCOUNTERS_2V2),
+  ACT3_ENCOUNTERS_3V3: filterForestTable('ACT3_ENCOUNTERS_3V3', ACT3_ENCOUNTERS_3V3),
+  ACT3_ENCOUNTERS_4V4: filterForestTable('ACT3_ENCOUNTERS_4V4', ACT3_ENCOUNTERS_4V4),
+  ACT3_ELITE_ENCOUNTERS: filterForestTable('ACT3_ELITE_ENCOUNTERS', ACT3_ELITE_ENCOUNTERS),
+  ACT3_ARENA_ENCOUNTERS: filterForestTable('ACT3_ARENA_ENCOUNTERS', ACT3_ARENA_ENCOUNTERS),
+  ACT3_GAUNTLET_2: filterForestTable('ACT3_GAUNTLET_2', ACT3_GAUNTLET_2),
+  ACT3_GAUNTLET_3: filterForestTable('ACT3_GAUNTLET_3', ACT3_GAUNTLET_3),
+  ACT3_GUARDIAN_1V1: filterForestTable('ACT3_GUARDIAN_1V1', ACT3_GUARDIAN_1V1),
+  ACT3_GUARDIAN_2V2: filterForestTable('ACT3_GUARDIAN_2V2', ACT3_GUARDIAN_2V2),
+};
+
 function buildEncounter(
   rng: () => number,
   type: NodeType,
@@ -1166,7 +1237,33 @@ function buildEncounter(
   progress: number,
   bossId?: string,
   gauntletSize?: 2 | 3,
+  region: MainRegionId = 'mixed',
 ): { speciesId: string }[] {
+  const {
+    ACT1_ENCOUNTERS_1V1,
+    ACT1_ENCOUNTERS_2V2,
+    ACT1_ENCOUNTERS_3V3,
+    ACT1_ELITE_ENCOUNTERS,
+    ACT1_GAUNTLET_2,
+    ACT1_GAUNTLET_3,
+    ACT2_ENCOUNTERS_1V1,
+    ACT2_ENCOUNTERS_2V2,
+    ACT2_ENCOUNTERS_3V3,
+    ACT2_ENCOUNTERS_4V4,
+    ACT2_ELITE_ENCOUNTERS,
+    ACT2_GAUNTLET_2,
+    ACT2_GAUNTLET_3,
+    ACT3_ENCOUNTERS_1V1,
+    ACT3_ENCOUNTERS_2V2,
+    ACT3_ENCOUNTERS_3V3,
+    ACT3_ENCOUNTERS_4V4,
+    ACT3_ELITE_ENCOUNTERS,
+    ACT3_ARENA_ENCOUNTERS,
+    ACT3_GAUNTLET_2,
+    ACT3_GAUNTLET_3,
+    ACT3_GUARDIAN_1V1,
+    ACT3_GUARDIAN_2V2,
+  } = region === 'mixed' ? MIXED_ENCOUNTER_TABLES : FOREST_ENCOUNTER_TABLES;
   if (type === 'boss') {
     const id = bossId ?? ACT_BOSS_POOLS[act][0];
     const minions = BOSS_MINIONS[id] ?? [];
@@ -1332,7 +1429,7 @@ function buildEncounter(
 }
 
 /** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */
-export function buildEvent(rng: () => number, act: number): EventNode {
+export function buildEvent(rng: () => number, act: number, region: MainRegionId = 'mixed'): EventNode {
   // 幕次专属池
   const pool: string[] = [];
   if (act === 1) {
@@ -1344,7 +1441,7 @@ export function buildEvent(rng: () => number, act: number): EventNode {
   }
   const pick2 = pool[Math.floor(rng() * pool.length)];
 
-  return buildEventByType(rng, pick2, act);
+  return buildEventByType(rng, pick2, act, region);
 }
 
 /** 事件类型映射：eventType → 中文标题（供自定义测试选择） */
@@ -1365,7 +1462,7 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 /** 按类型构建事件（可导出供自定义测试直接调用） */
-export function buildEventByType(rng: () => number, type: string, act: number): EventNode {
+export function buildEventByType(rng: () => number, type: string, act: number, region: MainRegionId = 'mixed'): EventNode {
   const c = (id: number, label: string, desc: string, kind: EventChoice['kind'], extra?: Partial<EventChoice>): EventChoice => ({
     id: `e${id}`,
     label,
@@ -1418,16 +1515,17 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
     };
   }
   if (type === 'egg') {
-    let pool2: string[];
+    const pools = MAIN_REGIONS[region];
+    let pool2: readonly string[];
     const r = rng();
     if (act <= 1) {
-      pool2 = BASE_POOL;
+      pool2 = pools.basePool;
     } else if (act === 2) {
-      pool2 = r < 0.7 ? EVO1_POOL : BASE_POOL;
+      pool2 = r < 0.7 ? pools.evo1Pool : pools.basePool;
     } else {
-      if (r < 0.6) pool2 = EVO2_POOL;
-      else if (r < 0.9) pool2 = EVO1_POOL;
-      else pool2 = BASE_POOL;
+      if (r < 0.6) pool2 = pools.evo2Pool;
+      else if (r < 0.9) pool2 = pools.evo1Pool;
+      else pool2 = pools.basePool;
     }
     const eggMonsterId = pick(rng, pool2);
     return {
@@ -1564,7 +1662,8 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
   if (type === '精灵') {
     // 流浪精灵（战斗交互，全幕）
     const enemyCount = rng() < 0.6 ? 1 : 2;
-    const actPool = act === 1 ? BASE_POOL : act === 2 ? EVO1_POOL : EVO2_POOL;
+    const pools = MAIN_REGIONS[region];
+    const actPool = act === 1 ? pools.basePool : act === 2 ? pools.evo1Pool : pools.evo2Pool;
     const enemies = Array.from({ length: enemyCount }, () => ({ speciesId: pick(rng, actPool) }));
     const f1 = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
     const giftWin = rng() < 0.5;
@@ -1587,7 +1686,8 @@ export function buildEventByType(rng: () => number, type: string, act: number): 
   if (type === '训练') {
     // 训练场挑战（战斗交互，全幕）
     const enemyCount = 2 + Math.floor(rng() * 2);
-    const actPool = act === 1 ? BASE_POOL : act === 2 ? EVO1_POOL : EVO2_POOL;
+    const pools = MAIN_REGIONS[region];
+    const actPool = act === 1 ? pools.basePool : act === 2 ? pools.evo1Pool : pools.evo2Pool;
     const enemies = Array.from({ length: enemyCount }, () => ({ speciesId: pick(rng, actPool) }));
     return {
       title: '训练场挑战',
@@ -1653,11 +1753,12 @@ export function buildPunishmentEvent(rng: () => number): EventNode {
 }
 
 /** 主模式按幕抽取两个不同的招募候选，不依赖现有队伍。 */
-function recruitCandidates(rng: () => number, act: number): string[] {
+function recruitCandidates(rng: () => number, act: number, region: MainRegionId = 'mixed'): string[] {
+  const pools = MAIN_REGIONS[region];
   const candidates: string[] = [];
   const advancedChance = act >= 3 ? 0.6 : act === 2 ? 0.3 : 0;
   for (let i = 0; i < 2; i++) {
-    const pool = rng() < advancedChance ? EVO1_POOL : BASE_POOL;
+    const pool = rng() < advancedChance ? pools.evo1Pool : pools.basePool;
     candidates.push(pick(rng, pool.filter((id) => !candidates.includes(id))));
   }
   return candidates;
@@ -1665,6 +1766,7 @@ function recruitCandidates(rng: () => number, act: number): string[] {
 
 /** 斗兽场/车轮战胜利奖励：3 选 1 的丰厚选择（金币/食物/治疗/招募） */
 export function generateChallengeRewards(state: GameState, type: 'arena' | 'gauntlet'): RewardChoice[] {
+  const region = state.runMode === 'proficiency' ? 'mixed' : state.region ?? 'mixed';
   const rng = createRng(state.seed * 173 + state.act * 37 + state.currentRow * 59 + (type === 'arena' ? 1 : 2));
   const options: RewardChoice[] = [
     { id: 'ch-gold', label: '冠军赏金', desc: '获得 30 金币', kind: 'gold', amount: 30 },
@@ -1678,16 +1780,16 @@ export function generateChallengeRewards(state: GameState, type: 'arena' | 'gaun
       label: '斗士招募',
       desc: '随机一只普通宠物加入队伍',
       kind: 'recruit',
-      monsterId: pick(rng, RECRUIT_POOL),
+      monsterId: pick(rng, MAIN_REGIONS[region].basePool),
     });
   }
   return shuffle(rng, options).slice(0, 3).map((reward) => {
     if (!mainRecruit || reward.kind !== 'recruit') return reward;
-    return { ...reward, monsterId: undefined, recruitCandidates: recruitCandidates(rng, state.act), desc: '从两位候选伙伴中选择一位' };
+    return { ...reward, monsterId: undefined, recruitCandidates: recruitCandidates(rng, state.act, region), desc: '从两位候选伙伴中选择一位' };
   });
 }
 
-export function generateMap(seed: number, act: number, difficulty?: Difficulty): RunMap {
+export function generateMap(seed: number, act: number, difficulty?: Difficulty, region: MainRegionId = 'mixed'): RunMap {
   const rng = createRng(seed + act * 1013);
   const LAYER_RANGES: Record<number, [number, number]> = { 1: [11, 13], 2: [10, 12], 3: [12, 14] };
   const [lo, hi] = LAYER_RANGES[act] ?? LAYER_RANGES[1];
@@ -1718,10 +1820,11 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty):
       continue;
     }
     if (row === layerCount - 1) {
-      // 末层：2~3 个首领节点，均遵循寻路逻辑。数量纯随机（randInt 2~3），不受上一行节点数约束。
-      const m = randInt(rng, 2, 3);
-      actBossPool = shuffle(rng, ACT_BOSS_POOLS[act]).slice(0, m);
-      layers.push(Array.from({ length: m }, (_, i) => make('boss', row, i)));
+      // 混合地区仍为2~3个；林地单首领放在第1列，与前一层0~2列均相邻。
+      const [minBosses, maxBosses] = MAIN_REGIONS[region].bossCount;
+      const m = randInt(rng, minBosses, maxBosses);
+      actBossPool = shuffle(rng, [...MAIN_REGIONS[region].bossPools[act]]).slice(0, m);
+      layers.push(Array.from({ length: m }, (_, i) => make('boss', row, region === 'emerald_forest' ? 1 : i)));
       continue;
     }
     let count = Math.max(prevCount - 1, randInt(rng, 3, 5));
@@ -1960,13 +2063,13 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty):
   for (let row = 0; row < layerCount; row++) {
     const progress = row / (layerCount - 1);
     for (const n of layers[row]) {
-      if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress, actBossPool[n.col]);
-      else if (n.type === 'battle' || n.type === 'elite') encounter[n.id] = buildEncounter(rng, n.type, act, progress);
-      else if (n.type === 'arena') encounter[n.id] = buildEncounter(rng, 'arena', act, progress);
-      else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, undefined, n.gauntletSize);
-      else if (n.type === 'corrupted') encounter[n.id] = buildEncounter(rng, 'battle', act, progress);
-      else if (n.type === 'guardian') encounter[n.id] = buildEncounter(rng, 'guardian', act, progress);
-      else if (n.type === 'event') events[n.id] = buildEvent(rng, act);
+      if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress, actBossPool[region === 'emerald_forest' ? 0 : n.col], undefined, region);
+      else if (n.type === 'battle' || n.type === 'elite') encounter[n.id] = buildEncounter(rng, n.type, act, progress, undefined, undefined, region);
+      else if (n.type === 'arena') encounter[n.id] = buildEncounter(rng, 'arena', act, progress, undefined, undefined, region);
+      else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, undefined, n.gauntletSize, region);
+      else if (n.type === 'corrupted') encounter[n.id] = buildEncounter(rng, 'battle', act, progress, undefined, undefined, region);
+      else if (n.type === 'guardian') encounter[n.id] = buildEncounter(rng, 'guardian', act, progress, undefined, undefined, region);
+      else if (n.type === 'event') events[n.id] = buildEvent(rng, act, region);
       else if (n.type === 'special') specials[n.id] = buildSpecial(rng);
     }
   }
@@ -2127,6 +2230,7 @@ export function makeCustomUnit(presetId: string, rng: () => number): Unit {
 // ---------- 奖励 ----------
 
 export function generateRewards(state: GameState): RewardChoice[] {
+  const region = state.runMode === 'proficiency' ? 'mixed' : state.region ?? 'mixed';
   const rng = createRng(state.seed + state.act * 7 + state.currentRow * 31 + (hashStr(state.currentNodeId) % 997));
   const options: RewardChoice[] = [
     {
@@ -2152,7 +2256,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
       label: '招募',
       desc: '随机一只普通宠物加入队伍',
       kind: 'recruit',
-      monsterId: pick(rng, RECRUIT_POOL),
+      monsterId: pick(rng, MAIN_REGIONS[region].basePool),
     });
   }
   // 第 1 行（出发）奖励必含招募，保证前期扩员
@@ -2162,7 +2266,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
       label: '招募',
       desc: '随机一只普通宠物加入队伍',
       kind: 'recruit',
-      monsterId: pick(rng, RECRUIT_POOL),
+      monsterId: pick(rng, MAIN_REGIONS[region].basePool),
     });
   }
   const shuffled = shuffle(rng, options);
@@ -2180,7 +2284,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
   }
   return shuffled.slice(0, 2).map((reward) => {
     if (!mainRecruit || reward.kind !== 'recruit') return reward;
-    return { ...reward, monsterId: undefined, recruitCandidates: recruitCandidates(rng, state.act), desc: '从两位候选伙伴中选择一位' };
+    return { ...reward, monsterId: undefined, recruitCandidates: recruitCandidates(rng, state.act, region), desc: '从两位候选伙伴中选择一位' };
   });
 }
 

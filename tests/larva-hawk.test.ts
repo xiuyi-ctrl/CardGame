@@ -112,9 +112,30 @@ describe('熔壳虫与焚风雏鹰', () => {
     expect(playerEndTurn(playerSkill(fresh, actor.uid, 'fire_feather', b.enemyUnits[0].uid)).log.some(e => e.text.includes('灼羽剥甲'))).toBe(false);
   });
 
-  it('火羽5伤害加2层火，敌我双方都按先手执行；原火花保持不变', () => {
+  it('循焰飞羽命中附加2层灼烧，已有灼烧叠加且强化只提高伤害', () => {
+    const skill = getSkill('flame_tracing_feather');
+    expect(skill).toMatchObject({ damage: 4, hideEffects: true, effects: [{ kind: 'burn', value: 2 }] });
+    for (const level of [0, 1, 2, 3]) {
+      expect(getSkillEnhanceBonus(skill.id, level)).toMatchObject({ damageBonus: level * 2, effectBonus: 0 });
+      expect(skillFullDesc(skill, level)).toContain(`造成${4 + level * 2}点伤害`);
+      expect(skillFullDesc(skill, level)).toContain('灼烧2层');
+      for (const burn of [0, 4]) {
+        const b = calm('ember_hawk');
+        b.playerUnits[0].skillEnhancements = { 0: level };
+        b.enemyUnits[0].statuses = burn ? [{ kind: 'burn', value: burn, turns: 2 }] : [];
+        const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, skill.id, b.enemyUnits[0].uid));
+        const hit = after.log.find(e => e.text.includes('使用「循焰飞羽」攻击'))!;
+        expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(500 - 4 - level * 2);
+        expect(hit.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(burn + 2);
+        expect(hit.addsStatus).toContain('burn');
+        expect(after.log.some(e => e.text.includes('灼羽剥甲'))).toBe(false);
+      }
+    }
+  });
+
+  it('火羽5伤害加2层火，敌我双方都按先手执行；火花为5伤害', () => {
     expect(getSkill('fire_feather')).toMatchObject({ damage: 5, priority: 'first', effects: [{ kind: 'burn', value: 2 }] });
-    expect(getSkill('ember')).toMatchObject({ damage: 6, effects: [{ kind: 'burn', value: 2 }] });
+    expect(getSkill('ember')).toMatchObject({ damage: 5, effects: [{ kind: 'burn', value: 2 }] });
     expect(getNormalSkillPool()).toContain('fire_feather');
     expect(skillFullDesc(getSkill('fire_feather'), 2)).toContain('7点伤害');
     expect(skillFullDesc(getSkill('fire_feather'), 2)).toContain('灼烧4层');
@@ -140,7 +161,7 @@ describe('熔壳虫与焚风雏鹰', () => {
     const burning: BattleState = { ...b, playerUnits: [actor], enemyUnits: b.enemyUnits.map((u, i) => ({ ...u, shield: i ? 20 : 10, statuses: [{ kind: 'burn', value: 4, turns: 2 }] })) };
     const multi = playerEndTurn(playerSkill(burning, actor.uid, 'double_hit', b.enemyUnits[0].uid));
     expect(multi.log.filter(e => e.text.includes('灼羽剥甲'))).toHaveLength(1);
-    expect(multi.enemyUnits[0].shield).toBe(0);
+    expect(multi.enemyUnits[0].shield).toBe(4);
     expect(multi.playerUnits[0].burnStripUsed).toBeUndefined();
     const group = playerEndTurn(playerSkill(burning, actor.uid, 'tail'));
     expect(group.log.filter(e => e.text.includes('灼羽剥甲'))).toHaveLength(1);

@@ -621,11 +621,20 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
     const events: FxEvent[] = [];
     const eventSrcIdx: number[] = [];
+    let battleEnded = false;
     newEntries.forEach((e, idx) => {
+      if (battleEnded) return;
       const ev = parseEvent(battle, e);
       if (ev) {
         events.push(ev);
         eventSrcIdx.push(idx);
+      }
+      // 保留终结伤害及死亡反馈，截断其后的回复、增益等动画；有替补的车轮战仍继续。
+      if (battle.phase === 'won' || battle.phase === 'lost') {
+        const wiped = (units: BattleState['playerUnits'], bench: BattleState['playerBench']) =>
+          units.length > 0 && !(battle.gauntlet && bench?.length)
+          && units.every(unit => (e.hp?.[unit.uid] ?? unit.hp) <= 0);
+        battleEnded = !!e.hp && (wiped(battle.playerUnits, battle.playerBench) || wiped(battle.enemyUnits, battle.enemyBench));
       }
     });
     const prevHp = prevBattleBefore ? hpOfUnits(prevBattleBefore) : hpOfUnits(battle);

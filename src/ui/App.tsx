@@ -7,7 +7,10 @@ import type { GameState, Difficulty } from '../game/state/game';
 import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
-import { MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2, BASE_POOL, getMonster } from '../game/data/monsters';
+import { MONSTERS, BASE_POOL, getMonster } from '../game/data/monsters';
+import { MAIN_REGIONS } from '../game/data/regions';
+import { FOREST_ACT_NAMES, RegionScreen } from './RegionScreen';
+export { RegionScreen } from './RegionScreen';
 import { FOODS } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
@@ -59,7 +62,7 @@ import homeSettingsIcon from './assets/home-terminal-kit-v2/settings-gear.png';
 import homeExitIcon from './assets/home-terminal-kit-v2/exit-door.png';
 import homePawIcon from './assets/home-terminal-kit-v2/paw-status.png';
 
-const NO_SAVE_SCREENS = ['title', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
+const NO_SAVE_SCREENS = ['title', 'region-select', 'starter', 'gameover', 'victory', 'achievements', 'difficulty-select'];
 
 const EMPTY_ROW: MapNode[] = [];
 const MAP_ACT_NAMES = ['', '翠绿之径', '暗影沼泽', '余烬险地'];
@@ -93,11 +96,14 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         ...['difficulty-header', 'difficulty-normal', 'difficulty-hard', 'difficulty-nightmare',
           'traveler_charm', 'elite_badge', 'beast_master', 'difficulty-shop', 'difficulty-recovery']
           .map((name) => `/starter-growth-icons/${name}.png`)];
+    case 'region-select':
+      return [HOME_BACKGROUND, MAP_BACKGROUNDS[0]];
     case 'starter':
     case 'proficiency-select':
       return [HOME_BACKGROUND, homeXunxun, homePaopao, homeZhuozhuo,
         starterTiedun, starterMimi, starterCici, '/starter-choice-stone.png',
-        '/formation-plinth-occupied.png', '/starter-growth-icons/starter-paw.png'];
+        '/formation-plinth-occupied.png', '/starter-growth-icons/starter-paw.png',
+        ...MAIN_REGIONS[state.region ?? 'mixed'].starters.map(id => getMonster(id).image).filter((src): src is string => !!src)];
     case 'map':
       return [MAP_BACKGROUNDS[state.runMode === 'proficiency' ? 3 : Math.min(2, Math.max(0, state.act - 1))],
         '/map-node-stele.png',
@@ -219,7 +225,8 @@ export default function App() {
     void preloadImages([...UI_SYMBOL_IMAGES, ...screenImages(state.screen, state)]).then(() => {
       if (active) {
         setReadyScreen(screenKey);
-        const nextScreen = state.screen === 'title' ? 'difficulty-select'
+        const nextScreen = state.screen === 'title' ? 'region-select'
+          : state.screen === 'region-select' ? 'difficulty-select'
           : state.screen === 'difficulty-select' ? 'starter'
             : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'map'
               : state.screen === 'map' ? 'formation'
@@ -247,10 +254,11 @@ export default function App() {
   }, [state.toast]);
 
   return (
-    <div className={['event', 'special', 'tame-overflow', 'inter_act', 'victory', 'gameover', 'watchtower', 'chest', 'gauntlet-order', 'boost', 'custom', 'revive-select', 'achievements', 'rest', 'rest-fusion', 'rest-fusion-skill', 'skill-pick', 'growth-menu', 'blacksmith', 'enhance-stone', 'enhance-reset', 'arena3', 'proficiency-result'].includes(state.screen) || (state.screen === 'roster' && !state.postBattle && (!state.specialPending || state.specialPending.kind === 'evolve' || ['boost', 'arena', 'growthPoint', 'shopSlotUnlock', 'eventBoostHp', 'eventBoostSpd', 'eventResetGrowth', 'eventSkillReplace', 'arena3Exhibition'].includes(state.specialPending.kind))) ? 'screen screen-flow' : state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'backpack' ? 'screen screen-backpack' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : state.screen === 'difficulty-select' ? 'screen screen-difficulty' : 'screen'}>
+    <div className={['event', 'special', 'tame-overflow', 'inter_act', 'victory', 'gameover', 'watchtower', 'chest', 'gauntlet-order', 'boost', 'custom', 'revive-select', 'achievements', 'rest', 'rest-fusion', 'rest-fusion-skill', 'skill-pick', 'growth-menu', 'blacksmith', 'enhance-stone', 'enhance-reset', 'arena3', 'proficiency-result'].includes(state.screen) || (state.screen === 'roster' && !state.postBattle && (!state.specialPending || state.specialPending.kind === 'evolve' || ['boost', 'arena', 'growthPoint', 'shopSlotUnlock', 'eventBoostHp', 'eventBoostSpd', 'eventResetGrowth', 'eventSkillReplace', 'arena3Exhibition'].includes(state.specialPending.kind))) ? 'screen screen-flow' : state.screen === 'region-select' ? 'screen screen-region' : state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'backpack' ? 'screen screen-backpack' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : state.screen === 'difficulty-select' ? 'screen screen-difficulty' : 'screen'}>
       {!imagesReady && <div className="screen-assets-loading" role="status" aria-live="polite">正在准备画面…</div>}
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
-      {state.screen === 'starter' && <StarterScreen dispatch={dispatch} />}
+      {state.screen === 'region-select' && <RegionScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'starter' && <StarterScreen key={state.region ?? 'mixed'} state={state} dispatch={dispatch} />}
       {state.screen === 'map' && <MapScreen state={state} dispatch={dispatch} />}
       {state.screen === 'formation' && <FormationScreen state={state} dispatch={dispatch} />}
       {state.screen === 'gauntlet-order' && <GauntletOrderScreen state={state} dispatch={dispatch} />}
@@ -327,8 +335,8 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
           <span className="map-hud-place-copy">
             <strong>{state.runMode === 'proficiency'
               ? `熟练度远征 · 第${Math.max(1, state.currentRow + 1)}/50层`
-              : `第${state.act}幕 · ${MAP_ACT_NAMES[state.act] ?? '远征之路'}`}</strong>
-            <small>远征地图</small>
+              : `第${state.act}幕 · ${(state.region === 'emerald_forest' ? FOREST_ACT_NAMES : MAP_ACT_NAMES)[state.act] ?? '远征之路'}`}</strong>
+            <small>{state.runMode === 'proficiency' ? '远征地图' : `${MAIN_REGIONS[state.region ?? 'mixed'].name} · 远征地图`}</small>
           </span>
         </div>
         <div className="map-hud-resources">
@@ -1475,9 +1483,11 @@ function RelicEmblem({ id }: { id: string }) {
 }
 
 export function DifficultyScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('normal');
-  const [selectedRelic, setSelectedRelic] = useState<string>('');
   const unlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>(() => state.difficulty && unlocks.difficulties.includes(state.difficulty) ? state.difficulty : 'normal');
+  const [selectedRelic, setSelectedRelic] = useState<string>(() => state.relics?.[0] && unlocks.relics.includes(state.relics[0]) && RELIC_DEFS[state.relics[0]] ? state.relics[0] : '');
+  const back = () => dispatch({ type: 'BACK_TO_REGIONS', difficulty: selectedDifficulty, relic: selectedRelic || undefined });
+  useBackAction(true, back);
 
   const handleNext = () => {
     dispatch({ type: 'SET_PRERUN_CONFIG', difficulty: selectedDifficulty, relic: selectedRelic || undefined });
@@ -1490,8 +1500,8 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
       <header className="difficulty-header">
         <span className="difficulty-header-emblem" aria-hidden="true" />
         <h1><span>选择</span>难度与<span>遗物</span></h1>
-        <div className="difficulty-step" aria-label="新远征第 1 步，共 2 步"><i className="active" /><span>···</span><i /><strong>新远征 1/2</strong></div>
-        <button className="difficulty-back" onClick={() => dispatch({ type: 'TITLE' })}><UiSymbol name="arrow-left" /> 返回</button>
+        <div className="difficulty-step" aria-label="新远征第 2 步，共 4 步"><i /><span>···</span><i className="active" /><strong>新远征 2/4</strong></div>
+        <button className="difficulty-back" onClick={back}><UiSymbol name="arrow-left" /> 返回</button>
       </header>
       <main className="difficulty-main">
         <section className="difficulty-choices" aria-label="选择难度">
@@ -1536,7 +1546,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
       </main>
       <footer className="difficulty-footer">
         <div className="difficulty-summary"><span className={`difficulty-summary-emblem difficulty-summary-${selectedDifficulty}`} aria-hidden="true" />
-          <strong>{DIFFICULTY_CONFIG[selectedDifficulty].label} · {relicDef?.name ?? '无遗物'}</strong>
+          <strong>{MAIN_REGIONS[state.region ?? 'mixed'].name} · {DIFFICULTY_CONFIG[selectedDifficulty].label} · {relicDef?.name ?? '无遗物'}</strong>
           <span>{relicDef?.desc ?? '通关后解锁更多难度与遗物'}</span></div>
         <button className="difficulty-next" onClick={handleNext}>下一步：选择伙伴 <UiSymbol name="arrow-right" /></button>
       </footer>
@@ -1546,6 +1556,7 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
 
 const STARTER_ROLES: Record<string, string> = {
   momo: '均衡', lulu: '治愈', fifi: '进攻',
+  fire_fox: '狐火',
   kiki: '防护', mimi: '剧毒', pipi: '控制',
 };
 
@@ -1572,11 +1583,12 @@ function StarterChoiceCard({ id, selected, order, compact = false, onClick }: {
   );
 }
 
-export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
+export function StarterScreen({ state, dispatch }: { state?: GameState; dispatch: Dispatch<GameAction> }) {
+  const region = MAIN_REGIONS[state?.region ?? 'mixed'];
   const [firstPick, setFirstPick] = useState<string | null>(null);
-  const [candidate, setCandidate] = useState<string | null>(STARTER_GROUP_1[0]);
+  const [candidate, setCandidate] = useState<string | null>(region.starters[0]);
   const isCompanion = firstPick !== null;
-  const choices = isCompanion ? STARTER_GROUP_2 : STARTER_GROUP_1;
+  const choices = isCompanion ? region.companions : region.starters;
   const selected = getMonster(candidate ?? choices[0]);
   const passive = getPassive(selected.passive);
   const starterArt: Record<string, string> = {
@@ -1588,25 +1600,28 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
     if (!candidate) return;
     if (!firstPick) {
       setFirstPick(candidate);
-      setCandidate(STARTER_GROUP_2[0]);
+      setCandidate(region.companions[0]);
     } else {
       dispatch({ type: 'START_RUN', starterId: firstPick, companionId: candidate, seed: newSeed() });
     }
   };
+
+  const back = () => {
+    if (isCompanion) { setFirstPick(null); setCandidate(region.starters[0]); }
+    else dispatch({ type: 'SELECT_DIFFICULTY_BACK' });
+  };
+  useBackAction(true, back);
 
   return (
     <div className="starter-screen starter-selection">
       <header className="starter-select-header">
         <span className="starter-select-emblem" aria-hidden="true" />
         <h1><span>选择</span>{isCompanion ? '同行伙伴' : '初始伙伴'}</h1>
-        <div className="starter-select-step" aria-label={`新远征第 ${isCompanion ? 2 : 1} 步，共 2 步`}>
+        <div className="starter-select-step" aria-label={`新远征第 ${isCompanion ? 4 : 3} 步，共 4 步`}>
           <i className={!isCompanion ? 'active' : ''} /><span>···</span><i className={isCompanion ? 'active' : ''} />
-          <strong>新远征 {isCompanion ? 2 : 1}/2</strong>
+          <strong>新远征 {isCompanion ? 4 : 3}/4</strong>
         </div>
-        <button className="starter-select-back" onClick={() => {
-          if (isCompanion) { setFirstPick(null); setCandidate(STARTER_GROUP_1[0]); }
-          else dispatch({ type: 'SELECT_DIFFICULTY_BACK' });
-        }}><UiSymbol name="arrow-left" /> 返回</button>
+        <button className="starter-select-back" onClick={back}><UiSymbol name="arrow-left" /> 返回</button>
       </header>
       <main className="starter-select-layout">
         <section className="starter-select-world" aria-label="选择生物">
@@ -1617,7 +1632,7 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
               return <button key={id} type="button" className={`starter-select-choice ${candidate === id ? 'selected' : ''}`}
                 aria-pressed={candidate === id} onClick={() => setCandidate(id)}>
                 <span className="starter-select-pet">
-                  {starterArt[id] ? <img src={starterArt[id]} alt="" /> : <BattlePixelSprite src={species.image!} name={species.name} />}
+                  {starterArt[id] ? <img src={starterArt[id]} alt="" /> : species.image ? <BattlePixelSprite src={species.image} name={species.name} /> : <span className="starter-select-placeholder" role="img" aria-label={species.name}>{species.emoji}</span>}
                 </span>
                 <span className="starter-select-ground" aria-hidden="true" />
                 <span className="starter-select-label">
@@ -1631,7 +1646,7 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
         <aside className="starter-select-panel" aria-label={`${selected.name}详情`}>
           <div className="starter-select-profile">
             <div className="starter-select-portrait">
-              {starterArt[selected.id] ? <img src={starterArt[selected.id]} alt="" /> : <BattlePixelSprite src={selected.image!} name={selected.name} />}
+              {starterArt[selected.id] ? <img src={starterArt[selected.id]} alt="" /> : selected.image ? <BattlePixelSprite src={selected.image} name={selected.name} /> : <span className="starter-select-placeholder" role="img" aria-label={selected.name}>{selected.emoji}</span>}
             </div>
             <div><h2>{selected.name}</h2><span className="starter-select-role">{STARTER_ROLES[selected.id]}</span><p>{selected.desc}</p></div>
           </div>
@@ -1643,7 +1658,7 @@ export function StarterScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) 
             })}
           </div></MobileDetails>
           <button className="starter-select-confirm" onClick={confirm}>选择{selected.name}<UiSymbol name="play" /></button>
-          <p className="starter-select-note">{isCompanion ? `已选主力：${getMonster(firstPick).name} ×2 · 再选一只同伴` : '可在图鉴查看进化'}</p>
+          <p className="starter-select-note">{isCompanion ? `已选主力：${getMonster(firstPick).name} ×2 · 再选一只同伴` : `${region.name} · 可在图鉴查看进化`}</p>
         </aside>
       </main>
     </div>
@@ -2909,8 +2924,8 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
     <div className="flow-screen flow-report-screen flow-interact-screen">
       <main className="flow-report flow-frame">
       <header className="flow-report-heading">
-        <FlowIcon name="next-chapter" /><h1>{theme.name} · {actName}结算</h1>
-        <p>{theme.flavor}</p>
+        <FlowIcon name="next-chapter" /><h1>{state.region === 'emerald_forest' ? FOREST_ACT_NAMES[state.act] : theme.name} · {actName}结算</h1>
+        <p>{state.runMode !== 'proficiency' && `${MAIN_REGIONS[state.region ?? 'mixed'].name} · `}{state.region === 'emerald_forest' ? '整顿行装，继续探索林地深处。' : theme.flavor}</p>
       </header>
       <div className="flow-report-body">
       {rating && <div className="flow-act-rating"><FlowIcon name="rating-laurel" /><strong>{rating.grade}</strong><span>{rating.score}分 · {rating.label}</span><small>当前累计评级</small></div>}

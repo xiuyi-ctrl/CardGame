@@ -81,8 +81,9 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', reach: 'front', kind: 'attack', damage: 4,
   },
   flame_tracing_feather: {
-    id: 'flame_tracing_feather', name: '循焰飞羽', desc: '攻击单个敌人，造成4点伤害；可以越过前排攻击已灼烧的后排',
-    target: 'single', kind: 'attack', damage: 4,
+    id: 'flame_tracing_feather', name: '循焰飞羽', desc: '攻击单个敌人，造成4点伤害并附加灼烧2层；可以越过前排攻击已灼烧的后排',
+    target: 'single', kind: 'attack', damage: 4, hideEffects: true,
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   coal_claw: {
     id: 'coal_claw', name: '炭爪', desc: '攻击单个前排敌人，造成2点伤害并附加灼烧1层',
@@ -155,7 +156,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   ember: {
     id: 'ember', name: '火花', desc: '攻击单个敌人，附加灼烧2层',
-    target: 'single', kind: 'attack', damage: 6, hideEffects: true,
+    target: 'single', kind: 'attack', damage: 5, hideEffects: true,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   aqua_shot: {
@@ -166,8 +167,16 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'leaf_needle', name: '叶针', desc: '连续两次攻击随机敌人',
     target: 'random', kind: 'attack', damage: 3, hits: 2,
   },
+  swift_needle: {
+    id: 'swift_needle', name: '迅针', desc: '连续三次攻击随机敌人，每次造成3点伤害',
+    target: 'random', kind: 'attack', damage: 3, hits: 3, hideEffects: true,
+  },
+  flying_leaf: {
+    id: 'flying_leaf', name: '飞叶', desc: '攻击单个敌人，造成4点伤害；若自身速度高于目标，额外造成3点伤害',
+    target: 'single', kind: 'attack', damage: 4, hideEffects: true,
+  },
   shadow_claw: {
-    id: 'shadow_claw', name: '暗爪', desc: '重击单个敌人',
+    id: 'shadow_claw', name: '暗爪', desc: '攻击单个敌人，无视护盾，造成6点伤害', hideEffects: true,
     target: 'single', kind: 'attack', damage: 6,
   },
   steel_spike: {
@@ -186,8 +195,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
   },
   double_hit: {
-    id: 'double_hit', name: '连击', desc: '连续两次攻击单个敌人',
-    target: 'single', kind: 'attack', damage: 4, hits: 2,
+    id: 'double_hit', name: '连击', desc: '连续2次攻击随机敌人',
+    target: 'random', kind: 'attack', damage: 2, hits: 2,
   },
   poison_sting: {
     id: 'poison_sting', name: '毒刺', desc: '攻击单个敌人，附加中毒2层',
@@ -213,7 +222,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   shockwave: {
     id: 'shockwave', name: '冲击波', desc: '贯穿攻击一列敌人',
-    target: 'single', kind: 'attack', damage: 4, reach: 'pierce',
+    target: 'single', kind: 'attack', damage: 5, reach: 'pierce',
   },
   snipe: {
     id: 'snipe', name: '狙击', desc: '跳过前排，直接攻击后排敌人',
@@ -241,8 +250,8 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   provoke: {
-    id: 'provoke', name: '挑衅', desc: '攻击并嘲讽目标，持续2回合', hideEffects: true,
-    target: 'single', kind: 'attack', damage: 3, uses: 5,
+    id: 'provoke', name: '挑衅', desc: '攻击并嘲讽目标，持续2回合；冷却1回合', hideEffects: true,
+    target: 'single', kind: 'attack', damage: 3, cooldown: 1,
     effects: [{ kind: 'taunt', value: 1, turns: 2 }],
   },
 
@@ -257,7 +266,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   flame_combo: {
     id: 'flame_combo', name: '火焰连击', desc: '连续两次攻击随机敌人，附加灼烧 2 层',
-    target: 'random', kind: 'attack', damage: 4, hits: 2,
+    target: 'random', kind: 'attack', damage: 3, hits: 2,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
     hideEffects: true,
   },

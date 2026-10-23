@@ -37,12 +37,12 @@ describe('成长与融合', () => {
     const fused = fuseUnit(u)!;
     expect(fused.speciesId).toBe('momo_queen');
     expect(fused.name).toBe('迅牙');
-    expect(fused.maxHp).toBe(18);
-    expect(fused.hp).toBe(18);
+    expect(fused.maxHp).toBe(15);
+    expect(fused.hp).toBe(15);
     expect(fused.spd).toBe(7); // 迅牙 baseSpd 4 + 迅力 spd+3
     expect(fused.passive).toBe('swift_power'); // 被动更新为新形态
     expect(fused.uid).toBe(u.uid);
-    expect(fused.skills).toEqual(['leaf_needle', 'double_hit', 'shockwave']);
+    expect(fused.skills).toEqual(['swift_needle', 'flying_leaf', 'shockwave']);
   });
 
   it('fuseUnit 继承主宠的强化与诅咒', () => {
