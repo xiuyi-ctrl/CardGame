@@ -30,10 +30,11 @@ function makeBossBattleWithOnlyUltimate() {
 }
 
 describe('终焉成长：永久+1伤害每次使用累加', () => {
-  it('连续3次使用后 atkUp 分别累加为 +1/+2/+3', () => {
+  it('间隔冷却使用3次后 atkUp 分别累加为 +1/+2/+3', () => {
     let b = makeBossBattleWithOnlyUltimate();
     expect(atkUpValue(b)).toBe(0);
     for (let i = 0; i < 3; i++) {
+      if (i > 0) b = playerEndTurn(b);
       b = playerEndTurn(b);
       expect(b.phase).toBe('acting');
       expect(atkUpValue(b)).toBe(i + 1);
@@ -41,12 +42,13 @@ describe('终焉成长：永久+1伤害每次使用累加', () => {
     }
   });
 
-  it('消耗成长值：3次使用共消耗30成长值（40 - 30 + 每回合结束被动+1×3 = 13）', () => {
+  it('消耗成长值：3次使用共消耗30成长值，含2次等待冷却回合共增长5点', () => {
     let b = makeBossBattleWithOnlyUltimate();
     for (let i = 0; i < 3; i++) {
+      if (i > 0) b = playerEndTurn(b);
       b = playerEndTurn(b);
     }
-    expect(getBoss(b).growthValue).toBe(13);
+    expect(getBoss(b).growthValue).toBe(15);
   });
 });
 

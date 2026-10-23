@@ -6,6 +6,7 @@ import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
 import {
   REST_SKILL_ID,
+  battleCollapseDamage,
   canUnitUseSkill,
   stokeFireTargets,
   requiresBurningTarget,
@@ -28,6 +29,7 @@ import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import { BattleStatusIcons } from './BattleStatusIcons';
+import { CollapseWarning } from './CollapseWarning';
 import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART } from './BuffIcon';
 import { UiSymbol } from './UiSymbol';
 
@@ -173,7 +175,10 @@ export function BattleScreen({ state, dispatch }: Props) {
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
   // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）；车轮战待换人时也禁止，等替补自动上场
-  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap;
+  const collapseWarning = battle.phase === 'acting' && [13, 14].includes(battle.round) && battle.collapseWarningSeenRound !== battle.round;
+  const acknowledgeCollapse = () => dispatch({ type: 'ACK_COLLAPSE_WARNING' });
+  useBackAction(collapseWarning && !animating && !logPending, acknowledgeCollapse, 20);
+  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap && !collapseWarning;
   const previousOrders = useRef({ orders: battle.orders, round: battle.round });
   const [orderPulse, setOrderPulse] = useState<{ actorUid: string; targetUid: string; skillId: string; seq: number } | null>(null);
   useEffect(() => {
@@ -626,9 +631,11 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   return (
     <div className="screen battle-screen">
+      {collapseWarning && !animating && !logPending && !battle.pendingSwap && <CollapseWarning round={battle.round} onConfirm={acknowledgeCollapse} />}
       <div className="hud">
         <span className="act">{state.runMode === 'proficiency' ? '熟练度远征' : `第${state.act}幕`} · 第{state.currentRow + 1}层</span>
         <span className="battle-hud-round">回合 {battle.round}</span>
+        {battleCollapseDamage(battle.round) > 0 && <span className="chip" title="本回合末双方全体直接扣生命，无视护盾、减伤与伤害上限">{mobile ? '末全体－' : '崩解：回合末全体－'}{battleCollapseDamage(battle.round)}{mobile ? '' : '生命'}</span>}
         <button type="button" className="touch-only mobile-log-toggle" onClick={() => setMobileLogOpen(v => !v)}>战斗记录</button>
         {battle.gauntlet && (
           <span className="chip" title="敌方轮换上阵，一只倒下另一只顶替">

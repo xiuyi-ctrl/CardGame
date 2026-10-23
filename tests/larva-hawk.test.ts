@@ -33,41 +33,40 @@ describe('熔壳虫与焚风雏鹰', () => {
     expect([...STARTER_GROUP_1, ...STARTER_GROUP_2]).toEqual(['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi']);
   });
 
-  it('自焚先自损1与加2盾，再扣2灼烧生命，最后消耗剩余1层换2盾', () => {
+  it('自焚不自损，先加4火2盾，再扣2灼烧生命，消耗剩余2层换4盾', () => {
     const b = calm('molten_larva');
     const uid = b.playerUnits[0].uid;
     const after = playerEndTurn(playerSkill(b, uid, 'molten_self_burn'));
-    expect(after.playerUnits[0].hp).toBe(11);
-    expect(after.playerUnits[0].shield).toBe(4);
-    expect(after.playerUnits[0].statuses.find(s => s.kind === 'burn')?.value).toBe(1);
+    expect(after.playerUnits[0].hp).toBe(12);
+    expect(after.playerUnits[0].shield).toBe(6);
+    expect(after.playerUnits[0].statuses.some(s => s.kind === 'burn')).toBe(false);
     expect(skillCooldownLeft(after.playerUnits[0], 'molten_self_burn')).toBe(0);
-    const cost = after.log.find(e => e.text.includes('自身损失 1 点生命'))!;
     const cast = after.log.find(e => e.text.includes('使用「熔火自焚」，强化自身'))!;
     const dot = after.log.findIndex(e => e.text.includes('受到灼烧 2 点伤害'));
     const conversion = after.log.findIndex(e => e.text.includes('的「热壳换火」获得'));
-    expect(cost.hp?.[uid]).toBe(13);
+    expect(cast.hp?.[uid]).toBe(14);
     expect(cast.shields?.[uid]).toBe(2);
     expect(cast.statuses?.[uid].find(s => s.kind === 'burn')?.value).toBe(4);
     expect(dot).toBeLessThan(conversion);
-    expect(parseEvent(after, cost)).toMatchObject({ kind: 'thorn', targetUid: uid, value: 1 });
     expect(parseEvent(after, cast)).toMatchObject({ kind: 'buff', targetUid: uid, addsStatus: ['burn'] });
     expect(parseEvent(after, after.log[conversion])).toMatchObject({ kind: 'buff', targetUid: uid });
     const repeated = playerEndTurn(playerSkill(after, uid, 'molten_self_burn'));
-    expect(repeated.log.filter(e => e.text.includes('自身损失 1 点生命'))).toHaveLength(2);
-    expect(repeated.playerUnits[0].hp).toBe(7);
-    expect(repeated.playerUnits[0].shield).toBe(8);
+    expect(repeated.log.filter(e => e.text.includes('自身损失 1 点生命'))).toHaveLength(0);
+    expect(repeated.playerUnits[0].hp).toBe(10);
+    expect(repeated.playerUnits[0].shield).toBe(12);
     expect(skillCooldownLeft(repeated.playerUnits[0], 'molten_self_burn')).toBe(0);
   });
 
-  it('生命1不能选自焚，准备后降至1时不能自杀施放；灼烧致死则不能转换', () => {
+  it('生命1仍能选择和施放自焚，但随后灼烧致死不能转换', () => {
     const b = calm('molten_larva');
     const uid = b.playerUnits[0].uid;
     const low = { ...b, playerUnits: b.playerUnits.map(u => ({ ...u, hp: 1 })) };
-    expect(canUnitUseSkill(low.playerUnits[0], 'molten_self_burn')).toBe(false);
-    expect(playerSkill(low, uid, 'molten_self_burn')).toBe(low);
+    expect(canUnitUseSkill(low.playerUnits[0], 'molten_self_burn')).toBe(true);
+    expect(playerSkill(low, uid, 'molten_self_burn').orders?.[uid]?.skillId).toBe('molten_self_burn');
     const ordered = playerSkill(b, uid, 'molten_self_burn');
     const stopped = playerEndTurn({ ...ordered, playerUnits: ordered.playerUnits.map(u => ({ ...u, hp: 1 })) });
     expect(stopped.log.some(e => e.text.includes('自身损失'))).toBe(false);
+    expect(stopped.log.some(e => e.text.includes('使用「熔火自焚」，强化自身'))).toBe(true);
     const fatal = playerEndTurn(playerSkill({ ...b, playerUnits: b.playerUnits.map(u => ({ ...u, hp: 2 })) }, uid, 'molten_self_burn'));
     expect(fatal.playerUnits[0].hp).toBe(0);
     expect(fatal.log.some(e => e.text.includes('热壳换火'))).toBe(false);
@@ -195,8 +194,8 @@ describe('熔壳虫与焚风雏鹰', () => {
     const larva = createBattle([{ ...makeUnit('momo', true, 0, false), hp: 100, maxHp: 100 }], [{ speciesId: 'molten_larva' }], 3);
     larva.enemyUnits[0].skills = ['molten_self_burn'];
     const result = playerEndTurn(larva);
-    expect(result.enemyUnits[0].hp).toBe(11);
-    expect(result.enemyUnits[0].shield).toBe(4);
+    expect(result.enemyUnits[0].hp).toBe(12);
+    expect(result.enemyUnits[0].shield).toBe(6);
     const players = [makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)];
     const hawk = createBattle(players, [{ speciesId: 'ember_hawk' }], 3);
     hawk.enemyUnits[0].skills = ['flame_tracing_feather'];
@@ -205,12 +204,12 @@ describe('熔壳虫与焚风雏鹰', () => {
     expect(acted.log.some(e => e.actorUid === hawk.enemyUnits[0].uid && e.targetUid === hawk.playerUnits[1].uid && e.text.includes('循焰飞羽'))).toBe(true);
   });
 
-  it('熟练度强化只改变规定数值，不改变自损、燃料或剥盾上限', () => {
+  it('熟练度强化只改变规定数值，不改变燃料或剥盾上限', () => {
     const b = calm('molten_larva');
     b.playerUnits[0].skillEnhancements = { 0: 2, 1: 2 };
     const result = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'molten_self_burn'));
-    expect(result.playerUnits[0].hp).toBe(11);
-    expect(result.playerUnits[0].shield).toBe(8);
+    expect(result.playerUnits[0].hp).toBe(12);
+    expect(result.playerUnits[0].shield).toBe(10);
     expect(getSkillEnhanceBonus('heated_shell_bump', 2)).toMatchObject({ damageBonus: 2, effectBonus: 2 });
     expect(skillFullDesc(getSkill('heated_shell_bump'), 2)).toContain('6点伤害');
     expect(skillFullDesc(getSkill('heated_shell_bump'), 2)).toContain('4点护盾');

@@ -63,8 +63,8 @@ function battleStep(state: GameState): GameState {
 
   const offensive = usable
     .filter((skill) => skill.kind !== 'heal' && skill.target !== 'ally' && skill.target !== 'allyAll')
-    .sort((a, b) => (b.damage ?? 0) + (b.id === 'shell_charge' ? Math.min(4, actor.shield) : 0)
-      - (a.damage ?? 0) - (a.id === 'shell_charge' ? Math.min(4, actor.shield) : 0));
+    .sort((a, b) => (b.damage ?? 0) + (b.id === 'shell_charge' ? Math.min(5, actor.shield) : 0)
+      - (a.damage ?? 0) - (a.id === 'shell_charge' ? Math.min(5, actor.shield) : 0));
   const chosen = offensive[0] ?? usable[0];
   if (chosen.target === 'all' || chosen.target === 'random' || chosen.target === 'self' || chosen.target === 'allyAll') {
     return dispatch(state, { type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: chosen.id });
@@ -315,7 +315,7 @@ function finishBattle(battle: BattleState, nodeType: BattleSimulationSummary['no
     nodeType,
     result: battle.phase === 'won' ? 'won' : 'lost',
     rounds: battle.round,
-    fatigueTriggered: battle.round > BATTLE_FATIGUE_START_ROUND,
+    fatigueTriggered: (battle.collapseResolvedRound ?? 0) >= BATTLE_FATIGUE_START_ROUND,
     playerDeaths: telemetry.filter((event) => event.kind === 'death' && event.side === 'player').length,
     enemyDeaths: telemetry.filter((event) => event.kind === 'death' && event.side === 'enemy').length,
     telemetry,

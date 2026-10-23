@@ -1,5 +1,5 @@
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
-import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, evolutionLockReason, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
+import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, evolutionLockReason, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, MAIN_SHOP_REFRESH_COSTS, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
@@ -86,6 +86,7 @@ export type GameAction =
   | { type: 'PLAYER_CANCEL_ORDER'; actorUid: string }
   | { type: 'PLAYER_SWAP'; actorUid: string; otherUid: string }
   | { type: 'END_TURN' }
+  | { type: 'ACK_COLLAPSE_WARNING' }
   | { type: 'GAUNTLET_SWAP' }
   | { type: 'FORMATION_CONFIRM'; units: Unit[] }
   | { type: 'FORMATION_UPDATE'; positions: Record<string, FormationPosition> }
@@ -1692,6 +1693,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, battle };
     }
 
+    case 'ACK_COLLAPSE_WARNING': {
+      const battle = state.battle;
+      if (state.screen !== 'battle' || !battle || battle.phase !== 'acting' || ![13, 14].includes(battle.round)) return state;
+      return { ...state, battle: { ...battle, collapseWarningSeenRound: battle.round } };
+    }
+
     case 'END_TURN': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
       return { ...state, battle: playerEndTurn(state.battle) };
@@ -2139,7 +2146,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'shop') return state;
       const count = state.shopRefreshCount ?? 0;
       if (count >= 3) return { ...state, toast: { msg: '刷新次数已用尽', kind: 'error' } };
-      const cost = Math.round((5 + count * 5) * (DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult));
+      const cost = Math.round((MAIN_SHOP_REFRESH_COSTS[count] ?? MAIN_SHOP_REFRESH_COSTS[2]) * (DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult));
       if (state.gold < cost) return state;
       // 重新生成商店库存
       const currentNode = state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);

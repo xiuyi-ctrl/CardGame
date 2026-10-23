@@ -41,24 +41,38 @@ describe('熔甲虫与焚风鹰', () => {
     expect(TIER2).toContain(evolved);
   });
 
-  it('熔蜕消耗两层剩余火换4盾，二阶前后排布局正确', () => {
+  it.each(['molten_larva', 'molten_beetle'])('%s 按灼烧结算后的剩余火换盾，无火不触发，最多消耗两层', speciesId => {
+    for (const burn of [0, 1, 2, 4, 10]) {
+      const b = quiet([speciesId]);
+      b.playerUnits[0].statuses = burn ? [{ kind: 'burn', value: burn, turns: 2 }] : [];
+      const after = playerEndTurn(b);
+      const remaining = Math.floor(burn / 2);
+      const consumed = Math.min(2, remaining);
+      expect(after.playerUnits[0].hp).toBe(100 - Math.ceil(burn / 2));
+      expect(after.playerUnits[0].shield).toBe(consumed * (speciesId === 'molten_larva' ? 2 : 3));
+      expect(after.playerUnits[0].statuses.find(s => s.kind === 'burn')?.value ?? 0).toBe(remaining - consumed);
+      expect(after.log.filter(e => /的「(?:热壳换火|熔蜕)」获得/.test(e.text))).toHaveLength(consumed ? 1 : 0);
+    }
+  });
+
+  it('熔蜕消耗两层剩余火换6盾，二阶前后排布局正确', () => {
     const b = quiet(['molten_beetle']);
     const actor = b.playerUnits[0];
     const after = playerEndTurn(playerSkill(b, actor.uid, 'molten_self_burn'));
-    expect(after.playerUnits[0].hp).toBe(97);
-    expect(after.playerUnits[0].shield).toBe(6);
+    expect(after.playerUnits[0].hp).toBe(98);
+    expect(after.playerUnits[0].shield).toBe(8);
     expect(after.playerUnits[0].statuses.some(s => s.kind === 'burn')).toBe(false);
-    const log = after.log.find(e => e.text.includes('的「熔蜕」获得 4 点护盾'))!;
+    const log = after.log.find(e => e.text.includes('的「熔蜕」获得 6 点护盾'))!;
     expect(parseEvent(after, log)).toMatchObject({ kind: 'buff', targetUid: actor.uid, skillName: '熔蜕' });
     expect(planEnemyLayout([{ speciesId: 'molten_beetle' }, { speciesId: 'searing_hawk' }]).map(u => u.row)).toEqual(['front', 'back']);
   });
 
-  it.each([1, 2, 4, 10])('裂壳冲撞按执行时盾量%s扣费，最多消耗4，无冷却', (shield) => {
+  it.each([1, 2, 4, 5, 10])('裂壳冲撞按执行时盾量%s扣费，最多消耗5，无冷却', (shield) => {
     const b = quiet(['molten_beetle']);
     b.playerUnits[0].shield = shield;
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'shell_charge', b.enemyUnits[0].uid));
-    expect(after.playerUnits[0].shield).toBe(shield - Math.min(shield, 4));
-    expect(after.enemyUnits[0].hp).toBe(500 - 3 - Math.min(shield, 4));
+    expect(after.playerUnits[0].shield).toBe(shield - Math.min(shield, 5));
+    expect(after.enemyUnits[0].hp).toBe(500 - 3 - Math.min(shield, 5));
     expect(skillCooldownLeft(after.playerUnits[0], 'shell_charge')).toBe(0);
   });
 
@@ -72,8 +86,8 @@ describe('熔甲虫与焚风鹰', () => {
     const stopped = playerEndTurn({ ...ordered, playerUnits: ordered.playerUnits.map(u => ({ ...u, shield: 0 })) });
     expect(stopped.log.some(e => e.text.includes('使用「裂壳冲撞」攻击'))).toBe(false);
     const boosted = playerEndTurn(ordered);
-    expect(boosted.enemyUnits[0].hp).toBe(489);
-    expect(boosted.playerUnits[0].shield).toBe(5);
+    expect(boosted.enemyUnits[0].hp).toBe(488);
+    expect(boosted.playerUnits[0].shield).toBe(4);
   });
 
   it('焚风蚀甲剥3盾，火羽和一阶先手规则保持', () => {

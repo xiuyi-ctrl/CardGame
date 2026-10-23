@@ -68,7 +68,7 @@ export type PassiveKind =
   | 'venom' // 毒牙：攻击命中附加中毒 value（2 回合）
   | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
   | 'furnace' // 炉火：每回合前两次受到敌方攻击技能命中后，使攻击者灼烧 value 层
-  | 'burnShield' // 热壳换火：回合开始消耗1层灼烧，获得 value 点护盾
+  | 'burnShield' // 灼烧结算后消耗最多 burnConsumeMax 层灼烧，每层获得 value 点护盾
   | 'burnStripShield' // 灼羽剥甲：每回合首次攻击已灼烧且有盾目标时剥除 value 点护盾
   | 'afterglow' // 余温：全队每回合首次攻击已灼烧目标后，为当前生命最低的存活伙伴回复 value 点生命，同名取最高值
   | 'eternalLight' // 长明之光：每只持有者独立计次，每回合首次攻击已灼烧目标后全队回血
@@ -209,6 +209,8 @@ export interface Unit {
   skillCooldowns?: Record<string, number>;
   /** 上一回合使用的技能 id（敌方 AI 用于降低连续重复使用同一技能的概率） */
   lastSkillId?: string;
+  /** 敌方连续使用治疗或防御技能的次数，攻击后归零。 */
+  defensiveStreak?: number;
   /** 属性强化：对基准属性的永久加成（来自奇遇关「属性强化」） */
   bonusStats?: { hp?: number; spd?: number };
   /** 超进化带来的负面诅咒：hpDown=生命-5 / atkDown=伤害-2 / spdDown=速度-2 */
@@ -331,6 +333,11 @@ export interface PlayerOrder {
 }
 
 export interface BattleState {
+  /** 已结算崩解的回合与已确认预警，随战斗存档持久化。 */
+  collapseResolvedRound?: number;
+  collapseWarningSeenRound?: number;
+  /** 回合末崩解导致替补等待时，换人不重复开启下一回合。 */
+  roundEndedBeforeSwap?: boolean;
   playerUnits: Unit[];
   enemyUnits: Unit[];
   turnOrder: string[];

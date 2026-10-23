@@ -14,7 +14,7 @@ describe('商店界面', () => {
     const unit = { ...makeUnit('momo', true, 0, false), hp: 0 };
     const state = {
       ...createInitialState(), screen: 'shop' as const, difficulty: 'hard' as const,
-      roster: [unit], field: [unit.uid], gold: 12,
+      roster: [unit], field: [unit.uid], gold: 20,
       shopStock: ['berry', 'meat', 'gem', 'scout'], shopBoughtItems: ['meat'], shopRefreshCount: 1,
     };
     const { container } = render(createElement(ShopScreen, { state, dispatch }));
@@ -22,9 +22,10 @@ describe('商店界面', () => {
     expect(container.querySelectorAll('.shop-product')).toHaveLength(4);
     expect(container.querySelectorAll('.shop-product-icon img, .shop-product-icon svg')).toHaveLength(4);
     expect(screen.getByText('林间商铺')).toBeTruthy();
+    expect(screen.getByText('花费 17 金币 · 剩余 2 次')).toBeTruthy();
     expect(screen.getByRole('button', { name: '已购买 鲜肉' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: '金币不足 秘晶' }).hasAttribute('disabled')).toBe(true);
-    expect([...container.querySelectorAll('.shop-price')].map((el) => el.textContent)).toEqual(['6', '10', '15', '18']);
+    expect([...container.querySelectorAll('.shop-price')].map((el) => el.textContent)).toEqual(['11', '22', '33', '22']);
     fireEvent.click(screen.getByRole('button', { name: '购买 浆果' }));
     fireEvent.click(screen.getByRole('button', { name: '休整' }));
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
@@ -45,6 +46,7 @@ describe('商店界面', () => {
     const { container } = render(createElement(ShopScreen, { state, dispatch }));
 
     expect(screen.getByText('远征补给站')).toBeTruthy();
+    expect(screen.getByText('花费 5 金币 · 剩余 3 次')).toBeTruthy();
     expect(screen.getByText('熟练度远征 · 第 12 层')).toBeTruthy();
     expect(container.querySelectorAll('.shop-product')).toHaveLength(4);
     expect(screen.queryByText('立即休整')).toBeNull();

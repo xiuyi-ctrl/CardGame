@@ -418,7 +418,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   coal: {
     id: 'coal', name: '煤煤', emoji: '🦡',
-    baseHp: 15, baseSpd: 1, skills: ['coal_claw', 'furnace_shell'],
+    baseHp: 13, baseSpd: 1, skills: ['coal_claw', 'furnace_shell'],
     passive: 'coal_furnace', evolutions: [{ to: 'coal_guard' }],
     desc: '背负煤块的林地小獾，以炉壳承受攻击，让敌人在余火中燃烧。',
     tame: { difficulty: 0.75 }, rank: 1,

@@ -34,8 +34,8 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'ally', kind: 'buff', uses: 3, hideEffects: true,
   },
   solar_heal: {
-    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命',
-    target: 'ally', kind: 'heal', heal: 3,
+    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命；冷却1回合',
+    target: 'ally', kind: 'heal', cooldown: 1, heal: 3,
   },
   light_bath: {
     id: 'light_bath', name: '光浴', desc: '为指定的一名己方伙伴回复3点生命值。',
@@ -59,7 +59,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', reach: 'front', kind: 'attack', damage: 4, cooldown: 1,
   },
   shell_charge: {
-    id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多4点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；至少有1点护盾才能使用',
+    id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多5点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；至少有1点护盾才能使用',
     target: 'single', reach: 'front', kind: 'attack', damage: 3,
   },
   burn_brand: {
@@ -73,7 +73,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   molten_self_burn: {
-    id: 'molten_self_burn', name: '熔火自焚', desc: '自身直接失去1点生命，获得4层真实灼烧与2点护盾；生命必须大于1。',
+    id: 'molten_self_burn', name: '熔火自焚', desc: '自身获得4层灼烧与2点护盾',
     target: 'self', kind: 'status', hideEffects: true,
   },
   heated_shell_bump: {
@@ -86,9 +86,9 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   coal_claw: {
-    id: 'coal_claw', name: '炭爪', desc: '攻击单个前排敌人，造成2点伤害并附加灼烧1层',
+    id: 'coal_claw', name: '炭爪', desc: '攻击单个前排敌人，造成2点伤害并附加灼烧2层',
     target: 'single', reach: 'front', kind: 'attack', damage: 2, hideEffects: true,
-    effects: [{ kind: 'burn', value: 1, turns: 2 }],
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   furnace_shell: {
     id: 'furnace_shell', name: '炉壳', desc: '自身和指定的一名友方各获得3点护盾，冷却1回合。',
@@ -96,8 +96,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'shield', value: 3, turns: 99 }],
   },
   ash_shelter: {
-    id: 'ash_shelter', name: '灰烬庇护', desc: '一名己方伙伴获得4点护盾；若场上存在灼烧敌人，额外获得2点护盾',
-    target: 'ally', kind: 'buff', hideEffects: true,
+    id: 'ash_shelter', name: '灰烬庇护', desc: '一名己方伙伴获得4点护盾；若场上存在灼烧敌人，额外获得2点护盾；冷却1回合',
+    target: 'ally', kind: 'buff', cooldown: 1, hideEffects: true,
     effects: [{ kind: 'shield', value: 4, turns: 99 }],
   },
   candle_flame: {
@@ -111,8 +111,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 3, turns: 2 }],
   },
   lamp_guard: {
-    id: 'lamp_guard', name: '护灯', desc: '为一名己方伙伴回复3点生命值',
-    target: 'ally', kind: 'heal', heal: 3,
+    id: 'lamp_guard', name: '护灯', desc: '为一名己方伙伴回复5点生命值',
+    target: 'ally', kind: 'heal', heal: 5,
   },
   molten_claw: {
     id: 'molten_claw', name: '熔岩重爪', desc: '攻击单个前排敌人，造成6点伤害；目标攻击前已灼烧时额外造成2点伤害',
@@ -124,8 +124,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'shield', value: 8, turns: 99 }],
   },
   seal_furnace: {
-    id: 'seal_furnace', name: '封炉', desc: '全体己方伙伴各获得3点护盾，每场战斗限3次',
-    target: 'allyAll', kind: 'buff', uses: 3, hideEffects: true,
+    id: 'seal_furnace', name: '封炉', desc: '全体己方伙伴各获得3点护盾，每场战斗限3次；冷却1回合',
+    target: 'allyAll', kind: 'buff', cooldown: 1, uses: 3, hideEffects: true,
     effects: [{ kind: 'shield', value: 3, turns: 99 }],
   },
   eternal_flame: {
@@ -186,8 +186,8 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   heal_light: {
-    id: 'heal_light', name: '愈光', desc: '治疗一个队友',
-    target: 'ally', kind: 'heal', heal: 8, uses: 2,
+    id: 'heal_light', name: '愈光', desc: '治疗一个队友；冷却1回合',
+    target: 'ally', kind: 'heal', cooldown: 1, heal: 8,
   },
   roar: {
     id: 'roar', name: '战吼', desc: '提升自身伤害，持续2回合', hideEffects: true,
@@ -236,11 +236,11 @@ export const SKILLS: Record<string, SkillDef> = {
   // —— 初始宠物专属技能 ——
   water_bath: {
     id: 'water_bath', name: '水浴', desc: '恢复指定队友生命值',
-    target: 'ally', kind: 'heal', heal: 5, uses: 5,
+    target: 'ally', kind: 'heal', heal: 5,
   },
   shield_skill: {
     id: 'shield_skill', name: '坚盾', desc: '为指定队友或自身附加5点护盾',
-    target: 'ally', kind: 'buff', uses: 5,
+    target: 'ally', kind: 'buff',
     effects: [{ kind: 'shield', value: 5, turns: 0 }],
   },
   weaken: {
@@ -311,8 +311,8 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   tidal_slam: {
-    id: 'tidal_slam', name: '潮涌重击', desc: '攻击全体敌人并恢复自身4点生命值',
-    target: 'all', kind: 'attack', damage: 4, heal: 4,
+    id: 'tidal_slam', name: '潮涌重击', desc: '攻击全体敌人并恢复自身4点生命值；冷却1回合',
+    target: 'all', kind: 'attack', cooldown: 1, damage: 4, heal: 4,
   },
   quake: {
     id: 'quake', name: '震地', desc: '攻击全体敌人并使其眩晕1回合',
@@ -356,8 +356,8 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // —— 传奇宠物重做技能 ——
   iron_domain: {
-    id: 'iron_domain', name: '铁壁领域', desc: '为全体友方附加 6 层护盾',
-    kind: 'buff', target: 'allyAll',
+    id: 'iron_domain', name: '铁壁领域', desc: '为全体友方附加 6 层护盾；冷却1回合',
+    kind: 'buff', cooldown: 1, target: 'allyAll',
     effects: [{ kind: 'shield', value: 6, turns: 99 }],
     uses: 2,
     hideEffects: true,
@@ -368,8 +368,8 @@ export const SKILLS: Record<string, SkillDef> = {
     reach: 'front',
   },
   iron_double: {
-    id: 'iron_double', name: '铁壁双击', desc: '随机攻击两个敌人，每命中一个自身获得 5 层护盾',
-    kind: 'attack', damage: 3, hits: 2, target: 'random',
+    id: 'iron_double', name: '铁壁双击', desc: '随机攻击两个敌人，每命中一个自身获得 5 层护盾；冷却1回合',
+    kind: 'attack', cooldown: 1, damage: 3, hits: 2, target: 'random',
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
     hideEffects: true,
   },
@@ -408,8 +408,8 @@ export const SKILLS: Record<string, SkillDef> = {
     reach: 'pierce', priority: 'first',
   },
   tidal_domain: {
-    id: 'tidal_domain', name: '潮汐领域', desc: '全体友方恢复 4 点生命，并附加水幕（下回合受伤 -2）',
-    kind: 'heal', target: 'allyAll',
+    id: 'tidal_domain', name: '潮汐领域', desc: '全体友方恢复 4 点生命，并附加水幕（下回合受伤 -2）；冷却1回合',
+    kind: 'heal', cooldown: 1, target: 'allyAll',
     heal: 4,
     effects: [{ kind: 'waterCurtain', value: 2, turns: 1 }],
     uses: 2,
@@ -465,8 +465,8 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 2, reach: 'pierce', spdScaling: 1,
   },
   boss_vine_shield: {
-    id: 'boss_vine_shield', name: '古树庇护', desc: '全体友方获得5点护盾并回复2点生命',
-    target: 'allyAll', kind: 'buff', heal: 2, uses: 2,
+    id: 'boss_vine_shield', name: '古树庇护', desc: '全体友方获得5点护盾并回复2点生命；冷却1回合',
+    target: 'allyAll', kind: 'buff', cooldown: 1, heal: 2, uses: 2,
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
     hideEffects: true,
   },
@@ -595,8 +595,8 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 12,
   },
   iron_wall: {
-    id: 'iron_wall', name: '铸甲', desc: '为全体友方附加5护盾（每场限5次）',
-    target: 'allyAll', kind: 'buff', uses: 5,
+    id: 'iron_wall', name: '铸甲', desc: '为全体友方附加5护盾（每场限5次）；冷却1回合',
+    target: 'allyAll', kind: 'buff', cooldown: 1, uses: 5,
     effects: [{ kind: 'shield', value: 5, turns: 99 }],
     hideEffects: true,
   },
@@ -617,8 +617,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'atkUp', value: 3, turns: 2 }],
   },
   growth_ultimate: {
-    id: 'growth_ultimate', name: '终焉成长', desc: '消耗10成长值，回复20HP，自身永久+1伤害（限3次）',
-    target: 'self', kind: 'heal', heal: 20, uses: 3,
+    id: 'growth_ultimate', name: '终焉成长', desc: '消耗10成长值，回复20HP，自身永久+1伤害（限3次）；冷却1回合',
+    target: 'self', kind: 'heal', cooldown: 1, heal: 20, uses: 3,
     growthCost: 10,
     effects: [{ kind: 'atkUp', value: 1, turns: 999 }],
     hideEffects: true,

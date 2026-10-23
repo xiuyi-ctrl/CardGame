@@ -1,0 +1,8 @@
+.collapse-warning { box-sizing: border-box; width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px); overflow-y: auto; border: 4px solid #182638; padding: 16px; background: #fff9e9; color: #182638; font-family: inherit; }
+.collapse-warning::backdrop { background: #091724bb; }
+.collapse-warning h2 { margin: 0 0 12px; font-size: 22px; }
+.collapse-warning p { font-size: 14px; line-height: 1.5; }
+.collapse-warning button { min-height: 44px; min-width: 100px; border: 3px solid #182638; background: #ffb51c; color: #182638; font: inherit; font-weight: bold; }
+.mobile-ui .collapse-warning { padding: 10px 14px; }
+.mobile-ui .collapse-warning h2 { font-size: 18px; margin-bottom: 6px; }
+.mobile-ui .collapse-warning p { font-size: 12px; margin: 6px 0; }

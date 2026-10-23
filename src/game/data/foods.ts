@@ -3,15 +3,15 @@ import type { FoodDef } from '../types';
 export const FOODS: Record<string, FoodDef> = {
   berry: {
     id: 'berry', name: '浆果', emoji: '🍓', desc: '驯服成功率一般',
-    baseTame: 0.7, price: 5,
+    baseTame: 0.7, price: 10,
   },
   meat: {
     id: 'meat', name: '鲜肉', emoji: '🍖', desc: '驯服成功率较高',
-    baseTame: 0.85, price: 9,
+    baseTame: 0.85, price: 20,
   },
   gem: {
     id: 'gem', name: '秘晶', emoji: '💎', desc: '驯服成功率最高',
-    baseTame: 0.95, price: 14,
+    baseTame: 0.95, price: 30,
   },
   golden_fruit: {
     id: 'golden_fruit', name: '圣果', emoji: '🍎', desc: '必定驯服一只残血且可驯服的敌人',

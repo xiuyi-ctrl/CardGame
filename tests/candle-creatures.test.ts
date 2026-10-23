@@ -91,7 +91,7 @@ describe('烛烛与灯翅蛾', () => {
     const battle = { ...raw, enemyUnits: raw.enemyUnits.map((unit, i) => ({ ...unit,
       hp: i === 1 ? 1 : unit.hp, skills: i === 0 ? ['lamp_guard'] : [], acted: i === 1 })) };
     const after = playerEndTurn(battle);
-    expect(after.enemyUnits[1].hp).toBe(4);
+    expect(after.enemyUnits[1].hp).toBe(6);
     expect(after.log.some(entry => entry.actorUid === battle.enemyUnits[0].uid
       && entry.targetUid === battle.enemyUnits[1].uid && entry.text.includes('使用「护灯」，治愈'))).toBe(true);
   });
@@ -121,7 +121,7 @@ describe('烛烛与灯翅蛾', () => {
     expect(warmth(playerEndTurn(ordered))).toHaveLength(1);
   });
 
-  it('添薪只增加已有灼烧，不造成直接伤害或触发被动；护灯回复指定伙伴3点生命', () => {
+  it('添薪只增加已有灼烧，不造成直接伤害或触发被动；护灯回复指定伙伴5点生命', () => {
     const battle = passiveBattle(['lantern_moth']);
     const moth = battle.playerUnits[1];
     const after = fire(battle, 'stoke_fire', 1);
@@ -130,7 +130,7 @@ describe('烛烛与灯翅蛾', () => {
     expect(cast.hp?.[battle.enemyUnits[0].uid]).toBe(500);
     expect(cast.statuses?.[battle.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(11);
     const healed = playerEndTurn(playerSkill(battle, moth.uid, 'lamp_guard', battle.playerUnits[0].uid));
-    expect(healed.playerUnits[0].hp).toBe(8);
+    expect(healed.playerUnits[0].hp).toBe(10);
     expect(healed.playerUnits[0].shield).toBe(0);
     expect(healed.playerUnits[1].shield).toBe(0);
     expect(warmth(healed)).toHaveLength(0);

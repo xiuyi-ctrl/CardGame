@@ -53,7 +53,10 @@ describe('熔炉兽与长明灵蛾', () => {
     expect(wall.playerUnits[0].shield).toBe(8);
     expect(skillCooldownLeft(wall.playerUnits[0], 'furnace_bastion')).toBe(1);
     let seal = b;
-    for (let i = 0; i < 3; i++) seal = playerEndTurn(playerSkill(seal, seal.playerUnits[0].uid, 'seal_furnace'));
+    for (let i = 0; i < 3; i++) {
+      if (i > 0) seal = playerEndTurn(seal);
+      seal = playerEndTurn(playerSkill(seal, seal.playerUnits[0].uid, 'seal_furnace'));
+    }
     expect(seal.playerUnits.map(u => u.shield)).toEqual([9, 9]);
     expect(skillUsesLeft(seal.playerUnits[0], 'seal_furnace')).toBe(0);
     expect(playerSkill(seal, seal.playerUnits[0].uid, 'seal_furnace')).toBe(seal);

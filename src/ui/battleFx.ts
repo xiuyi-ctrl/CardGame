@@ -228,7 +228,7 @@ export function rockShellHitsAfterEvent(
   ev: FxEvent,
   bossUid: string | undefined,
 ): Record<string, number> {
-  if (!bossUid) return prev;
+  if (!bossUid || ev.skillName === '战场崩解') return prev;
   const cur = prev[bossUid] ?? 0;
   if (ev.kind === 'attack' && ev.targetUid === bossUid) return { ...prev, [bossUid]: cur + 1 };
   if (ev.kind === 'burst') {
@@ -262,7 +262,7 @@ export function thornRoyalHitsAfterEvent(
 export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const text = entry.text;
   const side = entry.side;
-  if (side === 'info') return null;
+  if (side === 'info' && !text.startsWith('战场崩解！')) return null;
   const opposite: 'player' | 'enemy' = side === 'player' ? 'enemy' : 'player';
 
   // 范围伤害（岩壳碎片自爆 / 岩壳崩解 / 毒性爆发）：由 burstTargets 标识，一次性给全体波及单位挂飘字，无抖动
@@ -271,6 +271,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     const dm = text.match(/造成 ?(\d+) ?点(?:真实)?伤害/);
     return {
       kind: 'burst',
+      skillName: text.startsWith('战场崩解！') ? '战场崩解' : undefined,
       value: dm ? Number(dm[1]) : 0,
       burstTargets: entry.burstTargets,
       addsStatus: entry.addsStatus,
@@ -280,6 +281,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     };
   }
 
+  if (side === 'info') return null;
   let m: RegExpMatchArray | null;
   if ((m = text.match(RE_ATTACK))) {
     return {

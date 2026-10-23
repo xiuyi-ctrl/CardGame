@@ -78,16 +78,16 @@ describe('战斗攻击目标准星', () => {
     else expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('熔火自焚生命仅1点时按钮禁用', () => {
+  it('熔火自焚生命仅1点时也可选择施放', () => {
     const battle = createBattle([makeUnit('molten_larva', true, 0, false)], [{ speciesId: 'momo' }], 7);
     battle.playerUnits[0].hp = 1;
     const dispatch = vi.fn();
     render(createElement(BattleScreen, { state: { ...createInitialState(), screen: 'battle', battle }, dispatch }));
     fireEvent.click(screen.getByRole('button', { name: /熔壳虫，右键或按菜单键查看我方生物 Buff/ }));
     const skill = screen.getByRole('button', { name: /^熔火自焚/ });
-    expect(skill.hasAttribute('disabled')).toBe(true);
+    expect(skill.hasAttribute('disabled')).toBe(false);
     fireEvent.click(skill);
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({ type: 'PLAYER_SKILL', actorUid: battle.playerUnits[0].uid, skillId: 'molten_self_burn' });
   });
 
   it('炉壳指定另一名伙伴，点击施法者本身不会下令', () => {

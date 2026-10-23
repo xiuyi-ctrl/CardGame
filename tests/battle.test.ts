@@ -333,26 +333,26 @@ describe('数据完整性', () => {
 
 describe('技能使用次数', () => {
   it('有限次技能初始化次数，无限次技能返回 Infinity', () => {
-    const u = makeUnit('lulu_king', true, 0, false); // 愈光 uses:2
-    expect(u.skillUses?.['heal_light']).toBe(2);
-    expect(skillUsesLeft(u, 'heal_light')).toBe(2);
+    const u = makeUnit('fifi_king', true, 0, false); // 战吼仍 uses:2
+    expect(u.skillUses?.['roar']).toBe(2);
+    expect(skillUsesLeft(u, 'roar')).toBe(2);
     expect(skillUsesLeft(u, 'water_gun')).toBe(Infinity);
   });
 
   it('每次使用扣一次次数；耗尽后 playerSkill 拒绝（状态不变）', () => {
-    const u = makeUnit('lulu_king', true, 0, false);
+    const u = makeUnit('fifi_king', true, 0, false);
     let b = createBattle([u], [{ speciesId: 'kiki' }], 1);
-    // 让泡泡将先挨打受伤，再连续使用愈光（每回合下指令后结算）
+    // 使用仍有限次的战吼验证通用次数消耗。
     b = {
       ...b,
       playerUnits: b.playerUnits.map((x) => (x.uid === u.uid ? { ...x, hp: 5 } : x)),
     };
-    let after = playerEndTurn(playerSkill(b, u.uid, 'heal_light', u.uid));
-    expect(skillUsesLeft(after.playerUnits[0], 'heal_light')).toBe(1);
-    after = playerEndTurn(playerSkill(after, u.uid, 'heal_light', u.uid));
-    expect(skillUsesLeft(after.playerUnits[0], 'heal_light')).toBe(0);
+    let after = playerEndTurn(playerSkill(b, u.uid, 'roar', u.uid));
+    expect(skillUsesLeft(after.playerUnits[0], 'roar')).toBe(1);
+    after = playerEndTurn(playerSkill(after, u.uid, 'roar', u.uid));
+    expect(skillUsesLeft(after.playerUnits[0], 'roar')).toBe(0);
     const hpBefore = after.playerUnits[0].hp;
-    const rejected = playerSkill(after, u.uid, 'heal_light', u.uid);
+    const rejected = playerSkill(after, u.uid, 'roar', u.uid);
     expect(rejected).toBe(after);
     expect(rejected.playerUnits[0].hp).toBe(hpBefore);
   });
@@ -887,7 +887,7 @@ describe('战斗日志与动画时序', () => {
 
   it('敌方治疗技能次数用尽且仅剩治疗技能时观望', () => {
     let b = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu_king' }], 3);
-    b = { ...b, enemyUnits: [{ ...b.enemyUnits[0], hp: 6, skills: ['heal_light'], skillUses: { heal_light: 0 } }] };
+    b = { ...b, enemyUnits: [{ ...b.enemyUnits[0], hp: 6, skills: ['tidal_domain'], skillUses: { tidal_domain: 0 } }] };
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
     expect(after.log.some((l) => l.text.includes('无技能可用，只能观望'))).toBe(true);
   });
@@ -1008,7 +1008,7 @@ describe('战斗日志与动画时序', () => {
 describe('技能可用性统一校验', () => {
   it('拒绝次数耗尽、冷却中和已封印的技能', () => {
     const base = makeUnit('gora', true, 0, false);
-    const ownedSkill = base.skills[0];
+    const ownedSkill = 'shield_counter';
 
     expect(canUnitUseSkill(base, ownedSkill)).toBe(true);
     expect(canUnitUseSkill({ ...base, skillUses: { [ownedSkill]: 0 } }, ownedSkill)).toBe(false);
@@ -1053,7 +1053,7 @@ describe('战斗防软锁', () => {
     expect(after.log.some((entry) => entry.actorUid === actorUid && entry.text.includes('造成 1 伤害'))).toBe(true);
   });
 
-  it('第 31 回合起攻击获得逐回合递增的疲劳伤害', () => {
+  it('崩解替代旧疲劳，后期攻击自身不再获得疲劳增伤', () => {
     const damageAt = (round: number): number => {
       const raw = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'lulu' }], 23);
       const actorUid = raw.playerUnits[0].uid;
@@ -1064,14 +1064,19 @@ describe('战斗防软锁', () => {
         enemyUnits: raw.enemyUnits.map((u) => ({ ...u, hp: 100, maxHp: 100, passive: undefined, acted: true })),
       };
       const after = playerEndTurn(playerSkill(battle, actorUid, 'punch', targetUid));
-      return 100 - after.enemyUnits[0].hp;
+      const hit = after.log.find(entry => entry.actorUid === actorUid && entry.text.includes('使用「爪击」攻击'))!;
+      return 100 - hit.hp![targetUid];
     };
 
-    expect(damageAt(BATTLE_FATIGUE_START_ROUND + 1)).toBe(damageAt(BATTLE_FATIGUE_START_ROUND) + 1);
+    expect(damageAt(31)).toBe(damageAt(BATTLE_FATIGUE_START_ROUND - 1));
   });
 });
 
 describe('priority first 技能回合顺序', () => {
+  // 此组验证先手执行与冷却，不依赖 AI 在固定种子下的选招偏好。
+  function onlyEnemyFirstSkills(b: BattleState) {
+    b.enemyUnits = b.enemyUnits.map(u => ({ ...u, skills: u.skills.filter(id => SKILLS[id].priority === 'first') }));
+  }
   it('flame_shield (fifi_god) 在首回合应排到第一顺位', () => {
     const slow = makeUnit('momo', true, 0, false); // spd 2
     const b = createBattle([slow], [{ speciesId: 'fifi_god' }], 1);
@@ -1091,6 +1096,7 @@ describe('priority first 技能回合顺序', () => {
   it('shield_counter 执行顺序验证：gora 应在 fifi 之前行动', () => {
     const fast = makeUnit('fifi', true, 0, false); // spd 4
     const b = createBattle([fast], [{ speciesId: 'gora' }], 1);
+    onlyEnemyFirstSkills(b);
     const gora = b.enemyUnits[0];
     const cur = currentPlayerUnit(b)!;
     const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], gora.uid));
@@ -1115,6 +1121,7 @@ describe('priority first 技能回合顺序', () => {
   it('shield_counter 实际执行：日志应包含盾反', () => {
     const fast = makeUnit('fifi', true, 0, false);
     const b = createBattle([fast], [{ speciesId: 'gora' }], 1);
+    onlyEnemyFirstSkills(b);
     const gora = b.enemyUnits[0];
     const cur = currentPlayerUnit(b)!;
     const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], gora.uid));
@@ -1142,9 +1149,10 @@ describe('priority first 技能回合顺序', () => {
     expect(sisiActIdx).toBeLessThan(fifiActIdx);
   });
 
-  it('flame_shield 在冷却中时不应用先手排序（纯速度排序）', () => {
+  it('shield_counter 在冷却中时不应用先手排序（纯速度排序）', () => {
     const fast = makeUnit('fifi', true, 0, false); // spd 4
     const b = createBattle([fast], [{ speciesId: 'gora' }], 1);
+    onlyEnemyFirstSkills(b);
     const goraUnit = b.enemyUnits[0];
     const cur = currentPlayerUnit(b)!;
     const after1 = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], goraUnit.uid));
@@ -1218,6 +1226,7 @@ describe('priority first 技能回合顺序', () => {
     // 玩家 gora(spd 2, shield_counter) vs 敌方 fifi_god(spd 7, flame_shield)
     const gora = makeUnit('gora', true, 0, false);
     const b = createBattle([gora], [{ speciesId: 'fifi_god' }], 1);
+    onlyEnemyFirstSkills(b);
     const g = b.playerUnits.find(u => u.speciesId === 'gora')!;
     let s = playerSkill(b, g.uid, 'shield_counter');
     const after = playerEndTurn(s);
@@ -1232,6 +1241,7 @@ describe('priority first 技能回合顺序', () => {
     // 敌方 fifi_god(flame_shield) + gora(shield_counter) vs 玩家 kiki
     const kiki = makeUnit('kiki', true, 0, false);
     const b = createBattle([kiki], [{ speciesId: 'fifi_god' }, { speciesId: 'gora' }], 1);
+    onlyEnemyFirstSkills(b);
     const cur = currentPlayerUnit(b)!;
     const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid));
     // 两个敌方都应执行先手技能
@@ -1248,6 +1258,7 @@ describe('priority first 技能回合顺序', () => {
   it('敌方双先手：两个先手技能都应在日志中体现（不遗漏）', () => {
     const kiki = makeUnit('kiki', true, 0, false);
     const b = createBattle([kiki], [{ speciesId: 'fifi_god' }, { speciesId: 'gora' }], 1);
+    onlyEnemyFirstSkills(b);
     const cur = currentPlayerUnit(b)!;
     const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid));
     // 统计先手技能日志出现次数
@@ -1260,6 +1271,7 @@ describe('priority first 技能回合顺序', () => {
   it('敌方双先手：先手技能日志应先于非先手单位的行动日志', () => {
     const kiki = makeUnit('kiki', true, 0, false);
     const b = createBattle([kiki], [{ speciesId: 'fifi_god' }, { speciesId: 'gora' }], 1);
+    onlyEnemyFirstSkills(b);
     const cur = currentPlayerUnit(b)!;
     const after = playerEndTurn(playerSkill(b, cur.uid, cur.skills[0], b.enemyUnits[0].uid));
     const fLog = after.log.findIndex(l => l.text.includes('烈焰护盾'));

@@ -450,6 +450,9 @@ export const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
   nightmare: { label: '地狱', enemyHpMult: 1.35, enemySpdBonus: 2, shopPriceMult: 1.25, healRatio: 0.5, eliteBoost: 0.1, interActMinHpRatio: 0.5 },
 };
 
+/** 主线商店刷新费用（按已刷新次数递增，不超过 3 次） */
+export const MAIN_SHOP_REFRESH_COSTS = [10, 15, 25] as const;
+
 export const DIFFICULTY_ORDER: Difficulty[] = ['normal', 'hard', 'nightmare'];
 
 export interface RelicDef {

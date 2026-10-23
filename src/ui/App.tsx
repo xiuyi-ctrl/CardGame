@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, MAIN_SHOP_REFRESH_COSTS, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -2324,7 +2324,9 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
     isProf ? profShopIds.includes(id) : (!!FOODS[id] || !!ITEMS[id])
   );
   const refreshCount = state.shopRefreshCount ?? 0;
-  const refreshCost = Math.round((5 + refreshCount * 5) * (isProf ? 1 : DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult));
+  const refreshCost = isProf
+    ? 5 + refreshCount * 5
+    : Math.round((MAIN_SHOP_REFRESH_COSTS[refreshCount] ?? MAIN_SHOP_REFRESH_COSTS[2]) * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult);
   const canRefresh = refreshCount < 3 && state.gold >= refreshCost;
   const canRest = state.roster.some((u) => u.hp < u.maxHp);
   return (

@@ -89,13 +89,13 @@ describe('取消共享行动点', () => {
   });
 
   it('我方暗影追猎击杀后立即追加行动，技能次数不能无限复用', () => {
-    const hunter = { ...makeUnit('boss_dark', true, 0, false), hp: 500, maxHp: 500, spd: 99, skills: ['punch', 'bite'], skillUses: { punch: 1 } };
+    const hunter = { ...makeUnit('boss_dark', true, 0, false), hp: 500, maxHp: 500, spd: 99, skills: ['soul_rend', 'bite'], skillUses: { soul_rend: 1 } };
     const raw = createBattle([hunter], [{ speciesId: 'momo' }, { speciesId: 'lulu' }], 31, { collectTelemetry: true });
     const battle = { ...raw, enemyUnits: raw.enemyUnits.map((u, i) => ({ ...u, row: 'front' as const, hp: i === 0 ? 1 : 100, maxHp: 100 })) };
-    const after = playerEndTurn(playerSkill(battle, hunter.uid, 'punch', battle.enemyUnits[0].uid));
+    const after = playerEndTurn(playerSkill(battle, hunter.uid, 'soul_rend', battle.enemyUnits[0].uid));
     const uses = after.telemetry!.filter((e) => e.kind === 'skill-use' && e.actorUid === hunter.uid);
-    expect(uses.map((e) => e.skillId)).toEqual(['punch', 'bite']);
-    expect(skillUsesLeft(after.playerUnits[0], 'punch')).toBe(0);
+    expect(uses.map((e) => e.skillId)).toEqual(['soul_rend', 'bite']);
+    expect(skillUsesLeft(after.playerUnits[0], 'soul_rend')).toBe(0);
     expect(uses[1].targetUid).toBe(battle.enemyUnits[1].uid);
     expect(after.log.some((entry) => (entry.hp?.[battle.enemyUnits[1].uid] ?? 100) < 100)).toBe(true);
   });

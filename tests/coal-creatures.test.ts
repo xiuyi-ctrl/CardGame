@@ -5,6 +5,8 @@ import { fusionNeedCount, generateMap, generateRewards, nextStage } from '../src
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { parseEvent, computeRevealAt } from '../src/ui/battleFx';
 import type { BattleState } from '../src/game/types';
+import { getSkillEnhanceBonus } from '../src/game/core/growth';
+import { getSkill } from '../src/game/data/skills';
 
 function incomingBattle(speciesId = 'coal', count = 3, skill = 'double_hit'): BattleState {
   const players = Array.from({ length: count }, (_, i) => ({ ...makeUnit('momo', true, i as 0 | 1 | 2, false),
@@ -20,9 +22,18 @@ function attackAll(battle: BattleState): BattleState {
 }
 
 describe('煤煤与炉甲獾', () => {
+  it('炭爪与护灯强化沿用原规则，并以新基础数值递增', () => {
+    const claw = getSkill('coal_claw');
+    const lamp = getSkill('lamp_guard');
+    expect([0, 1, 2, 3].map(level => {
+      const bonus = getSkillEnhanceBonus(claw.id, level);
+      return [claw.damage! + bonus.damageBonus, claw.effects![0].value + bonus.effectBonus];
+    })).toEqual([[2, 2], [3, 3], [4, 4], [5, 5]]);
+    expect([0, 1, 2, 3].map(level => lamp.heal! + getSkillEnhanceBonus(lamp.id, level).healBonus)).toEqual([5, 7, 9, 11]);
+  });
   it('属性、固定技能组和两只融合符合设计，二阶连接传奇形态', () => {
     const coal = makeUnit('coal', true, 0, false);
-    expect([coal.maxHp, coal.spd]).toEqual([15, 1]);
+    expect([coal.maxHp, coal.spd]).toEqual([13, 1]);
     expect(coal.skills).toEqual(['coal_claw', 'furnace_shell']);
     const material = makeUnit('coal', true, 1, false);
     const state = { ...createInitialState(), screen: 'roster' as const, roster: [coal, material] };
@@ -36,7 +47,7 @@ describe('煤煤与炉甲獾', () => {
     expect(planEnemyLayout([{ speciesId: 'coal' }, { speciesId: 'coal_guard' }]).every(p => p.row === 'front')).toBe(true);
   });
 
-  it.each([['coal', 1], ['coal_guard', 2]] as const)('%s：多段攻击只触发一次，每完整回合最多两次，下回合重置', (speciesId, value) => {
+  it.each([['coal', 2], ['coal_guard', 3]] as const)('%s：多段攻击只触发一次，每完整回合最多两次，下回合重置', (speciesId, value) => {
     const battle = incomingBattle(speciesId);
     const after = attackAll(battle);
     const logs = after.log.filter(entry => /的「(?:炉火|炽炉)」使/.test(entry.text));
@@ -66,7 +77,7 @@ describe('煤煤与炉甲獾', () => {
     const after = playerEndTurn(battle);
     const logs = after.log.filter(entry => /的「(?:炉火|炽炉)」使/.test(entry.text));
     expect(logs).toHaveLength(2);
-    expect(logs.every(entry => entry.actorUid === coal.uid && entry.text.endsWith('灼烧 2 层'))).toBe(true);
+    expect(logs.every(entry => entry.actorUid === coal.uid && entry.text.endsWith('灼烧 3 层'))).toBe(true);
     expect(after.log.some(entry => entry.actorUid === coal.uid && entry.text.includes('使用「'))).toBe(false);
   });
 
@@ -109,7 +120,7 @@ describe('煤煤与炉甲獾', () => {
     }
   });
 
-  it('炭爪造成2点伤害并附加1层灼烧；炉壳不能重复选自己拿双盾，独自上场仅加3盾', () => {
+  it('炭爪造成2点伤害并附加2层灼烧；炉壳不能重复选自己拿双盾，独自上场仅加3盾', () => {
     const coal = makeUnit('coal', true, 0, false);
     const ally = makeUnit('momo', true, 1, false);
     const raw = createBattle([coal, ally], [{ speciesId: 'momo' }], 2);
@@ -117,7 +128,7 @@ describe('煤煤与炉甲獾', () => {
     const hit = playerEndTurn(playerSkill(battle, coal.uid, 'coal_claw', battle.enemyUnits[0].uid));
     const log = hit.log.find(entry => entry.actorUid === coal.uid && entry.text.includes('使用「炭爪」攻击'))!;
     expect(log.text).toContain('造成 2 伤害');
-    expect(log.statuses?.[battle.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(1);
+    expect(log.statuses?.[battle.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(2);
     expect(playerSkill(battle, coal.uid, 'furnace_shell', coal.uid)).toBe(battle);
     expect(playerSkill(battle, coal.uid, 'furnace_shell', battle.enemyUnits[0].uid)).toBe(battle);
     expect(playerSkill(battle, coal.uid, 'furnace_shell')).toBe(battle);

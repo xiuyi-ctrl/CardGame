@@ -38,7 +38,7 @@ describe('熔甲兽与烈日神鹰', () => {
   it('赤甲炼火先承受灼烧，再以两层余火换6盾', () => {
     const b = quiet('molten_beast');
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'molten_self_burn'));
-    expect(after.playerUnits[0].hp).toBe(97);
+    expect(after.playerUnits[0].hp).toBe(98);
     expect(after.playerUnits[0].shield).toBe(8);
     expect(after.playerUnits[0].statuses.some(s => s.kind === 'burn')).toBe(false);
     const log = after.log.find(e => e.text.includes('赤甲炼火」获得 6'))!;

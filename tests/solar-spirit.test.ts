@@ -77,13 +77,14 @@ describe('日炎灵与日华', () => {
     expect(radianceLayers(playerEndTurn(after).playerUnits[0])).toBe(2);
   });
 
-  it('回合开始的熔甲换盾属于新回合清火机会，上一回合先正常衰减', () => {
+  it('回合末熔甲换盾属于本回合清火机会，在日华衰减判断前充能', () => {
     const b = radiant(burn(quiet(['solar_spirit', 'molten_beetle']), 4), 2);
     const after = playerEndTurn(b);
-    expect(radianceLayers(after.playerUnits[0])).toBe(2);
-    expect(after.playerUnits[0].radianceGainedThisRound).toBe(true);
+    expect(radianceLayers(after.playerUnits[0])).toBe(3);
+    expect(after.playerUnits[0].radianceGainedThisRound).toBeUndefined();
     const logs = after.log.filter(e => e.text.includes('日华」'));
-    expect(logs.map(e => e.text)).toEqual([expect.stringContaining('衰减'), expect.stringContaining('充能')]);
+    expect(logs.map(e => e.text)).toEqual([expect.stringContaining('充能')]);
+    expect(radianceLayers(playerEndTurn(after).playerUnits[0])).toBe(2);
   });
 
   it('自燃顶撞消耗燃料属于被动/技能清火，但清除敌方灼烧不为我方充能', () => {

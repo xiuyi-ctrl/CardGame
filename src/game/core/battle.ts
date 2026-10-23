@@ -32,8 +32,26 @@ const BACK_PASSIVES: PassiveKind[] = [
 /** AI 选择行动时 softmax 温度：越小越趋向最高分，越大越随机（默认 12） */
 const SOFTMAX_TEMP = 12;
 
-/** 防止低伤、减伤、护盾与回复组合形成无限战斗：超过该回合后攻击逐回合获得疲劳增伤。 */
-export const BATTLE_FATIGUE_START_ROUND = 30;
+/** 第15回合末起，战场崩解直接扣生命，替代旧攻击疲劳增伤。 */
+export const BATTLE_FATIGUE_START_ROUND = 15;
+export function battleCollapseDamage(round: number): number {
+  return round >= BATTLE_FATIGUE_START_ROUND ? Math.max(0, round - 10) : 0;
+}
+
+function applyBattleCollapse(b: BattleState): BattleState {
+  const damage = battleCollapseDamage(b.round);
+  if (!damage || b.collapseResolvedRound === b.round || b.phase !== 'acting') return b;
+  const alive = [...b.playerUnits, ...b.enemyUnits].filter(u => u.hp > 0);
+  let nb: BattleState = { ...b, collapseResolvedRound: b.round };
+  // 同一批次先扣完双方生命，再处理死亡连锁并判定胜负，不能先扣一侧就结束。
+  for (const unit of alive) nb = replaceUnit(nb, { ...unit, hp: Math.max(0, unit.hp - damage) });
+  nb = pushLog(nb, `战场崩解！对全体造成 ${damage} 点真实伤害`, 'info', undefined, undefined, undefined, alive.map(u => u.uid));
+  for (const unit of alive) {
+    const current = actorFromId(nb, unit.uid)!;
+    if (current.hp <= 0) nb = applyDefeatedTarget(nb, current);
+  }
+  return checkEnd(nb);
+}
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
@@ -173,7 +191,8 @@ export function getUnitPassive(u: Unit, b?: BattleState): PassiveDef | undefined
 
 /** 技能的剩余使用次数（无限制技能返回 Infinity） */
 export function skillUsesLeft(u: Unit, skillId: string): number {
-  return u.skillUses?.[skillId] ?? getSkill(skillId).uses ?? Infinity;
+  const limit = getSkill(skillId).uses;
+  return limit === undefined ? Infinity : u.skillUses?.[skillId] ?? limit;
 }
 
 /** 消耗一次技能使用次数 */
@@ -202,7 +221,6 @@ export function canUnitUseSkill(u: Unit, skillId: string): boolean {
   );
   if (sealed) return false;
   const skill = getSkill(skillId);
-  if (skillId === 'molten_self_burn' && u.hp <= 1) return false;
   if (skillId === 'shell_charge' && u.shield <= 0) return false;
   return !skill.growthCost || (u.growthValue ?? 0) >= skill.growthCost;
 }
@@ -426,6 +444,8 @@ export function createBattle(
       const c = cloneUnit(u);
       c.uid = nextUid('e');
       c.isPlayer = false;
+      c.lastSkillId = undefined;
+      c.defensiveStreak = undefined;
       c.tameable = false;
       const mirrorPos = preparedPlayer[i];
       c.row = mirrorPos?.row ?? 'front';
@@ -575,6 +595,18 @@ function startRound(b: BattleState): BattleState {
     nb = checkEnd(nb);
     if (nb.phase !== 'acting') return nb;
   }
+  // 回合末先结算持续伤害，再将存活者剩余灼烧转换；归属本回合的清火机会。
+  for (const unit of [...nb.playerUnits, ...nb.enemyUnits]) {
+    const passive = getUnitPassive(unit, nb);
+    if (unit.hp <= 0 || passive?.kind !== 'burnShield' || !isBurning(unit)) continue;
+    const layers = Math.min(passive.burnConsumeMax ?? 1, unit.statuses.find((status) => status.kind === 'burn')!.value);
+    const shield = Math.min(passive.value * layers, 99 - unit.shield);
+    nb = replaceUnit(nb, { ...consumeBurn(unit, layers), shield: unit.shield + shield });
+    const msg = `${unit.name} 的「${passive.name}」获得 ${shield} 点护盾`;
+    nb = pushLog(nb, msg, sideOf(unit), unit.uid, unit.uid, undefined, undefined,
+      spans(msg, [['actor', unit.name], ['passive', passive.name]]));
+    nb = { ...notifyBurnRemoved({ ...nb, round: prevRound }, unit, layers), round: nb.round };
+  }
   // 盾反清理：若 shieldCounter 已过期但 shield 状态仍存在，一并移除
   for (const u of [...nb.playerUnits, ...nb.enemyUnits]) {
     if (u.hp <= 0) continue;
@@ -627,6 +659,10 @@ function startRound(b: BattleState): BattleState {
     nb = checkEnd(nb);
     if (nb.phase !== 'acting') return nb;
   }
+  // 用正在结束的回合编号结算崩解；存活后再进入新回合回复。
+  const collapsed = applyBattleCollapse({ ...nb, round: prevRound });
+  if (collapsed.phase !== 'acting') return collapsed;
+  nb = { ...collapsed, round: nb.round, roundEndedBeforeSwap: collapsed.pendingSwap ? true : undefined };
   // 日华只根据上一完整回合的主动清火触发判断衰减，天然DOT不刷新机会。
   for (const unit of [...nb.playerUnits, ...nb.enemyUnits]) {
     if (unit.hp <= 0 || getUnitPassive(unit, nb)?.kind !== 'sunRadiance' || unit.radianceGainedThisRound) continue;
@@ -641,18 +677,6 @@ function startRound(b: BattleState): BattleState {
     playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
     enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
   };
-  // 热壳换火：必须先承受上一回合持续伤害，存活后才转换剩余燃料。
-  for (const unit of [...nb.playerUnits, ...nb.enemyUnits]) {
-    const passive = getUnitPassive(unit, nb);
-    if (unit.hp <= 0 || passive?.kind !== 'burnShield' || !isBurning(unit)) continue;
-    const layers = Math.min(passive.burnConsumeMax ?? 1, unit.statuses.find((status) => status.kind === 'burn')!.value);
-    const shield = Math.min(passive.value * layers, 99 - unit.shield);
-    nb = replaceUnit(nb, { ...consumeBurn(unit, layers), shield: unit.shield + shield });
-    const msg = `${unit.name} 的「${passive.name}」获得 ${shield} 点护盾`;
-    nb = pushLog(nb, msg, sideOf(unit), unit.uid, unit.uid, undefined, undefined,
-      spans(msg, [['actor', unit.name], ['passive', passive.name]]));
-    nb = notifyBurnRemoved(nb, unit, layers);
-  }
   // 清除来源已死亡的嘲讽
   const allUnits = [...nb.playerUnits, ...nb.enemyUnits];
   for (const u of allUnits) {
@@ -1097,10 +1121,12 @@ export function performGauntletSwap(b: BattleState): BattleState {
     };
     nb = pushLog(nb, `我方派出下一只：${next.name}！`, 'player');
   }
-  nb = { ...nb, pendingSwap: undefined };
+  nb = { ...nb, pendingSwap: undefined, roundEndedBeforeSwap: undefined };
   nb = checkEnd(nb);
   if (nb.phase !== 'acting') return nb;
   if (wantsPlayer) {
+    // 崩解在完整回合末触发换人时，新回合已初始化，不再递增回合或重复结算。
+    if (b.roundEndedBeforeSwap) return { ...nb, turnOrder: computeTurnOrder(nb) };
     nb = startRound(nb);
     return checkEnd(nb);
   }
@@ -1360,8 +1386,37 @@ function tryEnemySwap(b: BattleState, actor: Unit): BattleState | undefined {
   return nb;
 }
 
-/** 纯函数：基于给定状态选择敌方行动，不产生日志/不扣技能次数/不标记 acted */
-function selectEnemyAction(
+function isDefensiveSkill(skill: SkillDef): boolean {
+  return skill.kind === 'heal' || (skill.kind === 'buff' && (skill.id === 'clean_flame_care'
+    || skill.id === 'furnace_shell' || skill.id === 'ash_shelter'
+    || !!skill.effects?.some(e => e.kind === 'shield' || e.kind === 'shieldCounter' || e.kind === 'sporeShield')));
+}
+
+// 仅用公开属性估算直接伤害，不读取我方指令，也不预演随机效果。
+function estimateAiDamage(b: BattleState, actor: Unit, skill: SkillDef, target: Unit): number {
+  if ((skill.damage ?? 0) <= 0 && !skill.spdScaling) return 0;
+  const opponents = enemiesOf(b, actor);
+  const reach = skill.reach ?? 'front';
+  if ((skill.target === 'single' || skill.target === 'all') && reach !== 'direct'
+    && getUnitPassive(actor, b)?.kind !== 'bloodScent') {
+    const preferredRow = reach === 'back' ? 'back' : 'front';
+    if ((skill.target === 'single' || skill.reach === 'front')
+      && opponents.some(u => u.row === preferredRow) && target.row !== preferredRow) return 0;
+  }
+  const bonus = getSkillEnhanceBonus(skill.id, getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id)));
+  let damage = (skill.damage ?? 0) + bonus.damageBonus + getDamageBonus(actor, b)
+    + getEffectiveSpd(actor) * (skill.spdScaling ?? 0);
+  if (skill.id === 'flying_leaf' && getEffectiveSpd(actor) > getEffectiveSpd(target)) damage += 3;
+  if (skill.id === 'purifying_orb' && isBurning(target)) damage += 2;
+  if (skill.id === 'solar_strike') damage += radianceLayers(actor) * 2;
+  if (skill.id === 'shell_charge') damage += Math.min(5, actor.shield);
+  const hits = skill.target === 'random' && opponents.length > 1 ? 1 : (skill.hits ?? 1) + bonus.hitsBonus;
+  const total = Math.max(1, damage - getDamageGuard(target, b)) * hits;
+  return Math.max(0, total - (skill.id === 'shadow_claw' || skill.id === 'sun_sunder' ? 0 : target.shield));
+}
+
+/** 纯函数：基于公开状态选择敌方行动，不修改状态或消耗随机数。 */
+export function selectEnemyAction(
   b: BattleState, actor: Unit, rngVal1: number, rngVal2: number,
 ): { skillId?: string; targetUid?: string; kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; fallbackSkillId?: string } | undefined {
   if (actor.statuses.some((s) => s.kind === 'stun')) return undefined;
@@ -1376,13 +1431,16 @@ function selectEnemyAction(
   const allies = alliesOf(b, actor);
   const enemies = enemiesOf(b, actor);
   // ─── 1. 治疗 ───
-  const nTypeHeal = b.nodeType ?? 'battle';
+  const collapse = battleCollapseDamage(b.round);
+  const incomingAttack = (target: Unit) => Math.max(0, ...enemies.flatMap(enemy => enemy.skills
+    .map(getSkill).filter(skill => !enemy.statuses.some(s => s.kind === 'stun') && skill.kind === 'attack' && canUnitUseSkill(enemy, skill.id))
+    .map(skill => estimateAiDamage(b, enemy, skill, target))));
+  const endDamage = (target: Unit) => collapse + target.statuses.reduce((sum, status) =>
+    sum + ((status.kind === 'poison' || (status.kind === 'burn' && getUnitPassive(target, b)?.kind !== 'foxFlame'))
+      ? Math.ceil(status.value / 2) : 0), 0);
+  const lifesaving = new Set<string>();
   const healSkills = skills.filter((s) => s.kind === 'heal');
   if (healSkills.length > 0) {
-    let healThreshold = 0.45;
-    if (nTypeHeal === 'guardian') healThreshold = 0.55;
-    else if (nTypeHeal === 'gauntlet') healThreshold = 0.35;
-    else if (nTypeHeal === 'corrupted') healThreshold = 0.30;
     for (const hs of healSkills) {
       // 终焉成长专属阈值：残血（<60%）且成长值充足时优先使用；不满足则完全不作为治疗候选（避免成长值不足白选）
       if (hs.id === 'growth_ultimate') {
@@ -1392,38 +1450,32 @@ function selectEnemyAction(
         }
         continue;
       }
-      if (hs.id === 'burn_reversal' || hs.id === 'light_bath' || hs.id === 'solar_heal') {
-        for (const ally of allies.filter(isBurning)) {
-          // 生命安全时不为纯净化而清掉自燃换盾伙伴的燃料。
-          if (getUnitPassive(ally, b)?.kind === 'burnShield' && ally.hp / ally.maxHp > 0.55) continue;
-          const layers = Math.min(hs.id === 'burn_reversal' ? 5 : 3, ally.statuses.find(s => s.kind === 'burn')?.value ?? 0);
-          candidates.push({ kind: 'heal', skill: hs, targetUid: ally.uid, score: 30 + layers * 8 + (ally.hp < ally.maxHp ? 10 : 0) });
-        }
+      const enhancement = getSkillEnhanceBonus(hs.id, getSkillEnhanceLevel(actor, actor.skills.indexOf(hs.id)));
+      const targets = hs.target === 'self' ? [actor] : allies;
+      let groupScore = 0;
+      for (const ally of targets) {
+        const burn = ally.statuses.find(s => s.kind === 'burn')?.value ?? 0;
+        const reversed = hs.id === 'burn_reversal' ? Math.min(5, burn) : 0;
+        const passive = getUnitPassive(actor, b);
+        const cleanse = passive && ['healBurnCleanse', 'healBurnBoost', 'sunRadiance'].includes(passive.kind) ? passive.value : 0;
+        const removed = Math.min(burn, reversed + cleanse);
+        const effective = Math.min(getEffectiveMaxHp(ally) - ally.hp, Math.max(1, hs.heal ?? 0)
+          + enhancement.healBonus + reversed + mossHealBonus(b, actor, ally)
+          + (hs.id === 'solar_heal' ? radianceLayers(actor) : 0));
+        const cleanseBenefit = getUnitPassive(ally, b)?.kind === 'foxFlame' ? 0
+          : Math.ceil(burn / 2) - Math.ceil((burn - removed) / 2);
+        const usefulCleanse = getUnitPassive(ally, b)?.kind === 'burnShield' && ally.hp / ally.maxHp > 0.55 ? 0 : cleanseBenefit;
+        if (effective <= 0 && usefulCleanse <= 0) continue;
+        const danger = incomingAttack(ally) + endDamage(ally);
+        const rescue = ally.hp <= danger && ally.hp + effective > danger - usefulCleanse;
+        let score = effective * 5 + usefulCleanse * 6 + (ally.hp / ally.maxHp < 0.4 ? 8 : 0) + (rescue ? 24 : 0);
+        // 无法熬过已知回合末伤害的治疗，不再因残血而反复高优先施放。
+        if (ally.hp + effective <= endDamage(ally) - usefulCleanse) score -= 35;
+        if (rescue) lifesaving.add(`${hs.id}:${hs.target === 'allyAll' ? '' : ally.uid}`);
+        if (hs.target === 'allyAll') groupScore += score;
+        else candidates.push({ kind: 'heal', skill: hs, targetUid: ally.uid, score });
       }
-      if (hs.target === 'allyAll') {
-        const injuredAllies = allies.filter((u) => u.hp / u.maxHp < 0.8);
-        if (injuredAllies.length >= 2) {
-          let healScore = 0;
-          if (hpRatio < healThreshold) healScore += 55;
-          else if (hpRatio < 0.55) healScore += 30;
-          const lowAllies = allies.filter((u) => u.hp / u.maxHp < 0.3);
-          healScore += lowAllies.length * 15;
-          if (nTypeHeal === 'guardian') healScore += 15;
-          candidates.push({ kind: 'heal', skill: hs, score: healScore });
-        }
-        continue;
-      }
-      if (hpRatio < healThreshold) {
-        candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 65 });
-      } else if (hpRatio < 0.55) {
-        candidates.push({ kind: 'heal', skill: hs, targetUid: actor.uid, score: 35 });
-      }
-      const criticalAlly = allies
-        .filter((u) => u.hp > 0 && u.hp / u.maxHp < 0.25)
-        .sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
-        if (criticalAlly) {
-          candidates.push({ kind: 'heal', skill: hs, targetUid: criticalAlly.uid, score: 60 });
-      }
+      if (hs.target === 'allyAll' && groupScore > 0) candidates.push({ kind: 'heal', skill: hs, score: groupScore });
     }
   }
   // ─── 2. 增益/防御 ───
@@ -1443,7 +1495,7 @@ function selectEnemyAction(
       }
     }
   }
-  const buffSkills = skills.filter((s) => s.kind === 'buff' && s.target !== 'allyAll');
+  const buffSkills = skills.filter((s) => s.kind === 'buff');
   for (const bs of buffSkills) {
     if (bs.id === 'clean_flame_care') {
       const target = allies.filter(isBurning).sort((a, c) =>
@@ -1451,19 +1503,28 @@ function selectEnemyAction(
       if (target) candidates.push({ kind: 'buff', skill: bs, targetUid: target.uid, score: 65 });
       continue;
     }
-    if (bs.id === 'furnace_shell') {
-      const target = furnaceShellTargets(b, actor).sort((a, c) => a.hp / a.maxHp - c.hp / c.maxHp)[0];
-      if ((actor.shield < 3 || target.shield < 3) && rngVal1 < 0.6) {
-        candidates.push({ kind: 'buff', skill: bs, targetUid: target.uid, score: hpRatio < 0.5 ? 60 : 40 });
-      }
-      continue;
-    }
-    if (bs.id === 'ash_shelter') {
-      const ally = alliesOf(b, actor).filter((unit) => unit.shield < 4)
-        .sort((a, c) => a.hp / a.maxHp - c.hp / c.maxHp)[0];
-      if (ally && rngVal1 < 0.6) {
-        const burningEnemy = enemies.some((unit) => unit.statuses.some((status) => status.kind === 'burn'));
-        candidates.push({ kind: 'buff', skill: bs, targetUid: ally.uid, score: ally.hp / ally.maxHp < 0.5 ? 60 : burningEnemy ? 50 : 35 });
+    const shieldEffect = bs.effects?.find(e => e.kind === 'shield');
+    if (shieldEffect || bs.id === 'furnace_shell' || bs.id === 'ash_shelter') {
+      const enhanced = getSkillEnhanceBonus(bs.id, getSkillEnhanceLevel(actor, actor.skills.indexOf(bs.id))).effectBonus;
+      const amount = (bs.id === 'furnace_shell' ? 3 : bs.id === 'ash_shelter'
+        ? 4 + (enemies.some(isBurning) ? 2 : 0) : shieldEffect!.value) + enhanced;
+      const shieldScore = (target: Unit) => {
+        const incoming = incomingAttack(target);
+        const effective = Math.min(amount, Math.max(0, incoming - target.shield));
+        if (effective <= 0) return 0;
+        // 护盾不能抵挡灼烧、中毒或战场崩解。
+        if (target.hp <= endDamage(target)) return 0;
+        return effective * 5 + (target.hp <= incoming + endDamage(target) ? 12 : 0);
+      };
+      if (bs.target === 'allyAll') {
+        const score = allies.reduce((sum, ally) => sum + shieldScore(ally), 0);
+        if (score > 0) candidates.push({ kind: 'buff', skill: bs, score });
+      } else {
+        const targets = bs.id === 'furnace_shell' ? furnaceShellTargets(b, actor) : bs.target === 'self' ? [actor] : allies;
+        for (const target of targets) {
+          const score = shieldScore(target) + (bs.id === 'furnace_shell' && target.uid !== actor.uid ? shieldScore(actor) : 0);
+          if (score > 0) candidates.push({ kind: 'buff', skill: bs, targetUid: target.uid, score });
+        }
       }
       continue;
     }
@@ -1480,23 +1541,20 @@ function selectEnemyAction(
         else if (nTypeBuff === 'corrupted') roarChance = 0.7;
         else roarChance = 0.4;
       }
-      if (hpRatio < 0.4) roarChance = Math.max(roarChance, 0.6);
-      if (rngVal1 < roarChance) {
-        candidates.push({ kind: 'buff', skill: bs, score: 55 });
+      const canAttackLater = skills.some(s => s.kind === 'attack') && actor.hp > incomingAttack(actor) + endDamage(actor);
+      if (canAttackLater && rngVal1 < roarChance) {
+        candidates.push({ kind: 'buff', skill: bs, score: 40 });
       }
     }
     if (bs.priority === 'first' && canUnitUseSkill(actor, bs.id)) {
       if (!actor.statuses.some((s) => s.kind === 'shield' || s.kind === 'shieldCounter' || s.kind === 'atkUp' || s.kind === 'comboBoost')) {
         let firstChance = b.round <= 1 ? 0.8 : 0.5;
-        if (hpRatio < 0.4) firstChance = Math.max(firstChance, 0.7);
-        if (rngVal1 < firstChance) {
-          candidates.push({ kind: 'buff', skill: bs, score: 70 });
+        const offensive = bs.effects?.some(e => e.kind === 'atkUp' || e.kind === 'comboBoost');
+        const useful = offensive ? skills.some(s => s.kind === 'attack') && actor.hp > incomingAttack(actor) + endDamage(actor)
+          : incomingAttack(actor) > 0 && actor.hp > endDamage(actor);
+        if (useful && rngVal1 < firstChance) {
+          candidates.push({ kind: 'buff', skill: bs, score: offensive ? 40 : 45 });
         }
-      }
-    }
-    if (bs.effects?.some((e) => e.kind === 'shield') && !bs.priority && actor.shield <= 0 && !actor.statuses.some((s) => s.kind === 'shield')) {
-      if (hpRatio < 0.4 && rngVal1 < 0.5) {
-        candidates.push({ kind: 'buff', skill: bs, score: 50 });
       }
     }
     if (bs.effects?.some((e) => e.kind === 'taunt')) {
@@ -1507,7 +1565,8 @@ function selectEnemyAction(
       }
     }
     if (bs.effects?.some((e) => e.kind === 'comboBoost') && !actor.statuses.some((s) => s.kind === 'comboBoost')) {
-      if (hpRatio > 0.5 && rngVal1 < 0.55) {
+      if (hpRatio > 0.5 && actor.hp > incomingAttack(actor) + endDamage(actor)
+        && skills.some(s => s.kind === 'attack' && (s.hits ?? 1) > 1) && rngVal1 < 0.55) {
         candidates.push({ kind: 'buff', skill: bs, score: 45 });
       }
     }
@@ -1538,11 +1597,6 @@ function selectEnemyAction(
       const allChained = enemies.every((e) => e.statuses.some((s) => s.kind === 'chainLink'));
       if (!allChained && rngVal1 < 0.8) {
         candidates.push({ kind: 'buff', skill: bs, score: 65 });
-      }
-    }
-    if (bs.id === 'iron_wall') {
-      if (hpRatio < 0.5 && rngVal1 < 0.5) {
-        candidates.push({ kind: 'buff', skill: bs, score: 50 });
       }
     }
     // 成长之主Boss AI
@@ -1638,7 +1692,7 @@ function selectEnemyAction(
     const attackTargets = atk.id === 'flame_tracing_feather' ? flameTracingTargets(b, actor) : targetPool;
     const scoredTargets = attackTargets.map((t) => {
       let tScore = 0;
-      if (atk.id === 'shell_charge') tScore += Math.min(4, actor.shield) * 3;
+      if (atk.id === 'shell_charge') tScore += Math.min(5, actor.shield) * 3;
       if (atk.id === 'purifying_orb' && isBurning(t)) tScore += 6;
       if (atk.id === 'solar_strike') tScore += radianceLayers(actor) * 4 + (isBurning(t) ? 6 : 0);
       if (atk.id === 'sun_sunder') {
@@ -1676,6 +1730,7 @@ function selectEnemyAction(
         if (hasHealSkill) tScore += 10;
       }
       tScore += (atk.damage ?? 0) + getDamageBonus(actor, b);
+      if (estimateAiDamage(b, actor, atk, t) >= t.hp) tScore += 65;
       if (actorPassive?.kind === 'shadowHunter' && t.hp / t.maxHp < 0.5) {
         tScore += actorPassive.value;
       }
@@ -1772,10 +1827,24 @@ function selectEnemyAction(
         if (c.kind === 'attack') c.score -= 15;
         else if (c.kind === 'buff') c.score -= 10;
         else if (c.kind === 'status') c.score -= 10;
-        // heal 和 swap 不惩罚（治疗是刚需，换位有次数限制）
+        else if (c.kind === 'heal') c.score -= 10;
       }
     }
   }
+  for (const candidate of candidates) {
+    if (candidate.skill && isDefensiveSkill(candidate.skill) && candidate.skill.id !== 'growth_ultimate') {
+      const rescue = lifesaving.has(`${candidate.skill.id}:${candidate.targetUid ?? ''}`);
+      candidate.score -= Math.min(3, actor.defensiveStreak ?? 0) * (rescue ? 6 : 18);
+    }
+    if (b.round >= 13 && candidate.kind === 'attack') candidate.score += b.round >= 15 ? 16 : 8;
+  }
+  // 同一技能/目标仅保留最高评分，避免多个评分入口重复增加抽中权重。
+  const unique = new Map<string, typeof candidates[number]>();
+  for (const candidate of candidates) {
+    const key = `${candidate.kind}:${candidate.skill?.id ?? ''}:${candidate.targetUid ?? ''}`;
+    if (!unique.has(key) || unique.get(key)!.score < candidate.score) unique.set(key, candidate);
+  }
+  candidates.splice(0, candidates.length, ...unique.values());
   // ─── 6. softmax 选择 ───
   // 兜底：有可用技能但未产生候选（如封印后只剩治疗/buff且不满足使用条件）时，
   // 从剩余技能中挑一个执行（优先攻击/状态/增益，治疗垫底），避免 AI 瘫痪无行动
@@ -2102,10 +2171,6 @@ function resolveAttack(
   const shadowMark = tWithPassive.statuses.find((s) => s.kind === 'shadowMark');
   if (shadowMark) {
     perHitDmg += shadowMark.value;
-  }
-  // 战斗疲劳：第 31 回合起，所有攻击每段获得递增伤害，打破护盾/回复形成的永久僵局。
-  if (skill.kind === 'attack' && nb.round > BATTLE_FATIGUE_START_ROUND) {
-    perHitDmg += nb.round - BATTLE_FATIGUE_START_ROUND;
   }
   // 原本带伤害的攻击每段至少造成 1 点，避免降攻与减伤叠加后出现 0/负伤害软锁。
   const isDamagingAttack = skill.kind === 'attack' && ((skill.damage ?? 0) > 0 || base > 0 || perHitDmg > 0);
@@ -2654,9 +2719,6 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     // 被封印的技能无法使用
     return markActed(pushLog(b, `${actor.name} 的「${skill.name}」被封印，无法使用`, sideOf(actor)), actor.uid);
   }
-  if (skill.id === 'molten_self_burn' && actor.hp <= 1) {
-    return markActed(pushLog(b, `${actor.name} 的生命不足，无法使用「${skill.name}」`, sideOf(actor), actor.uid), actor.uid);
-  }
   if (skill.id === 'shell_charge' && actor.shield <= 0) {
     return markActed(pushLog(b, `${actor.name} 没有护盾，无法使用「${skill.name}」`, sideOf(actor), actor.uid), actor.uid);
   }
@@ -2682,6 +2744,14 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (targets.length === 0) {
     return markActed(pushLog(nb, `${actor.name} 的${skill.name}没有目标`, sideOf(actor)), actor.uid);
   }
+  if (!actor.isPlayer) {
+    const freshActor = actorFromId(nb, actor.uid)!;
+    actor = { ...freshActor, lastSkillId: skill.id,
+      defensiveStreak: isDefensiveSkill(skill) ? (freshActor.defensiveStreak ?? 0) + 1 : 0 };
+    nb = replaceUnit(nb, actor);
+    // 后续部分技能从目标快照写回自身，必须同步此次行动记录。
+    for (let i = 0; i < targets.length; i++) if (targets[i].uid === actor.uid) targets[i] = actor;
+  }
   if (nb.telemetry) {
     nb = {
       ...nb,
@@ -2701,7 +2771,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
 
   if (skill.id === 'shell_charge') {
     const current = actorFromId(nb, actor.uid)!;
-    const spent = Math.min(4, current.shield);
+    const spent = Math.min(5, current.shield);
     const shield = current.shield - spent;
     nb = replaceUnit(nb, { ...current, shield, statuses: shield === 0 ? current.statuses.filter((status) => status.kind !== 'shield') : current.statuses });
     nb = pushLog(nb, `${actor.name} 使用「${skill.name}」消耗 ${spent} 点护盾`, sideOf(actor), actor.uid, actor.uid);
@@ -2744,12 +2814,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   }
   if (skill.id === 'molten_self_burn') {
     const enhanced = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
-    const damaged = { ...actorFromId(nb, actor.uid)!, hp: actor.hp - 1 };
-    nb = replaceUnit(nb, damaged);
-    const msg = `${actor.name} 使用「熔火自焚」，自身损失 1 点生命`;
-    nb = pushLog(nb, msg, sideOf(actor), actor.uid, actor.uid, undefined, undefined,
-      spans(msg, [['actor', actor.name], ['skill', skill.name], ['damage', '1']]));
-    const burning = applyStatusTo(damaged, { kind: 'burn', value: 4, turns: 2 }, nb.round);
+    const burning = applyStatusTo(actorFromId(nb, actor.uid)!, { kind: 'burn', value: 4, turns: 2 }, nb.round);
     nb = replaceUnit(nb, { ...burning, shield: Math.min(99, burning.shield + 2 + enhanced * 2) });
     nb = pushLog(nb, `${actor.name} 使用「熔火自焚」，强化自身`, sideOf(actor), actor.uid, actor.uid, ['burn']);
     return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);

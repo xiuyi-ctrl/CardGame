@@ -41,7 +41,7 @@ describe('光苔球与光苔兽', () => {
     expect(nextStage('moss_beast')).toBe('solar_spirit');
     expect(planEnemyLayout([{ speciesId: 'kiki' }, { speciesId: 'moss_beast' }])[1].row).toBe('back');
     expect([...STARTER_GROUP_1, ...STARTER_GROUP_2]).not.toContain('light_moss');
-    expect(getSkill('lamp_guard').heal).toBe(3);
+    expect(getSkill('lamp_guard').heal).toBe(5);
   });
 
   it.each(['light_moss', 'moss_beast'])('%s光浴清两层火但不清毒，二阶对灼烧目标多治疗2点', species => {
