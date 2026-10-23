@@ -230,3 +230,5 @@
   .codex-terminal .codex-skills .skill-desc, .codex-terminal .skill-uses-note { grid-column: 1; }
   .codex-terminal .codex-title img { width: 30px; height: 30px; }
 }
+.progression-branch-choice { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.progression-branch-choice select { min-height: 44px; max-width: 100%; }

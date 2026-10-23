@@ -36,8 +36,8 @@ export const MAIN_REGIONS: Record<MainRegionId, MainRegionDef> = {
   emerald_forest: {
     id: 'emerald_forest', name: '翠影林地',
     basePool: ['momo', 'lulu', 'kiki', 'pipi', 'mimi', 'light_moss', 'fire_fox'],
-    evo1Pool: ['momo_queen', 'lulu_king', 'gora', 'sisi', 'mimi_king', 'moss_beast', 'phantom_tail_fox'],
-    evo2Pool: ['momo_god', 'lulu_god', 'gora_god', 'sisi_god', 'mimi_god', 'solar_spirit', 'nine_tail_sovereign'],
+    evo1Pool: ['momo_queen', 'lulu_king', 'gora', 'sisi', 'mimi_king', 'moss_beast', 'phantom_tail_fox', 'torch_fox'],
+    evo2Pool: ['momo_god', 'lulu_god', 'gora_god', 'sisi_god', 'mimi_god', 'solar_spirit', 'nine_tail_sovereign', 'torch_fox_lord'],
     starters: ['momo', 'lulu', 'fire_fox'],
     companions: ['kiki', 'mimi', 'pipi'],
     bossPools: {

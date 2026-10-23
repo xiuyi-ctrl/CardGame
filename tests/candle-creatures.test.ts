@@ -202,8 +202,10 @@ describe('烛烛与灯翅蛾', () => {
   it('主模式招募、遭遇能出现新伙伴，开局不变', () => {
     const found = new Set<string>();
     for (let seed = 0; seed < 150; seed++) {
-      const map = generateMap(seed, 1);
-      for (const group of Object.values(map.encounter)) for (const enemy of group) found.add(enemy.speciesId);
+      for (const act of [1, 2]) {
+        const map = generateMap(seed, act);
+        for (const group of Object.values(map.encounter)) for (const enemy of group) found.add(enemy.speciesId);
+      }
       const rewards = generateRewards({ ...createInitialState(), seed, act: 2 });
       for (const reward of rewards) for (const id of reward.recruitCandidates ?? []) found.add(`recruit:${id}`);
     }

@@ -61,10 +61,10 @@ export type GameAction =
   | { type: 'EVENT_BATTLE_START'; enemies: { speciesId: string }[]; reward: { kind: 'gold' | 'food' | 'hp'; amount?: number; foodId?: string }; penalty: { percent?: number; goldLoss?: number; curseTarget?: boolean }; bonusReward?: { kind: 'food'; foodId: string } }
   | { type: 'BATTLE_END_CONFIRM' }
   | { type: 'SPECIAL_CHOICE'; rewardId: string }
-  | { type: 'EVOLVE_ONE'; uid: string }
+  | { type: 'EVOLVE_ONE'; uid: string; targetSpeciesId?: string }
   | { type: 'SPECIAL_TARGET'; uid: string }
   | { type: 'BOOST_STAT'; stat: 'hp' | 'spd' }
-  | { type: 'FUSE'; primaryUid: string; materialUid?: string }
+  | { type: 'FUSE'; primaryUid: string; materialUid?: string; targetSpeciesId?: string }
   | { type: 'PICK_CUSTOM'; presetId: string }
   | { type: 'USE_PURIFY'; uid: string }
   | { type: 'USE_SKIP'; nodeId: string; free?: boolean }
@@ -77,10 +77,10 @@ export type GameAction =
   | { type: 'OPEN_BACKPACK' }
   | { type: 'CLOSE_BACKPACK' }
   | { type: 'TAME_OVERFLOW_REPLACE'; tameUid: string; discardUid: string }
-  | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string }
+  | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string; targetSpeciesId?: string }
   | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
   | { type: 'TAME_OVERFLOW_JOIN'; tameUid: string }
-  | { type: 'FUSE_IN_OVERFLOW'; uid: string; materialUid?: string }
+  | { type: 'FUSE_IN_OVERFLOW'; uid: string; materialUid?: string; targetSpeciesId?: string }
   | { type: 'PLAYER_SKILL'; actorUid: string; skillId: string; targetUid?: string }
   | { type: 'PLAYER_REST'; actorUid: string }
   | { type: 'PLAYER_CANCEL_ORDER'; actorUid: string }
@@ -1275,7 +1275,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.specialPending?.kind !== 'evolve') return state;
       const target = state.roster.find((u) => u.uid === action.uid);
       if (!target || !nextStage(target.speciesId) || evolutionLockReason(state, target.speciesId)) return state;
-      let evolved = fuseUnit(target);
+      let evolved = fuseUnit(target, action.targetSpeciesId);
       if (!evolved) return state;
       if (state.specialPending.super) {
         const rng = createRng(state.seed * 33 + state.act * 11 + state.roster.length * 7);
@@ -1499,7 +1499,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const roster = state.roster.map((u) => (u.uid === target.uid ? recomputeStats({ ...u, bonusStats: bonus }) : u));
       return {
         ...state,
-        screen: 'roster',
+        screen: state.screen === 'boost' ? 'map' : 'roster',
         roster,
         specialPending: undefined,
         log: [`属性强化！${target.name} 的${statCn}永久提升`, ...state.log].slice(0, 20),
@@ -1971,7 +1971,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // 主宠保留原 uid；其余同物种材料（need-1 只）从队伍移除
       const materials = same.filter((u) => u.uid !== primary.uid && (!action.materialUid || u.uid === action.materialUid)).slice(0, need - 1);
       if (materials.length !== need - 1) return state;
-      const evolved = fuseUnit(primary);
+      const evolved = fuseUnit(primary, action.targetSpeciesId);
       if (!evolved) return state;
       const materialUids = materials.map((u) => u.uid);
       const roster = state.roster
@@ -2038,7 +2038,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (same.length + 1 < need) return state;
       // 材料：现有同物种中除主宠外取 need-2 只，再加上刚驯服的这只，共 need-1 只
       const useExisting = same.filter((u) => u.uid !== primary.uid).slice(0, need - 2);
-      const evolved = fuseUnit(primary);
+      const evolved = fuseUnit(primary, action.targetSpeciesId);
       if (!evolved) return state;
       const roster = state.roster
         .filter((u) => !useExisting.some((m) => m.uid === u.uid))
@@ -2093,7 +2093,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (same.length < need) return state;
       const materials = same.filter((u) => u.uid !== primary.uid && (!action.materialUid || u.uid === action.materialUid)).slice(0, need - 1);
       if (materials.length !== need - 1) return state;
-      const evolved = fuseUnit(primary);
+      const evolved = fuseUnit(primary, action.targetSpeciesId);
       if (!evolved) return state;
       const materialUids = materials.map((u) => u.uid);
       const roster = state.roster

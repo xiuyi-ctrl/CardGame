@@ -689,21 +689,22 @@ describe('奇遇关', () => {
     expect(s.inventory.purify).toBe(0);
   });
 
-  it('属性强化：选宠物 → 选属性 → 属性提升', () => {
+  it.each(['hp', 'spd'] as const)('属性强化%s：选宠物 → 选属性 → 属性提升后返回地图', stat => {
     let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('b', 'boost'),
     ]);
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'b' });
     expect(s.specialPending).toEqual({ kind: 'boost', uid: '' });
-    const u = s.roster[0];
-    const hp0 = u.maxHp;
+    const u = s.roster.find(unit => unit.speciesId === 'kiki')!;
+    const value0 = stat === 'hp' ? u.maxHp : u.spd;
     s = dispatch(s, { type: 'SPECIAL_TARGET', uid: u.uid });
     expect(s.screen).toBe('boost');
-    s = dispatch(s, { type: 'BOOST_STAT', stat: 'hp' });
-    expect(s.screen).toBe('roster');
+    s = dispatch(s, { type: 'BOOST_STAT', stat });
+    expect(s.screen).toBe('map');
     expect(s.specialPending).toBeUndefined();
     const boosted = s.roster.find((x) => x.uid === u.uid)!;
-    expect(boosted.maxHp).toBe(hp0 + 5);
+    expect(stat === 'hp' ? boosted.maxHp : boosted.spd).toBe(value0 + (stat === 'hp' ? 5 : 2));
+    expect(dispatch(s, { type: 'BOOST_STAT', stat })).toBe(s);
   });
 
   it('造物：选择模板后随机技能自创生物加入队伍', () => {

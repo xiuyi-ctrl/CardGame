@@ -33,6 +33,8 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
 function effectText(e: StatusEffect): string {
   const turns = e.turns > 0 ? `，持续 ${e.turns} 回合` : '';
   switch (e.kind) {
+    case 'emberSeed':
+      return '火种1层；下一次攻击首次命中额外附加2层灼烧，触发后消失；战斗内不衰减';
     case 'foxFire':
       return `狐火 ${e.value}层；技能对敌人附加灼烧额外＋${e.value}层，战斗内不衰减`;
     case 'foxTailGuard':
@@ -111,6 +113,10 @@ function getDescEffectBonus(s: SkillDef, effectBonus: number, enhanced: number, 
 export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   let desc = s.desc;
+  if (s.id === 'pass_flame') desc = desc.replace('2层灼烧', `${2 + bonus.effectBonus}层灼烧`);
+  if (s.id === 'relay_wildfire') desc = desc.replace('附加1层灼烧', `附加${1 + bonus.effectBonus}层灼烧`);
+  if (s.id === 'ember_veil') desc = desc.replace('获得2点护盾', `获得${2 + bonus.effectBonus}点护盾`);
+  if (s.id === 'ignite_embers' && bonus.damageBonus > 0) desc = desc.replace('×2的伤害', `×2＋${bonus.damageBonus}的伤害`);
   if (s.id === 'burn_reversal') {
     desc = desc.replace('回复2加', `回复${2 + bonus.healBonus}加`).replace('基础最多7点', `最多${7 + bonus.healBonus}点`).replace('仍治疗2点', `仍治疗${2 + bonus.healBonus}点`);
   }

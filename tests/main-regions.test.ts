@@ -25,12 +25,12 @@ describe('主模式地区基础配置', () => {
     expect(mixed.bossCount).toEqual([2, 3]);
   });
 
-  it('林地是7条完整进化链共21种形态，未夹带其他地区物种', () => {
+  it('林地7条基础进化链含传火分支共23种形态，未夹带其他地区物种', () => {
     const forest = MAIN_REGIONS.emerald_forest;
     expect(forest.basePool.map(id => getMonster(id).name)).toEqual(['迅迅', '泡泡', '铁墩', '刺刺', '咪咪', '光苔球', '火狐']);
-    expect(forest.evo1Pool.map(id => getMonster(id).name)).toEqual(['迅牙', '泡泡将', '铁卫', '棘尾', '蟒影', '光苔兽', '幻尾火狐']);
-    expect(forest.evo2Pool.map(id => getMonster(id).name)).toEqual(['迅天', '泡泡龙神', '铁壁神', '棘刺王', '深渊蛇王', '日炎灵', '九尾炎尊']);
-    expect(new Set([...forest.basePool, ...forest.evo1Pool, ...forest.evo2Pool]).size).toBe(21);
+    expect(forest.evo1Pool.map(id => getMonster(id).name)).toEqual(['迅牙', '泡泡将', '铁卫', '棘尾', '蟒影', '光苔兽', '幻尾火狐', '传火狐']);
+    expect(forest.evo2Pool.map(id => getMonster(id).name)).toEqual(['迅天', '泡泡龙神', '铁壁神', '棘刺王', '深渊蛇王', '日炎灵', '九尾炎尊', '传火狐尊']);
+    expect(new Set([...forest.basePool, ...forest.evo1Pool, ...forest.evo2Pool]).size).toBe(23);
     forest.basePool.forEach((id, index) => {
       expect(nextStage(id)).toBe(forest.evo1Pool[index]);
       expect(nextStage(forest.evo1Pool[index])).toBe(forest.evo2Pool[index]);
@@ -116,7 +116,7 @@ describe('地区存档兼容', () => {
 });
 
 describe('混合地区确定性基线', () => {
-  it('27组地图、战后奖励和挑战奖励与地区改动前逐字节一致', () => {
+  it('27组地图、战后奖励和挑战奖励符合分段布局改版后的确定性快照', () => {
     const results = [];
     for (const difficulty of ['normal', 'hard', 'nightmare'] as const) {
       for (const act of [1, 2, 3]) {
@@ -127,6 +127,7 @@ describe('混合地区确定性基线', () => {
         }
       }
     }
-    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('75cad770420b48c7c77b983c3b57fdb1a1deb2cda3cbf0ce9717753870535bb1');
+    // 本次明确修改新地图布局及随机消耗；旧存档地图不重生成，保留新版本确定性门禁。
+    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('6eb81073e2394ed7f60003c548f18180cc946905406cbaadaae179853afd481b');
   });
 });

@@ -1,9 +1,13 @@
 import type { SkillDef } from '../types';
 
 export const SKILLS: Record<string, SkillDef> = {
+  pass_flame: { id: 'pass_flame', name: '传火', desc: '给指定一名友方附加2层灼烧。', kind: 'status', target: 'ally', hideEffects: true, effects: [{ kind: 'burn', value: 2, turns: 2 }] },
+  relay_wildfire: { id: 'relay_wildfire', name: '传火燎原', desc: '全体存活队友各附加1层灼烧，各获得1层火种（每只最多1层）；冷却2回合。', kind: 'status', target: 'allyAll', cooldown: 2, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }, { kind: 'emberSeed', value: 1, turns: 0 }] },
+  ignite_embers: { id: 'ignite_embers', name: '火种引燃', desc: '立即消耗我方场上所有火种，攻击指定一名敌人，造成消耗火种数×2的伤害。', kind: 'attack', target: 'single', reach: 'direct', damage: 0, hideEffects: true },
+  ember_veil: { id: 'ember_veil', name: '火幕庇护', desc: '所有存活友方获得2点护盾；持有火种的友方额外获得2点护盾；冷却1回合。', kind: 'buff', target: 'allyAll', cooldown: 1, hideEffects: true, effects: [{ kind: 'shield', value: 2, turns: 99 }] },
   nine_tail_wildfire: {
-    id: 'nine_tail_wildfire', name: '九尾燎原', desc: '对全体敌人各造成3点伤害并附加灼烧1层，冷却1回合',
-    target: 'all', kind: 'attack', damage: 3, cooldown: 1, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
+    id: 'nine_tail_wildfire', name: '九尾燎原', desc: '对全体敌人各造成3点伤害并附加灼烧1层，冷却1回合，每场限3次',
+    target: 'all', kind: 'attack', damage: 3, cooldown: 1, uses: 3, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   flame_tail_shield: {
     id: 'flame_tail_shield', name: '焰尾护盾', desc: '自身获得灼烧2层与4点护盾；施放当回合首次被敌方攻击技能命中且存活后，额外获得1层狐火，多段只触发一次，冷却1回合',
@@ -55,8 +59,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   sun_sunder: {
-    id: 'sun_sunder', name: '掠日破盾', desc: '攻击单个前排敌人，伤害前移除目标所有护盾，再造成4点伤害；若本次实际移除护盾（包含被动移除），附加5层灼烧；冷却1回合',
-    target: 'single', reach: 'front', kind: 'attack', damage: 4, cooldown: 1,
+    id: 'sun_sunder', name: '掠日破盾', desc: '攻击单个前排敌人，伤害前移除目标所有护盾，再造成4点伤害；若本次实际移除护盾（包含被动移除），附加5层灼烧；冷却1回合，每场限3次',
+    target: 'single', reach: 'front', kind: 'attack', damage: 4, cooldown: 1, uses: 3,
   },
   shell_charge: {
     id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多5点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；至少有1点护盾才能使用',

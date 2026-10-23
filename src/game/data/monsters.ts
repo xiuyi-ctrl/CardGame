@@ -487,8 +487,20 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   fire_fox: {
     id: 'fire_fox', name: '火狐', emoji: '🦊', baseHp: 11, baseSpd: 4,
     skills: ['sealed_style_foxfire', 'illusory_flame'], passive: 'fox_flame_body', tame: { difficulty: 0.7 }, rank: 1,
-    evolutions: [{ to: 'phantom_tail_fox' }],
+    evolutions: [{ to: 'phantom_tail_fox' }, { to: 'torch_fox' }],
     desc: '将自身灼烧化为狐火的灵巧幼狐，免疫灼烧伤害，以自燃逐渐强化点火能力；仍会受到直接攻击与中毒伤害。',
+  },
+  torch_fox: {
+    id: 'torch_fox', name: '传火狐', emoji: '🦊', baseHp: 16, baseSpd: 5,
+    skills: ['ember_veil', 'twin_tail_flames', 'pass_flame'], passive: 'flame_relay',
+    evolutions: [{ to: 'torch_fox_lord' }], tame: { difficulty: 0.4 }, rank: 2,
+    desc: '火狐的传火分支，以灼烧为伙伴传递火种，保护队伍并准备后续引燃。',
+  },
+  torch_fox_lord: {
+    id: 'torch_fox_lord', name: '传火狐尊', emoji: '🦊', baseHp: 28, baseSpd: 6,
+    skills: ['pass_flame', 'relay_wildfire', 'ignite_embers', 'ember_veil'], passive: 'flame_relay',
+    tame: { difficulty: 0.3 }, rank: 3,
+    desc: '汇聚战场火种的传火传奇，通过群体传火与火幕庇护支援伙伴。',
   },
   phantom_tail_fox: {
     id: 'phantom_tail_fox', name: '幻尾火狐', emoji: '🦊', baseHp: 16, baseSpd: 5,
@@ -558,7 +570,7 @@ export function fusionDepth(id: string): number {
 
 /** 主模式进化链每阶均需两只同形态；其他物种沿用原有需求。 */
 export function fusionNeed(id: string): number {
-  if (MAIN_BASE_POOL.includes(id) || MAIN_EVO1_POOL.includes(id)) return 2;
+  if (MAIN_BASE_POOL.includes(id) || MAIN_EVO1_POOL.includes(id) || id === 'torch_fox') return 2;
   return fusionDepth(id) + 2;
 }
 
@@ -569,5 +581,5 @@ export const EVO2_POOL = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_
 
 /** 主模式新增伙伴池；原六条进化链池保留用于开局与专项评估。 */
 export const MAIN_BASE_POOL = [...BASE_POOL, 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss', 'fire_fox'];
-export const MAIN_EVO1_POOL = [...EVO1_POOL, 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast', 'phantom_tail_fox'];
-export const MAIN_EVO2_POOL = [...EVO2_POOL, 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle', 'solar_spirit', 'nine_tail_sovereign'];
+export const MAIN_EVO1_POOL = [...EVO1_POOL, 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast', 'phantom_tail_fox', 'torch_fox'];
+export const MAIN_EVO2_POOL = [...EVO2_POOL, 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle', 'solar_spirit', 'nine_tail_sovereign', 'torch_fox_lord'];

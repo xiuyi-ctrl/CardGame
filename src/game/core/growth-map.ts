@@ -13,9 +13,9 @@ export const TOTAL_LAYERS = 50;
 /** 一阶生物（rank 1） */
 export const TIER1 = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi', 'coal', 'candle', 'molten_larva', 'ember_hawk', 'light_moss', 'fire_fox'];
 /** 二阶生物（rank 2） */
-export const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king', 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast', 'phantom_tail_fox'];
+export const TIER2 = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king', 'coal_guard', 'lantern_moth', 'molten_beetle', 'searing_hawk', 'moss_beast', 'phantom_tail_fox', 'torch_fox'];
 /** 传奇生物（rank 3） */
-export const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god', 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle', 'solar_spirit', 'nine_tail_sovereign'];
+export const LEGENDARY = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god', 'sisi_god', 'furnace_beast', 'eternal_moth', 'molten_beast', 'solar_eagle', 'solar_spirit', 'nine_tail_sovereign', 'torch_fox_lord'];
 
 /** 节点类型概率表（按层进度调整） */
 interface NodeProb {
@@ -236,7 +236,11 @@ export function getGrowthEncounter(
   }
 
   const enemies: { speciesId: string }[] = [];
-  for (let i = 0; i < maxEnemies; i++) enemies.push({ speciesId: pickTierSpecies(tiers, rng) });
+  for (let i = 0; i < maxEnemies; i++) {
+    const needsAttacker = i === maxEnemies - 1 && enemies.every(u => u.speciesId === 'torch_fox' || u.speciesId === 'torch_fox_lord');
+    const choices: [string[], number][] = needsAttacker ? tiers.map(([pool, weight]) => [pool.filter(id => id !== 'torch_fox' && id !== 'torch_fox_lord'), weight]) : tiers;
+    enemies.push({ speciesId: pickTierSpecies(choices, rng) });
+  }
   return enemies;
 }
 
@@ -273,7 +277,9 @@ export function getGrowthEliteEncounter(
   const count = layer <= 10 ? 1 : 2;
   const enemies: { speciesId: string }[] = [];
   for (let i = 0; i < count; i++) {
-    enemies.push({ speciesId: pickTierSpecies(tiers, rng) });
+    const needsAttacker = i === count - 1 && enemies.every(u => u.speciesId === 'torch_fox' || u.speciesId === 'torch_fox_lord');
+    const choices: [string[], number][] = needsAttacker ? tiers.map(([pool, weight]) => [pool.filter(id => id !== 'torch_fox' && id !== 'torch_fox_lord'), weight]) : tiers;
+    enemies.push({ speciesId: pickTierSpecies(choices, rng) });
   }
   return enemies;
 }

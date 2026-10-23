@@ -3,6 +3,7 @@ import type { StatusEffect, Unit } from '../game/types';
 export type IconArt = readonly [label: string, file: string];
 
 export const STATUS_ART: Record<StatusEffect['kind'], IconArt> = {
+  emberSeed: ['火种', 'ember-seed'],
   burn: ['灼烧', 'burn'],
   burnBrand: ['灼烧烙印', 'burn-brand'],
   sunRadiance: ['日华', 'heal-tick'],

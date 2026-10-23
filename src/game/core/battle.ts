@@ -394,8 +394,9 @@ export function createBattle(
     c.furnaceTriggers = undefined;
     c.eternalLightUsed = undefined;
     c.burnStripUsed = undefined;
+    c.flameRelayUsed = undefined;
     c.radianceGainedThisRound = undefined;
-    c.statuses = c.statuses.filter(s => s.kind !== 'sunRadiance' && s.kind !== 'foxFire' && s.kind !== 'foxTailGuard');
+    c.statuses = c.statuses.filter(s => s.kind !== 'emberSeed' && s.kind !== 'sunRadiance' && s.kind !== 'foxFire' && s.kind !== 'foxTailGuard');
     if (options?.corruptDebuff === 'spd') c.spd = Math.max(1, c.spd - 2);
     return c;
   });
@@ -674,8 +675,8 @@ function startRound(b: BattleState): BattleState {
   // 状态结算完毕后，再根据当前状态设置 acted（眩晕已可能被 tickStatuses 移除）
   nb = {
     ...nb,
-    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
-    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
+    playerUnits: nb.playerUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), flameRelayUsed: undefined, furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
+    enemyUnits: nb.enemyUnits.map((u) => ({ ...u, acted: u.statuses.some((s) => s.kind === 'stun'), flameRelayUsed: undefined, furnaceTriggers: undefined, eternalLightUsed: undefined, burnStripUsed: undefined, radianceGainedThisRound: undefined })),
   };
   // 清除来源已死亡的嘲讽
   const allUnits = [...nb.playerUnits, ...nb.enemyUnits];
@@ -783,7 +784,7 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
     const left = s.value - dmg;
     // damageCap：dot伤害也计入本回合累计伤害上限
     const p = getUnitPassive(unit);
-    const immuneBurn = s.kind === 'burn' && p?.kind === 'foxFlame';
+    const immuneBurn = s.kind === 'burn' && (p?.kind === 'foxFlame' || p?.kind === 'flameRelay');
     if (immuneBurn) dmg = 0;
     if (p?.kind === 'damageCap') {
       const roundDmg = nb.roundDmgMap ?? {};
@@ -815,12 +816,12 @@ function applyDot(b: BattleState, u: Unit): { unit: Unit; battle: BattleState } 
 function tickStatuses(u: Unit, round?: number): void {
   for (const s of u.statuses) {
     // 灼烧/中毒由层数结算管理生命周期，护盾不被打破就永久存在，均不按回合数递减
-    if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.kind === 'sunRadiance' || s.kind === 'foxFire') continue;
+    if (s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.kind === 'emberSeed' || s.kind === 'sunRadiance' || s.kind === 'foxFire') continue;
     // 仅战吼（atkUp）、荆棘（thorns）、怒棘（rageThorn）、风羽（windSpd）、波光环（comboBoost）、暗影印记（shadowMark）、锁链连接（chainLink）施放回合不计入持续回合数：该回合不递减；其他状态正常递减
     if ((s.kind === 'atkUp' || s.kind === 'thorns' || s.kind === 'rageThorn' || s.kind === 'windSpd' || s.kind === 'comboBoost' || s.kind === 'shadowMark' || s.kind === 'chainLink') && s.appliedRound !== undefined && s.appliedRound === round) continue;
     s.turns -= 1;
   }
-  u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.kind === 'sunRadiance' || s.kind === 'foxFire' || s.turns > 0);
+  u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.kind === 'emberSeed' || s.kind === 'sunRadiance' || s.kind === 'foxFire' || s.turns > 0);
 }
 
 export function pushLog(
@@ -1005,6 +1006,16 @@ export function stokeFireTargets(b: BattleState, actor: Unit, skillId = 'stoke_f
     targets = [targets.reduce((lowest, unit) => unit.hp < lowest.hp ? unit : lowest)];
   }
   return targets.filter(isBurning);
+}
+
+function grantFlameRelay(b: BattleState, actor: Unit, targets: Unit[]): BattleState {
+  const holder = actorFromId(b, actor.uid)!;
+  if (holder.flameRelayUsed || getUnitPassive(holder, b)?.kind !== 'flameRelay') return b;
+  const target = targets.find(t => t.isPlayer === actor.isPlayer && (actorFromId(b, t.uid)?.hp ?? 0) > 0);
+  if (!target) return b;
+  let nb = replaceUnit(b, { ...holder, flameRelayUsed: true });
+  nb = replaceUnit(nb, applyStatusTo(actorFromId(nb, target.uid)!, { kind: 'emberSeed', value: 1, turns: 0 }, nb.round));
+  return pushLog(nb, `${holder.name} 的「传火之尾」使 ${target.name} 获得火种`, sideOf(holder), holder.uid, target.uid, ['emberSeed']);
 }
 
 function applyAfterglow(b: BattleState, actor: Unit): BattleState {
@@ -1325,6 +1336,7 @@ function resolveTargets(b: BattleState, actor: Unit, skill: SkillDef, explicitTa
 }
 
 function applyStatusTo(unit: Unit, effect: { kind: Unit['statuses'][number]['kind']; value: number; turns: number; sourceUid?: string; sealedSkills?: string[] }, round?: number): Unit {
+  if (effect.kind === 'emberSeed') effect = { ...effect, value: 1, turns: 0 };
   if (effect.kind === 'burn' && effect.value > 0 && unit.hp > 0 && getUnitPassive(unit)?.kind === 'foxFlame') unit = addFoxFire(unit, 1);
   const idx = unit.statuses.findIndex((s) => s.kind === effect.kind);
   if (idx >= 0) {
@@ -1424,7 +1436,8 @@ export function selectEnemyAction(
   const skills = actor.skills
     .map(getSkill)
     .filter((s) => canUnitUseSkill(actor, s.id) && (!requiresBurningTarget(s.id) || stokeFireTargets(b, actor, s.id).length > 0)
-      && (s.id !== 'flame_tracing_feather' || flameTracingTargets(b, actor).length > 0));
+      && (s.id !== 'flame_tracing_feather' || flameTracingTargets(b, actor).length > 0)
+      && (s.id !== 'ignite_embers' || alliesOf(b, actor).some(u => u.statuses.some(effect => effect.kind === 'emberSeed'))));
   if (skills.length === 0) return undefined;
   const candidates: { kind: 'heal' | 'buff' | 'attack' | 'status' | 'swap'; skill?: SkillDef; targetUid?: string; score: number }[] = [];
   const hpRatio = actor.hp / actor.maxHp;
@@ -1760,6 +1773,14 @@ export function selectEnemyAction(
   }
   // ─── 4b. 状态技能评分（弱化/毒雾等 debuff 技能） ───
   for (const st of statusSkills) {
+    if (st.id === 'pass_flame' || st.id === 'relay_wildfire') {
+      const allies = alliesOf(b, actor).filter(unit => !unit.statuses.some(s => s.kind === 'emberSeed')
+        && unit.skills.some(id => getSkill(id).kind === 'attack') && unit.hp > 4);
+      const target = allies.sort((a, c) => c.hp - a.hp)[0];
+      if (target && (st.id === 'relay_wildfire' || !actor.flameRelayUsed))
+        candidates.push({ kind: 'status', skill: st, targetUid: target.uid, score: st.id === 'relay_wildfire' ? 50 : 38 });
+      continue;
+    }
     if (st.id === 'burn_tail') {
       const p = getUnitPassive(actor, b);
       if (foxFireLayers(actor) < (p?.kind === 'foxFlame' ? p.value : 5)) candidates.push({ kind: 'status', skill: st, score: 55 });
@@ -2065,6 +2086,17 @@ function applyCorruptSpread(b: BattleState, poisonedUid: string): BattleState {
 }
 
 /** 逐目标攻击结算：伤害计算 + 段数拆分 + 护盾/吸血/反伤/状态写回 */
+type AttackReactions = Array<(battle: BattleState) => BattleState>;
+
+/** 群体主效果全部写入后封存同一快照，后续反击/死亡效果另行记录。 */
+function sealSkillGroup(b: BattleState, from: number): BattleState {
+  if (b.log.length === from) return b;
+  const snapshot = b.log[b.log.length - 1];
+  return { ...b, log: b.log.map((entry, index) => index < from ? entry : {
+    ...entry, simultaneousGroup: from, hp: snapshot.hp, statuses: snapshot.statuses, shields: snapshot.shields,
+  }) };
+}
+
 function resolveAttack(
   b: BattleState,
   actor: Unit,
@@ -2072,6 +2104,8 @@ function resolveAttack(
   skill: SkillDef,
   count: number,
   foxBurnBonus: number = 0,
+  firstHitBonus: number = 0,
+  batch?: { reactions: AttackReactions; hit: number; last: boolean; shieldIgnore: Map<string, number> },
 ): { battle: BattleState; lastHitLog: number | undefined; passiveAdds: string[]; didPoison: boolean } {
   let nb = b;
   // 技能强化：伤害加成
@@ -2120,7 +2154,7 @@ function resolveAttack(
   const ap = getUnitPassive(actor);
   let didPoison = false;
   let tWithPassive = target;
-  if (ap?.kind === 'venom') {
+  if (ap?.kind === 'venom' && (!batch || batch.hit === 0)) {
     tWithPassive = applyStatusTo(tWithPassive, { kind: 'poison', value: ap.value, turns: 2 }, nb.round);
     passiveAdds.push('poison');
     didPoison = true;
@@ -2148,7 +2182,7 @@ function resolveAttack(
     perHitDmg += Math.min(8, getDamageGuard(target, nb));
   }
   if (ap?.kind === 'scorchPlus') {
-    tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
+    if (!batch || batch.hit === 0) tWithPassive = applyStatusTo(tWithPassive, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
     passiveAdds.push('burn');
     const burnStacks = tWithPassive.statuses.filter((s) => s.kind === 'burn').reduce((sum, s) => sum + s.value, 0) - ap.value;
     if (burnStacks > 0) {
@@ -2174,15 +2208,18 @@ function resolveAttack(
   }
   // 原本带伤害的攻击每段至少造成 1 点，避免降攻与减伤叠加后出现 0/负伤害软锁。
   const isDamagingAttack = skill.kind === 'attack' && ((skill.damage ?? 0) > 0 || base > 0 || perHitDmg > 0);
+  const firstHitDamage = perHitDmg + firstHitBonus;
   if (isDamagingAttack) perHitDmg = Math.max(1, perHitDmg);
   const finalDmg = perHitDmg * count;
   const segments = splitDamage(finalDmg, count);
+  if (firstHitBonus > 0 && segments.length > 0) segments[0] = isDamagingAttack ? Math.max(1, firstHitDamage) : firstHitDamage;
   let t2 = tWithPassive;
   const skillEffectKinds: string[] = (skill.effects ?? [])
     .filter((e) => e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'thorns' || e.kind === 'shieldCounter' || e.kind === 'shadowMark' || e.kind === 'skillSeal' || e.kind === 'fear')
     .map((e) => e.kind);
   let lastHitLog: number | undefined;
-  let shieldIgnoreLeft = (ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) ? 8 : 0;
+  let shieldIgnoreLeft = batch?.shieldIgnore.get(target.uid)
+    ?? ((ap?.kind === 'poisonBreak' && tWithPassive.statuses.some((s) => s.kind === 'poison')) ? 8 : 0);
   for (let i = 0; i < segments.length; i++) {
     let seg = segments[i];
     if (t2.hp <= 0) break;
@@ -2217,26 +2254,32 @@ function resolveAttack(
       }
       t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
       // 锁链传导：被锁链连接的单位受到伤害时，50%传导给伙伴（传导伤害不再触发连锁）
-      if (remainingDmg > 0) {
-        const chain = t2.statuses.find((s) => s.kind === 'chainLink');
-        if (chain?.sourceUid) {
-          const partner = actorFromId(nb, chain.sourceUid);
-          if (partner && partner.hp > 0 && partner.uid !== t2.uid) {
-            const chainGuard = getDamageGuard(partner, nb);
-            const chainDmg = Math.max(1, Math.floor(remainingDmg * chain.value / 100) - chainGuard);
-            let p2 = partner;
-            if (p2.shield > 0) {
-              const absorbed = Math.min(p2.shield, chainDmg);
-              p2 = { ...p2, shield: p2.shield - absorbed };
-              if (p2.shield <= 0) p2 = { ...p2, statuses: p2.statuses.filter((s) => s.kind !== 'shield') };
+      const conductChain = (state: BattleState): BattleState => {
+        let nb = state;
+        if (remainingDmg > 0) {
+          const chain = t2.statuses.find((s) => s.kind === 'chainLink');
+          if (chain?.sourceUid) {
+            const partner = actorFromId(nb, chain.sourceUid);
+            if (partner && partner.hp > 0 && partner.uid !== t2.uid) {
+              const chainGuard = getDamageGuard(partner, nb);
+              const chainDmg = Math.max(1, Math.floor(remainingDmg * chain.value / 100) - chainGuard);
+              let p2 = partner;
+              if (p2.shield > 0) {
+                const absorbed = Math.min(p2.shield, chainDmg);
+                p2 = { ...p2, shield: p2.shield - absorbed };
+                if (p2.shield <= 0) p2 = { ...p2, statuses: p2.statuses.filter((s) => s.kind !== 'shield') };
+              }
+              const actualDmg = chainDmg - Math.min(p2.shield, chainDmg);
+              p2 = { ...p2, hp: Math.max(0, p2.hp - actualDmg) };
+              nb = replaceUnit(nb, p2);
+              nb = pushLog(nb, `🔗 锁链传导！${partner.name} 受到 ${chainDmg} 点伤害`, sideOf(partner), t2.uid, partner.uid);
             }
-            const actualDmg = chainDmg - Math.min(p2.shield, chainDmg);
-            p2 = { ...p2, hp: Math.max(0, p2.hp - actualDmg) };
-            nb = replaceUnit(nb, p2);
-            nb = pushLog(nb, `🔗 锁链传导！${partner.name} 受到 ${chainDmg} 点伤害`, sideOf(partner), t2.uid, partner.uid);
           }
         }
-      }
+        return nb;
+      };
+      if (batch) batch.reactions.push(conductChain);
+      else nb = conductChain(nb);
     }
     for (const e of skill.effects ?? []) {
       if (skill.id === 'weaken') {
@@ -2287,9 +2330,15 @@ function resolveAttack(
     if (ap?.kind === 'scorch' && i > 0) {
       t2 = applyStatusTo(t2, { kind: 'burn', value: ap.value, turns: 2 }, nb.round);
     }
+    const seededActor = actorFromId(nb, actor.uid)!;
+    const seeded = skill.kind === 'attack' && actor.isPlayer !== target.isPlayer && seededActor.statuses.some(s => s.kind === 'emberSeed');
+    if (seeded) {
+      t2 = applyStatusTo(t2, { kind: 'burn', value: 2, turns: 2 }, nb.round);
+      nb = replaceUnit(nb, { ...seededActor, statuses: seededActor.statuses.filter(s => s.kind !== 'emberSeed') });
+    }
     nb = replaceUnit(nb, t2);
-    const hitAdds = skillEffectKinds.length > 0 ? skillEffectKinds : undefined;
-    if (seg === 0 && skill.effects && skill.effects.length > 0 && skill.target === 'all') {
+    const hitAdds = skillEffectKinds.length || seeded ? [...skillEffectKinds, ...(seeded ? ['burn'] : [])] : undefined;
+    if (seg === 0 && skill.effects && skill.effects.length > 0 && skill.target === 'all' && !batch) {
       // 零伤全体 debuff：由 useSkillInner 统一推送合并日志，此处跳过
     } else if (seg === 0 && skill.effects && skill.effects.length > 0) {
       const effectDesc = skill.effects.map((e) => {
@@ -2312,316 +2361,333 @@ function resolveAttack(
         spans(msg1, [['actor', actor.name], ['skill', skill.name], ['target', target.name], ['damage', String(seg)]]));
     }
     lastHitLog = nb.log.length - 1;
-    // 命中即换盾，先于本次命中引发的即时反击。
-    if (skill.id === 'heated_shell_bump' && i === 0) {
-      const current = actorFromId(nb, actor.uid);
-      if (current && isBurning(current)) {
-        const amount = Math.min(2 + enhanceBonus.effectBonus, 99 - current.shield);
-        nb = replaceUnit(nb, { ...consumeBurn(current, 1), shield: current.shield + amount });
-        nb = pushLog(nb, `${actor.name} 的「热壳顶撞」获得 ${amount} 点护盾`, sideOf(actor), actor.uid, actor.uid);
-        nb = notifyBurnRemoved(nb, current, 1);
+    const reactToHit = (state: BattleState): BattleState => {
+      let nb = state;
+      let t2 = actorFromId(nb, target.uid)!;
+      // 命中即换盾，先于本次命中引发的即时反击。
+      if (skill.id === 'heated_shell_bump' && i === 0) {
+        const current = actorFromId(nb, actor.uid);
+        if (current && isBurning(current)) {
+          const amount = Math.min(2 + enhanceBonus.effectBonus, 99 - current.shield);
+          nb = replaceUnit(nb, { ...consumeBurn(current, 1), shield: current.shield + amount });
+          nb = pushLog(nb, `${actor.name} 的「热壳顶撞」获得 ${amount} 点护盾`, sideOf(actor), actor.uid, actor.uid);
+          nb = notifyBurnRemoved(nb, current, 1);
+        }
       }
-    }
-    if (ap?.kind === 'drain') {
-      const healedActor = actorFromId(nb, actor.uid);
-      if (healedActor && healedActor.hp > 0) {
-        const maxHp = getEffectiveMaxHp(healedActor);
-        const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
-        nb = replaceUnit(nb, healed);
-        const msgDrain = `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`;
-        nb = pushLog(nb, msgDrain, sideOf(healedActor), healedActor.uid, healedActor.uid, undefined, undefined,
-          spans(msgDrain, [['actor', healedActor.name], ['passive', ap.name], ['heal', String(ap.value)]]));
+      if (ap?.kind === 'drain') {
+        const healedActor = actorFromId(nb, actor.uid);
+        if (healedActor && healedActor.hp > 0) {
+          const maxHp = getEffectiveMaxHp(healedActor);
+          const healed = { ...healedActor, hp: Math.min(maxHp, healedActor.hp + ap.value) };
+          nb = replaceUnit(nb, healed);
+          const msgDrain = `${healedActor.name} 的「${ap.name}」恢复 ${ap.value} 点生命`;
+          nb = pushLog(nb, msgDrain, sideOf(healedActor), healedActor.uid, healedActor.uid, undefined, undefined,
+            spans(msgDrain, [['actor', healedActor.name], ['passive', ap.name], ['heal', String(ap.value)]]));
+        }
       }
-    }
-    // 灵魂汲取：攻击命中时，攻击者灵魂 +1（上限 20）
-    if (t2.hp <= 0 || seg > 0) {
-      const freshActor = actorFromId(nb, actor.uid);
-      if (freshActor && freshActor.hp > 0) {
-        const fp = getUnitPassive(freshActor);
-        if (fp?.kind === 'soulSiphon') {
-          const curSoul = freshActor.soul ?? 0;
-          if (curSoul < 20) {
-            const newSoul = curSoul + 1;
-            nb = replaceUnit(nb, { ...freshActor, soul: newSoul });
-            // 阶梯触发日志
-            if (newSoul === 5) { const m = `${freshActor.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
-            else if (newSoul === 10) { const m = `${freshActor.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
-            else if (newSoul === 20) { const m = `${freshActor.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
+      // 灵魂汲取：攻击命中时，攻击者灵魂 +1（上限 20）
+      if (t2.hp <= 0 || seg > 0) {
+        const freshActor = actorFromId(nb, actor.uid);
+        if (freshActor && freshActor.hp > 0) {
+          const fp = getUnitPassive(freshActor);
+          if (fp?.kind === 'soulSiphon') {
+            const curSoul = freshActor.soul ?? 0;
+            if (curSoul < 20) {
+              const newSoul = curSoul + 1;
+              nb = replaceUnit(nb, { ...freshActor, soul: newSoul });
+              // 阶梯触发日志
+              if (newSoul === 5) { const m = `${freshActor.name} 的「灵魂汲取」达到 5 灵魂！伤害 +2`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
+              else if (newSoul === 10) { const m = `${freshActor.name} 的「灵魂汲取」达到 10 灵魂！每回合恢复 3 HP`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
+              else if (newSoul === 20) { const m = `${freshActor.name} 的「灵魂汲取」达到 20 灵魂！伤害 +3（共 +5）`; nb = pushLog(nb, m, sideOf(freshActor), freshActor.uid, freshActor.uid, undefined, undefined, spans(m, [['actor', freshActor.name], ['passive', '灵魂汲取']])); }
+            }
           }
         }
       }
-    }
-    // 成长值被动：主动攻击命中 +2 成长值（成长值消耗与命中加成互相独立，各自生效）
-    if (t2.hp <= 0 || seg > 0) {
-      const freshActor2 = actorFromId(nb, actor.uid);
-      if (freshActor2 && freshActor2.hp > 0) {
-        const gp = getUnitPassive(freshActor2);
-        if (gp?.kind === 'growthValue') {
-          const curGV = freshActor2.growthValue ?? 0;
-          nb = replaceUnit(nb, { ...freshActor2, growthValue: curGV + 2 });
-        }
-      }
-    }
-    // 荆棘缠绕：攻击时概率使目标伤害 -1（古树之主在场时概率更高）
-    if (ap?.kind === 'thornEntangle' && t2.hp > 0) {
-      const bossAlive = nb.enemyUnits.some((u) => u.speciesId === 'boss_vine' && u.hp > 0);
-      const chance = bossAlive ? 60 : 40;
-      const roll = Math.abs((nb.rngCount ?? 0)) % 100;
-      nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
-      if (roll < chance) {
-        t2 = applyStatusTo(t2, { kind: 'atkDown', value: ap.value, turns: 2 }, nb.round);
-        nb = replaceUnit(nb, t2);
-        const msgEnt = `${actor.name} 的「${ap.name}」使 ${t2.name} 伤害 -1`;
-        nb = pushLog(nb, msgEnt, sideOf(actor), actor.uid, t2.uid, ['atkDown'], undefined,
-          spans(msgEnt, [['actor', actor.name], ['passive', ap.name], ['target', t2.name], ['status', '伤害 -1']]));
-      }
-    }
-    // 恐惧支配/恐惧之王：攻击命中附加恐惧1层
-    if ((ap?.kind === 'fearOnHit' || ap?.kind === 'fearLord') && t2.hp > 0) {
-      nb = applyFear(nb, t2, 1);
-      t2 = actorFromId(nb, t2.uid) ?? t2;
-      const freshT2 = t2;
-      const fearStacks = getFearStacks(freshT2);
-      const passiveName = ap?.kind === 'fearLord' ? '恐惧之王' : '恐惧支配';
-      const msgFH = `${actor.name} 的「${passiveName}」使 ${freshT2.name} 恐惧 +1（共 ${fearStacks} 层）`;
-      nb = pushLog(nb, msgFH, sideOf(actor), actor.uid, freshT2.uid, undefined, undefined,
-        spans(msgFH, [['actor', actor.name], ['passive', passiveName], ['target', freshT2.name], ['status', `恐惧 ${fearStacks} 层`]]));
-    }
-    // 烈焰环绕：被攻击时 30% 概率使攻击者灼烧 1 层，熔火领主在场时 100%
-    if (t2.hp > 0) {
-      const tp = getUnitPassive(t2);
-      if (tp?.kind === 'flameAura') {
-        const attacker = actorFromId(nb, actor.uid);
-        if (attacker && attacker.hp > 0) {
-          const hasBossFire = alliesOf(nb, t2).some((a) => a.speciesId === 'boss_fire');
-          if (hasBossFire || Math.abs((nb.rngCount ?? 0)) % 100 < 30) {
-            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
-            const burned = applyStatusTo(attacker, { kind: 'burn', value: tp.value, turns: 2 }, nb.round);
-            nb = replaceUnit(nb, burned);
-            const msgFA = `${t2.name} 的「烈焰环绕」触发！${burned.name} 被灼烧 ${tp.value} 层`;
-            const burnDesc = `灼烧 ${tp.value} 层`;
-            nb = pushLog(nb, msgFA, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
-              spans(msgFA, [['passive', '烈焰环绕'], ['target', burned.name], ['status', burnDesc]]));
-          } else {
-            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+      // 成长值被动：主动攻击命中 +2 成长值（成长值消耗与命中加成互相独立，各自生效）
+      if (t2.hp <= 0 || seg > 0) {
+        const freshActor2 = actorFromId(nb, actor.uid);
+        if (freshActor2 && freshActor2.hp > 0) {
+          const gp = getUnitPassive(freshActor2);
+          if (gp?.kind === 'growthValue') {
+            const curGV = freshActor2.growthValue ?? 0;
+            nb = replaceUnit(nb, { ...freshActor2, growthValue: curGV + 2 });
           }
         }
       }
-    }
+      // 荆棘缠绕：攻击时概率使目标伤害 -1（古树之主在场时概率更高）
+      if (ap?.kind === 'thornEntangle' && t2.hp > 0) {
+        const bossAlive = nb.enemyUnits.some((u) => u.speciesId === 'boss_vine' && u.hp > 0);
+        const chance = bossAlive ? 60 : 40;
+        const roll = Math.abs((nb.rngCount ?? 0)) % 100;
+        nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+        if (roll < chance) {
+          t2 = applyStatusTo(t2, { kind: 'atkDown', value: ap.value, turns: 2 }, nb.round);
+          nb = replaceUnit(nb, t2);
+          const msgEnt = `${actor.name} 的「${ap.name}」使 ${t2.name} 伤害 -1`;
+          nb = pushLog(nb, msgEnt, sideOf(actor), actor.uid, t2.uid, ['atkDown'], undefined,
+            spans(msgEnt, [['actor', actor.name], ['passive', ap.name], ['target', t2.name], ['status', '伤害 -1']]));
+        }
+      }
+      // 恐惧支配/恐惧之王：攻击命中附加恐惧1层
+      if ((ap?.kind === 'fearOnHit' || ap?.kind === 'fearLord') && t2.hp > 0) {
+        nb = applyFear(nb, t2, 1);
+        t2 = actorFromId(nb, t2.uid) ?? t2;
+        const freshT2 = t2;
+        const fearStacks = getFearStacks(freshT2);
+        const passiveName = ap?.kind === 'fearLord' ? '恐惧之王' : '恐惧支配';
+        const msgFH = `${actor.name} 的「${passiveName}」使 ${freshT2.name} 恐惧 +1（共 ${fearStacks} 层）`;
+        nb = pushLog(nb, msgFH, sideOf(actor), actor.uid, freshT2.uid, undefined, undefined,
+          spans(msgFH, [['actor', actor.name], ['passive', passiveName], ['target', freshT2.name], ['status', `恐惧 ${fearStacks} 层`]]));
+      }
+      // 烈焰环绕：被攻击时 30% 概率使攻击者灼烧 1 层，熔火领主在场时 100%
       if (t2.hp > 0) {
         const tp = getUnitPassive(t2);
-        if (tp?.kind === 'thorns') {
+        if (tp?.kind === 'flameAura') {
           const attacker = actorFromId(nb, actor.uid);
           if (attacker && attacker.hp > 0) {
-            const hurt = applyCounterDmg(attacker, tp.value);
-            nb = replaceUnit(nb, hurt);
-            const msgTh = `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`;
-            nb = pushLog(nb, msgTh, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
-              spans(msgTh, [['passive', tp.name], ['target', attacker.name], ['damage', String(tp.value)]]));
+            const hasBossFire = alliesOf(nb, t2).some((a) => a.speciesId === 'boss_fire');
+            if (hasBossFire || Math.abs((nb.rngCount ?? 0)) % 100 < 30) {
+              nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+              const burned = applyStatusTo(attacker, { kind: 'burn', value: tp.value, turns: 2 }, nb.round);
+              nb = replaceUnit(nb, burned);
+              const msgFA = `${t2.name} 的「烈焰环绕」触发！${burned.name} 被灼烧 ${tp.value} 层`;
+              const burnDesc = `灼烧 ${tp.value} 层`;
+              nb = pushLog(nb, msgFA, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
+                spans(msgFA, [['passive', '烈焰环绕'], ['target', burned.name], ['status', burnDesc]]));
+            } else {
+              nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+            }
           }
         }
-        if (tp?.kind === 'thornRoyal') {
-          const attacker = actorFromId(nb, actor.uid);
-          if (attacker && attacker.hp > 0) {
-            const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').reduce((sum, s) => sum + s.value, 0);
-            const baseDmg = tp.value + rageThornStacks;
-            t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
-            const hitCount = t2.thornsHitCount!;
-            const isBurst = hitCount % 3 === 0;
-            const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
-            const newAttacker = applyCounterDmg(attacker, thornDmg);
-            nb = replaceUnit(nb, newAttacker);
-            nb = replaceUnit(nb, t2);
-            const msgTR = `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`;
-            nb = pushLog(nb, msgTR, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
-              spans(msgTR, [['passive', '荆棘之躯'], ['target', attacker.name], ['damage', String(thornDmg)]]));
-            if (isBurst) {
-              const freshT2 = actorFromId(nb, t2.uid) ?? t2;
-              t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
+      }
+        if (t2.hp > 0) {
+          const tp = getUnitPassive(t2);
+          if (tp?.kind === 'thorns') {
+            const attacker = actorFromId(nb, actor.uid);
+            if (attacker && attacker.hp > 0) {
+              const hurt = applyCounterDmg(attacker, tp.value);
+              nb = replaceUnit(nb, hurt);
+              const msgTh = `${t2.name} 的「${tp.name}」反伤 ${attacker.name} ${tp.value} 点`;
+              nb = pushLog(nb, msgTh, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
+                spans(msgTh, [['passive', tp.name], ['target', attacker.name], ['damage', String(tp.value)]]));
+            }
+          }
+          if (tp?.kind === 'thornRoyal') {
+            const attacker = actorFromId(nb, actor.uid);
+            if (attacker && attacker.hp > 0) {
+              const rageThornStacks = t2.statuses.filter((s) => s.kind === 'rageThorn').reduce((sum, s) => sum + s.value, 0);
+              const baseDmg = tp.value + rageThornStacks;
+              t2 = { ...t2, thornsHitCount: (t2.thornsHitCount ?? 0) + 1 };
+              const hitCount = t2.thornsHitCount!;
+              const isBurst = hitCount % 3 === 0;
+              const thornDmg = isBurst ? 5 + rageThornStacks : baseDmg;
+              const newAttacker = applyCounterDmg(attacker, thornDmg);
+              nb = replaceUnit(nb, newAttacker);
               nb = replaceUnit(nb, t2);
-              const msgTRh = `${t2.name} 的「荆棘之躯」恢复 2 点生命`;
-              nb = pushLog(nb, msgTRh, sideOf(t2), t2.uid, t2.uid, undefined, undefined,
-                spans(msgTRh, [['passive', '荆棘之躯'], ['heal', '2']]));
+              const msgTR = `${t2.name} 的「荆棘之躯」反伤 ${attacker.name} ${thornDmg} 点`;
+              nb = pushLog(nb, msgTR, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
+                spans(msgTR, [['passive', '荆棘之躯'], ['target', attacker.name], ['damage', String(thornDmg)]]));
+              if (isBurst) {
+                const freshT2 = actorFromId(nb, t2.uid) ?? t2;
+                t2 = { ...freshT2, hp: Math.min(getEffectiveMaxHp(freshT2), freshT2.hp + 2) };
+                nb = replaceUnit(nb, t2);
+                const msgTRh = `${t2.name} 的「荆棘之躯」恢复 2 点生命`;
+                nb = pushLog(nb, msgTRh, sideOf(t2), t2.uid, t2.uid, undefined, undefined,
+                  spans(msgTRh, [['passive', '荆棘之躯'], ['heal', '2']]));
+              }
+            }
+          }
+          // 熔岩护体：受到攻击时灼烧攻击者 1 层
+          if (tp?.id === 'molten_armor' && t2.hp > 0) {
+            const attacker = actorFromId(nb, actor.uid);
+            if (attacker && attacker.hp > 0) {
+              let burned = applyStatusTo(attacker, { kind: 'burn', value: 1, turns: 2 }, nb.round);
+              nb = replaceUnit(nb, burned);
+              const msgMA = `${t2.name} 的「熔岩护体」触发！${burned.name} 被灼烧 1 层`;
+              nb = pushLog(nb, msgMA, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
+                spans(msgMA, [['passive', '熔岩护体'], ['target', burned.name], ['status', '灼烧 1 层']]));
+            }
+          }
+          // 岩壳崩解：每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益
+          if (tp?.kind === 'rockShellBreak' && t2.hp > 0) {
+            t2 = { ...t2, rockShellHits: (t2.rockShellHits ?? 0) + 1 };
+            nb = replaceUnit(nb, t2);
+            if (t2.rockShellHits! >= tp.value) {
+              t2 = { ...t2, rockShellHits: 0 };
+              nb = replaceUnit(nb, t2);
+              // 对全体敌人（玩家单位）造成5点伤害
+              const playerUnits = nb.playerUnits.filter((u) => u.hp > 0);
+              const resolveShardBurstUids: string[] = [];
+              for (const pu of playerUnits) {
+                let puDmg = 5;
+                let pu2 = pu;
+                if (pu2.shield > 0) {
+                  const absorbed = Math.min(pu2.shield, puDmg);
+                  pu2 = { ...pu2, shield: pu2.shield - absorbed };
+                  puDmg -= absorbed;
+                  if (pu2.shield <= 0) pu2 = { ...pu2, statuses: pu2.statuses.filter((s) => s.kind !== 'shield') };
+                }
+                pu2 = { ...pu2, hp: Math.max(0, pu2.hp - puDmg) };
+                nb = replaceUnit(nb, pu2);
+                resolveShardBurstUids.push(pu2.uid);
+              }
+              // 清除自身所有减益状态
+              const debuffKinds = ['burn', 'poison', 'atkDown', 'spdDown', 'taunt', 'stun', 'thorns'];
+              const clearedBurn = (actorFromId(nb, t2.uid) ?? t2).statuses.find(s => s.kind === 'burn')?.value ?? 0;
+              t2 = { ...(actorFromId(nb, t2.uid) ?? t2), statuses: (actorFromId(nb, t2.uid) ?? t2).statuses.filter((s) => !debuffKinds.includes(s.kind)) };
+              nb = replaceUnit(nb, t2);
+              nb = notifyBurnRemoved(nb, t2, clearedBurn);
+              nb = pushLog(nb, `${t2.name} 的「岩壳崩解」触发！岩壳碎裂，对全体敌人造成5点伤害！`, sideOf(t2), t2.uid, undefined, undefined, resolveShardBurstUids);
+            }
+          }
+          // 受击加速/古木加速：受到攻击后速度 +1（可叠加，上限按被动类型区分）
+          if ((tp?.kind === 'spdOnHit' || tp?.kind === 'treeSpeedUp') && t2.hp > 0) {
+          const stacks = t2.passiveSpdStacks ?? 0;
+          const cap = tp.kind === 'treeSpeedUp' ? 8 : 6;
+          if (stacks < cap) {
+            t2 = { ...t2, spd: t2.spd + 1, passiveSpdStacks: stacks + 1 };
+            nb = replaceUnit(nb, t2);
+            const msgSpd = `${t2.name} 的「${tp.name}」速度 +1`;
+            nb = pushLog(nb, msgSpd, sideOf(t2), t2.uid, t2.uid, undefined, undefined,
+              spans(msgSpd, [['passive', tp.name]]));
+          }
+        }
+        if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
+          t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
+          nb = replaceUnit(nb, t2);
+          const msgRT = `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`;
+          nb = pushLog(nb, msgRT, sideOf(t2), t2.uid, t2.uid, ['rageThorn'], undefined,
+            spans(msgRT, [['passive', '复仇棘甲']]));
+        }
+        // 腐化囊体：被攻击时50%概率使攻击者中毒2层
+        if (t2.hp > 0) {
+          const tp2 = getUnitPassive(t2);
+          if (tp2?.kind === 'corruptSac') {
+            const roll = Math.abs((nb.rngCount ?? 0)) % 100;
+            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+            if (roll < 50) {
+              const attacker2 = actorFromId(nb, actor.uid);
+              if (attacker2 && attacker2.hp > 0) {
+                const poisoned = applyStatusTo(attacker2, { kind: 'poison', value: tp2.value, turns: 2 }, nb.round);
+                nb = replaceUnit(nb, poisoned);
+                const msgCS = `${t2.name} 的「腐化囊体」使 ${attacker2.name} 中毒 ${tp2.value} 层`;
+                nb = pushLog(nb, msgCS, sideOf(t2), t2.uid, attacker2.uid, undefined, undefined,
+                  spans(msgCS, [['passive', '腐化囊体'], ['target', attacker2.name], ['status', `中毒 ${tp2.value} 层`]]));
+                didPoison = true;
+                if (batch) nb = applyCorruptSpread(nb, t2.uid);
+              }
             }
           }
         }
-        // 熔岩护体：受到攻击时灼烧攻击者 1 层
-        if (tp?.id === 'molten_armor' && t2.hp > 0) {
+        // 粘滞躯体：攻击蛞蝓的单位速度-1，持续2回合
+        if (t2.hp > 0) {
+          const tp2 = getUnitPassive(t2);
+          if (tp2?.kind === 'stickyBody') {
+            const attacker3 = actorFromId(nb, actor.uid);
+            if (attacker3 && attacker3.hp > 0) {
+              const slowed = applyStatusTo(attacker3, { kind: 'spdDown', value: tp2.value, turns: 2 }, nb.round);
+              nb = replaceUnit(nb, slowed);
+              const msgSB = `${t2.name} 的「粘滞躯体」使 ${attacker3.name} 速度 -${tp2.value}`;
+              nb = pushLog(nb, msgSB, sideOf(t2), t2.uid, attacker3.uid, undefined, undefined,
+                spans(msgSB, [['passive', '粘滞躯体'], ['target', attacker3.name], ['status', `速度 -${tp2.value}`]]));
+            }
+          }
+        }
+        // 恐惧传递：被攻击时50%概率给攻击者恐惧1层
+        if (t2.hp > 0) {
+          const tp2 = getUnitPassive(t2);
+          if (tp2?.kind === 'fearOnBeingHit') {
+            const roll = Math.abs((nb.rngCount ?? 0)) % 100;
+            nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
+            if (roll < 50) {
+              const attackerFear = actorFromId(nb, actor.uid);
+              if (attackerFear && attackerFear.hp > 0) {
+                nb = applyFear(nb, attackerFear, 1);
+                const msgFB = `${t2.name} 的「恐惧传递」使 ${attackerFear.name} 恐惧 +1`;
+                nb = pushLog(nb, msgFB, sideOf(t2), t2.uid, attackerFear.uid, undefined, undefined,
+                  spans(msgFB, [['passive', '恐惧传递'], ['target', attackerFear.name], ['status', '恐惧']]));
+              }
+            }
+          }
+        }
+      }
+      if (t2.hp > 0) {
+        const scIdx = t2.statuses.findIndex((s) => s.kind === 'shieldCounter');
+        if (scIdx >= 0) {
+          const scVal = t2.statuses[scIdx].value;
           const attacker = actorFromId(nb, actor.uid);
           if (attacker && attacker.hp > 0) {
-            let burned = applyStatusTo(attacker, { kind: 'burn', value: 1, turns: 2 }, nb.round);
+            const hurt = applyCounterDmg(attacker, scVal);
+            const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
+            nb = replaceUnit(nb, debuffed);
+            const msgSC = `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低目标攻击2层`;
+            nb = pushLog(nb, msgSC, sideOf(t2), t2.uid, attacker.uid, ['atkDown'], undefined,
+              spans(msgSC, [['passive', '盾反'], ['target', attacker.name], ['damage', String(scVal)]]));
+          }
+          t2 = { ...t2, shield: 0, statuses: t2.statuses.filter((s) => s.kind !== 'shield' && s.kind !== 'shieldCounter') };
+          nb = replaceUnit(nb, t2);
+        }
+      }
+      if (t2.hp > 0) {
+        const fsIdx = t2.statuses.findIndex((s) => s.kind === 'flameShield');
+        if (fsIdx >= 0) {
+          const fsVal = t2.statuses[fsIdx].value;
+          const attacker = actorFromId(nb, actor.uid);
+          if (attacker && attacker.hp > 0) {
+            const burned = applyStatusTo(attacker, { kind: 'burn', value: fsVal, turns: 2 }, nb.round);
             nb = replaceUnit(nb, burned);
-            const msgMA = `${t2.name} 的「熔岩护体」触发！${burned.name} 被灼烧 1 层`;
-            nb = pushLog(nb, msgMA, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
-              spans(msgMA, [['passive', '熔岩护体'], ['target', burned.name], ['status', '灼烧 1 层']]));
-          }
-        }
-        // 岩壳崩解：每受到4次攻击，对全体敌人造成5点伤害并清除自身所有减益
-        if (tp?.kind === 'rockShellBreak' && t2.hp > 0) {
-          t2 = { ...t2, rockShellHits: (t2.rockShellHits ?? 0) + 1 };
-          nb = replaceUnit(nb, t2);
-          if (t2.rockShellHits! >= tp.value) {
-            t2 = { ...t2, rockShellHits: 0 };
-            nb = replaceUnit(nb, t2);
-            // 对全体敌人（玩家单位）造成5点伤害
-            const playerUnits = nb.playerUnits.filter((u) => u.hp > 0);
-            const resolveShardBurstUids: string[] = [];
-            for (const pu of playerUnits) {
-              let puDmg = 5;
-              let pu2 = pu;
-              if (pu2.shield > 0) {
-                const absorbed = Math.min(pu2.shield, puDmg);
-                pu2 = { ...pu2, shield: pu2.shield - absorbed };
-                puDmg -= absorbed;
-                if (pu2.shield <= 0) pu2 = { ...pu2, statuses: pu2.statuses.filter((s) => s.kind !== 'shield') };
-              }
-              pu2 = { ...pu2, hp: Math.max(0, pu2.hp - puDmg) };
-              nb = replaceUnit(nb, pu2);
-              resolveShardBurstUids.push(pu2.uid);
-            }
-            // 清除自身所有减益状态
-            const debuffKinds = ['burn', 'poison', 'atkDown', 'spdDown', 'taunt', 'stun', 'thorns'];
-            const clearedBurn = (actorFromId(nb, t2.uid) ?? t2).statuses.find(s => s.kind === 'burn')?.value ?? 0;
-            t2 = { ...(actorFromId(nb, t2.uid) ?? t2), statuses: (actorFromId(nb, t2.uid) ?? t2).statuses.filter((s) => !debuffKinds.includes(s.kind)) };
-            nb = replaceUnit(nb, t2);
-            nb = notifyBurnRemoved(nb, t2, clearedBurn);
-            nb = pushLog(nb, `${t2.name} 的「岩壳崩解」触发！岩壳碎裂，对全体敌人造成5点伤害！`, sideOf(t2), t2.uid, undefined, undefined, resolveShardBurstUids);
-          }
-        }
-        // 受击加速/古木加速：受到攻击后速度 +1（可叠加，上限按被动类型区分）
-        if ((tp?.kind === 'spdOnHit' || tp?.kind === 'treeSpeedUp') && t2.hp > 0) {
-        const stacks = t2.passiveSpdStacks ?? 0;
-        const cap = tp.kind === 'treeSpeedUp' ? 8 : 6;
-        if (stacks < cap) {
-          t2 = { ...t2, spd: t2.spd + 1, passiveSpdStacks: stacks + 1 };
-          nb = replaceUnit(nb, t2);
-          const msgSpd = `${t2.name} 的「${tp.name}」速度 +1`;
-          nb = pushLog(nb, msgSpd, sideOf(t2), t2.uid, t2.uid, undefined, undefined,
-            spans(msgSpd, [['passive', tp.name]]));
-        }
-      }
-      if (t2.hp > 0 && t2.statuses.some((s) => s.kind === 'thornSpikes')) {
-        t2 = applyStatusTo(t2, { kind: 'rageThorn', value: 1, turns: 2 }, nb.round);
-        nb = replaceUnit(nb, t2);
-        const msgRT = `${t2.name} 的「复仇棘甲」蓄力，攻击 +1`;
-        nb = pushLog(nb, msgRT, sideOf(t2), t2.uid, t2.uid, ['rageThorn'], undefined,
-          spans(msgRT, [['passive', '复仇棘甲']]));
-      }
-      // 腐化囊体：被攻击时50%概率使攻击者中毒2层
-      if (t2.hp > 0) {
-        const tp2 = getUnitPassive(t2);
-        if (tp2?.kind === 'corruptSac') {
-          const roll = Math.abs((nb.rngCount ?? 0)) % 100;
-          nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
-          if (roll < 50) {
-            const attacker2 = actorFromId(nb, actor.uid);
-            if (attacker2 && attacker2.hp > 0) {
-              const poisoned = applyStatusTo(attacker2, { kind: 'poison', value: tp2.value, turns: 2 }, nb.round);
-              nb = replaceUnit(nb, poisoned);
-              const msgCS = `${t2.name} 的「腐化囊体」使 ${attacker2.name} 中毒 ${tp2.value} 层`;
-              nb = pushLog(nb, msgCS, sideOf(t2), t2.uid, attacker2.uid, undefined, undefined,
-                spans(msgCS, [['passive', '腐化囊体'], ['target', attacker2.name], ['status', `中毒 ${tp2.value} 层`]]));
-              didPoison = true;
-            }
+            const msgFS = `${t2.name} 的「烈焰护盾」灼烧 ${attacker.name} ${fsVal} 层`;
+            const burnFS = `灼烧 ${fsVal} 层`;
+            nb = pushLog(nb, msgFS, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
+              spans(msgFS, [['passive', '烈焰护盾'], ['target', attacker.name], ['status', burnFS]]));
           }
         }
       }
-      // 粘滞躯体：攻击蛞蝓的单位速度-1，持续2回合
-      if (t2.hp > 0) {
-        const tp2 = getUnitPassive(t2);
-        if (tp2?.kind === 'stickyBody') {
-          const attacker3 = actorFromId(nb, actor.uid);
-          if (attacker3 && attacker3.hp > 0) {
-            const slowed = applyStatusTo(attacker3, { kind: 'spdDown', value: tp2.value, turns: 2 }, nb.round);
-            nb = replaceUnit(nb, slowed);
-            const msgSB = `${t2.name} 的「粘滞躯体」使 ${attacker3.name} 速度 -${tp2.value}`;
-            nb = pushLog(nb, msgSB, sideOf(t2), t2.uid, attacker3.uid, undefined, undefined,
-              spans(msgSB, [['passive', '粘滞躯体'], ['target', attacker3.name], ['status', `速度 -${tp2.value}`]]));
-          }
-        }
-      }
-      // 恐惧传递：被攻击时50%概率给攻击者恐惧1层
-      if (t2.hp > 0) {
-        const tp2 = getUnitPassive(t2);
-        if (tp2?.kind === 'fearOnBeingHit') {
-          const roll = Math.abs((nb.rngCount ?? 0)) % 100;
-          nb = { ...nb, rngCount: (nb.rngCount ?? 0) + 1 };
-          if (roll < 50) {
-            const attackerFear = actorFromId(nb, actor.uid);
-            if (attackerFear && attackerFear.hp > 0) {
-              nb = applyFear(nb, attackerFear, 1);
-              const msgFB = `${t2.name} 的「恐惧传递」使 ${attackerFear.name} 恐惧 +1`;
-              nb = pushLog(nb, msgFB, sideOf(t2), t2.uid, attackerFear.uid, undefined, undefined,
-                spans(msgFB, [['passive', '恐惧传递'], ['target', attackerFear.name], ['status', '恐惧']]));
-            }
-          }
-        }
-      }
-    }
-    if (t2.hp > 0) {
-      const scIdx = t2.statuses.findIndex((s) => s.kind === 'shieldCounter');
-      if (scIdx >= 0) {
-        const scVal = t2.statuses[scIdx].value;
-        const attacker = actorFromId(nb, actor.uid);
-        if (attacker && attacker.hp > 0) {
-          const hurt = applyCounterDmg(attacker, scVal);
-          const debuffed = applyStatusTo(hurt, { kind: 'atkDown', value: 2, turns: 2 }, nb.round);
-          nb = replaceUnit(nb, debuffed);
-          const msgSC = `${t2.name} 的「盾反」反击 ${attacker.name} ${scVal} 点并降低目标攻击2层`;
-          nb = pushLog(nb, msgSC, sideOf(t2), t2.uid, attacker.uid, ['atkDown'], undefined,
-            spans(msgSC, [['passive', '盾反'], ['target', attacker.name], ['damage', String(scVal)]]));
-        }
-        t2 = { ...t2, shield: 0, statuses: t2.statuses.filter((s) => s.kind !== 'shield' && s.kind !== 'shieldCounter') };
-        nb = replaceUnit(nb, t2);
-      }
-    }
-    if (t2.hp > 0) {
-      const fsIdx = t2.statuses.findIndex((s) => s.kind === 'flameShield');
-      if (fsIdx >= 0) {
-        const fsVal = t2.statuses[fsIdx].value;
-        const attacker = actorFromId(nb, actor.uid);
-        if (attacker && attacker.hp > 0) {
-          const burned = applyStatusTo(attacker, { kind: 'burn', value: fsVal, turns: 2 }, nb.round);
-          nb = replaceUnit(nb, burned);
-          const msgFS = `${t2.name} 的「烈焰护盾」灼烧 ${attacker.name} ${fsVal} 层`;
-          const burnFS = `灼烧 ${fsVal} 层`;
-          nb = pushLog(nb, msgFS, sideOf(t2), t2.uid, attacker.uid, undefined, undefined,
-            spans(msgFS, [['passive', '烈焰护盾'], ['target', attacker.name], ['status', burnFS]]));
-        }
-      }
-    }
+      return nb;
+    };
+    if (batch) batch.reactions.push(reactToHit);
+    else { nb = reactToHit(nb); t2 = actorFromId(nb, target.uid)!; }
   }
+  if (batch) batch.shieldIgnore.set(target.uid, shieldIgnoreLeft);
   if (passiveAdds.length > 0 && lastHitLog !== undefined) {
     nb = { ...nb, log: nb.log.map((l, idx) => (idx === lastHitLog ? { ...l, addsStatus: [...(l.addsStatus ?? []), ...passiveAdds] } : l)) };
   }
   nb = replaceUnit(nb, t2);
-  // 炉火按一次攻击技能命中结算，不随连击段数重复触发；致死命中、反伤和持续伤害不触发。
-  const furnace = getUnitPassive(t2, nb);
-  const attacker = actorFromId(nb, actor.uid);
-  if (skill.kind === 'attack' && t2.isPlayer !== actor.isPlayer && t2.hp > 0
-    && furnace?.kind === 'furnace' && (t2.furnaceTriggers ?? 0) < 2 && attacker && attacker.hp > 0) {
-    t2 = { ...t2, furnaceTriggers: (t2.furnaceTriggers ?? 0) + 1 };
-    const shieldGain = Math.min(furnace.shieldOnTrigger ?? 0, 99 - t2.shield);
-    if (shieldGain > 0) t2 = { ...t2, shield: t2.shield + shieldGain };
-    nb = replaceUnit(nb, t2);
-    nb = replaceUnit(nb, applyStatusTo(attacker, { kind: 'burn', value: furnace.value, turns: 2 }, nb.round));
-    const msg = `${t2.name} 的「${furnace.name}」使 ${attacker.name} 灼烧 ${furnace.value} 层`;
-    nb = pushLog(nb, msg, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
-      spans(msg, [['actor', t2.name], ['passive', furnace.name], ['target', attacker.name], ['status', `灼烧 ${furnace.value} 层`]]));
-    if (shieldGain > 0) nb = pushLog(nb, `${t2.name} 的「${furnace.name}」获得 ${shieldGain} 点护盾`, sideOf(t2), t2.uid, t2.uid);
-  }
-  const defended = actorFromId(nb, t2.uid)!;
-  if (skill.kind === 'attack' && lastHitLog !== undefined && defended.hp > 0 && defended.isPlayer !== actor.isPlayer
-    && defended.statuses.some(s => s.kind === 'foxTailGuard' && s.appliedRound === nb.round)) {
-    t2 = addFoxFire({ ...defended, statuses: defended.statuses.filter(s => s.kind !== 'foxTailGuard') }, 1);
-    nb = replaceUnit(nb, t2);
-    nb = pushLog(nb, `${t2.name} 的「焰尾护盾」获得 ${foxFireLayers(t2) - foxFireLayers(defended)} 层狐火（当前 ${foxFireLayers(t2)}）`, sideOf(t2), t2.uid, t2.uid, ['foxFire']);
-  }
-  nb = applyDefeatedTarget(nb, t2);
-  if (skill.kind === 'attack' && actor.isPlayer !== target.isPlayer && isBurning(target) && lastHitLog !== undefined) {
-    nb = applyAfterglow(nb, actor);
-    nb = applyEternalLight(nb, actor);
-  }
+  const defeatedByHit = t2.hp <= 0;
+  const finishHit = (state: BattleState): BattleState => {
+    let nb = state;
+    let t2 = actorFromId(nb, target.uid)!;
+    // 炉火按一次攻击技能命中结算，不随连击段数重复触发；致死命中、反伤和持续伤害不触发。
+    const furnace = getUnitPassive(t2, nb);
+    const attacker = actorFromId(nb, actor.uid);
+    if (skill.kind === 'attack' && t2.isPlayer !== actor.isPlayer && t2.hp > 0
+      && (!batch || batch.last) && furnace?.kind === 'furnace' && (t2.furnaceTriggers ?? 0) < 2 && attacker && attacker.hp > 0) {
+      t2 = { ...t2, furnaceTriggers: (t2.furnaceTriggers ?? 0) + 1 };
+      const shieldGain = Math.min(furnace.shieldOnTrigger ?? 0, 99 - t2.shield);
+      if (shieldGain > 0) t2 = { ...t2, shield: t2.shield + shieldGain };
+      nb = replaceUnit(nb, t2);
+      nb = replaceUnit(nb, applyStatusTo(attacker, { kind: 'burn', value: furnace.value, turns: 2 }, nb.round));
+      const msg = `${t2.name} 的「${furnace.name}」使 ${attacker.name} 灼烧 ${furnace.value} 层`;
+      nb = pushLog(nb, msg, sideOf(t2), t2.uid, attacker.uid, ['burn'], undefined,
+        spans(msg, [['actor', t2.name], ['passive', furnace.name], ['target', attacker.name], ['status', `灼烧 ${furnace.value} 层`]]));
+      if (shieldGain > 0) nb = pushLog(nb, `${t2.name} 的「${furnace.name}」获得 ${shieldGain} 点护盾`, sideOf(t2), t2.uid, t2.uid);
+    }
+    const defended = actorFromId(nb, t2.uid)!;
+    if (skill.kind === 'attack' && lastHitLog !== undefined && defended.hp > 0 && defended.isPlayer !== actor.isPlayer
+      && defended.statuses.some(s => s.kind === 'foxTailGuard' && s.appliedRound === nb.round)) {
+      t2 = addFoxFire({ ...defended, statuses: defended.statuses.filter(s => s.kind !== 'foxTailGuard') }, 1);
+      nb = replaceUnit(nb, t2);
+      nb = pushLog(nb, `${t2.name} 的「焰尾护盾」获得 ${foxFireLayers(t2) - foxFireLayers(defended)} 层狐火（当前 ${foxFireLayers(t2)}）`, sideOf(t2), t2.uid, t2.uid, ['foxFire']);
+    }
+    if (!batch || defeatedByHit) nb = applyDefeatedTarget(nb, t2);
+    if (skill.kind === 'attack' && actor.isPlayer !== target.isPlayer && isBurning(target) && lastHitLog !== undefined) {
+      nb = applyAfterglow(nb, actor);
+      nb = applyEternalLight(nb, actor);
+    }
+    return nb;
+  };
+  if (batch) batch.reactions.push(finishHit);
+  else nb = finishHit(nb);
   return { battle: nb, lastHitLog, passiveAdds, didPoison };
 }
 
@@ -2690,7 +2756,7 @@ function detonateBurnBrand(b: BattleState, actor: Unit, uid: string): BattleStat
   let damage = layers;
   let nb = b;
   const passive = getUnitPassive(target, nb);
-  if (passive?.kind === 'foxFlame') damage = 0;
+  if (passive?.kind === 'foxFlame' || passive?.kind === 'flameRelay') damage = 0;
   if (passive?.kind === 'damageCap') {
     const dealt = nb.roundDmgMap?.[target.uid] ?? 0;
     damage = Math.min(damage, Math.max(0, passive.value - dealt));
@@ -2741,6 +2807,12 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   }
   const { targets, battle } = resolveTargets(nb, actor, skill, explicitTarget);
   nb = battle;
+  if (skill.id === 'ignite_embers') {
+    const carriers = alliesOf(nb, actor).filter(unit => unit.statuses.some(s => s.kind === 'emberSeed'));
+    if (carriers.length === 0) return markActed(pushLog(nb, `${actor.name} 没有可引燃的我方火种`, sideOf(actor)), actor.uid);
+    for (const unit of carriers) nb = replaceUnit(nb, { ...unit, statuses: unit.statuses.filter(s => s.kind !== 'emberSeed') });
+    skill = { ...skill, damage: carriers.length * 2 };
+  }
   if (targets.length === 0) {
     return markActed(pushLog(nb, `${actor.name} 的${skill.name}没有目标`, sideOf(actor)), actor.uid);
   }
@@ -2873,6 +2945,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
 
   if (skill.kind === 'heal') {
     let r = nb;
+    const groupStart = r.log.length;
     const baseHeal = Math.max(1, skill.heal ?? 0);
     // 技能强化：治疗加成
     const healEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
@@ -2916,7 +2989,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       const msgHeal = `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${totalHeal} 点生命`;
       r = pushLog(r, msgHeal, sideOf(actor), actor.uid, t.uid, addsKinds, undefined,
         spans(msgHeal, [['actor', actor.name], ['skill', skill.name], ['target', t.name], ['heal', String(totalHeal)]]));
-      r = cleanseMossAfterHeal(r, actor, t.uid);
+      if (targets.length === 1) r = cleanseMossAfterHeal(r, actor, t.uid);
+    }
+    if (targets.length > 1) {
+      r = sealSkillGroup(r, groupStart);
+      for (const t of targets) r = cleanseMossAfterHeal(r, actor, t.uid);
     }
     nb = r;
   } else if (skill.kind === 'buff') {
@@ -2925,6 +3002,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       // 技能强化：buff 效果加成
       const buffEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
       const buffEnhanceBonus = getSkillEnhanceBonus(skill.id, buffEnhanceLevel);
+      const groupStart = nb.log.length;
       for (const t of targets) {
         let buffed = t;
         if (skill.heal && skill.heal > 0) {
@@ -2936,7 +3014,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           // 护盾效果加 effectBonus（level×2），非护盾效果只加 level×1
           const ashBonus = skill.id === 'ash_shelter' && e.kind === 'shield'
             && enemiesOf(nb, actor).some((unit) => unit.statuses.some((status) => status.kind === 'burn' && status.value > 0)) ? 2 : 0;
-          const effectValue = e.value + ashBonus + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceLevel);
+          const emberBonus = skill.id === 'ember_veil' && t.statuses.some(status => status.kind === 'emberSeed') ? 2 : 0;
+          const effectValue = e.value + ashBonus + emberBonus + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceLevel);
           buffed = applyStatusTo(buffed, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
           if (e.kind === 'shield') {
             buffed = { ...buffed, shield: Math.min(99, buffed.shield + effectValue) };
@@ -2950,7 +3029,11 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         if (skill.heal && skill.heal > 0) buffSpans.push(['heal', `${buffHeal}`]);
         nb = pushLog(nb, msgBuff, sideOf(actor), actor.uid, t.uid, undefined, undefined,
           spans(msgBuff, buffSpans));
-        if ((skill.heal ?? 0) > 0) nb = cleanseMossAfterHeal(nb, actor, t.uid);
+        if (targets.length === 1 && (skill.heal ?? 0) > 0) nb = cleanseMossAfterHeal(nb, actor, t.uid);
+      }
+      if (targets.length > 1) {
+        nb = sealSkillGroup(nb, groupStart);
+        if ((skill.heal ?? 0) > 0) for (const t of targets) nb = cleanseMossAfterHeal(nb, actor, t.uid);
       }
     } else {
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，强化自身`, sideOf(actor), actor.uid, actor.uid);
@@ -3218,9 +3301,9 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       if (e.kind === 'fear') return `恐惧 ${e.value + statusEnhanceBonus.effectBonus} 层`;
       return e.kind;
     }).join('，');
-    const hitAdds = addsKinds.filter((k) => ['burn', 'poison', 'atkDown', 'spdDown', 'stun', 'fear'].includes(k));
+    const hitAdds = addsKinds.filter((k) => ['emberSeed', 'burn', 'poison', 'atkDown', 'spdDown', 'stun', 'fear'].includes(k));
     if (skill.id === 'burn_brand') hitAdds.push('burnBrand');
-    if (skill.target === 'all') {
+    if (skill.target === 'all' || skill.target === 'allyAll') {
       const allTargetUids = targets.filter((t) => { const u = actorFromId(nb, t.uid); return u && u.hp > 0; }).map((t) => t.uid);
       nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${effectDesc}`, sideOf(actor), actor.uid, undefined, hitAdds.length > 0 ? hitAdds : undefined, allTargetUids);
     } else {
@@ -3229,6 +3312,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         nb = pushLog(nb, `${actor.name} 使用「${skill.name}」，${firstTarget.name} ${effectDesc}`, sideOf(actor), actor.uid, firstTarget.uid, hitAdds.length > 0 ? hitAdds : undefined);
       }
     }
+    if (skill.effects?.some(e => e.kind === 'burn' && e.value > 0)) nb = grantFlameRelay(nb, actor, targets);
   } else {
     const perTarget = new Map<string, number>();
     let waterWaveHits = 0;
@@ -3237,45 +3321,77 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       perTarget.set(t.uid, (perTarget.get(t.uid) ?? 0) + 1);
     }
     let passiveStrippedTarget: string | undefined;
+    let passiveBonusTarget: string | undefined;
+    let passiveHitBonus = 0;
     const stripPassive = getUnitPassive(actor, nb);
     if (skill.kind === 'attack' && stripPassive?.kind === 'burnStripShield' && !actor.burnStripUsed) {
       const target = [...perTarget.keys()].map((uid) => actorFromId(nb, uid)!)
-        .filter((unit) => unit.isPlayer !== actor.isPlayer && isBurning(unit) && unit.shield > 0)
+        .filter((unit) => unit.hp > 0 && unit.isPlayer !== actor.isPlayer && isBurning(unit))
         .sort((a, c) => c.shield - a.shield)[0];
       if (target) {
-        const amount = Math.min(stripPassive.value, target.shield);
+        const burn = target.statuses.find(status => status.kind === 'burn')!.value;
+        const stripLimit = stripPassive.burnStripCap === undefined ? stripPassive.value
+          : Math.min(stripPassive.burnStripCap, stripPassive.value + burn);
+        const amount = Math.min(stripLimit, target.shield);
         if (amount > 0) passiveStrippedTarget = target.uid;
         nb = replaceUnit(nb, { ...actorFromId(nb, actor.uid)!, burnStripUsed: true });
         const stripped = { ...target, shield: target.shield - amount };
         if (stripped.shield === 0) stripped.statuses = stripped.statuses.filter((status) => status.kind !== 'shield');
         nb = replaceUnit(nb, stripped);
-        const msg = `${actor.name} 的「${stripPassive.name}」剥除 ${target.name} ${amount} 点护盾`;
+        if (target.shield === 0) {
+          passiveBonusTarget = target.uid;
+          passiveHitBonus = stripPassive.unshieldedDamageBonus ?? 0;
+        }
+        const msg = amount > 0 ? `${actor.name} 的「${stripPassive.name}」剥除 ${target.name} ${amount} 点护盾`
+          : `${actor.name} 的「${stripPassive.name}」对 ${target.name} 本次伤害增加 ${passiveHitBonus} 点`;
         nb = pushLog(nb, msg, sideOf(actor), actor.uid, target.uid, undefined, undefined,
           spans(msg, [['actor', actor.name], ['passive', stripPassive.name], ['target', target.name]]));
       }
     }
-    for (const [uid, count] of perTarget) {
-      let t = actorFromId(nb, uid);
-      if (!t || t.hp <= 0) continue;
-      let targetSkill = skill;
-      if (skill.id === 'solar_strike' && isBurning(t)) targetSkill = { ...skill, effects: [{ kind: 'burn', value: 2, turns: 2 }] };
-      if (skill.id === 'sun_sunder') {
-        const stripped = t.shield;
-        t = { ...t, shield: 0, statuses: t.statuses.filter((status) => status.kind !== 'shield') };
-        nb = replaceUnit(nb, t);
-        if (stripped > 0) nb = pushLog(nb, `${actor.name} 的「掠日破盾」剥除 ${t.name} ${stripped} 点护盾`, sideOf(actor), actor.uid, t.uid);
-        if (stripped > 0 || passiveStrippedTarget === uid) targetSkill = { ...skill, effects: [{ kind: 'burn', value: 5, turns: 2 }] };
+    const isGroup = perTarget.size > 1;
+    const waves = isGroup ? Math.max(...perTarget.values()) : 1;
+    const shieldIgnore = new Map<string, number>();
+    for (let hit = 0; hit < waves; hit++) {
+      if (hit > 0 && (actorFromId(nb, actor.uid)!.hp <= 0 || checkEnd(nb).phase !== 'acting')) break;
+      const reactions: AttackReactions = [];
+      const groupStart = nb.log.length;
+      for (const [uid, totalHits] of perTarget) {
+        if (isGroup && hit >= totalHits) continue;
+        const count = isGroup ? 1 : totalHits;
+        let t = actorFromId(nb, uid);
+        if (!t || t.hp <= 0) continue;
+        let targetSkill = skill;
+        if (skill.id === 'solar_strike' && isBurning(t)) targetSkill = { ...skill, effects: [{ kind: 'burn', value: 2, turns: 2 }] };
+        if (skill.id === 'sun_sunder') {
+          const stripped = t.shield;
+          t = { ...t, shield: 0, statuses: t.statuses.filter((status) => status.kind !== 'shield') };
+          nb = replaceUnit(nb, t);
+          if (stripped > 0) nb = pushLog(nb, `${actor.name} 的「掠日破盾」剥除 ${t.name} ${stripped} 点护盾`, sideOf(actor), actor.uid, t.uid);
+          if (stripped > 0 || passiveStrippedTarget === uid) targetSkill = { ...skill, effects: [{ kind: 'burn', value: 5, turns: 2 }] };
+        }
+        const branded = skill.kind === 'attack' && actor.isPlayer !== t.isPlayer
+          && t.statuses.some((status) => status.kind === 'burnBrand' && status.sourceSide === sideOf(actor));
+        const result = resolveAttack(nb, actor, t, targetSkill, count, foxBurnBonus,
+          passiveBonusTarget === uid && hit === 0 ? passiveHitBonus : 0,
+          isGroup ? { reactions, hit, last: hit === totalHits - 1, shieldIgnore } : undefined);
+        nb = result.battle;
+        if (branded && result.lastHitLog !== undefined) brandedHits.add(uid);
+        if (result.didPoison) {
+          if (isGroup) reactions.push((state) => applyCorruptSpread(state, uid));
+          else nb = applyCorruptSpread(nb, t.uid);
+        }
+        if (skill.id === 'water_wave' && hit === 0) waterWaveHits += 1;
       }
-      const branded = skill.kind === 'attack' && actor.isPlayer !== t.isPlayer
-        && t.statuses.some((status) => status.kind === 'burnBrand' && status.sourceSide === sideOf(actor));
-      const result = resolveAttack(nb, actor, t, targetSkill, count, foxBurnBonus);
-      nb = result.battle;
-      if (branded && result.lastHitLog !== undefined) brandedHits.add(uid);
-      if (result.didPoison) nb = applyCorruptSpread(nb, t.uid);
-      if (skill.id === 'water_wave') waterWaveHits += 1;
+      if (isGroup) {
+        nb = sealSkillGroup(nb, groupStart);
+        for (const react of reactions) {
+          if (checkEnd(nb).phase !== 'acting') break;
+          nb = react(nb);
+        }
+      }
     }
     // 零伤全体 debuff：推送一条合并日志，所有目标通过 burstTargets 同时触发 buff 图标
-    if (skill.damage === 0 && skill.effects?.length && skill.target === 'all') {
+    if (skill.damage === 0 && skill.effects?.length && skill.target === 'all' && !isGroup) {
       const zeroDmgEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
       const zeroDmgEnhanceBonus = getSkillEnhanceBonus(skill.id, zeroDmgEnhanceLevel);
       const effectDesc = skill.effects.map((e) => {

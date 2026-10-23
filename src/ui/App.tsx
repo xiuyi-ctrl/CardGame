@@ -432,8 +432,10 @@ export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: 
   const materials = [...state.roster, ...overflow].filter(unit => unit.uid !== primary.uid && unit.speciesId === primary.speciesId);
   const [materialUid, setMaterialUid] = useState(materials.length === 1 ? materials[0].uid : '');
   const material = materials.find(unit => unit.uid === materialUid);
+  const branches = getMonster(primary.speciesId).evolutions ?? [];
+  const [targetSpeciesId, setTargetSpeciesId] = useState(branches[0]?.to);
   const lockReason = evolutionLockReason(state, primary.speciesId);
-  const evolved = useMemo(() => fuseUnit(primary), [primary]);
+  const evolved = useMemo(() => fuseUnit(primary, targetSpeciesId), [primary, targetSpeciesId]);
   if (!evolved) return null;
   const fromOverflow = !!material && overflow.some(unit => unit.uid === material.uid);
   const passive = getPassive(evolved.passive);
@@ -442,6 +444,7 @@ export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: 
     <div className="confirm-box fusion-confirm" role="dialog" aria-modal="true" aria-labelledby="fusion-confirm-title" onClick={event => event.stopPropagation()}>
       <div className="section-title fusion-title" id="fusion-confirm-title"><img src="/main-flow-art/icons/fuse-companion.png" alt="" />确认融合</div>
       <div className="popup-body fusion-confirm-body">
+        {branches.length > 1 && <label>进化形态 <select aria-label="进化形态" value={targetSpeciesId} onChange={event => setTargetSpeciesId(event.target.value)}>{branches.map(branch => <option key={branch.to} value={branch.to}>{getMonster(branch.to).name}</option>)}</select></label>}
         <div className="fusion-result-card">
           <div className="fusion-pet-row"><PetIcon image={formationImage(evolved.speciesId, evolved.image)} emoji={evolved.emoji} name={evolved.name} /><div><h3 className="fusion-name">{evolved.name}</h3><div className="fusion-stats"><span><img src="/battle-stat-icons/life.png" alt="" />生命 <strong>{evolved.hp}/{evolved.maxHp}</strong></span><span><img src="/battle-stat-icons/speed.png" alt="" />速度 <strong>{evolved.spd}</strong></span></div></div></div>
           {passive && <section className="fusion-detail fusion-passive"><h4>被动</h4><strong>{passive.name}</strong><p>{passive.desc}</p></section>}
@@ -453,9 +456,10 @@ export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: 
       </div>
       <div className="panel-row fusion-actions"><button className="primary" disabled={!material || !!lockReason || state.runMode === 'proficiency'} onClick={() => {
         if (!material || lockReason) return;
-        if (fromOverflow) dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: material.uid, primaryUid: primary.uid });
-        else if (state.screen === 'tame-overflow') dispatch({ type: 'FUSE_IN_OVERFLOW', uid: primary.uid, materialUid: material.uid });
-        else dispatch({ type: 'FUSE', primaryUid: primary.uid, materialUid: material.uid });
+        const branchChoice = branches.length > 1 ? { targetSpeciesId } : {};
+        if (fromOverflow) dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: material.uid, primaryUid: primary.uid, ...branchChoice });
+        else if (state.screen === 'tame-overflow') dispatch({ type: 'FUSE_IN_OVERFLOW', uid: primary.uid, materialUid: material.uid, ...branchChoice });
+        else dispatch({ type: 'FUSE', primaryUid: primary.uid, materialUid: material.uid, ...branchChoice });
         onClose();
       }}>确定融合</button><button onClick={onClose}>取消</button></div>
     </div>
@@ -1458,12 +1462,12 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
               {next ? (
                 <>
                   需 {fusionNeedCount(sp.id)} 只同物种 →{' '}
-                  <button type="button"
+                  {sp.evolutions!.map(branch => <button key={branch.to} type="button"
                     className="codex-link"
-                    onClick={() => setSelectedId(next)}
+                    onClick={() => setSelectedId(branch.to)}
                   >
-                    {getMonster(next).name}
-                  </button>
+                    {getMonster(branch.to).name}
+                  </button>)}
                 </>
               ) : (
                 '不可融合'

@@ -1,5 +1,6 @@
 export interface StatusEffect {
-  kind: 'burn' | 'burnBrand' | 'sunRadiance' | 'foxFire' | 'foxTailGuard' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
+  // 火种战斗内保留至首次攻击命中，每只最多1层。
+  kind: 'emberSeed' | 'burn' | 'burnBrand' | 'sunRadiance' | 'foxFire' | 'foxTailGuard' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -53,6 +54,7 @@ export interface SkillDef {
 
 /** 被动技能效果类型 */
 export type PassiveKind =
+  | 'flameRelay'
   | 'healBurnCleanse' // 技能施加治疗后清除灼烧
   | 'healBurnBoost' // 为灼烧目标施加技能治疗时增量，治疗后清除灼烧
   | 'sunRadiance' // 技能治疗后清火，友方被移除灼烧时每回合首次积攒日华
@@ -69,7 +71,7 @@ export type PassiveKind =
   | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
   | 'furnace' // 炉火：每回合前两次受到敌方攻击技能命中后，使攻击者灼烧 value 层
   | 'burnShield' // 灼烧结算后消耗最多 burnConsumeMax 层灼烧，每层获得 value 点护盾
-  | 'burnStripShield' // 灼羽剥甲：每回合首次攻击已灼烧且有盾目标时剥除 value 点护盾
+  | 'burnStripShield' // 每回合首次攻击已灼烧目标时剥盾，原本无盾则单次加伤
   | 'afterglow' // 余温：全队每回合首次攻击已灼烧目标后，为当前生命最低的存活伙伴回复 value 点生命，同名取最高值
   | 'eternalLight' // 长明之光：每只持有者独立计次，每回合首次攻击已灼烧目标后全队回血
   | 'frenzy' // 狂暴：生命低于 50% 时伤害 + value
@@ -121,6 +123,10 @@ export interface PassiveDef {
   shieldOnTrigger?: number;
   /** 自燃换盾每回合可消耗的最大灼烧层数，缺省1。 */
   burnConsumeMax?: number;
+  /** 剥甲值加目标灼烧层数后的上限；缺省不随灼烧层数增长。 */
+  burnStripCap?: number;
+  /** 剥甲触发前目标无盾时，仅首段获得的伤害加成。 */
+  unshieldedDamageBonus?: number;
   /** 狐火达到本被动上限时的技能直接伤害加成，缺省0。 */
   fullFoxDamage?: number;
 }
@@ -200,6 +206,7 @@ export interface Unit {
   /** 长明之光本回合是否已触发，每只生物独立计次。 */
   eternalLightUsed?: boolean;
   burnStripUsed?: boolean;
+  flameRelayUsed?: boolean;
   radianceGainedThisRound?: boolean;
   /** 专属被动技能 id（随物种固定） */
   passive?: string;
@@ -290,6 +297,8 @@ export interface LogEntry {
   addsStatus?: string[];
   /** 范围伤害日志（岩壳碎片自爆/岩壳崩解）：本条日志波及的所有目标 uid，供动画一次性同时挂飘字 */
   burstTargets?: string[];
+  /** 同一次群体技能的一段：共享最终快照与动画起始时间；旧日志缺省时仍逐条播放。 */
+  simultaneousGroup?: number;
   /** 日志高亮片段，UI 渲染时按 kind 套用不同颜色 */
   spans?: LogSpan[];
 }

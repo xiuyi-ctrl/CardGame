@@ -1,6 +1,7 @@
 import type { PassiveDef } from '../types';
 
 export const PASSIVES: Record<string, PassiveDef> = {
+  flame_relay: { id: 'flame_relay', name: '传火之尾', desc: '免疫灼烧伤害。每回合首次给友方附加灼烧后，该友方获得1层火种：下次攻击首次命中附带2层灼烧，触发后消失。每只最多1层。', kind: 'flameRelay', value: 1 },
   nine_tail_heart: { id: 'nine_tail_heart', name: '九尾焰心', desc: '免疫灼烧伤害，每次被附加灼烧获得1层狐火，上限9层；每层使技能对敌人附加的灼烧额外增加1层，狐火满9层时技能直接伤害+1。', kind: 'foxFlame', value: 9, fullFoxDamage: 1 },
   fox_flame_body: { id: 'fox_flame_body', name: '狐火之躯', desc: '免疫灼烧伤害，每次被附加灼烧时获得1层狐火，上限3层；每层使自身技能对敌人附加的灼烧额外增加1层', kind: 'foxFlame', value: 3 },
   twin_fox_flame: { id: 'twin_fox_flame', name: '双尾狐焰', desc: '免疫灼烧伤害，每次被附加灼烧时获得1层狐火，上限5层；每层使自身技能对敌人附加的灼烧额外增加1层', kind: 'foxFlame', value: 5 },
@@ -8,11 +9,11 @@ export const PASSIVES: Record<string, PassiveDef> = {
   heat_moss: { id: 'heat_moss', name: '吸热苔', desc: '每次以技能施加治疗后，移除该伙伴最多2层灼烧。', kind: 'healBurnCleanse', value: 2 },
   clean_moss: { id: 'clean_moss', name: '净苔', desc: '每次以技能施加治疗后，移除目标最多2层灼烧；为治疗前已灼烧的友方提供治疗时，治疗量额外增加2点，灼烧反转按清火前判断。', kind: 'healBurnBoost', value: 2 },
   heated_carapace: { id: 'heated_carapace', name: '热壳换火', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧。每层获得2点护盾；没有灼烧时不触发', kind: 'burnShield', value: 2, burnConsumeMax: 2 },
-  burning_feather: { id: 'burning_feather', name: '灼羽剥甲', desc: '每回合首次攻击一个攻击前已灼烧且有护盾的敌人时，伤害前额外移除其2点护盾；多段或群攻只作用一次', kind: 'burnStripShield', value: 2 },
+  burning_feather: { id: 'burning_feather', name: '灼羽剥甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多2点护盾；若目标无护盾，该次伤害+1。多段或群攻只作用一次', kind: 'burnStripShield', value: 2, unshieldedDamageBonus: 1 },
   red_carapace: { id: 'red_carapace', name: '赤甲炼火', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧，每层获得3点护盾；没有灼烧时不触发', kind: 'burnShield', value: 3, burnConsumeMax: 2 },
-  solar_feather: { id: 'solar_feather', name: '烈日销甲', desc: '每回合首次攻击一个攻击前已灼烧且有护盾的敌人时，伤害前额外移除其5点护盾；多段或群攻只作用一次', kind: 'burnStripShield', value: 5 },
+  solar_feather: { id: 'solar_feather', name: '烈日销甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前移除其最多（3＋目标灼烧层数，上限8）点护盾；若目标无护盾，该次伤害+2。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, burnStripCap: 8, unshieldedDamageBonus: 2 },
   molten_molt: { id: 'molten_molt', name: '熔蜕', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧，每层获得3点护盾；没有灼烧时不触发', kind: 'burnShield', value: 3, burnConsumeMax: 2 },
-  searing_feather: { id: 'searing_feather', name: '焚风蚀甲', desc: '每回合首次攻击一个攻击前已灼烧且有护盾的敌人时，伤害前额外移除其3点护盾；多段或群攻只作用一次', kind: 'burnStripShield', value: 3 },
+  searing_feather: { id: 'searing_feather', name: '焚风蚀甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多3点护盾；若目标无护盾，该次伤害+2。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, unshieldedDamageBonus: 2 },
   // —— 基础（御三家/常见野怪）——
   quick: { id: 'quick', name: '迅捷', desc: '战斗开始速度 +2', kind: 'spd', value: 2 },
   watery_regen: { id: 'watery_regen', name: '水愈', desc: '每回合开始恢复 2 点生命', kind: 'regen', value: 2 },

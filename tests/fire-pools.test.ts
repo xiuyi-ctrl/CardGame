@@ -23,7 +23,7 @@ describe('灼烧新生物与技能完整投放', () => {
     expect([...STARTER_GROUP_1, ...STARTER_GROUP_2]).toEqual(['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi']);
   });
 
-  it.each([1, 2, 3])('第%d幕各类遭遇均可抽中新生物，规模与首领规则不变', (act) => {
+  it.each([1, 2, 3])('第%d幕进攻型新生物可单出，辅助新生物仍在组合中，规模与首领不变', (act) => {
     const seen = new Map<string, Set<string>>();
     for (let seed = 0; seed < 500; seed++) {
       const map = generateMap(seed, act);
@@ -43,14 +43,15 @@ describe('灼烧新生物与技能完整投放', () => {
     const normal = act === 1 ? base : act === 2 ? tier2 : legends;
     const special = act === 1 ? tier2 : legends;
     for (const count of act === 3 ? [1, 2, 3, 4] : [1, 2, 3]) {
-      for (const id of normal) expect(seen.get(`battle:${count}`)?.has(id), `幕${act} battle:${count} ${id}`).toBe(true);
+      for (const id of normal) expect(seen.get(`battle:${count}`)?.has(id), `幕${act} battle:${count} ${id}`).toBe(count > 1 || id === normal[0]);
     }
     for (const type of ['elite', 'arena', 'guardian']) {
       const all = new Set([...seen].filter(([key]) => key.startsWith(`${type}:`)).flatMap(([, ids]) => [...ids]));
-      for (const id of special) expect(all.has(id), `幕${act} ${type} ${id}`).toBe(true);
+      expect(all.has(special[0]), `幕${act} ${type} ${special[0]}`).toBe(true);
+      expect(all.has(special[1]), `幕${act} ${type} ${special[1]}`).toBe(act === 3 && type !== 'arena');
     }
     for (const count of act === 3 ? [2, 3] : [2]) {
-      for (const id of normal) expect(seen.get(`gauntlet:${count}`)?.has(id), `幕${act} gauntlet:${count} ${id}`).toBe(true);
+      for (const id of normal) expect(seen.get(`gauntlet:${count}`)?.has(id), `幕${act} gauntlet:${count} ${id}`).toBe(id === normal[0]);
     }
     expect(generateMap(47, act)).toEqual(generateMap(47, act));
   });
@@ -97,7 +98,7 @@ describe('灼烧新生物与技能完整投放', () => {
       expect(LEGENDARY_SKILLS.has(id)).toBe(true);
       expect(normal).not.toContain(id);
     }
-    expect(LEGENDARY_SKILLS.size).toBe(42);
+    expect(LEGENDARY_SKILLS.size).toBe(44);
     expect(getRandomSkillChoices(unit, normal.length, createRng(1))).toEqual(expect.arrayContaining(ordinarySkills));
     expect(getRandomLegendarySkillChoices(unit, 100, createRng(1))).toEqual(expect.arrayContaining(legendarySkills));
     const learned = { ...unit, skills: [...ordinarySkills, ...legendarySkills] };

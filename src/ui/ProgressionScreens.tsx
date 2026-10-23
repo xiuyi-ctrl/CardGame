@@ -16,8 +16,8 @@ import { MobileDetails, MobileUnitAbilities } from './MobileDetails';
 import './progression.css';
 
 // 仅用于展示：按 fuseUnit 的属性公式计算，不调用 makeUnit，避免预览递增全局 UID。
-function evolutionPreview(unit: Unit): Unit | undefined {
-  const id = nextStage(unit.speciesId);
+function evolutionPreview(unit: Unit, targetSpeciesId?: string): Unit | undefined {
+  const id = targetSpeciesId ?? nextStage(unit.speciesId);
   if (!id) return undefined;
   const species = getMonster(id);
   const passive = getPassive(species.passive);
@@ -31,13 +31,14 @@ function evolutionPreview(unit: Unit): Unit | undefined {
 
 export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [focusedUid, setFocusedUid] = useState<string | null>(null);
+  const [evolutionTargets, setEvolutionTargets] = useState<Record<string, string>>({});
   const pending = state.specialPending;
   const isEvolution = pending?.kind === 'evolve';
   const isSuper = isEvolution && pending.super;
   const focused = state.roster.find(unit => unit.uid === focusedUid)
     ?? state.roster.find(unit => !isEvolution || (nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId))) ?? state.roster[0];
   const lockReason = focused && isEvolution ? evolutionLockReason(state, focused.speciesId) : undefined;
-  const evolved = focused && isEvolution && !lockReason ? evolutionPreview(focused) : undefined;
+  const evolved = focused && isEvolution && !lockReason ? evolutionPreview(focused, evolutionTargets[focused.uid]) : undefined;
   const oldPassive = focused ? getPassive(focused.passive) : undefined;
   const newPassive = evolved ? getPassive(evolved.passive) : undefined;
   const title = isEvolution ? (isSuper ? '超进化' : '进化之光') : '属性强化 · 选择伙伴';
@@ -49,13 +50,17 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
           const unitLockReason = isEvolution ? evolutionLockReason(state, unit.speciesId) : undefined;
           const eligible = !isEvolution || (!!nextStage(unit.speciesId) && !unitLockReason);
           return <button type="button" key={unit.uid} className={`progression-pet-option ${focused?.uid === unit.uid ? 'is-focused' : ''}`} disabled={!eligible}
-            onMouseEnter={() => setFocusedUid(unit.uid)} onFocus={() => setFocusedUid(unit.uid)} onClick={() => dispatch(isEvolution ? { type: 'EVOLVE_ONE', uid: unit.uid } : { type: 'SPECIAL_TARGET', uid: unit.uid })}>
+            onMouseEnter={() => setFocusedUid(unit.uid)} onFocus={() => setFocusedUid(unit.uid)} onClick={() => {
+              if (isEvolution && (getMonster(unit.speciesId).evolutions?.length ?? 0) > 1) { setFocusedUid(unit.uid); return; }
+              dispatch(isEvolution ? { type: 'EVOLVE_ONE', uid: unit.uid } : { type: 'SPECIAL_TARGET', uid: unit.uid });
+            }}>
             <span className="progression-pet-label">{unitLockReason ? '传奇未解锁' : eligible ? (isEvolution ? '可进化' : '可强化') : '最终形态'}</span>
             <FlowPet unit={unit} /><strong>{unit.name}</strong><FlowPetStats unit={unit} />
           </button>;
         })}</div>
       </section>
       <section className="flow-frame progression-preview"><h2>{isEvolution ? '进化预览' : '伙伴资料'}</h2>
+        {isEvolution && focused && (getMonster(focused.speciesId).evolutions?.length ?? 0) > 1 && <div className="progression-branch-choice"><label>进化形态 <select aria-label="进化形态" value={evolutionTargets[focused.uid] ?? nextStage(focused.speciesId)} onChange={event => setEvolutionTargets(values => ({ ...values, [focused.uid]: event.target.value }))}>{getMonster(focused.speciesId).evolutions!.map(branch => <option key={branch.to} value={branch.to}>{getMonster(branch.to).name}</option>)}</select></label><button type="button" className="primary" disabled={!!lockReason} onClick={() => dispatch({ type: 'EVOLVE_ONE', uid: focused.uid, targetSpeciesId: evolutionTargets[focused.uid] ?? nextStage(focused.speciesId) })}>确认进化</button></div>}
         <div className="progression-preview-body">{focused && <>
           {evolved ? <>
             <div className="evolution-portraits"><div><FlowPet unit={focused} /><strong>{focused.name}</strong></div><span aria-hidden="true"><UiSymbol name="arrow-right" /></span><div><FlowPet unit={evolved} /><strong>{evolved.name}</strong></div></div>

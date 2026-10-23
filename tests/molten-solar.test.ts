@@ -136,7 +136,7 @@ describe('熔甲兽与烈日神鹰', () => {
     b.playerUnits[0].skillEnhancements = { 3: 2 };
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'sun_sunder', b.enemyUnits[0].uid));
     const strips = after.log.filter(e => e.text.includes('剥除'));
-    expect(strips.map(e => e.text)).toEqual(shield > 5 ? [
+    expect(strips.map(e => e.text)).toEqual(shield > 7 ? [
       expect.stringContaining('烈日销甲」剥除'), expect.stringContaining('掠日破盾」剥除'),
     ] : [expect.stringContaining('烈日销甲」剥除')]);
     const hit = after.log.find(e => e.text.includes('掠日破盾」攻击'))!;

@@ -219,6 +219,7 @@ export function applySkillEnhanceReset(unit: Unit, slotIndex: number): { newUnit
 
 /** 传奇技能池（仅奇遇关「传奇招募」可获得） */
 export const LEGENDARY_SKILLS = new Set([
+  'relay_wildfire', 'ignite_embers',
   'nine_tail_wildfire', 'flame_tail_shield',
   'solar_strike', 'clean_flame_care', 'solar_heal',
   'molten_quake', 'sun_sunder',

@@ -624,8 +624,9 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     const events: FxEvent[] = [];
     const eventSrcIdx: number[] = [];
     let battleEnded = false;
+    let terminalGroup: number | undefined;
     newEntries.forEach((e, idx) => {
-      if (battleEnded) return;
+      if (battleEnded && (terminalGroup === undefined || e.simultaneousGroup !== terminalGroup)) return;
       const ev = parseEvent(battle, e);
       if (ev) {
         events.push(ev);
@@ -637,6 +638,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           units.length > 0 && !(battle.gauntlet && bench?.length)
           && units.every(unit => (e.hp?.[unit.uid] ?? unit.hp) <= 0);
         battleEnded = !!e.hp && (wiped(battle.playerUnits, battle.playerBench) || wiped(battle.enemyUnits, battle.enemyBench));
+        if (battleEnded) terminalGroup = e.simultaneousGroup;
       }
     });
     const prevHp = prevBattleBefore ? hpOfUnits(prevBattleBefore) : hpOfUnits(battle);
@@ -710,6 +712,12 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setThornRoyalHitsMap(prevBattleBefore ? thornRoyalHitsOfUnits(prevBattleBefore) : null);
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
+    let animationStep = -1;
+    const eventSteps = eventSrcIdx.map((source, index) => {
+      const group = newEntries[source].simultaneousGroup;
+      if (index === 0 || group === undefined || group !== newEntries[eventSrcIdx[index - 1]].simultaneousGroup) animationStep++;
+      return animationStep;
+    });
     events.forEach((ev, i) => {
       timers.current.set(
         () => {
@@ -862,7 +870,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             CLEAR_MS / animSpeedRef.current,
           );
         },
-        i * (STEP_MS / animSpeedRef.current),
+        eventSteps[i] * (STEP_MS / animSpeedRef.current),
       );
     });
 
@@ -880,7 +888,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
         setEndingStatuses({});
         setRevealedLogLen(battle.log.length);
       },
-      events.length * (STEP_MS / animSpeedRef.current) + CLEAR_MS / animSpeedRef.current,
+      (animationStep + 1) * (STEP_MS / animSpeedRef.current) + CLEAR_MS / animSpeedRef.current,
     );
   }, [battle?.log.length]);
 
