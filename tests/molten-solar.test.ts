@@ -18,8 +18,8 @@ function quiet(species = 'solar_eagle', count = 1): BattleState {
 
 describe('熔甲兽与烈日神鹰', () => {
   it.each([
-    ['molten_beetle', 'molten_beast', 30, 4, ['heated_shell_bump', 'molten_self_burn', 'shell_charge', 'molten_quake']],
-    ['searing_hawk', 'solar_eagle', 27, 7, ['flame_tracing_feather', 'fire_feather', 'burn_brand', 'sun_sunder']],
+    ['molten_beetle', 'molten_beast', 25, 4, ['heated_shell_bump', 'molten_self_burn', 'shell_charge', 'molten_quake']],
+    ['searing_hawk', 'solar_eagle', 21, 7, ['flame_tracing_feather', 'fire_feather', 'burn_brand', 'sun_sunder']],
   ] as const)('%s首领后两只融合为%s，保留主宠强化和固定技能', (base, id, hp, spd, skills) => {
     const primary = { ...makeUnit(base, true, 0, false), bonusStats: { hp: 5, spd: 2 }, curse: 'atkDown' as const };
     const material = { ...makeUnit(base, true, 1, false), skills: ['heal_light'] };

@@ -144,7 +144,7 @@ const RE_DOT = /^(.+?) 受到(灼烧|中毒) (\d+) 点伤害$/;
 const RE_THORN = /^(.+?) 的「(.+?)」反伤 (.+?) (\d+) 点$/;
 const RE_THORN_DEBUFF = /^(.+?) 的「荆棘」反噬，受到 (\d+) 点伤害$/;
 const RE_COUNTER = /^(.+?) 的「(.+?)」反击 (.+?) (\d+) 点并降低目标攻击\d+层$/;
-const RE_DEBUFF = /^(.+?) 使用「(.+?)」，(?:([^ ，]+) )?(中毒|灼烧|降低攻击|降低速度|眩晕)(?: \d+ 层)?$/;
+const RE_DEBUFF = /^(.+?) 使用「(.+?)」，(?:([^ ，]+) )?(中毒|灼烧|降低攻击|降低速度|眩晕|时滞)(?: \d+ 层)?$/;
 const RE_BUFF = /^(.+?) 使用「(.+?)」，强化(.+?)(?:，回复 (\d+) 点生命|，获得(?:攻击提升|速度提升) 2 层，持续 2 回合)?$/;
 const RE_SPD_UP = /^(.+?) 的「(.+?)」速度 \+(\d+)$/;
 const RE_SUMMON = /^(.+?) 使用「(.+?)」，召唤了(.+?)！$/;
@@ -413,7 +413,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     };
   }
   if ((m = text.match(RE_DEBUFF))) {
-    const debuffKind = m[4] === '中毒' ? 'poison' : m[4] === '灼烧' ? 'burn' : m[4] === '降低攻击' ? 'atkDown' : m[4] === '降低速度' ? 'spdDown' : 'stun';
+    const debuffKind = m[4] === '中毒' ? 'poison' : m[4] === '灼烧' ? 'burn' : m[4] === '降低攻击' ? 'atkDown' : m[4] === '降低速度' ? 'spdDown' : m[4] === '时滞' ? 'timeLag' : 'stun';
     const isMultiTarget = !m[3] && entry.burstTargets && entry.burstTargets.length > 0;
     return {
       kind: 'buff',
@@ -784,13 +784,13 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             }
           } else if (ev.kind === 'buff') {
             // 区分 debuff 和普通 buff：debuff 用抖动动画，buff 用发光动画
-            const isDebuffEvt = (ev.debuffTargets && ev.debuffTargets.length > 0) || (ev.addsStatus && ev.addsStatus.some((k) => ['poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k)));
+            const isDebuffEvt = (ev.debuffTargets && ev.debuffTargets.length > 0) || (ev.addsStatus && ev.addsStatus.some((k) => ['timeLag', 'poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k)));
             if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: isDebuffEvt ? 'fx-status-cast' : 'fx-cast', seq: capturedActorSeq } })); }
             const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
             const isShield = sk?.effects?.[0]?.kind === 'shield';
             const statusIcon = isShield ? 'shield' : sk?.id === 'chain_link' ? 'chainLink' : undefined;
             const buffCls = isShield ? 'fx-shield' : 'fx-buff';
-            const debuffLabel = (kind?: string) => kind === 'poison' ? '中毒↓' : kind === 'burn' ? '灼烧↓' : kind === 'atkDown' ? '弱化↓' : kind === 'spdDown' ? '迟缓↓' : kind === 'stun' ? '眩晕↓' : '▼ debuff';
+            const debuffLabel = (kind?: string) => kind === 'poison' ? '中毒↓' : kind === 'burn' ? '灼烧↓' : kind === 'atkDown' ? '弱化↓' : kind === 'spdDown' ? '迟缓↓' : kind === 'stun' ? '眩晕↓' : kind === 'timeLag' ? '时滞↓' : '▼ debuff';
             if (ev.debuffTargets && ev.debuffTargets.length > 0) {
               // 全体 debuff：所有目标同时显示 debuff 图标 + debuff 飘字；每个目标独立 seq 以便 clear 精确匹配
               debuffTargetSeqs = {};

@@ -1,6 +1,14 @@
 import type { PassiveDef } from '../types';
 
 export const PASSIVES: Record<string, PassiveDef> = {
+  crystal_conversion: { id: 'crystal_conversion', name: '晶核转化', kind: 'crystalConversion', value: 2,
+    desc: '每回合结束时，消耗自身全部护盾，对随机两名不同的存活敌人各造成护盾值一半（向上取整）的真实伤害，无视护盾与减伤。只有一名敌人时只命中一次；没有护盾时不触发。' },
+  mirror_reflection: { id: 'mirror_reflection', name: '镜影复制', kind: 'mirrorCopy', value: 1,
+    desc: '每场限1次，以镜影复制指令占用本次行动，复制本回合最近一次其他友方成功使用的主动技能。按自身状态及基础技能结算，不消耗原单位次数、不借用原施法者被动或强化。使用镜像加速或减速的当回合不能触发；无记录、技能被禁止或条件不满足时保留次数，不改抄更早技能。' },
+  myriad_forms: { id: 'myriad_forms', name: '万变', kind: 'mimic', value: 4,
+    desc: '每场战斗开始时，从初始场上双方存活单位的可复制主动技能中，去重后随机抽取4个；不足时重复补足，没有候选时使用3伤害爪击保底。不复制被动、强化和原持有者层数；本场固定、读档不重抽，下场重新抽取。召唤、碎岩重组及依赖专属首领机制的技能不进入池。' },
+  time_rewind: { id: 'time_rewind', name: '时砂回溯', kind: 'timeRewind', value: 1,
+    desc: '每场战斗限1次。自身生命降至0时，立即复活并回复至最大生命的50%（向上取整），清除自身所有负面状态，本回合额外获得一次行动；触发后本场不再触发。' },
   flame_relay: { id: 'flame_relay', name: '传火之尾', desc: '免疫灼烧伤害。每回合首次给友方附加灼烧后，该友方获得1层火种：下次攻击首次命中附带2层灼烧，触发后消失。每只最多1层。', kind: 'flameRelay', value: 1 },
   nine_tail_heart: { id: 'nine_tail_heart', name: '九尾焰心', desc: '免疫灼烧伤害，每次被附加灼烧获得1层狐火，上限9层；每层使技能对敌人附加的灼烧额外增加1层，狐火满9层时技能直接伤害+1。', kind: 'foxFlame', value: 9, fullFoxDamage: 1 },
   fox_flame_body: { id: 'fox_flame_body', name: '狐火之躯', desc: '免疫灼烧伤害，每次被附加灼烧时获得1层狐火，上限3层；每层使自身技能对敌人附加的灼烧额外增加1层', kind: 'foxFlame', value: 3 },
@@ -10,7 +18,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   clean_moss: { id: 'clean_moss', name: '净苔', desc: '每次以技能施加治疗后，移除目标最多2层灼烧；为治疗前已灼烧的友方提供治疗时，治疗量额外增加2点，灼烧反转按清火前判断。', kind: 'healBurnBoost', value: 2 },
   heated_carapace: { id: 'heated_carapace', name: '热壳换火', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧。每层获得2点护盾；没有灼烧时不触发', kind: 'burnShield', value: 2, burnConsumeMax: 2 },
   burning_feather: { id: 'burning_feather', name: '灼羽剥甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多2点护盾；若目标无护盾，该次伤害+1。多段或群攻只作用一次', kind: 'burnStripShield', value: 2, unshieldedDamageBonus: 1 },
-  red_carapace: { id: 'red_carapace', name: '赤甲炼火', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧，每层获得3点护盾；没有灼烧时不触发', kind: 'burnShield', value: 3, burnConsumeMax: 2 },
+  red_carapace: { id: 'red_carapace', name: '赤甲炼火', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧，每层获得3点护盾；没有灼烧时不触发。自身存在护盾时，技能伤害+1', kind: 'burnShield', value: 3, burnConsumeMax: 2, shieldDamageBonus: 1 },
   solar_feather: { id: 'solar_feather', name: '烈日销甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前移除其最多（3＋目标灼烧层数，上限8）点护盾；若目标无护盾，该次伤害+2。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, burnStripCap: 8, unshieldedDamageBonus: 2 },
   molten_molt: { id: 'molten_molt', name: '熔蜕', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧，每层获得3点护盾；没有灼烧时不触发', kind: 'burnShield', value: 3, burnConsumeMax: 2 },
   searing_feather: { id: 'searing_feather', name: '焚风蚀甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多3点护盾；若目标无护盾，该次伤害+2。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, unshieldedDamageBonus: 2 },
@@ -22,7 +30,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   armored_furnace: { id: 'armored_furnace', name: '炽炉', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧3层；多段攻击只计一次', kind: 'furnace', value: 3 },
   candle_afterglow: { id: 'candle_afterglow', name: '余温', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为生命值最低的存活伙伴回复2点生命；全队同名被动每回合一次，取最高值', kind: 'afterglow', value: 2 },
   lantern_afterglow: { id: 'lantern_afterglow', name: '余温', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为生命值最低的2个存活伙伴各回复2点生命；全队同名被动每回合一次，取最高值', kind: 'afterglow', value: 2, targetCount: 2 },
-  molten_furnace: { id: 'molten_furnace', name: '熔炉之心', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧2层，每次触发为自身施加1点护盾；多段攻击只计一次', kind: 'furnace', value: 2, shieldOnTrigger: 1 },
+  molten_furnace: { id: 'molten_furnace', name: '熔炉之心', desc: '每回合前两次受到敌方攻击技能命中且存活后，使攻击者灼烧3层，每次触发为自身施加2点护盾；多段攻击只计一次', kind: 'furnace', value: 3, shieldOnTrigger: 2 },
   eternal_light: { id: 'eternal_light', name: '长明之光', desc: '每回合我方首次攻击一个攻击前已灼烧的敌人后，为全体存活伙伴各回复3点生命值；每只持有者独立计次，不与同类或余温共享次数', kind: 'eternalLight', value: 3 },
   iron_guard: { id: 'iron_guard', name: '铁壁', desc: '受到的所有伤害 -1', kind: 'guard', value: 1 },
   venom_fang: { id: 'venom_fang', name: '毒牙', desc: '攻击命中附加中毒 2 层', kind: 'venom', value: 2 },
@@ -97,7 +105,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   serpent_hunt: { id: 'serpent_hunt', name: '蛇狩', desc: '攻击中毒目标时，无视其 8 点护盾/减伤效果，并额外造成 5 点伤害', kind: 'poisonBreak', value: 5 },
   gale_combo: { id: 'gale_combo', name: '疾风连携', desc: '每次使用攻击技能后，自身速度 +1（可叠加）；速度每高于目标 1 点，伤害 +1，上限 +5', kind: 'speedBonus', value: 5 },
   life_spring: { id: 'life_spring', name: '生命之泉', desc: '每回合开始恢复 3 点生命；每次受到伤害超过 6 点时，伤害减少 2 点', kind: 'lifeSpring', value: 6 },
-  ember_body: { id: 'ember_body', name: '余烬焚身', desc: '攻击命中附加灼烧 4 层；对已灼烧的目标，每层灼烧使该次伤害 +1，上限 +5', kind: 'scorchPlus', value: 4 },
+  ember_body: { id: 'ember_body', name: '余烬焚身', desc: '攻击命中附加灼烧 3 层；对已灼烧的目标，每层灼烧使该次伤害 +1，上限 +3', kind: 'scorchPlus', value: 3 },
 
   // —— 玄铁渊龙 ——
   chain_master: { id: 'chain_master', name: '锁链掌控', desc: '锁链链接的敌人死亡时，回复15%最大生命+伤害+2持续2回合；自身被链接时，获取链接单位的被动效果', kind: 'chainMaster', value: 15 },

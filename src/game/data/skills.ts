@@ -1,6 +1,28 @@
 import type { SkillDef } from '../types';
 
 export const SKILLS: Record<string, SkillDef> = {
+  core_crystal_spike: { id: 'core_crystal_spike', name: '晶刺', kind: 'attack', target: 'single', reach: 'direct', damage: 3, hideEffects: true,
+    desc: '攻击单个敌人，造成3点伤害；若自身有护盾，额外造成1点伤害。' },
+  core_crystal_wall: { id: 'core_crystal_wall', name: '晶壁', kind: 'buff', target: 'self', hideEffects: true,
+    desc: '自身获得5点护盾。', effects: [{ kind: 'shield', value: 5, turns: 99 }] },
+  core_crystal_burst: { id: 'core_crystal_burst', name: '晶爆', kind: 'attack', target: 'single', reach: 'direct', damage: 2, hideEffects: true,
+    desc: '立即消耗自身最多5点护盾，攻击单个敌人，造成2加实际消耗护盾数的伤害；没有护盾时仍可使用。' },
+  core_crystal_cleanse: { id: 'core_crystal_cleanse', name: '晶核净化', kind: 'buff', target: 'self', hideEffects: true,
+    desc: '按灼烧、中毒、恐惧的顺序，合计移除自身最多6层状态，获得与实际移除层数等量的护盾。' },
+  mirror_copy: { id: 'mirror_copy', name: '镜影复制', kind: 'status', target: 'self', uses: 1, hideEffects: true,
+    desc: '行动时复制本回合上一名行动友方成功使用的技能，占用本次行动；不复制强化或原施法者被动，不消耗其次数。条件不满足保留次数，每场限1次。' },
+  mirror_speed_up: { id: 'mirror_speed_up', name: '镜像加速', kind: 'buff', target: 'self', hideEffects: true,
+    desc: '自身速度本场永久提升1点；本回合不能触发镜影复制，战后恢复。' },
+  mirror_speed_down: { id: 'mirror_speed_down', name: '镜像减速', kind: 'buff', target: 'self', hideEffects: true,
+    desc: '自身速度本场永久降低1点，最低1点；本回合不能触发镜影复制，战后恢复。' },
+  sand_time_strike: { id: 'sand_time_strike', name: '砂时攻击', kind: 'attack', target: 'single', reach: 'direct', damage: 5, hideEffects: true,
+    desc: '攻击单个敌人，造成5点伤害；若目标当前速度不高于自身，额外造成2点伤害；本回合已触发回溯时，无视速度条件获得该加伤。' },
+  time_lag: { id: 'time_lag', name: '时滞', kind: 'status', target: 'single', reach: 'direct', priority: 'first', cooldown: 1, hideEffects: true,
+    desc: '先手，指定一名敌人施加时滞，使其本回合尚未执行的行动延后至最后，不改变速度、不增加行动；冷却1回合。', effects: [{ kind: 'timeLag', value: 1, turns: 1 }] },
+  sand_shield: { id: 'sand_shield', name: '砂盾', kind: 'buff', target: 'self', cooldown: 1, hideEffects: true,
+    desc: '自身获得4点护盾；若本回合已触发回溯，改为6点护盾；冷却1回合。', effects: [{ kind: 'shield', value: 4, turns: 99 }] },
+  time_haste: { id: 'time_haste', name: '时速', kind: 'buff', target: 'self', hideEffects: true,
+    desc: '自身增加2点速度，持续2回合。', effects: [{ kind: 'windSpd', value: 2, turns: 2 }] },
   pass_flame: { id: 'pass_flame', name: '传火', desc: '给指定一名友方附加2层灼烧。', kind: 'status', target: 'ally', hideEffects: true, effects: [{ kind: 'burn', value: 2, turns: 2 }] },
   relay_wildfire: { id: 'relay_wildfire', name: '传火燎原', desc: '全体存活队友各附加1层灼烧，各获得1层火种（每只最多1层）；冷却2回合。', kind: 'status', target: 'allyAll', cooldown: 2, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }, { kind: 'emberSeed', value: 1, turns: 0 }] },
   ignite_embers: { id: 'ignite_embers', name: '火种引燃', desc: '立即消耗我方场上所有火种，攻击指定一名敌人，造成消耗火种数×2的伤害。', kind: 'attack', target: 'single', reach: 'direct', damage: 0, hideEffects: true },
@@ -10,8 +32,8 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'all', kind: 'attack', damage: 3, cooldown: 1, uses: 3, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   flame_tail_shield: {
-    id: 'flame_tail_shield', name: '焰尾护盾', desc: '自身获得灼烧2层与4点护盾；施放当回合首次被敌方攻击技能命中且存活后，额外获得1层狐火，多段只触发一次，冷却1回合',
-    target: 'self', kind: 'buff', cooldown: 1, hideEffects: true, effects: [{ kind: 'shield', value: 4, turns: 99 }],
+    id: 'flame_tail_shield', name: '焰尾护盾', desc: '自身获得灼烧2层与4点护盾；施放当回合首次被敌方攻击技能命中且存活后，额外获得1层狐火，多段只触发一次，冷却1回合，每场限2次',
+    target: 'self', kind: 'buff', cooldown: 1, uses: 2, hideEffects: true, effects: [{ kind: 'shield', value: 4, turns: 99 }],
   },
   sealed_style_foxfire: {
     id: 'sealed_style_foxfire', name: '破式狐火', desc: '攻击单个敌人，造成3点伤害并附加灼烧1层',
@@ -38,8 +60,8 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'ally', kind: 'buff', uses: 3, hideEffects: true,
   },
   solar_heal: {
-    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命；冷却1回合',
-    target: 'ally', kind: 'heal', cooldown: 1, heal: 3,
+    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命',
+    target: 'ally', kind: 'heal', heal: 3,
   },
   light_bath: {
     id: 'light_bath', name: '光浴', desc: '为指定的一名己方伙伴回复3点生命值。',
@@ -143,8 +165,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 5, turns: 2 }],
   },
   ember_transfer: {
-    id: 'ember_transfer', name: '余烬迁移', desc: '将指定敌人最多4层灼烧转移给随机另一名敌人，不增加总层数；冷却1回合',
-    target: 'single', reach: 'direct', kind: 'status', cooldown: 1,
+    id: 'ember_transfer', name: '余烬迁移', desc: '将指定敌人最多6层灼烧转移给随机另一名敌人，不增加总层数，无冷却',
+    target: 'single', reach: 'direct', kind: 'status',
   },
   punch: {
     id: 'punch', name: '爪击', desc: '攻击单个敌人',
@@ -195,7 +217,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   roar: {
     id: 'roar', name: '战吼', desc: '提升自身伤害，持续2回合', hideEffects: true,
-    target: 'self', kind: 'buff', uses: 2,
+    target: 'self', kind: 'buff',
     effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
   },
   double_hit: {
@@ -429,16 +451,16 @@ export const SKILLS: Record<string, SkillDef> = {
     reach: 'front',
   },
   burn_burst: {
-    id: 'burn_burst', name: '焚身爆', desc: '攻击所有敌人，附加灼烧3层；使用后自身损失 5 点生命（不可减免）',
+    id: 'burn_burst', name: '焚身爆', desc: '攻击所有敌人，附加灼烧2层；使用后自身损失 5 点生命（不可减免）',
     kind: 'attack', damage: 8, hits: 1, target: 'all',
-    effects: [{ kind: 'burn', value: 3, turns: 2 }],
+    effects: [{ kind: 'burn', value: 2, turns: 2 }],
     uses: 1,
     hideEffects: true,
   },
   flame_shield: {
-    id: 'flame_shield', name: '烈焰护盾',     desc: '先手：获得 5 层护盾；本回合受攻击则灼烧攻击者 10 层（使用后冷却1回合）',
+    id: 'flame_shield', name: '烈焰护盾',     desc: '先手：获得 5 层护盾；本回合受攻击则灼烧攻击者 5 层（使用后冷却1回合）',
     kind: 'buff', target: 'self', priority: 'first',
-    effects: [{ kind: 'shield', value: 5, turns: 99 }, { kind: 'flameShield', value: 10, turns: 1 }],
+    effects: [{ kind: 'shield', value: 5, turns: 99 }, { kind: 'flameShield', value: 5, turns: 1 }],
     uses: 5, cooldown: 1,
     hideEffects: true,
   },

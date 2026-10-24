@@ -327,6 +327,9 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
     void persistSave(state);
     dispatch({ type: 'TITLE' });
   };
+  const incubatingEggs = state.carriedEggs?.filter(egg => egg.remaining > 0) ?? [];
+  const specialEggs = state.carriedEggs?.filter(egg => egg.remaining === 0 && egg.special).length ?? 0;
+  const eggSummary = [incubatingEggs.length ? `携带蛋${incubatingEggs.length}（最近${Math.min(...incubatingEggs.map(egg => egg.remaining))}关）` : '', specialEggs ? `待孵特殊蛋${specialEggs}` : ''].filter(Boolean).join(' · ');
   if (state.screen === 'map') {
     return (
       <div className="hud map-hud">
@@ -336,7 +339,7 @@ function HUD({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAct
             <strong>{state.runMode === 'proficiency'
               ? `熟练度远征 · 第${Math.max(1, state.currentRow + 1)}/50层`
               : `第${state.act}幕 · ${(state.region === 'emerald_forest' ? FOREST_ACT_NAMES : MAP_ACT_NAMES)[state.act] ?? '远征之路'}`}</strong>
-            <small>{state.runMode === 'proficiency' ? '远征地图' : `${MAIN_REGIONS[state.region ?? 'mixed'].name} · 远征地图`}</small>
+            <small>{state.runMode === 'proficiency' ? '远征地图' : `${MAIN_REGIONS[state.region ?? 'mixed'].name} · 远征地图`}{eggSummary && ` · ${eggSummary}`}</small>
           </span>
         </div>
         <div className="map-hud-resources">
@@ -2750,7 +2753,8 @@ function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
         <div className="flow-choices">
           {ev.choices.map((c) => {
             const cost = c.goldDelta ?? 0;
-            const cantAfford = state.gold + cost < 0 || (c.consumeFood && c.foodId && (state.inventory[c.foodId] ?? 0) <= 0);
+            const cantAfford = state.gold + cost < 0 || (c.consumeFood && c.foodId && (state.inventory[c.foodId] ?? 0) <= 0)
+              || (c.consumeRandomFood && !Object.keys(FOODS).some(id => (state.inventory[id] ?? 0) > 0));
             return (
               <button type="button"
                 key={c.id}

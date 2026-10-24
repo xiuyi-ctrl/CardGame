@@ -267,7 +267,7 @@ describe('驯服', () => {
   });
 
   it('灼烧/中毒可叠加层数：同一目标再次附加则层数相加', () => {
-    const a = makeUnit('fifi_god', true, 0, false); // 余烬焚身被动攻击附加灼烧 4 层；技能附加 2 层
+    const a = makeUnit('fifi_god', true, 0, false); // 余烬焚身被动攻击附加灼烧 3 层；技能附加 2 层
     const raw = createBattle([a], [{ speciesId: 'pipi' }], 1);
     const b: BattleState = {
       ...raw,
@@ -278,11 +278,11 @@ describe('驯服', () => {
         statuses: [{ kind: 'burn', value: 2, turns: 2 }],
       })),
     };
-    // 已带 2 层灼烧的目标再被火花命中：被动 +4 层、技能 +2 层 = 共 8 层；火花 5+2 伤（余烬焚身对已灼烧+2）、灼烧 8 层结算一半 4 伤
+    // 已带2层灼烧：被动+3、技能+2共7层；火花5+2伤，回合末灼烧结算4层，剩3层。
     const after = playerEndTurn(playerSkill(b, a.uid, 'ember', b.enemyUnits[0].uid));
     const burn = after.enemyUnits[0].statuses.find((s) => s.kind === 'burn');
     expect(burn).toBeDefined();
-    expect(burn!.value).toBe(4);
+    expect(burn!.value).toBe(3);
     expect(after.enemyUnits[0].hp).toBe(100 - 7 - 4);
   });
 
@@ -333,26 +333,26 @@ describe('数据完整性', () => {
 
 describe('技能使用次数', () => {
   it('有限次技能初始化次数，无限次技能返回 Infinity', () => {
-    const u = makeUnit('fifi_king', true, 0, false); // 战吼仍 uses:2
-    expect(u.skillUses?.['roar']).toBe(2);
-    expect(skillUsesLeft(u, 'roar')).toBe(2);
+    const u = makeUnit('fifi_king', true, 0, false);
+    expect(u.skillUses?.['roar']).toBeUndefined();
+    expect(skillUsesLeft(u, 'roar')).toBe(Infinity);
     expect(skillUsesLeft(u, 'water_gun')).toBe(Infinity);
   });
 
   it('每次使用扣一次次数；耗尽后 playerSkill 拒绝（状态不变）', () => {
-    const u = makeUnit('fifi_king', true, 0, false);
+    const u = { ...makeUnit('fifi_king', true, 0, false), skills: ['revenge_thorn'] };
     let b = createBattle([u], [{ speciesId: 'kiki' }], 1);
-    // 使用仍有限次的战吼验证通用次数消耗。
+    // 使用仍有限次的复仇棘甲验证通用次数消耗。
     b = {
       ...b,
       playerUnits: b.playerUnits.map((x) => (x.uid === u.uid ? { ...x, hp: 5 } : x)),
     };
-    let after = playerEndTurn(playerSkill(b, u.uid, 'roar', u.uid));
-    expect(skillUsesLeft(after.playerUnits[0], 'roar')).toBe(1);
-    after = playerEndTurn(playerSkill(after, u.uid, 'roar', u.uid));
-    expect(skillUsesLeft(after.playerUnits[0], 'roar')).toBe(0);
+    let after = playerEndTurn(playerSkill(b, u.uid, 'revenge_thorn', u.uid));
+    expect(skillUsesLeft(after.playerUnits[0], 'revenge_thorn')).toBe(1);
+    after = playerEndTurn(playerSkill(after, u.uid, 'revenge_thorn', u.uid));
+    expect(skillUsesLeft(after.playerUnits[0], 'revenge_thorn')).toBe(0);
     const hpBefore = after.playerUnits[0].hp;
-    const rejected = playerSkill(after, u.uid, 'roar', u.uid);
+    const rejected = playerSkill(after, u.uid, 'revenge_thorn', u.uid);
     expect(rejected).toBe(after);
     expect(rejected.playerUnits[0].hp).toBe(hpBefore);
   });

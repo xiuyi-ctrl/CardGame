@@ -3,7 +3,7 @@ import type { FormationPosition } from './formation';
 import type { MainRegionId } from '../data/regions';
 import { MAIN_REGIONS, MIXED_ACT_BOSS_POOLS as ACT_BOSS_POOLS } from '../data/regions';
 export { MIXED_ACT_BOSS_POOLS as ACT_BOSS_POOLS } from '../data/regions';
-import { getMonster, fusionNeed } from '../data/monsters';
+import { getMonster, fusionNeed, SPECIAL_EGG_POOL } from '../data/monsters';
 export { MAIN_EVO2_POOL as EVO2_POOL } from '../data/monsters';
 import { getFood, FOODS } from '../data/foods';
 import { ITEMS, mainShopItemPool } from '../data/items';
@@ -80,7 +80,7 @@ export interface EventChoice {
   desc: string;
   kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none'
       | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status' | 'revive' | 'growthPoint'
-      | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace';
+      | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace' | 'carryEgg';
   /** heal/damage=百分比，gold=金额 */
   amount?: number;
   /** 复活属性保留比例（0~1） */
@@ -101,6 +101,9 @@ export interface EventChoice {
   statusValue?: number;
   /** 消耗 foodId 对应的道具（而非获得） */
   consumeFood?: boolean;
+  consumeRandomFood?: boolean;
+  damagePercent?: number;
+  carriedEgg?: { ambush: boolean; special: boolean; monsterId: string };
   /** gold 选项附加：随机宠物诅咒 */
   curseTarget?: boolean;
   /** 战斗胜利奖励 */
@@ -376,6 +379,7 @@ export interface GameState {
   postBattle?: boolean;
   /** 孵化预览：点击「孵化它」后暂存，弹出确认弹窗显示将孵化的宠物 */
   pendingEventHatch?: { choiceId: string; monsterId: string };
+  carriedEggs?: { id: string; remaining: number; special: boolean; monsterId: string; passedNodeIds: string[] }[];
   /** 事件战斗：记录战斗数据（敌人、奖励、惩罚），战斗结束后处理结果 */
   eventBattle?: {
     enemies: { speciesId: string }[];
@@ -1475,9 +1479,8 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
       title: '神秘泉水',
       desc: '一汪泛着微光的泉水在密林深处静静流淌，似有治愈之力。',
       choices: [
-        c(1, '饮用泉水', '全体恢复 30% 生命', 'heal', { amount: 30 }),
-        c(2, '以泉水入药', '全体恢复 50% 生命，但损失 10 金币', 'heal', { amount: 50, goldDelta: -10 }),
-        c(3, '离开', '不打扰这片宁静', 'none'),
+        c(1, '饮用泉水', '全体恢复50%生命', 'heal', { amount: 50 }),
+        c(2, '以泉水入药', '消耗1个随机持有的食物，获得1个生命药水', 'item', { itemId: 'hp_up', consumeRandomFood: true }),
       ],
     };
   }
@@ -1486,8 +1489,9 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
       title: '古老祭坛',
       desc: '一座刻满符文的祭坛散发着危险而诱人的力量。',
       choices: [
-        c(1, '献上金币祈愿', '损失 20 金币，全体恢复 40% 生命', 'heal', { amount: 40, goldDelta: -20 }),
-        c(2, '鲁莽触碰', '符文能量灼伤全队（失去 15% 生命）', 'damage', { amount: 15 }),
+        c(1, '献上金币祈愿', '损失40金币，随机1只宠物永久+1速度', 'boost', { amount: 1, boostStat: 'spd', goldDelta: -40 }),
+        c(2, '献上生命祈愿', '全体失去40%生命，随机1只宠物永久+2最大生命', 'boost', { amount: 2, boostStat: 'hp', damagePercent: 40 }),
+        c(3, '离开', '无事', 'none'),
       ],
     };
   }
@@ -1498,10 +1502,10 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
     let tradeChoice: EventChoice;
     if (isItem) {
       const itemId = pick(rng, shopItemPool);
-      tradeChoice = c(1, '购买补给', `损失 15 金币，获得 1 个${ITEMS[itemId].name}`, 'item', { itemId, goldDelta: -15 });
+      tradeChoice = c(1, '购买补给', '损失20金币，随机获得1个食物或道具（各50%）', 'item', { itemId, goldDelta: -20 });
     } else {
       const foodId2 = pick(rng, shopFoodPool);
-      tradeChoice = c(1, '购买补给', `损失 15 金币，获得 1 个${FOODS[foodId2].name}`, 'food', { foodId: foodId2, goldDelta: -15 });
+      tradeChoice = c(1, '购买补给', '损失20金币，随机获得1个食物或道具（各50%）', 'food', { foodId: foodId2, goldDelta: -20 });
     }
     return {
       title: '流浪商人',
@@ -1509,31 +1513,22 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
       choices: [
         tradeChoice,
         c(2, '打探消息', '获得 20 金币', 'gold', { amount: 20 }),
-        c(3, '离开', '继续赶路', 'none'),
       ],
     };
   }
   if (type === 'egg') {
     const pools = MAIN_REGIONS[region];
-    let pool2: readonly string[];
-    const r = rng();
-    if (act <= 1) {
-      pool2 = pools.basePool;
-    } else if (act === 2) {
-      pool2 = r < 0.7 ? pools.evo1Pool : pools.basePool;
-    } else {
-      if (r < 0.6) pool2 = pools.evo2Pool;
-      else if (r < 0.9) pool2 = pools.evo1Pool;
-      else pool2 = pools.basePool;
-    }
-    const eggMonsterId = pick(rng, pool2);
+    const eggMonsterId = pick(rng, pools.basePool);
+    const ambush = rng() < 0.5;
+    const special = rng() < 0.1;
+    const carriedEgg = { ambush, special, monsterId: pick(rng, special ? SPECIAL_EGG_POOL : pools.basePool) };
+    const battleEnemies = eventBattleEnemies(rng, act, 2, region);
     return {
       title: '神秘蛋',
       desc: '一颗布满奇异纹路的蛋静静躺在草丛中，轻轻颤动。',
       choices: [
-        c(1, '孵化它', '一只神秘生物破壳而出，加入队伍', 'recruit', { monsterId: eggMonsterId }),
-        c(2, '敲开蛋壳', '里面散落出 15 金币', 'gold', { amount: 15 }),
-        c(3, '离开', '让命运保持神秘', 'none'),
+        c(1, '孵化它', '随机普通生物加入队伍；队伍满则进入处理界面', 'recruit', { monsterId: eggMonsterId }),
+        c(2, '带走它', '50%触发战斗，50%带走；经过3关后孵化（90%普通生物，10%蛋生特殊生物）', 'carryEgg', { carriedEgg, battleEnemies }),
       ],
     };
   }
@@ -2196,6 +2191,7 @@ export function fusionNeedCount(speciesId: string): number {
  * 材料（不含主宠）在调用前应从队伍移除。
  */
 export function fuseUnit(primary: Unit, targetSpeciesId?: string): Unit | null {
+  if (getMonster(primary.speciesId).eggBorn) return null;
   const target = targetSpeciesId ?? nextStage(primary.speciesId);
   if (target && !getMonster(primary.speciesId).evolutions?.some(e => e.to === target)) return null;
   if (!target) return null;

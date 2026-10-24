@@ -29,7 +29,7 @@ describe('九尾炎尊', () => {
     expect(gameReducer(state, { type: 'FUSE', primaryUid: primary.uid })).toBe(state);
     const after = gameReducer({ ...state, legendEvolutionUnlocked: true }, { type: 'FUSE', primaryUid: primary.uid });
     expect(after.roster).toHaveLength(1);
-    expect(after.roster[0]).toMatchObject({ speciesId: 'nine_tail_sovereign', hp: 33, maxHp: 33, spd: 8, passive: 'nine_tail_heart',
+    expect(after.roster[0]).toMatchObject({ speciesId: 'nine_tail_sovereign', hp: 25, maxHp: 25, spd: 8, passive: 'nine_tail_heart',
       skills: ['twin_tail_flames', 'burn_tail', 'nine_tail_wildfire', 'flame_tail_shield'] });
     expect(fusionNeedCount('phantom_tail_fox')).toBe(2);
     expect(nextStage('nine_tail_sovereign')).toBeUndefined();

@@ -47,6 +47,7 @@ function capArenaOpponent(speciesId: string, maxRank: number): string {
 const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'elite', 'boss', 'corrupted', 'guardian', 'arena', 'gauntlet'];
 
 export type GameAction =
+  | { type: 'ACK_MIMIC_PREVIEW' }
   | { type: 'START_RUN'; starterId: string; companionId: string; seed: number; difficulty?: Difficulty; relic?: string }
   | { type: 'STARTER'; saveSlot?: number; unlocks?: Unlocks }
   | { type: 'SET_REGION'; region: MainRegionId }
@@ -363,8 +364,8 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       ...r,
       maxHp: b.maxHp,
       hp: b.hp,
-      spd: b.spd,
-      skills: b.skills,
+      spd: Math.max(1, b.spd - (b.mirrorSpdDelta ?? 0)),
+      skills: getMonster(r.speciesId).passive === 'myriad_forms' ? [] : b.skills,
       statuses: [],
     };
   });
@@ -715,6 +716,32 @@ function bossCleared(state: GameState): boolean {
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
+  let next = reduceGameAction(state, action);
+  if (!next.carriedEggs?.length || !['map', 'inter_act'].includes(next.screen)) return next;
+  const advancesEgg = next !== state && !['LOAD_GAME', 'START_RUN', 'DEBUG_JUMP', 'TITLE', 'BACK_TO_MAP', 'CLOSE_BACKPACK'].includes(action.type);
+  const completedId = next.currentNodeId || state.currentNodeId;
+  const eggs = next.carriedEggs ?? [];
+  const ready: typeof eggs = [];
+  next = { ...next, carriedEggs: eggs.flatMap(egg => {
+    if (egg.remaining === 0 && next.screen === 'map') { ready.push(egg); return []; }
+    if (!advancesEgg || egg.remaining <= 0 || egg.passedNodeIds.includes(completedId)) return [egg];
+    const updated = { ...egg, remaining: egg.remaining - 1, passedNodeIds: [...egg.passedNodeIds, completedId] };
+    if (updated.remaining > 0) return [updated];
+    if (next.screen === 'inter_act') return [updated];
+    ready.push(updated);
+    return [];
+  }) };
+  for (const egg of ready) {
+    const unit = makeUnit(egg.special ? (getMonster(egg.monsterId).eggBorn ? egg.monsterId : 'time_sand_beast') : egg.monsterId, true, 0, false);
+    if (next.roster.length < getMaxRoster(next.runMode)) next = { ...next, roster: [...next.roster, unit] };
+    else next = { ...next, screen: 'tame-overflow', tameOverflow: [...(next.tameOverflow ?? []), unit], tameOverflowReturn: 'map' };
+    next = { ...next, toast: { msg: `神秘蛋孵化：${unit.name}！`, kind: 'success' }, log: [`神秘蛋孵化：${unit.name}`, ...next.log].slice(0, 20) };
+  }
+  return next;
+}
+
+function reduceGameAction(state: GameState, action: GameAction): GameState {
+  if (state.battle?.mimicPreviewPending && ['PLAYER_SKILL', 'PLAYER_REST', 'PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'END_TURN'].includes(action.type)) return state;
   switch (action.type) {
     case 'START_RUN': {
       const diff = action.difficulty ?? state.difficulty ?? 'normal';
@@ -927,7 +954,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (choice.kind !== 'gold' && state.gold + (choice.goldDelta ?? 0) < 0) return state;
       // 消耗食物类选项若食物不足则视为无效
       if (choice.consumeFood && choice.foodId && (state.inventory[choice.foodId] ?? 0) <= 0) return state;
+      const ownedFoods = Object.keys(FOODS).filter(id => (state.inventory[id] ?? 0) > 0);
+      if (choice.consumeRandomFood && ownedFoods.length === 0) return state;
       let next: GameState = { ...state, gold: state.gold + (choice.goldDelta ?? 0), postBattle: undefined };
+      if (choice.consumeRandomFood) {
+        const foodId = ownedFoods[Math.floor(eventRng() * ownedFoods.length)];
+        next = { ...next, inventory: { ...next.inventory, [foodId]: next.inventory[foodId] - 1 } };
+      }
+      if (choice.damagePercent) next = { ...next, roster: next.roster.map(unit => ({ ...unit, hp: Math.max(1, unit.hp - Math.round(unit.maxHp * choice.damagePercent! / 100)) })) };
+      if (choice.kind === 'carryEgg' && choice.carriedEgg) {
+        if (choice.carriedEgg.ambush && choice.battleEnemies) return gameReducer(next, {
+          type: 'EVENT_BATTLE_START', enemies: choice.battleEnemies, reward: { kind: 'gold', amount: 0 }, penalty: { percent: 0 },
+        });
+        return { ...next, screen: 'map', carriedEggs: [...(next.carriedEggs ?? []), {
+          id: `${state.currentNodeId}:${choice.id}`, remaining: 3, special: choice.carriedEgg.special,
+          monsterId: choice.carriedEgg.monsterId, passedNodeIds: [state.currentNodeId],
+        }], toast: { msg: '带走神秘蛋，经过3个不同关卡后孵化', kind: 'success' } };
+      }
       if (choice.kind === 'heal') {
         next = healRoster(next, (choice.amount ?? 0) / 100);
       } else if (choice.kind === 'gold') {
@@ -943,14 +986,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           next = { ...next, inventory: { ...next.inventory, [choice.foodId]: Math.max(0, (next.inventory[choice.foodId] ?? 0) - 1) } };
         } else {
           next = { ...next, inventory: { ...next.inventory, [choice.foodId]: (next.inventory[choice.foodId] ?? 0) + 1 } };
+          if (ev.title === '流浪商人') next = { ...next, toast: { msg: `获得 ${FOODS[choice.foodId].name}`, kind: 'success' } };
         }
         // food 类型也可附带 itemId 奖励（如赠送食物事件）
         if (choice.itemId) {
           next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
         }
       } else if (choice.kind === 'item' && choice.itemId) {
-        next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 } };
-      } else if (choice.kind === 'recruit' && choice.monsterId && next.roster.length < getMaxRoster(state.runMode)) {
+        next = { ...next, inventory: { ...next.inventory, [choice.itemId]: (next.inventory[choice.itemId] ?? 0) + 1 }, toast: { msg: `获得 ${ITEMS[choice.itemId]?.name ?? choice.itemId}`, kind: 'success' } };
+      } else if (choice.kind === 'recruit' && choice.monsterId) {
+        if (next.roster.length >= getMaxRoster(state.runMode)) return { ...next, screen: 'tame-overflow',
+          tameOverflow: [...(next.tameOverflow ?? []), makeUnit(choice.monsterId, true, 0, false)], tameOverflowReturn: 'map' };
         next = { ...next, roster: [...next.roster, makeUnit(choice.monsterId, true, 0, false)] };
       } else if (choice.kind === 'damage') {
         next = {
@@ -1030,6 +1076,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             } else if (choice.boostStat === 'spd') {
               bonus.spd = (bonus.spd ?? 0) + (choice.amount ?? 0);
             }
+            // 祭坛在当前属性上加值，不能在重算时丢失已应用的被动属性。
+            if (ev.title === '古老祭坛') return choice.boostStat === 'hp'
+              ? { ...u, bonusStats: bonus, maxHp: u.maxHp + (choice.amount ?? 0), hp: u.hp + (choice.amount ?? 0) }
+              : { ...u, bonusStats: bonus, spd: u.spd + (choice.amount ?? 0) };
             return recomputeStats({ ...u, bonusStats: bonus });
           }),
         };
@@ -1699,6 +1749,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, battle: { ...battle, collapseWarningSeenRound: battle.round } };
     }
 
+    case 'ACK_MIMIC_PREVIEW': {
+      if (state.screen !== 'battle' || !state.battle?.mimicPreviewPending) return state;
+      return { ...state, battle: { ...state.battle, mimicPreviewPending: undefined } };
+    }
+
     case 'END_TURN': {
       if (!state.battle || state.battle.phase !== 'acting') return state;
       return { ...state, battle: playerEndTurn(state.battle) };
@@ -1805,7 +1860,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             const b = [...battle.playerUnits, ...(battle.playerDown ?? [])].find((u) => u.uid === r.uid);
             if (!b) return r;
             if (b.hp <= 0) return { ...r, hp: Math.max(1, r.hp), statuses: [] };
-            return { ...r, maxHp: b.maxHp, hp: b.hp, spd: b.spd, skills: b.skills, statuses: [] };
+            return { ...r, maxHp: b.maxHp, hp: b.hp, spd: Math.max(1, b.spd - (b.mirrorSpdDelta ?? 0)), skills: getMonster(r.speciesId).passive === 'myriad_forms' ? [] : b.skills, statuses: [] };
           });
           next = { ...next, roster: syncedRoster };
           // 战后回血 80%
@@ -2180,7 +2235,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'REST_FUSION_SET_MAIN': {
       if (state.screen !== 'rest-fusion') return state;
       const unit = state.roster.find((u) => u.uid === action.uid);
-      if (!unit) return state;
+      if (!unit || getMonster(unit.speciesId).eggBorn) return state;
       // 点击已选主宠 → 取消选择
       if (state.fusionMainUid === action.uid) {
         return { ...state, fusionMainUid: undefined, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
@@ -2195,7 +2250,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'REST_FUSION_SET_SUB': {
       if (state.screen !== 'rest-fusion') return state;
       const unit = state.roster.find((u) => u.uid === action.uid);
-      if (!unit) return state;
+      if (!unit || getMonster(unit.speciesId).eggBorn) return state;
       // 点击已选副宠 → 取消选择
       if (state.fusionSubUid === action.uid) {
         return { ...state, fusionSubUid: undefined, fusionLearnSkill: undefined, fusionReplaceIdx: undefined };
@@ -2211,7 +2266,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'rest-fusion') return state;
       const main = state.roster.find((u) => u.uid === state.fusionMainUid);
       const sub = state.roster.find((u) => u.uid === state.fusionSubUid);
-      if (!main || !sub || main.uid === sub.uid) return state;
+      if (!main || !sub || main.uid === sub.uid || getMonster(main.speciesId).eggBorn || getMonster(sub.speciesId).eggBorn) return state;
       // 基础属性 50% 继承 + 成长点 30% 继承
       const subBase = getMonster(sub.speciesId);
       const hpGain = Math.round(subBase.baseHp * 0.5);

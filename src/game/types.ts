@@ -1,6 +1,6 @@
 export interface StatusEffect {
   // 火种战斗内保留至首次攻击命中，每只最多1层。
-  kind: 'emberSeed' | 'burn' | 'burnBrand' | 'sunRadiance' | 'foxFire' | 'foxTailGuard' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
+  kind: 'timeLag' | 'emberSeed' | 'burn' | 'burnBrand' | 'sunRadiance' | 'foxFire' | 'foxTailGuard' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -54,6 +54,9 @@ export interface SkillDef {
 
 /** 被动技能效果类型 */
 export type PassiveKind =
+  | 'mirrorCopy'
+  | 'mimic'
+  | 'timeRewind'
   | 'flameRelay'
   | 'healBurnCleanse' // 技能施加治疗后清除灼烧
   | 'healBurnBoost' // 为灼烧目标施加技能治疗时增量，治疗后清除灼烧
@@ -71,6 +74,7 @@ export type PassiveKind =
   | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
   | 'furnace' // 炉火：每回合前两次受到敌方攻击技能命中后，使攻击者灼烧 value 层
   | 'burnShield' // 灼烧结算后消耗最多 burnConsumeMax 层灼烧，每层获得 value 点护盾
+  | 'crystalConversion' // 回合末消耗全部护盾，对两名不同敌人造成一半护盾向上取整的真实伤害
   | 'burnStripShield' // 每回合首次攻击已灼烧目标时剥盾，原本无盾则单次加伤
   | 'afterglow' // 余温：全队每回合首次攻击已灼烧目标后，为当前生命最低的存活伙伴回复 value 点生命，同名取最高值
   | 'eternalLight' // 长明之光：每只持有者独立计次，每回合首次攻击已灼烧目标后全队回血
@@ -84,7 +88,7 @@ export type PassiveKind =
   | 'treeSpeedUp' // 古木加速：每回合恢复3HP + 受击后速度+1（可叠加，上限8层）
   | 'speedBonus' // 速度差增伤：速度每高于目标 1 点伤害 +1，上限 value
   | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
-  | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+5
+  | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+3
   | 'lifeSpring' // 生命之泉：每回合开始恢复 3 点生命；受到超过 value 点伤害时，伤害 -2
   | 'tideRhythm' // 潮汐节律：每3回合触发一次，本回合伤害+2
   | 'tideEcho' // 潮汐共鸣：潮汐巨蟹爆发时本回合自身伤害+2
@@ -121,6 +125,8 @@ export interface PassiveDef {
   targetCount?: number;
   /** 炉火系每次触发为自身增加的护盾，缺省为0。 */
   shieldOnTrigger?: number;
+  /** 自身持有护盾时的技能伤害加成。 */
+  shieldDamageBonus?: number;
   /** 自燃换盾每回合可消耗的最大灼烧层数，缺省1。 */
   burnConsumeMax?: number;
   /** 剥甲值加目标灼烧层数后的上限；缺省不随灼烧层数增长。 */
@@ -138,6 +144,8 @@ export interface SpeciesTame {
 
 export interface MonsterSpecies {
   id: string;
+  /** 蛋生特殊生物：固定形态，不参与任何进化或融合。 */
+  eggBorn?: boolean;
   name: string;
   emoji: string;
   /** 自定义图片路径（优先于 emoji 显示），放在 public/ 下，如 '/01.png' */
@@ -207,6 +215,13 @@ export interface Unit {
   eternalLightUsed?: boolean;
   burnStripUsed?: boolean;
   flameRelayUsed?: boolean;
+  mirrorOwnSkillUsed?: boolean;
+  /** 镜像加减速在本场累计造成的基础速度变化，战后扣除。 */
+  mirrorSpdDelta?: number;
+  timeRewindUsed?: boolean;
+  timeRewindRound?: number;
+  timeRewindExtraPending?: boolean;
+  timeRewindLogPending?: boolean;
   radianceGainedThisRound?: boolean;
   /** 专属被动技能 id（随物种固定） */
   passive?: string;
@@ -342,6 +357,9 @@ export interface PlayerOrder {
 }
 
 export interface BattleState {
+  lastAllySkill?: Partial<Record<'player' | 'enemy', { actorUid: string; skillId: string; targetUid?: string }>>;
+  /** 万变抽技结果已锁定，确认预览后才能操作；随战斗存档保存。 */
+  mimicPreviewPending?: boolean;
   /** 已结算崩解的回合与已确认预警，随战斗存档持久化。 */
   collapseResolvedRound?: number;
   collapseWarningSeenRound?: number;

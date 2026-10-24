@@ -64,6 +64,11 @@ add('forest-map', ui.MapScreen, { region: 'emerald_forest' }, false);
 add('formation', FormationScreen, { formation }, false);
 add('gauntlet-order', GauntletOrderScreen, { gauntletOrder: base.roster.slice(0, 4) });
 add('battle', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false);
+add('battle-mimic', BattleScreen, { battle: createBattle([makeUnit('mimic_beast', true, 0, false)], [{ speciesId: 'boss_vine' }], 123) }, false);
+add('battle-mirror', BattleScreen, { battle: createBattle([makeUnit('mirror_beast', true, 0, false), makeUnit('momo', true, 1, false)], encounter, 123) }, false);
+add('battle-crystal', BattleScreen, { battle: createBattle([makeUnit('crystal_core_beast', true, 0, false), makeUnit('momo', true, 1, false)], encounter, 123) }, false);
+add('battle-mimic-duplicate', BattleScreen, { battle: createBattle([makeUnit('mimic_beast', true, 0, false)], [{ speciesId: 'mimic_beast' }], 123) }, false);
+add('battle-mimic-long', BattleScreen, { battle: createBattle([makeUnit('mimic_beast', true, 0, false)], [], 123, { mirrorUnits: [{ ...makeUnit('momo', false, 0, false), skills: ['flame_tail_shield', 'sand_time_strike', 'burn_reversal', 'nine_tail_wildfire'] }] }) }, false);
 add('reward', ui.RewardScreen, { rewards }, false);
 add('recruit', ui.RewardScreen, { rewards, pendingRecruitRewardId: 'recruit' }, false);
 add('roster', ui.RosterScreen);
@@ -112,6 +117,12 @@ window.petCard = { platform: 'preview', loadGame: async slot => slot === 1 ? JSO
 const variant = (name: string, original: string, extra = {}, setup?: string) => {
   registry[name] = { ...registry[original], state: { ...structuredClone(registry[original].state), ...extra }, setup };
 };
+variant('battle-mirror-selected', 'battle-mirror', {}, '.player-area .formation-slot');
+variant('battle-crystal-selected', 'battle-crystal', {}, '.player-area .formation-slot');
+variant('battle-mirror-queued', 'battle-mirror', {}, '.player-area .formation-slot|.battle-skill-grid .skill-btn:nth-child(3)');
+const usedMirrorBattle = structuredClone(registry['battle-mirror'].state.battle!);
+usedMirrorBattle.playerUnits[0].skillUses = { mirror_copy: 0 };
+variant('battle-mirror-used', 'battle-mirror', { battle: usedMirrorBattle }, '.player-area .formation-slot');
 const watchtowerMap = { ...base.map, layers: [
   [{ id: 'preview-tower', type: 'watchtower', label: '瞭望塔', col: 0 }],
   [{ id: 'preview-corrupt', type: 'corrupted', label: '被侵蚀', col: 0 }, { id: 'preview-elite', type: 'elite', label: '精英怪', col: 1 }, { id: 'preview-battle', type: 'battle', label: '遭遇战', col: 2 }, { id: 'preview-special', type: 'special', label: '神秘蛋', col: 3 }, { id: 'preview-arena', type: 'arena', label: '斗兽场', col: 4 }],

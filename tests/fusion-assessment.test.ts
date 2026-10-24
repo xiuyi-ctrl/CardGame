@@ -41,7 +41,7 @@ describe('融合专项评估工具', () => {
 
   it('首领使用实际小怪，二阶进化预算仍按两只材料评估', () => {
     expect(fusionEncounters(2).at(-1)?.enemies).toEqual(['boss_golem', 'boss_minion_rock', 'boss_minion_crystal']);
-    expect(fusionStatBudget('momo_queen')).toMatchObject({ pairHp: 30, fusedHp: 30, beforeActions: 2, afterActions: 1 });
+    expect(fusionStatBudget('momo_queen')).toMatchObject({ pairHp: 30, fusedHp: 22, beforeActions: 2, afterActions: 1 });
   });
 
   it('六条链两个阶段在首领压力下两种策略均可复现', () => {

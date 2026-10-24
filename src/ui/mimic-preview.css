@@ -1,0 +1,20 @@
+.mimic-preview { box-sizing: border-box; display: none; width: min(760px, calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 24px)); max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px); padding: clamp(8px, 2vh, 16px); gap: clamp(6px, 1.5vh, 12px); border: 4px solid #182638; background: #fff9e9; color: #182638; font-family: inherit; }
+.mimic-preview[open] { display: flex; flex-direction: column; }
+.mimic-preview::backdrop { background: #091724bb; }
+.mimic-preview header, .mimic-preview footer { flex: none; }
+.mimic-preview h2 { margin: 0; font-size: clamp(18px, 3vh, 24px); }
+.mimic-preview p { margin: 4px 0 0; color: #52636c; font-size: 12px; }
+.mimic-preview-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.mimic-preview-unit + .mimic-preview-unit { margin-top: 10px; }
+.mimic-preview h3 { margin: 0 0 5px; font-size: 14px; }
+.mimic-preview-skills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(5px, 1.5vh, 10px); }
+.mimic-preview-skills .skill-line { box-sizing: border-box; min-width: 0; padding: 7px; background: #f4edd9; border: 2px solid #52636c; border-left: 4px solid #45b7a2; }
+.mimic-preview-skills .skill-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 3px 6px; }
+.mimic-preview-skills .skill-name { color: #182638; font-size: 14px; font-weight: 800; }
+.mimic-preview-skills .skill-num, .mimic-preview-skills .skill-uses-note { color: #9f5900; }
+.mimic-preview-skills .skill-desc { display: block; margin-top: 3px; color: #52636c; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.mimic-preview footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; }
+.mimic-preview small { color: #52636c; font-size: 12px; }
+.mimic-preview button { flex: none; min-width: 110px; min-height: 44px; border: 3px solid #182638; background: #ffb51c; color: #182638; font: inherit; font-weight: 800; }
+.mimic-preview button:focus-visible { outline: 3px solid #45b7a2; outline-offset: 2px; }
+.mobile-ui .mimic-preview-skills .skill-line { padding: clamp(4px, 1vh, 7px); }

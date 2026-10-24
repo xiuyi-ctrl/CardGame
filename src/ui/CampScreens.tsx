@@ -56,7 +56,7 @@ export function CampRestScreen({ state, dispatch }: Props) {
 export function CampFusionScreen({ state, dispatch }: Props) {
   const main = state.roster.find(unit => unit.uid === state.fusionMainUid);
   const sub = state.roster.find(unit => unit.uid === state.fusionSubUid);
-  const canConfirm = !!main && !!sub && main.uid !== sub.uid;
+  const canConfirm = !!main && !!sub && main.uid !== sub.uid && !getMonster(main.speciesId).eggBorn && !getMonster(sub.speciesId).eggBorn;
   const base = sub ? getMonster(sub.speciesId) : undefined;
   const hpGain = base ? Math.round(base.baseHp * .5) : 0;
   const spdGain = base ? Math.round(base.baseSpd * .5) : 0;
@@ -85,8 +85,8 @@ export function CampFusionScreen({ state, dispatch }: Props) {
       })}<span className="camp-fusion-arrow" aria-hidden="true"><UiSymbol name="arrow-left" /></span></div>
       <section className="camp-fusion-preview"><h2>融合效果预览</h2><p>继承副宠50%基础属性与30%成长点</p>{canConfirm ? <div><span>生命 <b>+{hpGain}</b></span><span>速度 <b>+{spdGain}</b></span><span>成长点 <b>+{gpGain}</b></span></div> : <p>请选择主宠和副宠</p>}</section>
     </div><footer className="camp-fusion-confirm"><p>副宠将离开队伍，此操作不可撤销</p><div><button type="button" className="flow-primary" disabled={!canConfirm} onClick={() => dispatch({ type: 'REST_FUSION_CONFIRM' })}>开始融合</button><small>融合后可选择一个未学过的副宠技能</small></div></footer></main>
-    <section className="flow-frame camp-fusion-roster"><h2>我的宠物 · 点击或拖动选择</h2><div className="camp-fusion-roster-grid camp-scroll">{state.roster.map(unit => <button type="button" key={unit.uid} draggable onDragStart={event => dragStart(event, unit)} onClick={() => choose(unit)} className={`camp-roster-card ${main?.uid === unit.uid ? 'is-main' : sub?.uid === unit.uid ? 'is-sub' : ''}`}>
-      {main?.uid === unit.uid && <span className="camp-roster-badge">主宠</span>}{sub?.uid === unit.uid && <span className="camp-roster-badge">副宠</span>}<FlowPet unit={unit} /><strong>{unit.name}</strong><FlowPetStats unit={unit} /><small>基础生命 {getMonster(unit.speciesId).baseHp} · 速度 {getMonster(unit.speciesId).baseSpd} · 成长点 {unit.growthPoints ?? 0}</small>
+    <section className="flow-frame camp-fusion-roster"><h2>我的宠物 · 点击或拖动选择</h2><div className="camp-fusion-roster-grid camp-scroll">{state.roster.map(unit => <button type="button" key={unit.uid} disabled={getMonster(unit.speciesId).eggBorn} draggable={!getMonster(unit.speciesId).eggBorn} onDragStart={event => dragStart(event, unit)} onClick={() => choose(unit)} className={`camp-roster-card ${main?.uid === unit.uid ? 'is-main' : sub?.uid === unit.uid ? 'is-sub' : ''}`}>
+      {main?.uid === unit.uid && <span className="camp-roster-badge">主宠</span>}{sub?.uid === unit.uid && <span className="camp-roster-badge">副宠</span>}<FlowPet unit={unit} /><strong>{unit.name}{getMonster(unit.speciesId).eggBorn ? " · 不可融合" : ""}</strong><FlowPetStats unit={unit} /><small>基础生命 {getMonster(unit.speciesId).baseHp} · 速度 {getMonster(unit.speciesId).baseSpd} · 成长点 {unit.growthPoints ?? 0}</small>
     </button>)}</div></section>
   </div>;
 }

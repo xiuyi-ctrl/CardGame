@@ -13,7 +13,7 @@ function peacefulBattle(speciesId: string, burned = true): BattleState {
 }
 
 describe('熔炉兽与长明灵蛾', () => {
-  it.each([['coal_guard', 'furnace_beast', 31, 2], ['lantern_moth', 'eternal_moth', 23, 6]] as const)('%s：第一幕锁定，首领后两只同形态可融合为%s', (id, evolvedId, hp, spd) => {
+  it.each([['coal_guard', 'furnace_beast', 29, 3], ['lantern_moth', 'eternal_moth', 23, 6]] as const)('%s：第一幕锁定，首领后两只同形态可融合为%s', (id, evolvedId, hp, spd) => {
     const primary = makeUnit(id, true, 0, false);
     const material = makeUnit(id, true, 1, false);
     const state = { ...createInitialState(), act: 1, screen: 'roster' as const, roster: [primary, material] };
@@ -27,7 +27,7 @@ describe('熔炉兽与长明灵蛾', () => {
     expect(nextStage(evolvedId)).toBeUndefined();
   });
 
-  it('熔炉之心每回合只触发两次，每次灼烧2层并在受击结束后获得1盾，多段不重复触发', () => {
+  it('熔炉之心每回合只触发两次，每次灼烧3层并在受击结束后获得2盾，多段不重复触发', () => {
     const players = ([0, 1, 2] as const).map(col => ({ ...makeUnit('momo', true, col, false), spd: 99, skills: ['double_hit'] }));
     const raw = createBattle(players, [{ speciesId: 'furnace_beast' }], 2);
     let b: BattleState = { ...raw, enemyUnits: raw.enemyUnits.map(u => ({ ...u, hp: 500, maxHp: 500, acted: true, skills: [] })) };
@@ -36,9 +36,9 @@ describe('熔炉兽与长明灵蛾', () => {
     const burns = after.log.filter(entry => entry.text.includes('的「熔炉之心」使'));
     const shields = after.log.filter(entry => entry.text.includes('的「熔炉之心」获得'));
     expect(burns).toHaveLength(2);
-    expect(burns.every(entry => entry.text.endsWith('灼烧 2 层'))).toBe(true);
+    expect(burns.every(entry => entry.text.endsWith('灼烧 3 层'))).toBe(true);
     expect(shields).toHaveLength(2);
-    expect(shields.every(entry => entry.text.endsWith('获得 1 点护盾'))).toBe(true);
+    expect(shields.every(entry => entry.text.endsWith('获得 2 点护盾'))).toBe(true);
     expect(parseEvent(after, shields[0])?.kind).toBe('buff');
   });
 
@@ -102,11 +102,11 @@ describe('熔炉兽与长明灵蛾', () => {
     expect(fuelLog.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(11);
     const moved = playerEndTurn(playerSkill(b, actor.uid, 'ember_transfer', b.enemyUnits[0].uid));
     const cast = moved.log.find(entry => entry.text.includes('使用「余烬迁移」'))!;
-    expect(cast.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(2);
-    expect(cast.statuses?.[b.enemyUnits[1].uid].find(s => s.kind === 'burn')?.value).toBe(6);
+    expect(cast.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')).toBeUndefined();
+    expect(cast.statuses?.[b.enemyUnits[1].uid].find(s => s.kind === 'burn')?.value).toBe(8);
     expect(cast.hp?.[b.enemyUnits[0].uid]).toBe(500);
     expect(cast.hp?.[b.enemyUnits[1].uid]).toBe(500);
-    expect(skillCooldownLeft(moved.playerUnits[0], 'ember_transfer')).toBe(1);
+    expect(skillCooldownLeft(moved.playerUnits[0], 'ember_transfer')).toBe(0);
     expect(moved).toEqual(playerEndTurn(playerSkill(b, actor.uid, 'ember_transfer', b.enemyUnits[0].uid)));
     const solo = { ...b, enemyUnits: [b.enemyUnits[0]] };
     expect(stokeFireTargets(solo, actor, 'ember_transfer')).toEqual([]);

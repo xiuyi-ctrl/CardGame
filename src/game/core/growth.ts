@@ -65,6 +65,7 @@ function isSpeedBuffSkill(skillId: string): boolean {
 
 /** 获取技能最大强化等级（连击/速度类最多2次，其他最多3次） */
 export function getSkillEnhanceMaxLevel(skillId: string): number {
+  if (skillId.startsWith('mirror_') || skillId === 'core_crystal_cleanse') return 0;
   if (skillId === 'burn_tail' || skillId === 'clean_flame_care') return 0;
   if (isMultiHitSkill(skillId) || isSpeedBuffSkill(skillId)) return 2;
   return 3;
@@ -106,6 +107,8 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
   effectBonus: number;
 } {
   if (level <= 0) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  if (skillId.startsWith('mirror_') || skillId === 'core_crystal_cleanse') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  if (skillId === 'time_lag') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   if (skillId === 'clean_flame_care') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   const sk = SKILLS[skillId];
   if (!sk) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
@@ -242,8 +245,11 @@ export const LEGENDARY_SKILLS = new Set([
   'fear_gaze', 'hell_scream', 'fear_burst',
 ]);
 
-/** 不出现在任何技能池中的技能（Boss专属，玩家不可获取） */
+/** 不出现在随机技能池中的技能（Boss专属及蛋生生物专属） */
 export const BLOCKED_SKILLS = new Set([
+  'core_crystal_spike', 'core_crystal_wall', 'core_crystal_burst', 'core_crystal_cleanse',
+  'mirror_copy', 'mirror_speed_up', 'mirror_speed_down',
+  'sand_time_strike', 'time_lag', 'sand_shield', 'time_haste',
   'shell_up', 'rock_reforge', 'spore_summon', 'ghostly_summon',
   'soul_share', 'chain_bind', 'chain_activate', 'chain_link',
   'growth_bind', 'growth_roar', 'growth_ultimate', 'growth_impact', 'growth_eruption', 'growth_summon',

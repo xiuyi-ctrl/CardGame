@@ -85,24 +85,19 @@ describe('林地战后招募', () => {
 });
 
 describe('林地孵化与事件', () => {
-  it('保留原品阶分段边界，各同阶候选等分区间并覆盖全部21形态', () => {
-    const cases = [
-      { act: 1, roll: 0, pool: forest.basePool }, { act: 1, roll: 0.99, pool: forest.basePool },
-      { act: 2, roll: 0.69, pool: forest.evo1Pool }, { act: 2, roll: 0.7, pool: forest.basePool },
-      { act: 3, roll: 0.59, pool: forest.evo2Pool }, { act: 3, roll: 0.6, pool: forest.evo1Pool },
-      { act: 3, roll: 0.89, pool: forest.evo1Pool }, { act: 3, roll: 0.9, pool: forest.basePool },
-    ];
+  it('新版神秘蛋三幕均在地区一阶池内等概率孵化', () => {
     const seen = new Set<string>();
-    for (const { act, roll, pool } of cases) {
+    for (const act of [1, 2, 3]) {
+      const pool = forest.basePool;
       pool.forEach((id, index) => {
-        const rolls = [roll, (index + 0.5) / pool.length];
-        const event = buildEventByType(() => rolls.shift()!, 'egg', act, 'emerald_forest');
+        let first = true;
+        const rng = createRng(42);
+        const event = buildEventByType(() => first ? (first = false, (index + 0.5) / pool.length) : rng(), 'egg', act, 'emerald_forest');
         expect(event.choices[0].monsterId).toBe(id);
-        expect(rolls).toHaveLength(0);
         seen.add(id);
       });
     }
-    expect([...seen].sort()).toEqual([...allowed].sort());
+    expect([...seen].sort()).toEqual([...forest.basePool].sort());
   });
 
   it.each([false, true])('孵化预览绑定已生成物种，读档、确认与满员到账一致 full=%s', full => {

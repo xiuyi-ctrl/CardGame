@@ -189,10 +189,10 @@ describe('自定义测试：非战斗类节点（不需要宠物，跳过选宠�
     expect(s.field).toEqual(s.roster.map((u) => u.uid));
   });
 
-  it('事件：直接进入 event 界面且生成 3 个选项', () => {
+  it('事件：直接进入 event 界面且生成新版泉水两个选项', () => {
     const s = startTest('event');
     expect(s.screen).toBe('event');
-    expect(s.map.events.custom_test.choices).toHaveLength(3);
+    expect(s.map.events.custom_test.choices).toHaveLength(2);
   });
 
   it('奇遇：直接进入 special 界面且生成 3 个奖励', () => {

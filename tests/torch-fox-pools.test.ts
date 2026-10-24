@@ -7,7 +7,7 @@ import { buildEventByType, generateRewards, MIXED_ENCOUNTER_TABLES, FOREST_ENCOU
 import { createInitialState } from '../src/game/state/reducer';
 
 describe('传火分支随机投放', () => {
-  it.each(['mixed', 'emerald_forest'] as const)('%s 招募及孵化能够获得传火分支，开局与第一幕传奇限制不变', region => {
+  it.each(['mixed', 'emerald_forest'] as const)('%s 招募获得传火狐，新版神秘蛋仅普通形态，开局限制不变', region => {
     const pool = MAIN_REGIONS[region];
     expect(pool.evo1Pool).toContain('torch_fox');
     expect(pool.evo2Pool).toContain('torch_fox_lord');
@@ -22,8 +22,9 @@ describe('传火分支随机投放', () => {
         expect(reward.recruitCandidates ?? []).not.toContain('torch_fox_lord');
     }
     expect(recruits.has('torch_fox')).toBe(true);
-    expect(eggs.has('torch_fox')).toBe(true);
-    expect(eggs.has('torch_fox_lord')).toBe(true);
+    expect(eggs.has('torch_fox')).toBe(false);
+    expect(eggs.has('torch_fox_lord')).toBe(false);
+    expect([...eggs].every(id => pool.basePool.includes(id))).toBe(true);
   });
 
   it('两地区组合池均投放，单体、斗兽场、车轮战不加入传火辅助', () => {

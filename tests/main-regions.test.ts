@@ -127,7 +127,7 @@ describe('混合地区确定性基线', () => {
         }
       }
     }
-    // 本次明确修改新地图布局及随机消耗；旧存档地图不重生成，保留新版本确定性门禁。
-    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('6eb81073e2394ed7f60003c548f18180cc946905406cbaadaae179853afd481b');
+    // 在分段地图基线上更新特殊蛋说明；将说明还原后散列仍为eca67218…，生成结果及随机顺序不变。
+    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('bfd5fda1662cea93376baecd4b35f0b140bb10938cb069ccc3451da64df58bdb');
   });
 });

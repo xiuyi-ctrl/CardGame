@@ -30,6 +30,7 @@ import { persistSave } from './persistence';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import { BattleStatusIcons } from './BattleStatusIcons';
 import { CollapseWarning } from './CollapseWarning';
+import { MimicPreview } from './MimicPreview';
 import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART } from './BuffIcon';
 import { UiSymbol } from './UiSymbol';
 
@@ -95,8 +96,8 @@ export function BattleUnitInspectPanel({ unit, speed, side, showSkills = side ==
       {showSkills && <>
         <div className="enemy-inspect-section-title">技能</div>
         <div className="enemy-inspect-skills">
-          {unit.skills.map((sid) => (
-            <SkillTag key={sid} skill={getSkill(sid)} desc usesNote />
+          {unit.skills.map((sid, slot) => (
+            <SkillTag key={slot} skill={getSkill(sid)} desc usesNote />
           ))}
         </div>
       </>}
@@ -178,7 +179,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const collapseWarning = battle.phase === 'acting' && [13, 14].includes(battle.round) && battle.collapseWarningSeenRound !== battle.round;
   const acknowledgeCollapse = () => dispatch({ type: 'ACK_COLLAPSE_WARNING' });
   useBackAction(collapseWarning && !animating && !logPending, acknowledgeCollapse, 20);
-  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap && !collapseWarning;
+  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap && !collapseWarning && !battle.mimicPreviewPending;
   const previousOrders = useRef({ orders: battle.orders, round: battle.round });
   const [orderPulse, setOrderPulse] = useState<{ actorUid: string; targetUid: string; skillId: string; seq: number } | null>(null);
   useEffect(() => {
@@ -300,12 +301,13 @@ export function BattleScreen({ state, dispatch }: Props) {
   const inspectedEnemy = inspectEnemy ? battle.enemyUnits.find((u) => u.uid === inspectEnemy && u.hp > 0) : undefined;
   const inspectedAlly = inspectAlly ? battle.playerUnits.find((u) => u.uid === inspectAlly) : undefined;
   const selectedSkills: SkillDef[] = useMemo(
-    () => (selected && selected.hp > 0 ? selected.skills.map((id) => getSkill(id)) : []),
+    () => (selected && selected.hp > 0 ? [...selected.skills, ...(getPassive(selected.passive)?.kind === 'mirrorCopy' ? ['mirror_copy'] : [])].map((id) => getSkill(id)) : []),
     [selected],
   );
   const selectedOrder = selected ? battle.orders?.[selected.uid] : undefined;
   const selectedOrderLabel = selectedOrder ? (() => {
     if (selectedOrder.skillId === REST_SKILL_ID) return '✓ 休息';
+    if (selectedOrder.skillId === 'mirror_copy') return '✓ 镜影复制 → 行动时判定';
     const skill = getSkill(selectedOrder.skillId);
     const targetName = (skill.target === 'single' || skill.target === 'ally')
       ? [...battle.playerUnits, ...battle.enemyUnits].find(unit => unit.uid === selectedOrder.targetUid)?.name ?? '目标已离场'
@@ -631,6 +633,7 @@ export function BattleScreen({ state, dispatch }: Props) {
 
   return (
     <div className="screen battle-screen">
+      {battle.mimicPreviewPending && <MimicPreview units={[...battle.playerUnits, ...battle.enemyUnits, ...(battle.playerBench ?? []), ...(battle.enemyBench ?? [])].filter(unit => unit.hp > 0 && getPassive(unit.passive)?.kind === 'mimic')} onConfirm={() => dispatch({ type: 'ACK_MIMIC_PREVIEW' })} />}
       {collapseWarning && !animating && !logPending && !battle.pendingSwap && <CollapseWarning round={battle.round} onConfirm={acknowledgeCollapse} />}
       <div className="hud">
         <span className="act">{state.runMode === 'proficiency' ? '熟练度远征' : `第${state.act}幕`} · 第{state.currentRow + 1}层</span>
@@ -722,7 +725,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                   </div>
                   <div className="battle-skill-scroll">
                     <div className="battle-skill-grid">
-                    {selectedSkills.map((s) => {
+                    {selectedSkills.map((s, displayIndex) => {
                     const left = skillUsesLeft(selected, s.id);
                     const cd = skillCooldownLeft(selected, s.id);
                     const limited = Number.isFinite(left);
@@ -742,7 +745,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                       || (requiresBurningTarget(s.id) && !isActive && stokeFireTargets(battle, selected, s.id).length === 0);
                     return (
                       <button
-                        key={s.id}
+                        key={displayIndex}
                         className={`skill-btn ${isActive ? 'skill-btn-current' : ''}`}
                         aria-pressed={isActive}
                         onClick={() => onSkillClick(s)}
@@ -755,7 +758,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                             <span className="skill-num" style={enhanced > 0 && !isActive ? { color: '#9f5900' } : undefined}>{skillBrief(s, enhanced)}</span>
                           </span>
                           <span className="skill-desc">{fullDesc}</span>
-                          {mobile && <span className="mobile-skill-meta">{({ single: '单敌', all: '全敌', random: '随机敌', ally: '友方', allyAll: '全队', self: '自身' })[s.target]}{s.priority === 'first' ? '·先手' : ''}{s.cooldown ? `·冷却${cd || s.cooldown}` : ''}{limited ? `·剩${left}次` : ''}{isSealed ? '·封印' : ''}</span>}
+                          {mobile && <span className="mobile-skill-meta">{s.id === 'mirror_copy' ? '行动时判定' : ({ single: '单敌', all: '全敌', random: '随机敌', ally: '友方', allyAll: '全队', self: '自身' })[s.target]}{s.priority === 'first' ? '·先手' : ''}{s.cooldown ? `·冷却${cd || s.cooldown}` : ''}{limited ? `·剩${left}次` : ''}{isSealed ? '·封印' : ''}</span>}
                         </span>
                       </button>
                     );

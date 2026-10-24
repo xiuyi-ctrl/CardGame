@@ -10,10 +10,15 @@ import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
 
 /** 技能数值简述：仅伤害/治疗/buff效果数值，如 "5"、"3×2"、"7" */
 export function skillBrief(s: SkillDef, enhanced: number = 0): string {
+  if (s.id === 'mirror_speed_up') return '本场+1速';
+  if (s.id === 'mirror_speed_down') return '本场−1速';
+  if (s.id === 'core_crystal_cleanse') return '净化≤6→盾';
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   if (s.kind === 'attack') {
     const dmg = (s.damage ?? 0) + bonus.damageBonus;
     if (s.id === 'shell_charge') return `${dmg}+护盾`;
+    if (s.id === 'core_crystal_burst') return `${dmg}+消耗盾≤5`;
+    if (s.id === 'core_crystal_spike') return `${dmg}·有盾+1`;
     if (s.id === 'solar_strike') return `${dmg}+日华×2`;
     const hits = (s.hits ?? 1) + bonus.hitsBonus;
     return hits > 1 ? `${dmg}×${hits}` : String(dmg);
@@ -53,6 +58,8 @@ function effectText(e: StatusEffect): string {
       return `伤害 -${e.value}${turns}`;
     case 'stun':
       return `眩晕（跳过行动）${turns}`;
+    case 'timeLag':
+      return '本回合行动延后至最后';
     case 'healTick':
       return `每回合回复 ${e.value}${turns}`;
     case 'shield':
@@ -113,6 +120,8 @@ function getDescEffectBonus(s: SkillDef, effectBonus: number, enhanced: number, 
 export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   let desc = s.desc;
+  if (s.id === 'core_crystal_spike') desc = desc.replace('造成3点伤害', `造成${3 + bonus.damageBonus}点伤害`);
+  if (s.id === 'core_crystal_burst') desc = desc.replace('造成2加', `造成${2 + bonus.damageBonus}加`);
   if (s.id === 'pass_flame') desc = desc.replace('2层灼烧', `${2 + bonus.effectBonus}层灼烧`);
   if (s.id === 'relay_wildfire') desc = desc.replace('附加1层灼烧', `附加${1 + bonus.effectBonus}层灼烧`);
   if (s.id === 'ember_veil') desc = desc.replace('获得2点护盾', `获得${2 + bonus.effectBonus}点护盾`);
@@ -129,6 +138,8 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   if (s.id === 'fire_feather') {
     desc = desc.replace('5点伤害', `${5 + bonus.damageBonus}点伤害`);
   }
+  if (s.id === 'sand_time_strike') desc = desc.replace('造成5点伤害', `造成${5 + bonus.damageBonus}点伤害`);
+  if (s.id === 'sand_shield') desc = desc.replace('改为6点护盾', `改为${6 + bonus.effectBonus}点护盾`);
   if (s.id === 'purifying_orb') desc = desc.replace('3点伤害', `${3 + bonus.damageBonus}点伤害`);
   if (s.id === 'flying_leaf') desc = desc.replace('造成4点伤害', `造成${4 + bonus.damageBonus}点伤害`);
   if (s.id === 'shadow_claw') desc = desc.replace('造成6点伤害', `造成${6 + bonus.damageBonus}点伤害`);
@@ -561,7 +572,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
       {showSkills && !small && (
         <div className="skill-list">
           {unit.skills.map((sid, idx) => (
-            <SkillTag key={sid} skill={getSkill(sid)} desc={showSkillDesc} enhanced={skillEnhancements?.[idx] ?? 0} />
+            <SkillTag key={idx} skill={getSkill(sid)} desc={showSkillDesc} enhanced={skillEnhancements?.[idx] ?? 0} />
           ))}
         </div>
       )}
@@ -639,6 +650,7 @@ export function DragScrollRow({
 }
 
 const STATUS_DESC: Record<string, (v: number) => string> = {
+  timeLag: () => '本回合尚未执行的行动延后至最后，不改变速度、不增加行动',
   burn: (v) => `每回合受到 ${Math.ceil(v / 2)} 点灼烧伤害（${v} 层，向上进位）`,
   poison: (v) => `每回合受到 ${Math.ceil(v / 2)} 点中毒伤害（${v} 层，向上进位）`,
   atkUp: (v) => `技能伤害 +${v}`,
@@ -652,7 +664,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   shieldCounter: () => '受击时反击攻击者 + 降低攻击 + 清除护盾',
   thornSpikes: () => '受击时获得怒棘（攻击+1，可叠加）',
   rageThorn: (v) => `攻击 +${v}，荆棘之躯反伤 +${v}`,
-  windSpd: () => '速度 +2',
+  windSpd: (v) => `速度 +${v}`,
   waterCurtain: (v) => `下回合受到伤害 -${v}`,
   flameShield: (v) => `受攻击时灼烧攻击者 ${v} 层`,
   comboBoost: (v) => `连击段数 +${v}`,
@@ -674,6 +686,8 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
   // 计算被动当前层数/加成（仅动态计数显示数字，固定效果数值在描述文字中）
   const passiveStacks = (() => {
     if (!passive) return null;
+    if (passive.kind === 'mirrorCopy') return (unit.skillUses?.mirror_copy ?? 1) > 0 ? '本场可用1次' : '本场已触发';
+    if (passive.kind === 'timeRewind') return unit.timeRewindUsed ? '本场已触发' : '本场可用1次';
     if (passive.kind === 'sunRadiance') return `日华 ${unit.statuses.find(s => s.kind === 'sunRadiance')?.value ?? 0}/3`;
     if (passive.kind === 'foxFlame') return `狐火 ${unit.statuses.find(s => s.kind === 'foxFire')?.value ?? 0}/${passive.value}`;
     // 速度叠加类被动：显示战斗中累计层数（被动层数随攻击/受击逐段递增）

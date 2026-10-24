@@ -1,4 +1,4 @@
-import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furnaceShellTargets, getActablePlayerUnits, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
+import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furnaceShellTargets, getActablePlayerUnits, getEffectiveSpd, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
 import { applyGrowthChoice, applySkillEnhance, getSkillEnhanceCost } from '../core/growth';
 import { FOODS } from '../data/foods';
 import { ITEMS } from '../data/items';
@@ -39,10 +39,15 @@ function withTelemetry(state: GameState, enabled: boolean): GameState {
 function battleStep(state: GameState): GameState {
   const battle = state.battle!;
   if (battle.phase !== 'acting') return state;
+  if (battle.mimicPreviewPending) return dispatch(state, { type: 'ACK_MIMIC_PREVIEW' });
   if (battle.pendingSwap?.player || battle.pendingSwap?.enemy) return dispatch(state, { type: 'GAUNTLET_SWAP' });
   if (!playerHasMove(battle)) return dispatch(state, { type: 'END_TURN' });
   const actor = getActablePlayerUnits(battle)[0];
   if (!actor) return dispatch(state, { type: 'END_TURN' });
+  if (actor.passive === 'mirror_reflection' && canUnitUseSkill(actor, 'mirror_copy')
+    && battle.playerUnits.some(u => u.uid !== actor.uid && u.hp > 0 && getEffectiveSpd(u) > getEffectiveSpd(actor))) {
+    return dispatch(state, { type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: 'mirror_copy' });
+  }
 
   const tameTarget = battle.enemyUnits
     .filter((unit) => unit.hp > 0 && canTameEnemy(unit) && isTameable(unit) && unit.hp / unit.maxHp <= 0.25)

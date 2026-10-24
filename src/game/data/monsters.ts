@@ -1,6 +1,12 @@
 import type { MonsterSpecies } from '../types';
 
 export const MONSTERS: Record<string, MonsterSpecies> = {
+  time_sand_beast: {
+    id: 'time_sand_beast', name: '时砂兽', emoji: '⌛', eggBorn: true,
+    baseHp: 20, baseSpd: 3, rank: 2, tame: { difficulty: 0 },
+    passive: 'time_rewind', skills: ['sand_time_strike', 'time_lag', 'sand_shield', 'time_haste'],
+    desc: '特殊蛋孵化的固定形态生物，以时砂回溯挣脱死亡、干预出手顺序；不可进化，不可作为主宠或材料参与融合。',
+  },
   momo: {
     id: 'momo', name: '迅迅', emoji: '🐭', image: '/01.png',
     baseHp: 10, baseSpd: 3,
@@ -111,7 +117,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   gora_god: {
     id: 'gora_god', name: '铁壁神', emoji: '🗿', image: '/05-2.png',
-    baseHp: 30, baseSpd: 3,
+    baseHp: 26, baseSpd: 4,
     skills: ['steel_spike', 'iron_domain', 'shield_quake', 'iron_double', 'shield_skill'],
     desc: '铁墩的最终形态，拥有受击上限的不朽堡垒，为队友提供大量护盾。',
     passive: 'iron_cap',
@@ -119,7 +125,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   mimi_god: {
     id: 'mimi_god', name: '深渊蛇王', emoji: '👹', image: '/06-2.png',
-    baseHp: 26, baseSpd: 6,
+    baseHp: 22, baseSpd: 6,
     skills: ['poison_sting', 'shadow_strike', 'poison_mist', 'toxic_bite'],
     desc: '咪咪的最终形态，毒系爆发刺客，真实伤害无视护盾。',
     passive: 'serpent_hunt',
@@ -127,7 +133,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   sisi_god: {
     id: 'sisi_god', name: '棘刺王', emoji: '🦂', image: '/04-2.png',
-    baseHp: 30, baseSpd: 4,
+    baseHp: 26, baseSpd: 4,
     skills: ['thorn_skill', 'steel_spike', 'revenge_thorn', 'group_taunt'],
     desc: '刺刺的最终形态，荆棘反伤坦克，受击越多反伤越痛，控制+反伤的极致肉盾。',
     passive: 'thorn_royal',
@@ -135,7 +141,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   momo_god: {
     id: 'momo_god', name: '迅天', emoji: '🐉', image: '/01-2.png',
-    baseHp: 30, baseSpd: 6,
+    baseHp: 22, baseSpd: 5,
     skills: ['wind_flash', 'wind_feather', 'whirlwind', 'swift_strike'],
     desc: '迅迅最终形态，越打越快，速度差转化为伤害',
     passive: 'gale_combo',
@@ -143,7 +149,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   lulu_god: {
     id: 'lulu_god', name: '泡泡龙神', emoji: '🐳', image: '/03-2.png',
-    baseHp: 32, baseSpd: 4,
+    baseHp: 30, baseSpd: 5,
     skills: ['tidal_domain', 'heal_light', 'water_shot', 'wave'],
     desc: '泡泡最终形态，全体回血与伤害减免',
     passive: 'life_spring',
@@ -151,7 +157,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   fifi_god: {
     id: 'fifi_god', name: '灼天', emoji: '🐲', image: '/02-2.png',
-    baseHp: 22, baseSpd: 7,
+    baseHp: 20, baseSpd: 7,
     skills: ['burn_burst', 'roar', 'flame_shield', 'flame_slash', 'flame_combo'],
     desc: '灼灼最终形态，群体灼烧，爆发伤害。',
     passive: 'ember_body',
@@ -445,7 +451,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '烛烛的融合形态，灯笼般的尾部照亮同伴，以护灯和余温维系阵线。',
   },
   furnace_beast: {
-    id: 'furnace_beast', name: '熔炉兽', emoji: '🦡', baseHp: 31, baseSpd: 2,
+    id: 'furnace_beast', name: '熔炉兽', emoji: '🦡', baseHp: 29, baseSpd: 3,
     skills: ['molten_claw', 'furnace_bastion', 'ash_shelter', 'seal_furnace'], passive: 'molten_furnace',
     tame: { difficulty: 0.3 }, rank: 3,
     desc: '煤煤的传奇形态，胸甲化作赤热炉膛，受击时以余火灼敌并凝成护盾，危急时封炉护住全队。',
@@ -497,7 +503,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '火狐的传火分支，以灼烧为伙伴传递火种，保护队伍并准备后续引燃。',
   },
   torch_fox_lord: {
-    id: 'torch_fox_lord', name: '传火狐尊', emoji: '🦊', baseHp: 28, baseSpd: 6,
+    id: 'torch_fox_lord', name: '传火狐尊', emoji: '🦊', baseHp: 22, baseSpd: 6,
     skills: ['pass_flame', 'relay_wildfire', 'ignite_embers', 'ember_veil'], passive: 'flame_relay',
     tame: { difficulty: 0.3 }, rank: 3,
     desc: '汇聚战场火种的传火传奇，通过群体传火与火幕庇护支援伙伴。',
@@ -509,7 +515,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '双尾间燃起多重狐火，随机向不同敌人扫出火焰；焚尾可快速积累狐火，但每场只有一次机会。',
   },
   nine_tail_sovereign: {
-    id: 'nine_tail_sovereign', name: '九尾炎尊', emoji: '🦊', baseHp: 28, baseSpd: 6,
+    id: 'nine_tail_sovereign', name: '九尾炎尊', emoji: '🦊', baseHp: 20, baseSpd: 6,
     skills: ['twin_tail_flames', 'burn_tail', 'nine_tail_wildfire', 'flame_tail_shield'], passive: 'nine_tail_heart', tame: { difficulty: 0.3 }, rank: 3,
     desc: '九尾环绕焰心，借自燃和承受攻击积攒最多九层狐火；满层后灼烧铺场与直接攻击一同增强。',
   },
@@ -531,16 +537,34 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '披着叶之斗篷的暖光灵体，将伙伴被移除的余火凝成日华，增强攻击与治疗；未能持续清火时，日华逐渐消退。',
   },
   molten_beast: {
-    id: 'molten_beast', name: '熔甲兽', emoji: '🪲', baseHp: 30, baseSpd: 4,
+    id: 'molten_beast', name: '熔甲兽', emoji: '🪲', baseHp: 25, baseSpd: 4,
     skills: ['heated_shell_bump', 'molten_self_burn', 'shell_charge', 'molten_quake'], passive: 'red_carapace',
     tame: { difficulty: 0.3 }, rank: 3,
     desc: '赤红炉腹藏在六足重甲下，将余火炼成护盾，再选择集中冲撞或震荡铺火；护盾无法抵挡自身灼烧。',
   },
   solar_eagle: {
-    id: 'solar_eagle', name: '烈日神鹰', emoji: '🦅', baseHp: 27, baseSpd: 7,
+    id: 'solar_eagle', name: '烈日神鹰', emoji: '🦅', baseHp: 21, baseSpd: 7,
     skills: ['flame_tracing_feather', 'fire_feather', 'burn_brand', 'sun_sunder'], passive: 'solar_feather',
     tame: { difficulty: 0.3 }, rank: 3,
     desc: '日轮般的金红羽翼掠过战场，拆解敌方护盾并转为灼烧，以烙印引导伙伴集火。',
+  },
+  mimic_beast: {
+    id: 'mimic_beast', name: '百变兽', emoji: '🎲', eggBorn: true,
+    baseHp: 18, baseSpd: 4, rank: 2, tame: { difficulty: 0 },
+    passive: 'myriad_forms', skills: [],
+    desc: '特殊蛋孵化的固定形态生物。每场战斗开始时以万变抽取4个主动技能；不可进化、融合或驯服，不进入野生生物池。',
+  },
+  mirror_beast: {
+    id: 'mirror_beast', name: '镜影兽', emoji: '🪞', eggBorn: true,
+    baseHp: 18, baseSpd: 5, rank: 2, tame: { difficulty: 0 },
+    passive: 'mirror_reflection', skills: ['mirror_speed_up', 'mirror_speed_down'],
+    desc: '固定形态的特殊蛋生物，不可进化、融合或驯服。调节本场速度，接在队友之后镜像复制一次其刚使用的技能。',
+  },
+  crystal_core_beast: {
+    id: 'crystal_core_beast', name: '晶核兽', emoji: '💠', eggBorn: true,
+    baseHp: 20, baseSpd: 1, rank: 2, tame: { difficulty: 0 },
+    passive: 'crystal_conversion', skills: ['core_crystal_spike', 'core_crystal_wall', 'core_crystal_burst', 'core_crystal_cleanse'],
+    desc: '特殊蛋孵化的固定形态生物，不可进化、融合或驯服。净化自身持续负面状态获得护盾，再以护盾发动攻击或回合末真实伤害。',
   },
 };
 
@@ -576,6 +600,8 @@ export function fusionNeed(id: string): number {
 
 /** 按进化阶段划分的物种池（用于事件招募） */
 export const BASE_POOL = ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'];
+/** 特殊蛋独立池，不并入任何地区或野生遭遇池。 */
+export const SPECIAL_EGG_POOL = ['time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast'];
 export const EVO1_POOL = ['momo_queen', 'lulu_king', 'fifi_king', 'sisi', 'gora', 'mimi_king'];
 export const EVO2_POOL = ['momo_god', 'lulu_god', 'fifi_god', 'gora_god', 'mimi_god'];
 

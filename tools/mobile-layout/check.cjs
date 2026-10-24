@@ -36,7 +36,9 @@ app.whenReady().then(async () => {
   const oneScreen = new Set(['title', 'difficulty-select', 'starter', 'proficiency-select', 'formation', 'gauntlet-order', 'battle', 'reward', 'recruit', 'roster', 'postbattle', 'shop', 'shop-prof', 'rest', 'rest-fusion', 'rest-fusion-skill', 'revive-select', 'event', 'special', 'custom', 'boost', 'evolve', 'special-target', 'gameover', 'victory', 'inter_act', 'chest', 'tame-overflow', 'skill-pick', 'growth-menu', 'growth-transfer', 'blacksmith', 'enhance-stone', 'enhance-reset', 'arena3', 'proficiency-result', 'save-management', 'backpack-empty', 'battle-selected', 'battle-ally-shield-target', 'battle-ally-heal-target', 'roster-long', 'toast-recruit', 'toast-long', 'growth-selected', 'growth-return', 'skill-pick-long', 'event-long', 'revive-empty', 'chest-empty', 'proficiency-lost', 'skill-replace']);
   for (const name of ['postbattle-cursed', 'roster-cursed', 'tame-overflow-long', 'gauntlet-empty']) oneScreen.add(name);
   oneScreen.delete('proficiency-select'); // 此页按用户要求保留原有布局与内容。
+  for (const name of ['battle-mirror-selected', 'battle-mirror-queued', 'battle-mirror-used']) oneScreen.add(name);
   oneScreen.add('battle-five-skills');
+  oneScreen.add('battle-crystal-selected');
   oneScreen.add('battle-summary-long');
   oneScreen.add('watchtower-cards');
   for (const name of ['watchtower-utilities', 'watchtower-challenges', 'watchtower-training']) oneScreen.add(name);
