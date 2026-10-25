@@ -3,7 +3,7 @@ import { STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
 import type { IconArt } from './BuffIcon';
 export { BATTLE_BUFF_ICON_IMAGES } from './BuffIcon';
 
-export function BattleStatusIcons({ unit }: { unit: Unit }) {
+export function BattleStatusIcons({ unit, pulses = {} }: { unit: Unit; pulses?: Record<string, number> }) {
   if (unit.hp <= 0) return null;
   const icons: { id: string; art: IconArt; detail: string }[] = [];
   for (const status of unit.statuses) {
@@ -30,7 +30,7 @@ export function BattleStatusIcons({ unit }: { unit: Unit }) {
   return (
     <span className="battle-status-icons" aria-label={`${unit.name}的状态`}>
       {icons.slice(0, 3).map(({ id, art, detail }) => (
-        <img key={id} src={`/buff-icons/${art[1]}.png`} alt={art[0]} title={detail} draggable={false} />
+        <img key={`${id}-${pulses[id.replace('status-', '')] ?? 0}`} className={pulses[id.replace('status-', '')] ? 'status-pulse' : undefined} src={`/buff-icons/${art[1]}.png`} alt={art[0]} title={detail} draggable={false} />
       ))}
     </span>
   );

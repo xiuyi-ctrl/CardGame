@@ -1455,7 +1455,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
           <div className="codex-meta-grid"><div className="codex-section">
             <div className="codex-sec-title">驯服</div>
             <div className="codex-line">
-              {tameable ? `驯服成功率 ${Math.round(sp.tame.difficulty * 100)}%` : '首领 · 不可驯服'}
+              {tameable ? '可驯服 · 生命≤40%时可喂食，概率随食物与生命变化' : '首领 · 不可驯服'}
             </div>
           </div>
 
@@ -2651,7 +2651,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
               <div className="backpack-detail-art">{BACKPACK_ITEM_ART[itemId] ? <img src={BACKPACK_ITEM_ART[itemId]} alt="" /> : <span className="backpack-item-emoji">{item.emoji}</span>}</div>
               <p className="backpack-detail-count">持有 ×{state.inventory[itemId]}</p>
               <p className="backpack-description">{item.desc}</p>
-              {food && <p className="backpack-food-rate">基础驯服率 {Math.round(food.baseTame * 100)}%</p>}
+              {food && <p className="backpack-food-rate">{food.guaranteed ? '残血且可驯服时必定成功' : `一阶40%生命基准率 ${Math.round(food.baseTame * 100)}%`}</p>}
               <p className="backpack-use-note">{useNote}</p>
             </div>
             <button className="backpack-use" disabled={!canUseItem} onClick={useItem}>{useLabel}</button>

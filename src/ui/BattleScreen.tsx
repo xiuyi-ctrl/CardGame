@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBackAction, useMobileLayout } from './mobile';
-import type { Dispatch, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, Dispatch, PointerEvent as ReactPointerEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { currentFoodList } from '../game/state/game';
@@ -21,6 +21,7 @@ import {
 } from '../game/core/battle';
 import { getSkillEnhanceLevel } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
+import { getFood } from '../game/data/foods';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
 import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
@@ -33,6 +34,8 @@ import { CollapseWarning } from './CollapseWarning';
 import { MimicPreview } from './MimicPreview';
 import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART } from './BuffIcon';
 import { UiSymbol } from './UiSymbol';
+import { BattleStrikeLayer } from './BattleStrikeLayer';
+import './battleFeedback.css';
 
 const BATTLE_ITEM_IDS = ['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'];
 
@@ -108,7 +111,10 @@ export function BattleUnitInspectPanel({ unit, speed, side, showSkills = side ==
 export function BattleScreen({ state, dispatch }: Props) {
   const mobile = useMobileLayout();
   const battle = state.battle;
-  const { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed, skipAnim } = useBattleFx(battle);
+  const { fx, pops, strikes, life, statusPulses, capture, departingEnemies, effectsPaused, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed, skipAnim } = useBattleFx(battle);
+  const captureLock = useRef(false);
+  useEffect(() => { if (!animating && !logPending) captureLock.current = false; }, [animating, logPending]);
+  const fieldRef = useRef<HTMLDivElement>(null);
   if (!battle) return null;
   const b = battle;
 
@@ -179,7 +185,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const collapseWarning = battle.phase === 'acting' && [13, 14].includes(battle.round) && battle.collapseWarningSeenRound !== battle.round;
   const acknowledgeCollapse = () => dispatch({ type: 'ACK_COLLAPSE_WARNING' });
   useBackAction(collapseWarning && !animating && !logPending, acknowledgeCollapse, 20);
-  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !battle.pendingSwap && !collapseWarning && !battle.mimicPreviewPending;
+  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !logPending && !battle.pendingSwap && !collapseWarning && !battle.mimicPreviewPending;
   const previousOrders = useRef({ orders: battle.orders, round: battle.round });
   const [orderPulse, setOrderPulse] = useState<{ actorUid: string; targetUid: string; skillId: string; seq: number } | null>(null);
   useEffect(() => {
@@ -412,7 +418,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   }
 
   function onEnemyClick(uid: string) {
-    if (animating) return;
+    if (animating || logPending || captureLock.current) return;
     if (pendingSkill) {
       const skill = getSkill(pendingSkill.skillId);
       // 治疗等 ally 技能只能点己方单位，点敌方直接忽略（保持待定状态）
@@ -433,6 +439,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (pendingTame) {
       const enemy = b.enemyUnits.find((u) => u.uid === uid);
       if (enemy && isTameable(enemy)) {
+        captureLock.current = true;
         dispatch({ type: 'PLAYER_TAME', foodId: pendingTame, enemyUid: uid });
         setPendingTame(null);
       }
@@ -503,9 +510,8 @@ export function BattleScreen({ state, dispatch }: Props) {
   function tameTip(u: Unit): string {
     if (!u.tameable) return '不可捕捉';
     if (u.hp / u.maxHp > TAME_THRESHOLD) return `需血量 ≤ ${Math.round(TAME_THRESHOLD * 100)}%`;
-    if (u.hp === 1) return '必定捕捉！';
     if (!pendingTame) return '';
-    return `捕捉概率 ${Math.round(tameChance(u, pendingTame) * 100)}%`;
+    return `捕获概率 ${u.hp === 1 || getFood(pendingTame).guaranteed ? 100 : Math.round(tameChance(u, pendingTame) * 100)}%`;
   }
 
   // 战斗记录只显示已揭示的条目（随攻击动画逐条出现），最多 6 条
@@ -516,8 +522,8 @@ export function BattleScreen({ state, dispatch }: Props) {
   const popOverlay = (uid: string) =>
     pops
       .filter((p) => p.uid === uid)
-      .map((p) => (
-        <span key={p.id} className={`dmg-pop ${p.heal ? 'heal' : ''} ${p.buff ? 'buff' : ''} ${p.shield ? 'shield' : ''} ${p.debuff ? 'debuff' : ''}`}>
+      .map((p, index) => (
+        <span key={`${p.id}-${p.kind ?? index}-${p.statusIcon ?? ''}`} className={`dmg-pop ${p.kind ?? ''} ${p.heavy ? 'heavy' : ''} ${p.heal ? 'heal' : ''} ${p.buff ? 'buff' : ''} ${p.shield ? 'shield' : ''} ${p.debuff ? 'debuff' : ''}`} style={{ '--pop-side': p.id % 2 ? 1 : -1, '--pop-stack': (p.slot ?? 0) % 3 } as CSSProperties}>
           {p.statusIcon && <BuffIcon art={STATUS_ART[p.statusIcon]} />}
           {p.text}
         </span>
@@ -546,7 +552,9 @@ export function BattleScreen({ state, dispatch }: Props) {
     return (
       <div
         key={key}
-        className={`${extra} ${isTarget ? 'valid-target targetable' : ''} ${aimClass}`}
+        data-battle-uid={u.uid}
+        data-battle-column={u.column}
+        className={`${extra} ${life[u.uid] ? `life-${life[u.uid].kind}` : ''} ${showTameTip ? 'tame-target' : ''} ${capture?.targetUid === u.uid ? `capture-${capture.stage}` : ''} ${isTarget ? 'valid-target targetable' : ''} ${aimClass}`}
         onClick={isTarget ? () => onEnemyClick(u.uid) : undefined}
         onClickCapture={suppressLongPressClick}
         onPointerDown={event => startLongPress(event, u.uid, 'enemy')}
@@ -569,12 +577,13 @@ export function BattleScreen({ state, dispatch }: Props) {
         tabIndex={0}
         role="button"
         aria-label={`${u.name}，右键或按菜单键查看敌人信息${mobile ? '，手机长按查看详情' : ''}`}
-        title={mobile ? '长按查看生物详情' : choosingEnemyTarget ? (isTarget ? '点击选择攻击目标，右键查看敌人信息' : '当前技能无法攻击，右键查看敌人信息') : '右键查看敌人信息'}
+        title={pendingTame && !isTameable(u) ? tameTip(u) : mobile ? '长按查看生物详情' : choosingEnemyTarget ? (isTarget ? '点击选择攻击目标，右键查看敌人信息' : '当前技能无法攻击，右键查看敌人信息') : '右键查看敌人信息'}
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene skillEnhancements={u.skillEnhancements} className={`${fxInfo?.cls ?? ''} ${isTarget ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
-        <BattleStatusIcons unit={shownUnit(u)} />
+        <BattleStatusIcons unit={shownUnit(u)} pulses={statusPulses[u.uid]} />
         {orderFeedback(u)}
         {showTameTip && <div className="tame-tip">{tameTip(u)}</div>}
+        {(showTameTip || capture?.targetUid === u.uid) && <span className="capture-target-ring" aria-hidden="true" />}
         {popOverlay(u.uid)}
       </div>
     );
@@ -590,7 +599,9 @@ export function BattleScreen({ state, dispatch }: Props) {
     return (
       <div
         key={key}
-        className={`${extra} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''} ${aimClass}`}
+        data-battle-uid={u.uid}
+        data-battle-column={u.column}
+        className={`${extra} ${life[u.uid] ? `life-${life[u.uid].kind}` : ''} ${clickable ? 'valid-target targetable' : ''} ${sel ? 'selected' : ''} ${aimClass}`}
         aria-disabled={choosingAllyTarget && !clickable ? true : undefined}
         onClick={clickable ? () => onPlayerClick(u.uid) : undefined}
         onClickCapture={suppressLongPressClick}
@@ -617,7 +628,7 @@ export function BattleScreen({ state, dispatch }: Props) {
         title={mobile ? '长按查看生物详情' : '右键查看我方生物 Buff'}
       >
         <UnitCard key={`fx-${fxInfo?.seq ?? 0}`} unit={shownUnit(u)} battleDisplay battleScene className={`${fxInfo?.cls ?? ''} ${clickable || (sel && !choosingAllyTarget) ? 'valid-target targetable' : ''}`} speedOverride={spdMap?.[u.uid]} stacksOverride={passiveSpdMap?.[u.uid]} rockShellHitsOverride={rockShellHitsMap?.[u.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[u.uid]} />
-        <BattleStatusIcons unit={shownUnit(u)} />
+        <BattleStatusIcons unit={shownUnit(u)} pulses={statusPulses[u.uid]} />
         {orderFeedback(u)}
         {canAct && u.hp > 0 && battle.orders?.[u.uid] && <span className="battle-order-ready">✓ 已安排</span>}
         {popOverlay(u.uid)}
@@ -625,14 +636,14 @@ export function BattleScreen({ state, dispatch }: Props) {
     );
   };
 
-  const visibleEnemyUnits = battle.enemyUnits.filter((u) => !u.summoning || revealedSummons.has(u.uid));
+  const visibleEnemyUnits = [...battle.enemyUnits, ...departingEnemies].filter((u) => !u.summoning || revealedSummons.has(u.uid));
   const enemyBack = [visibleEnemyUnits.find((u) => u.row === 'back' && u.column === 0), visibleEnemyUnits.find((u) => u.row === 'back' && u.column === 1), visibleEnemyUnits.find((u) => u.row === 'back' && u.column === 2)];
   const enemyFront = [visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 0), visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 1), visibleEnemyUnits.find((u) => u.row === 'front' && u.column === 2)];
   const playerFront = [battle.playerUnits.find((u) => u.row === 'front' && u.column === 0), battle.playerUnits.find((u) => u.row === 'front' && u.column === 1), battle.playerUnits.find((u) => u.row === 'front' && u.column === 2)];
   const playerBack = [battle.playerUnits.find((u) => u.row === 'back' && u.column === 0), battle.playerUnits.find((u) => u.row === 'back' && u.column === 1), battle.playerUnits.find((u) => u.row === 'back' && u.column === 2)];
 
   return (
-    <div className="screen battle-screen">
+    <div className="screen battle-screen" style={{ '--battle-fx-speed': animSpeed, '--battle-fx-play': effectsPaused ? 'paused' : 'running' } as CSSProperties}>
       {battle.mimicPreviewPending && <MimicPreview units={[...battle.playerUnits, ...battle.enemyUnits, ...(battle.playerBench ?? []), ...(battle.enemyBench ?? [])].filter(unit => unit.hp > 0 && getPassive(unit.passive)?.kind === 'mimic')} onConfirm={() => dispatch({ type: 'ACK_MIMIC_PREVIEW' })} />}
       {collapseWarning && !animating && !logPending && !battle.pendingSwap && <CollapseWarning round={battle.round} onConfirm={acknowledgeCollapse} />}
       <div className="hud">
@@ -662,7 +673,8 @@ export function BattleScreen({ state, dispatch }: Props) {
       </div>
 
       <div className="battle-main">
-        <div className="battle-field">
+        <div className="battle-field" ref={fieldRef}>
+          <BattleStrikeLayer field={fieldRef} strikes={strikes} capture={capture} />
           <div className="enemy-area">
             <span className="battle-row-label first-row">敌方后排</span>
             <span className="battle-row-label second-row">敌方前排</span>
@@ -793,7 +805,7 @@ export function BattleScreen({ state, dispatch }: Props) {
             )}
             <div className="skill-drawer-bottom">
               <div className="battle-utility-row">
-                <button className={`hud-action-btn ${foodOverlayOpen ? 'active' : ''}`} onClick={() => { setFoodOverlayOpen((v) => !v); setItemOverlayOpen(false); }} disabled={!canAct}><BattleActionIcon kind="capture" />捕获</button>
+                <button data-capture-origin className={`hud-action-btn ${foodOverlayOpen ? 'active' : ''}`} onClick={() => { setFoodOverlayOpen((v) => !v); setItemOverlayOpen(false); }} disabled={!canAct}><BattleActionIcon kind="capture" />捕获</button>
                 <button className={`hud-action-btn ${itemOverlayOpen ? 'active' : ''}`} onClick={() => { setItemOverlayOpen((v) => !v); setFoodOverlayOpen(false); }} disabled={!canAct}><BattleActionIcon kind="item" />道具</button>
                 <button
                   className="hud-action-btn"
@@ -816,7 +828,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                   <button
                     className="anim-speed-btn"
                     aria-label={`当前动画速度 ${animSpeed} 倍，点击切换`}
-                    onClick={() => setAnimSpeed((s) => s === 1 ? 2 : s === 2 ? 4 : 1)}
+                    onClick={() => setAnimSpeed(animSpeed === 1 ? 2 : animSpeed === 2 ? 4 : 1)}
                   >
                     <UiSymbol name="play" /> {animSpeed}x
                   </button>

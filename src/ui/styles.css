@@ -1924,6 +1924,9 @@ button.primary {
   filter: drop-shadow(2px 2px 0 #070711) drop-shadow(0 0 3px rgba(0, 255, 213, 0.42));
 }
 
+.native-creature-art { width: 100%; height: 100%; object-fit: contain; }
+:is(.battle-field, .formation-board) .battle-sprite .native-creature-art { width: 95%; height: 105%; object-position: center bottom; image-rendering: auto; }
+
 :is(.battle-field, .formation-board) .battle-sprite-emoji {
   font-size: clamp(68px, 8vw, 106px);
   line-height: 1;
@@ -3560,8 +3563,8 @@ html:not(.mobile-ui) .postbattle-detail-body::-webkit-scrollbar { display: none;
 .postbattle-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .postbattle-detail h2 { color: #101c2c; font-size: 30px; }
 .postbattle-detail-heading > span { padding: 5px 9px; background: #d6edda; color: #167a79; font-size: 13px; font-weight: 700; white-space: nowrap; }
-.postbattle-detail-portrait { flex: 1 0 110px; min-height: 110px; display: grid; place-items: center; }
-.postbattle-detail-portrait canvas { display: block; width: min(100%, 190px); height: clamp(110px, 19vh, 190px); object-fit: contain; image-rendering: pixelated; }
+.postbattle-detail-portrait { position: relative; flex: none; min-height: 110px; height: clamp(110px, 19vh, 190px); display: grid; place-items: center; }
+.postbattle-detail-portrait :is(canvas, img) { position: absolute; inset: 0; margin: auto; display: block; width: min(100%, 190px); height: 100%; max-height: 100%; object-fit: contain; image-rendering: pixelated; }
 .postbattle-detail-portrait .battle-sprite-emoji { font-size: 100px; }
 .postbattle-detail-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 20px; padding: 10px 0; border-block: 3px solid #a4b0ac; color: #101c2c; font-size: 22px; font-weight: 700; }
 .postbattle-detail-stats .starter-stat-icon { width: 30px; height: 30px; background-size: 175% auto; }
@@ -3604,7 +3607,7 @@ html:not(.mobile-ui) .postbattle-detail-body::-webkit-scrollbar { display: none;
   .postbattle-detail-body { gap: 10px; }
   .postbattle-detail h2 { font-size: 20px; }
   .postbattle-detail-heading > span { font-size: 12px; }
-  .postbattle-detail-portrait { flex-basis: 90px; min-height: 90px; }
+  .postbattle-detail-portrait { height: 100px; min-height: 90px; }
   .postbattle-detail-portrait canvas { height: 100px; width: min(100%, 145px); }
   .postbattle-detail-stats { font-size: 18px; padding-block: 6px; }
   .postbattle-detail-stats .starter-stat-icon { width: 24px; height: 24px; }
@@ -6954,6 +6957,16 @@ html:not(.mobile-ui) .postbattle-detail-body::-webkit-scrollbar { display: none;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #8a979b #fff9e9;
+}
+
+.enemy-inspect-modal[aria-labelledby="enemy-inspect-title"],
+.enemy-inspect-modal[aria-labelledby="enemy-inspect-title"] .enemy-skill-panel {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.enemy-inspect-modal[aria-labelledby="enemy-inspect-title"]::-webkit-scrollbar,
+.enemy-inspect-modal[aria-labelledby="enemy-inspect-title"] .enemy-skill-panel::-webkit-scrollbar {
+  display: none;
 }
 
 :is(.confirm-box, .battle-overlay-panel, .growth-modal, .overlay-box) {

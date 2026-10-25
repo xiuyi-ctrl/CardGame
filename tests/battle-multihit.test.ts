@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { makeUnit, createBattle, playerSkill, playerEndTurn } from '../src/game/core/battle';
+import { getSkill } from '../src/game/data/skills';
 
 function attackLogs(
   b: ReturnType<typeof playerEndTurn>,
@@ -18,6 +19,28 @@ function lowHpEnemy(enemyHp: number) {
 }
 
 describe('连击多段：一段之后敌人已死亡则后续段不再命中', () => {
+  it.each(['double_hit', 'flame_combo'])('%s 连续命中指定的单个敌人，击杀后不转移剩余段数', skillId => {
+    const skill = getSkill(skillId);
+    expect(skill.target).toBe('single');
+    for (const seed of [3, 17, 42]) {
+      const battle = createBattle([makeUnit('fifi_king', true, 0, false)], [{ speciesId: 'lulu' }, { speciesId: 'lulu' }], seed);
+      battle.playerUnits[0] = { ...battle.playerUnits[0], skills: [skillId], passive: undefined, spd: 99 };
+      battle.enemyUnits = battle.enemyUnits.map(unit => ({ ...unit, hp: 50, maxHp: 50, passive: undefined, skills: [], acted: true, row: 'front' }));
+      const actor = battle.playerUnits[0], target = battle.enemyUnits[1];
+      const after = playerEndTurn(playerSkill(battle, actor.uid, skillId, target.uid));
+      const logs = attackLogs(after, actor.uid, skill.name);
+      expect(logs).toHaveLength(2);
+      expect(logs.every(log => log.targetUid === target.uid)).toBe(true);
+      expect(logs[0].hp?.[target.uid]).toBe(50 - skill.damage!);
+      expect(logs[1].hp?.[target.uid]).toBe(50 - skill.damage! * 2);
+      expect(logs[1].hp?.[battle.enemyUnits[0].uid]).toBe(50);
+
+      target.hp = 1;
+      const killed = playerEndTurn(playerSkill(battle, actor.uid, skillId, target.uid));
+      expect(attackLogs(killed, actor.uid, skill.name)).toHaveLength(1);
+      expect(killed.enemyUnits[0].hp).toBe(50);
+    }
+  });
   it('连击一段击杀唯一敌人：只产生一段攻击日志，敌人归零', () => {
     const { a, b0, lulu } = lowHpEnemy(1);
     const b1 = playerEndTurn(playerSkill(b0, a.uid, 'double_hit', lulu.uid));

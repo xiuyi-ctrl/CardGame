@@ -18,7 +18,7 @@ import { MobileShell } from '../../src/ui/mobile';
 import { preloadImages } from '../../src/ui/imageCache';
 import { FORMATION_SPRITES } from '../../src/ui/formationSprites';
 import { createInitialState, gameReducer } from '../../src/game/state/reducer';
-import { createBattle, makeUnit } from '../../src/game/core/battle';
+import { createBattle, makeUnit, performGauntletSwap, playerTame } from '../../src/game/core/battle';
 import { ITEMS } from '../../src/game/data/items';
 import { FOODS } from '../../src/game/data/foods';
 import type { GameState } from '../../src/game/state/game';
@@ -148,8 +148,12 @@ registry['save-overwrite-confirm'].extra = { currentSaveSlot: 1 };
 variant('save-import-confirm', 'title', {}, '存档管理|file:backup');
 registry['save-import-confirm'].extra = { currentSaveSlot: 1 };
 variant('backpack-detail', 'backpack', {}, '.backpack-item');
+variant('backpack-tame-food', 'backpack', { inventory: { berry: 3 } }, '.backpack-item');
 variant('backpack-empty', 'backpack', { inventory: {}, roster: [], field: [] });
 variant('codex-detail', 'codex', {}, '.codex-item');
+variant('codex-xuntian-original', 'codex', {}, '迅天');
+variant('codex-paopao-original', 'codex', {}, '泡泡龙神');
+variant('codex-zhuotian-original', 'codex', {}, '灼天');
 variant('battle-food', 'battle', {}, '捕获');
 variant('battle-items', 'battle', {}, '道具');
 variant('battle-enemy', 'battle', {}, 'hold:.enemy-area .formation-slot:not(.empty)');
@@ -224,10 +228,74 @@ summaryBattle.orders = { [summaryBattle.playerUnits[0].uid]: { skillId: 'clean_f
 variant('battle-summary-long', 'battle', { battle: summaryBattle }, '.player-area .formation-slot');
 
 const root = createRoot(document.getElementById('root')!);
+variant('postbattle-zhuoren-portrait', 'postbattle', { roster: [makeUnit('fifi_king', true, 0, false)] });
+variant('postbattle-eternal-portrait', 'postbattle', { roster: [makeUnit('eternal_moth', true, 0, false)] });
+variant('codex-eternal-moth-art', 'codex', {}, '长明灵蛾');
+const eternalMothArt = [makeUnit('eternal_moth', true, 0, false)];
+const eternalMothEncounter = [{ speciesId: 'eternal_moth' }];
+add('eternal-moth-art-battle', BattleScreen, { roster: eternalMothArt, field: eternalMothArt.map(unit => unit.uid), battle: createBattle(eternalMothArt, eternalMothEncounter, 126) }, false);
+add('eternal-moth-art-formation', FormationScreen, { roster: eternalMothArt, formation: { ...formation, units: eternalMothArt, initialField: eternalMothArt, encounter: eternalMothEncounter } }, false);
+variant('codex-coal-guard-art', 'codex', {}, '炉甲獾');
+variant('codex-lantern-moth-art', 'codex', {}, '灯翅蛾');
+variant('codex-furnace-beast-art', 'codex', {}, '熔炉兽');
+const revisedCoalMoth = ['coal_guard', 'lantern_moth', 'furnace_beast'].map((id, column) => makeUnit(id, true, column as 0 | 1 | 2, false));
+const revisedCoalMothEncounter = revisedCoalMoth.map(unit => ({ speciesId: unit.speciesId }));
+add('coal-moth-revised-battle', BattleScreen, { roster: revisedCoalMoth, field: revisedCoalMoth.map(unit => unit.uid), battle: createBattle(revisedCoalMoth, revisedCoalMothEncounter, 126) }, false);
+add('coal-moth-revised-formation', FormationScreen, { roster: revisedCoalMoth, formation: { ...formation, units: revisedCoalMoth, initialField: revisedCoalMoth, encounter: revisedCoalMothEncounter } }, false);
+variant('codex-coal-art', 'codex', {}, '煤煤');
+variant('codex-candle-art', 'codex', {}, '烛烛');
+const coalCandleArt = ['coal', 'candle'].map((id, column) => makeUnit(id, true, column as 0 | 1, false));
+const coalCandleEncounter = coalCandleArt.map(unit => ({ speciesId: unit.speciesId }));
+add('coal-candle-art-battle', BattleScreen, { roster: coalCandleArt, field: coalCandleArt.map(unit => unit.uid), battle: createBattle(coalCandleArt, coalCandleEncounter, 126) }, false);
+add('coal-candle-art-formation', FormationScreen, { roster: coalCandleArt, formation: { ...formation, units: coalCandleArt, initialField: coalCandleArt, encounter: coalCandleEncounter } }, false);
+const originalLegends = ['momo_god', 'lulu_god', 'fifi_god'].map((id, column) => makeUnit(id, true, column as 0 | 1 | 2, false));
+const originalEncounter = originalLegends.map(unit => ({ speciesId: unit.speciesId }));
+add('legend-original-battle', BattleScreen, { roster: originalLegends, field: originalLegends.map(unit => unit.uid), battle: createBattle(originalLegends, originalEncounter, 126) }, false);
+add('legend-original-formation', FormationScreen, { roster: originalLegends, formation: { ...formation, units: originalLegends, initialField: originalLegends, encounter: originalEncounter } }, false);
+let feedbackDispatch: ((action: any) => void) | undefined;
+let feedbackEnter: (() => void) | undefined;
+const feedbackCases: Record<string, { skillId: string; targetUid: string }> = {};
+for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch']]) {
+  const pets = ['momo_queen', 'fifi_king', 'lulu_king', 'coal', 'light_moss'].map((id, i) => makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back'));
+  const battle = createBattle(pets, [{ speciesId: 'fifi_king' }, { speciesId: 'lulu_king' }, { speciesId: 'momo_queen' }], 31);
+  battle.playerUnits = battle.playerUnits.map((unit, i) => ({ ...unit, hp: i === 0 ? 19 : 20, maxHp: 20, passive: undefined, spd: 99, skills: i === 0 ? [skillId] : unit.skills }));
+  battle.enemyUnits = battle.enemyUnits.map(unit => ({ ...unit, hp: 20, maxHp: 20, passive: undefined, skills: [], acted: true, shield: label === 'block' ? 30 : unit.row === 'front' ? 2 : 0 }));
+  if (label === 'shield') battle.playerUnits[0].shield = 98;
+  if (label === 'death') battle.enemyUnits.forEach(unit => { unit.hp = 1; unit.shield = 0; });
+  if (label === 'group-heal') battle.playerUnits.forEach((unit, i) => { unit.hp = 10 + i; });
+  if (label === 'rewind') {
+    const target = battle.enemyUnits.find(unit => unit.row === 'front')!;
+    Object.assign(target, { ...makeUnit('time_sand_beast', false, target.column, false, 'front'), uid: target.uid, hp: 1, shield: 0, skills: [], acted: true });
+  }
+  if (label === 'entry') {
+    battle.enemyUnits = [{ ...battle.enemyUnits[0], hp: 0 }];
+    battle.enemyBench = [makeUnit('fifi_king', false, 1, false, 'front')];
+    battle.gauntlet = { total: 2, current: 1 };
+  }
+  const targetUid = ['heal', 'shield'].includes(label) ? battle.playerUnits[0].uid : (battle.enemyUnits.find(unit => unit.row === 'front') ?? battle.enemyUnits[0]).uid;
+  const name = `battle-feedback-${label}`;
+  add(name, BattleScreen, { battle, roster: battle.playerUnits, field: battle.playerUnits.map(unit => unit.uid) }, false);
+  feedbackCases[name] = { skillId, targetUid };
+}
 let generation = 0;
+const captureCases: Record<string, string> = {};
+for (const label of ['preview', 'feed', 'success', 'fail']) {
+  const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'fifi' }, { speciesId: 'lulu' }], 42);
+  battle.enemyUnits.forEach(unit => { unit.hp = label === 'success' || label === 'feed' ? 1 : Math.floor(unit.maxHp * .4); });
+  const uid = battle.enemyUnits[0].uid;
+  if (label === 'fail') for (let seed = 1; seed <= 100; seed++) {
+    battle.seed = seed; battle.rngCount = 0;
+    if (playerTame(battle, 'berry', uid).log.some(entry => entry.capture?.success === false)) break;
+  }
+  const name = `battle-feedback-capture-${label}`;
+  add(name, BattleScreen, { battle, roster: battle.playerUnits, field: battle.playerUnits.map(unit => unit.uid), inventory: { berry: 3 } }, false);
+  captureCases[name] = uid;
+}
 function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
   const [current, setCurrent] = useState(scene.state);
   const dispatch = (action: any) => setCurrent(s => gameReducer(s, action));
+  feedbackDispatch = dispatch;
+  feedbackEnter = () => setCurrent(s => ({ ...s, battle: performGauntletSwap({ ...s.battle!, pendingSwap: { enemy: true } }) }));
   const C = scene.component;
   const shell = scene.flow ? 'screen-flow' : C === ui.HomeScreen ? 'screen-title' : C === ui.RewardScreen ? 'screen-reward'
     : C === ui.BackpackScreen ? 'screen-backpack' : C === ui.StarterScreen || C === ui.ProficiencyStarterScreen ? 'screen-starter'
@@ -239,6 +307,22 @@ function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
   </div>;
 }
 (window as any).preview = {
+  pauseFeedback() { flushSync(() => window.dispatchEvent(new CustomEvent('petcard-visibility', { detail: false }))); },
+  resumeFeedback() { flushSync(() => window.dispatchEvent(new CustomEvent('petcard-visibility', { detail: true }))); },
+  startFeedback(name: string) {
+    if (name === 'battle-feedback-capture-preview') {
+      flushSync(() => [...document.querySelectorAll('button')].find(button => button.textContent === '捕获')!.click());
+      flushSync(() => [...document.querySelectorAll('.battle-overlay-grid button')].find(button => button.textContent?.includes('浆果'))!.click());
+      return;
+    }
+    if (captureCases[name]) { flushSync(() => feedbackDispatch!({ type: 'PLAYER_TAME', foodId: 'berry', enemyUid: captureCases[name] })); return; }
+    if (name === 'battle-feedback-entry') { flushSync(() => feedbackEnter!()); return; }
+    const config = feedbackCases[name];
+    const actorUid = registry[name].state.battle!.playerUnits[0].uid;
+    flushSync(() => feedbackDispatch!({ type: 'PLAYER_SKILL', actorUid, ...config }));
+    flushSync(() => feedbackDispatch!({ type: 'END_TURN' }));
+    return { actorUid, ...config };
+  },
   names: Object.keys(registry),
   desktopNames: Object.keys(registry).filter(name => !name.endsWith('-details') && !['save-import-confirm', 'battle-menu'].includes(name)),
   backupJson: JSON.stringify({ saveVersion: 1, main: base }),

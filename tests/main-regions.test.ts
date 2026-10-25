@@ -127,7 +127,7 @@ describe('混合地区确定性基线', () => {
         }
       }
     }
-    // 在分段地图基线上更新特殊蛋说明；将说明还原后散列仍为eca67218…，生成结果及随机顺序不变。
-    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('bfd5fda1662cea93376baecd4b35f0b140bb10938cb069ccc3451da64df58bdb');
+    // 相邻层重复事件降权后的地图生成基线；旧存档中的地图不会重生成。
+    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('85872b7848882826bb0be8c2b16b5959075db68945c776b9cf48a8a19d47ca4e');
   });
 });

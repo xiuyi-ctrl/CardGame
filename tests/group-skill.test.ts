@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { createBattle, makeUnit, playerEndTurn, playerSkill } from '../src/game/core/battle';
 import { getSkill } from '../src/game/data/skills';
-import { useBattleFx } from '../src/ui/battleFx';
+import { COMBO_MS, HIT_DELAY_MS, useBattleFx } from '../src/ui/battleFx';
 
 function setup(skillId: string, species = ['pipi', 'pipi']) {
   const b = createBattle([makeUnit('momo', true, 0, false), makeUnit('lulu', true, 1, false)],
@@ -114,6 +114,48 @@ describe('群体技能分段批量结算', () => {
 });
 
 describe('群体动画同步起播', () => {
+  it.each(['swift_needle', 'leaf_needle', 'double_hit', 'flame_combo'])('%s 按目标规则连续命中时逐次播放并逐次扣血', id => {
+    vi.useFakeTimers();
+    let b = setup(id, ['lulu', 'lulu']);
+    let after = cast(b, id);
+    for (let seed = 1; getSkill(id).target === 'random' && new Set(hits(after, id).map(log => log.targetUid)).size < 2 && seed <= 30; seed++) {
+      b = { ...b, seed };
+      after = cast(b, id);
+    }
+    const attack = hits(after, id);
+    expect(attack).toHaveLength(getSkill(id).hits!);
+    if (getSkill(id).target === 'single') expect(new Set(attack.map(log => log.targetUid)).size).toBe(1);
+    else expect(new Set(attack.map(log => log.targetUid)).size).toBeGreaterThan(1);
+    expect(attack.every(log => log.simultaneousGroup === undefined)).toBe(true);
+    const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
+    act(() => rerender({ battle: after }));
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
+    for (let i = 0; i < attack.length; i++) {
+      if (i > 0) act(() => vi.advanceTimersByTime(COMBO_MS));
+      expect(attack.filter(log => after.log.indexOf(log) < result.current.revealedLogLen)).toHaveLength(i + 1);
+      if (i === 0) expect(result.current.pops.filter(pop => pop.kind === 'damage')).toHaveLength(1);
+      expect(result.current.hpMap).toEqual(attack[i].hp);
+    }
+  });
+
+  it('连续攻击同一个目标时也逐段播放', () => {
+    vi.useFakeTimers();
+    const b = setup('swift_needle', ['lulu']);
+    const after = cast(b, 'swift_needle');
+    const attack = hits(after, 'swift_needle');
+    const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
+    act(() => rerender({ battle: after }));
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
+    expect(result.current.pops).toHaveLength(1);
+    expect(result.current.hpMap).toEqual(attack[0].hp);
+    act(() => vi.advanceTimersByTime(COMBO_MS));
+    expect(result.current.pops).toHaveLength(2);
+    expect(result.current.hpMap).toEqual(attack[1].hp);
+    act(() => vi.advanceTimersByTime(COMBO_MS));
+    expect(attack.filter(log => after.log.indexOf(log) < result.current.revealedLogLen)).toHaveLength(3);
+    expect(result.current.hpMap).toEqual(attack[2].hp);
+  });
+
   it.each(['vine_whip', 'tidal_domain', 'iron_domain'])('%s 所有目标首帧同时显示，后续反伤不抢播', id => {
     vi.useFakeTimers();
     const b = setup(id);
@@ -121,7 +163,7 @@ describe('群体动画同步起播', () => {
     const after = cast(b, id);
     const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
     act(() => rerender({ battle: after }));
-    act(() => vi.advanceTimersByTime(0));
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
     const targets = id === 'vine_whip' ? b.enemyUnits : b.playerUnits;
     for (const target of targets) expect(result.current.pops.some(p => p.uid === target.uid)).toBe(true);
     if (id === 'vine_whip') {
@@ -137,7 +179,7 @@ describe('群体动画同步起播', () => {
     const after = cast(b, 'vine_whip');
     const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
     act(() => rerender({ battle: after }));
-    act(() => vi.advanceTimersByTime(0));
-    expect(result.current.pops.map(p => p.uid)).toEqual(b.enemyUnits.map(u => u.uid));
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
+    expect(result.current.pops.filter(p => p.kind === 'damage').map(p => p.uid)).toEqual(b.enemyUnits.map(u => u.uid));
   });
 });

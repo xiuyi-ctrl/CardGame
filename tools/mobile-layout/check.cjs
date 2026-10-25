@@ -135,7 +135,14 @@ app.whenReady().then(async () => {
           const rosterActions = [...document.querySelectorAll('.ordinary-detail-actions button')].filter(visible);
           const overlappingActions = rosterActions.flatMap((a, index) => rosterActions.slice(index + 1).filter(b => { const x = a.getBoundingClientRect(), y = b.getBoundingClientRect(); return Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1; }).map(b => [a.textContent.trim(), b.textContent.trim()]));
           const oneScreenOverflow = ${mobile && height < width && oneScreen.has(name)} && !topMask ? scrolls : [];
-          return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,oneScreenOverflow,overlappingActions,scrollTails,smallTargets,blocked,toastBounds,toastTooLarge,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
+          const portraitOverlap = [...document.querySelectorAll('.postbattle-detail-portrait canvas, .postbattle-detail-portrait img')].filter(visible).filter(el => {
+            const box = el.parentElement.getBoundingClientRect(), art = el.getBoundingClientRect();
+            const stats = document.querySelector('.postbattle-detail-stats')?.getBoundingClientRect();
+            const outsideBox = art.top < box.top - 1 || art.bottom > box.bottom + 1;
+            const hitsStats = stats && Math.min(art.right, stats.right) - Math.max(art.left, stats.left) > 1 && Math.min(art.bottom, stats.bottom) - Math.max(art.top, stats.top) > 1;
+            return outsideBox || hitsStats;
+          }).map(el => rect(el));
+          return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,oneScreenOverflow,overlappingActions,portraitOverlap,scrollTails,smallTargets,blocked,toastBounds,toastTooLarge,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
         })()`);
         const file = `${name}-${width}x${height}${mobile ? '' : '-desktop'}.png`;
         await fs.writeFile(path.join(output, file), (await win.webContents.capturePage()).toPNG());
@@ -148,7 +155,7 @@ app.whenReady().then(async () => {
   const previous = process.argv.includes('--merge') ? JSON.parse(await fs.readFile(reportPath, 'utf8')) : [];
   const merged = [...previous.filter(old=>!results.some(r=>r.name===old.name&&r.width===old.width&&r.height===old.height)), ...results];
   await fs.writeFile(reportPath, JSON.stringify(merged, null, 2));
-  const failures = merged.filter(r => r.error || r.errors?.length || r.clipped?.length || r.concealed?.length || r.horizontal?.length || r.toastTooLarge
+  const failures = merged.filter(r => r.error || r.errors?.length || r.clipped?.length || r.concealed?.length || r.horizontal?.length || r.portraitOverlap?.length || r.toastTooLarge
     || r.resizeChecks?.some(check => !check.selectionStable || check.documentOverflow)
     || r.toastFrames?.some(frame => frame.h > r.height * .4 || frame.x < -2 || frame.y < -2 || frame.x + frame.w > r.width + 2 || frame.y + frame.h > r.height + 2)
     || (mobile && (r.smallTargets?.length || r.blocked?.length || r.overlappingActions?.length || r.oneScreenOverflow?.length || r.scrollTails?.some(s=>!s.atEnd||!s.usable)))

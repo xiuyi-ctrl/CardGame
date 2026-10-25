@@ -221,8 +221,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'atkUp', value: 2, turns: 2 }],
   },
   double_hit: {
-    id: 'double_hit', name: '连击', desc: '连续2次攻击随机敌人',
-    target: 'random', kind: 'attack', damage: 2, hits: 2,
+    id: 'double_hit', name: '连击', desc: '连续攻击单个敌人2次，每次造成2点伤害',
+    target: 'single', kind: 'attack', damage: 2, hits: 2,
   },
   poison_sting: {
     id: 'poison_sting', name: '毒刺', desc: '攻击单个敌人，附加中毒2层',
@@ -291,8 +291,8 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'all', kind: 'attack', damage: 2, heal: 1, reach: 'front',
   },
   flame_combo: {
-    id: 'flame_combo', name: '火焰连击', desc: '连续两次攻击随机敌人，附加灼烧 2 层',
-    target: 'random', kind: 'attack', damage: 3, hits: 2,
+    id: 'flame_combo', name: '火焰连击', desc: '连续攻击单个敌人2次，每次造成3点伤害并附加灼烧2层',
+    target: 'single', kind: 'attack', damage: 3, hits: 2,
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
     hideEffects: true,
   },
@@ -312,8 +312,8 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 7, reach: 'back',
   },
   thorn_skill: {
-    id: 'thorn_skill', name: '荆棘', desc: '攻击单个敌人，使其下次攻击时自身受到荆棘反伤4（触发后消失），持续1回合',
-    kind: 'attack', damage: 3, hits: 1, target: 'single',
+    id: 'thorn_skill', name: '荆棘', desc: '攻击单个敌人，使其下次攻击时自身受到荆棘反伤4（触发后消失），持续1回合；冷却1回合',
+    kind: 'attack', damage: 3, hits: 1, target: 'single', cooldown: 1,
     effects: [{ kind: 'thorns', value: 4, turns: 1 }],
     hideEffects: true,
   },
@@ -407,8 +407,8 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   toxic_bite: {
-    id: 'toxic_bite', name: '淬毒噬咬', desc: '攻击单个敌人，附加中毒4层，若目标已中毒则伤害翻倍',
-    kind: 'attack', damage: 6, hits: 1, target: 'single',
+    id: 'toxic_bite', name: '淬毒噬咬', desc: '攻击单个敌人，造成4点伤害并附加中毒4层，若目标已中毒则伤害翻倍',
+    kind: 'attack', damage: 4, hits: 1, target: 'single',
     effects: [{ kind: 'poison', value: 4, turns: 3 }],
     uses: 3,
     hideEffects: true,

@@ -33,4 +33,14 @@ export class PausableTimers {
     for (const entry of this.entries) window.clearTimeout(entry.id);
     this.entries.clear();
   }
+
+  /** 改变播放速度只缩放剩余时间，不重新执行已经发生的回调。 */
+  scaleRemaining(factor: number): void {
+    for (const entry of this.entries) {
+      window.clearTimeout(entry.id);
+      const elapsed = this.paused ? 0 : Date.now() - entry.started;
+      entry.remaining = Math.max(0, entry.remaining - elapsed) * factor;
+      if (!this.paused) this.start(entry);
+    }
+  }
 }

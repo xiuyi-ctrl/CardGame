@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildEventByType, type GameState } from '../src/game/state/game';
+import { buildEventByType, CURSE_CN, type GameState } from '../src/game/state/game';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
-import { makeUnit } from '../src/game/core/battle';
+import { createBattle, makeUnit } from '../src/game/core/battle';
 import { createRng } from '../src/game/rng';
 import { FOODS } from '../src/game/data/foods';
+import { ITEMS } from '../src/game/data/items';
 import { parseDualSave } from '../src/ui/persistence';
 
 function eventState(type: string, seed = 1): GameState {
@@ -41,6 +42,8 @@ describe('四类事件改版', () => {
     const after = choose(state, 'e2');
     expect(after.inventory[food]).toBe(1);
     expect(after.inventory.hp_up).toBe(1);
+    expect(after.toast?.msg).toContain(`消耗 ${FOODS[food].name} ×1`);
+    expect(after.toast?.msg).toContain(`获得 ${ITEMS.hp_up.name} ×1`);
     expect(after.gold).toBe(100);
     expect(choose(after, 'e2')).toBe(after);
   });
@@ -135,5 +138,54 @@ describe('四类事件改版', () => {
     expect(after.act).toBe(3);
     expect(after.roster).toHaveLength(state.roster.length + 1);
     expect(after.carriedEggs).toEqual([]);
+  });
+});
+
+describe('事件结果说明实际对象与消耗', () => {
+  it.each(['curse', 'gold'] as const)('%s选项提示被诅咒的实际伙伴和诅咒，保留金币奖励', kind => {
+    const state = eventState('cursed_chest');
+    state.roster[0].name = '左伙伴';
+    state.roster[1].name = '右伙伴';
+    state.map.events.origin.choices = [{ id: 'result', label: '打开', desc: '', kind,
+      ...(kind === 'gold' ? { amount: 30, curseTarget: true } : {}) }];
+    const after = choose(state, 'result');
+    const cursed = after.roster.find(unit => unit.curse)!;
+    expect(after.toast?.msg).toContain(`${cursed.name} 获得诅咒「${CURSE_CN[cursed.curse!]}」`);
+    expect(after.roster.filter(unit => unit.curse)).toHaveLength(1);
+    if (kind === 'gold') expect(after.toast?.msg).toContain('获得 30 金币');
+    expect(choose(state, 'result')).toEqual(after);
+  });
+
+  it('泉水随机消耗提示与库存实际减少的食物一致', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const state = eventState('spring', seed);
+      state.inventory = { berry: 2, meat: 3 };
+      const after = choose(state, 'e2');
+      const consumed = ['berry', 'meat'].find(id => after.inventory[id] === state.inventory[id] - 1)!;
+      expect(after.toast?.msg).toContain(`消耗 ${FOODS[consumed].name} ×1`);
+      expect(after.toast?.msg).toContain(`获得 ${ITEMS.hp_up.name} ×1`);
+    }
+  });
+
+  it('赠送指定食物换道具时，不把消耗的食物误报为奖励', () => {
+    const state = eventState('spring');
+    state.inventory = { meat: 2 };
+    state.map.events.origin.choices = [{ id: 'gift', label: '赠送食物', desc: '', kind: 'food',
+      foodId: 'meat', consumeFood: true, itemId: 'hp_up' }];
+    const after = choose(state, 'gift');
+    expect(after.inventory.meat).toBe(1);
+    expect(after.inventory.hp_up).toBe(1);
+    expect(after.toast?.msg).toBe(`消耗 鲜肉 ×1；获得 ${ITEMS.hp_up.name} ×1`);
+  });
+
+  it('事件战斗失败的诅咒提示保留其他惩罚并指明实际伙伴', () => {
+    const state = eventState('spring');
+    state.battle = { ...createBattle(state.roster, [{ speciesId: 'momo' }], 1), phase: 'lost' };
+    state.eventBattle = { enemies: [{ speciesId: 'momo' }], reward: { kind: 'gold', amount: 0 },
+      penalty: { curseTarget: true, goldLoss: 10 } };
+    const after = gameReducer(state, { type: 'BATTLE_END_CONFIRM' });
+    const cursed = after.roster.find(unit => unit.curse)!;
+    expect(after.toast?.msg).toContain('失去 10 金币');
+    expect(after.toast?.msg).toContain(`${cursed.name} 获得诅咒「${CURSE_CN[cursed.curse!]}」`);
   });
 });

@@ -18,8 +18,8 @@ describe('食物只影响驯服，不增加生命', () => {
     }
   });
 
-  it('食物数据不再包含生命加成，基础驯服概率和圣果保证不变', () => {
-    expect(foodIds.map(id => FOODS[id].baseTame)).toEqual([0.7, 0.85, 0.95, 1]);
+  it('食物不包含生命加成，采用一阶40%生命基准率并保留圣果保证', () => {
+    expect(foodIds.map(id => FOODS[id].baseTame)).toEqual([0.6, 0.7, 0.8, 1]);
     for (const food of Object.values(FOODS)) {
       expect(food).not.toHaveProperty('hpBonus');
       expect(food.desc).not.toMatch(/提升生命|生命加成/);

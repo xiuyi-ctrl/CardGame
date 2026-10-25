@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { BattleState, LogEntry, StatusEffect } from '../game/types';
+import type { BattleState, LogEntry, StatusEffect, Unit } from '../game/types';
 import { SKILLS } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { PausableTimers } from './pausableTimers';
-import { useMobileLayout } from './mobile';
+import { impactPops, RANGED_FEEDBACK_SKILLS } from './battleFeedback';
+import type { FeedbackPop } from './battleFeedback';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
 interface FxEvent {
-  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed' | 'burst' | 'summon';
+  kind: 'attack' | 'heal' | 'dot' | 'thorn' | 'buff' | 'speed' | 'burst' | 'summon' | 'rewind' | 'enter' | 'capture';
+  capture?: LogEntry['capture'];
+  passive?: boolean;
   actorUid?: string;
   targetUid?: string;
   secondTargetUid?: string;
@@ -22,7 +25,7 @@ interface FxEvent {
   /** 该事件发生时的全员护盾快照（uid → shield），用于按事件回放护盾值 */
   shields?: Record<string, number>;
   /** dot 事件对应的状态 kind（burn/poison），用于定位状态标签消失时机 */
-  statusKind?: string;
+  statusKind?: StatusEffect['kind'];
   /** buff/治疗事件使用的技能名，用于飘字文案（如战吼→「攻击↑」） */
   skillName?: string;
   /** 攻击事件：本次攻击附加给 target 的状态 kind（来自日志 addsStatus），用于在该攻击动画播放时揭示 */
@@ -33,10 +36,13 @@ interface FxEvent {
   debuffTargets?: string[];
   /** 该事件需要揭示状态的目标 uid 列表（如锁链束缚：施法者抖动，两个被链接敌人显示 buff 图标） */
   revealUids?: string[];
+  impacts?: LogEntry['impacts'];
+  notice?: string;
 }
 
 /** 伤害/治疗/buff 飘字 */
-export interface PopItem {
+export interface PopItem extends FeedbackPop {
+  slot?: number;
   id: number;
   uid: string;
   text: string;
@@ -259,7 +265,7 @@ export function thornRoyalHitsAfterEvent(
 }
 
 /** 解析一条战斗日志为动画事件；无法识别或名字找不到目标时返回 null */
-export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
+function parseLegacyEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const text = entry.text;
   const side = entry.side;
   if (side === 'info' && !text.startsWith('战场崩解！')) return null;
@@ -286,6 +292,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if ((m = text.match(RE_ATTACK))) {
     return {
       kind: 'attack',
+      skillName: m[2],
       actorUid: entry.actorUid ?? findUid(b, side, m[1]),
       targetUid: entry.targetUid ?? findUid(b, opposite, m[3]),
       value: Number(m[4]),
@@ -306,7 +313,12 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: '日华', addsStatus: entry.addsStatus,
       hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   }
-  if ((m = text.match(RE_FOX_IMMUNE)) || (m = text.match(RE_BURN_TAIL)) || (m = text.match(RE_FOX_TAIL_GUARD))) {
+  if ((m = text.match(RE_FOX_IMMUNE))) {
+    const uid = entry.actorUid ?? findUid(b, side, m[1]);
+    return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, notice: '免疫灼烧',
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  }
+  if ((m = text.match(RE_BURN_TAIL)) || (m = text.match(RE_FOX_TAIL_GUARD))) {
     const uid = entry.actorUid ?? findUid(b, side, m[1]);
     return { kind: 'buff', actorUid: uid, targetUid: uid, value: 0, skillName: '狐火', addsStatus: entry.addsStatus,
       hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
@@ -316,6 +328,7 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
     const targetUid = entry.targetUid ?? (m[3] ? findUid(b, side, m[3]) : actorUid);
     return {
       kind: 'heal',
+      skillName: m[2],
       actorUid,
       targetUid,
       value: Number(m[4]),
@@ -467,7 +480,36 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   return null;
 }
 
-const STEP_MS = 800;
+export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
+  if (entry.capture) return { kind: 'capture', targetUid: entry.capture.targetUid, capture: entry.capture, value: 0, hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
+  const special = entry.text.includes('的「时砂回溯」恢复') ? 'rewind' : /^(?:敌方|我方)派出下一只：/.test(entry.text) ? 'enter' : undefined;
+  if (special) {
+    const side = entry.side === 'player' ? b.playerUnits : b.enemyUnits;
+    const uid = entry.targetUid ?? entry.actorUid ?? side.find(unit => entry.text.includes(`：${unit.name}！`))?.uid;
+    return { kind: special, actorUid: uid, targetUid: uid, value: 0, hp: entry.hp, statuses: entry.statuses, shields: entry.shields, impacts: entry.impacts };
+  }
+  const event = parseLegacyEvent(b, entry);
+  if (event) return { ...event, impacts: entry.impacts, passive: entry.spans?.some(span => span.kind === 'passive') || /^.+? 的「/.test(entry.text) };
+  const target = entry.targetUid && entry.impacts?.[entry.targetUid];
+  if (target && (target.shieldGain || target.shieldLoss || target.healing || target.hpLoss)) return {
+    kind: target.hpLoss ? 'dot' : target.healing ? 'heal' : 'buff',
+    actorUid: entry.actorUid, targetUid: entry.targetUid, value: 0,
+    hp: entry.hp, shields: entry.shields, statuses: entry.statuses, impacts: entry.impacts,
+  };
+  return null;
+}
+
+export interface BattleStrike {
+  id: number;
+  actorUid: string;
+  targetUid: string;
+  ranged: boolean;
+}
+
+const STEP_MS = 800; // 兼容旧日志的原节拍。
+export const HIT_DELAY_MS = 160;
+export const ACTION_MS = 600;
+export const COMBO_MS = 240;
 const CLEAR_MS = 1300;
 let popSeq = 0;
 /** 动画序号：每次触发动画自增，作为 UnitCard 的 key 强制重挂载，保证连续命中（连击/随机多段）每次动画都重新播放 */
@@ -478,6 +520,9 @@ export interface FxAnim {
   cls: string;
   seq: number;
 }
+
+export interface LifeAnim { kind: 'dying' | 'gone' | 'rewind' | 'enter' | 'captured'; seq: number }
+export interface CaptureAnim { targetUid: string; foodId: string; stage: 'feed' | 'success' | 'fail'; seq: number }
 
 /**
  * 战斗动画：监听 battle.log 增量，把新日志按顺序播放为冲刺/受击/飘字，
@@ -494,6 +539,12 @@ export interface FxAnim {
 export function useBattleFx(battle: BattleState | null | undefined) {
   const [fx, setFx] = useState<Record<string, FxAnim>>({});
   const [pops, setPops] = useState<PopItem[]>([]);
+  const [strikes, setStrikes] = useState<BattleStrike[]>([]);
+  const [life, setLife] = useState<Record<string, LifeAnim>>({});
+  const [statusPulses, setStatusPulses] = useState<Record<string, Record<string, number>>>({});
+  const [capture, setCapture] = useState<CaptureAnim | null>(null);
+  const [captureGhosts, setCaptureGhosts] = useState<Unit[]>([]);
+  const [effectsPaused, setEffectsPaused] = useState(false);
   const [hpMap, setHpMap] = useState<Record<string, number> | null>(null);
   const [shieldMap, setShieldMap] = useState<Record<string, number> | null>(null);
   const [spdMap, setSpdMap] = useState<Record<string, number> | null>(null);
@@ -511,11 +562,10 @@ export function useBattleFx(battle: BattleState | null | undefined) {
   const prevBattle = useRef<BattleState | null | undefined>(null);
   const prevStatusRef = useRef<BattleState | null | undefined>(null);
   const timers = useRef(new PausableTimers());
-  const mobile = useMobileLayout();
   useEffect(() => {
-    if (!mobile) return;
     const update = (event?: Event) => {
       const active = event instanceof CustomEvent ? event.detail === true : !document.hidden;
+      setEffectsPaused(!active);
       if (active) timers.current.resume(); else timers.current.pause();
     };
     update();
@@ -525,9 +575,15 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       document.removeEventListener('visibilitychange', update);
       window.removeEventListener('petcard-visibility', update);
       timers.current.resume();
+      setEffectsPaused(false);
     };
-  }, [mobile]);
+  }, []);
   const animSpeedRef = useRef<1 | 2 | 4>(1);
+  const changeAnimSpeed = useCallback((speed: 1 | 2 | 4) => {
+    timers.current.scaleRemaining(animSpeedRef.current / speed);
+    animSpeedRef.current = speed;
+    setAnimSpeed(speed);
+  }, []);
   // animSpeed 变化时同步到 ref，供 useEffect 内读取
   useEffect(() => { animSpeedRef.current = animSpeed; }, [animSpeed]);
 
@@ -599,6 +655,9 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       setStatusMap(null);
       setFx({});
       setPops([]);
+      setStrikes([]);
+      setLife({}); setStatusPulses({});
+      setCapture(null); setCaptureGhosts([]);
       setRevealedKinds({});
       setEndingStatuses({});
       setRevealedSummons(new Set());
@@ -609,7 +668,13 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     prevStatusRef.current = battle;
     // 首次遇到该战斗（含从存档/继续游戏恢复的中途战斗）：只初始化基线、不重播既有日志。
     // 否则会把整场战斗的日志全部当作新事件重播，动画长时间停在「战斗结算中」。
-    if (prevBattleBefore === null) {
+    if (prevBattleBefore === null || prevBattleBefore?.seed !== battle.seed
+      || (!battle.gauntlet && battle.log.length <= prevLen.current && prevBattleBefore?.enemyUnits[0]?.uid !== battle.enemyUnits[0]?.uid)) {
+      timers.current.clear();
+      setFx({}); setPops([]); setStrikes([]);
+      setLife({}); setStatusPulses({});
+      setCapture(null); setCaptureGhosts([]);
+      setHpMap(null); setStatusMap(null);
       prevLen.current = battle.log.length;
       setRevealedLogLen(battle.log.length);
       setAnimating(false);
@@ -620,6 +685,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     const newEntries = battle.log.slice(startLen);
     prevLen.current = battle.log.length;
     if (newEntries.length === 0) return;
+    setCaptureGhosts((prevBattleBefore?.enemyUnits ?? []).filter(unit => newEntries.some(entry => entry.capture?.success && entry.capture.targetUid === unit.uid)));
 
     const events: FxEvent[] = [];
     const eventSrcIdx: number[] = [];
@@ -682,6 +748,9 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     timers.current.clear();
     setFx({});
     setPops([]);
+    setStrikes([]);
+    setLife({}); setStatusPulses({});
+    setCapture(null);
 
     // 岩壳崩解计数动画：逐段+1，bossUid 从最终状态取（boss 在 AOE 之后存活）
     const bossUid = battle.enemyUnits.find((u) => u.speciesId === 'boss_golem')?.uid ?? undefined;
@@ -712,19 +781,76 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setThornRoyalHitsMap(prevBattleBefore ? thornRoyalHitsOfUnits(prevBattleBefore) : null);
     if (hasStatusSnapshots) setStatusMap(prevStatuses);
     setRevealedLogLen(startLen);
-    let animationStep = -1;
-    const eventSteps = eventSrcIdx.map((source, index) => {
+    let timeline = 0;
+    const eventTimes = eventSrcIdx.map((source, index) => {
       const group = newEntries[source].simultaneousGroup;
-      if (index === 0 || group === undefined || group !== newEntries[eventSrcIdx[index - 1]].simultaneousGroup) animationStep++;
-      return animationStep;
+      if (index > 0 && (group === undefined || group !== newEntries[eventSrcIdx[index - 1]].simultaneousGroup)) {
+        const previous = events[index - 1];
+        const consecutive = previous.kind === 'attack' && events[index].kind === 'attack'
+          && previous.actorUid === events[index].actorUid && previous.skillName === events[index].skillName;
+        timeline += previous.capture ? 900 : previous.impacts ? (consecutive ? COMBO_MS : ACTION_MS) : STEP_MS;
+      }
+      return timeline;
     });
+    const castGroups = new Set<string>();
+    const displayedHp = { ...prevHp };
     events.forEach((ev, i) => {
+      let windupSeq = 0;
+      const skill = Object.values(SKILLS).find(s => s.name === ev.skillName);
+      const addedKinds = [...(ev.addsStatus ?? []), ...Object.values(ev.impacts ?? {}).flatMap(change => Object.keys(change.addedStatuses ?? {})), ...(skill?.effects ?? []).map(effect => effect.kind)];
+      const quietDotStatus = ev.kind === 'buff' && addedKinds.length > 0
+        && addedKinds.every(kind => kind === 'burn' || kind === 'poison')
+        && ev.value === 0 && !ev.notice
+        && Object.values(ev.impacts ?? {}).every(change => !change.hpLoss && !change.shieldLoss && !change.healing && !change.shieldGain);
+      const phased = ev.impacts !== undefined && ['attack', 'heal', 'buff'].includes(ev.kind) && !ev.notice && !quietDotStatus;
+      const group = newEntries[eventSrcIdx[i]].simultaneousGroup;
+      const castKey = `${group ?? `event-${i}`}:${ev.actorUid}`;
+      const firstCast = !castGroups.has(castKey);
+      castGroups.add(castKey);
+      const ranged = !!skill && RANGED_FEEDBACK_SKILLS.has(skill.id);
+      if (ev.capture) timers.current.set(() => {
+        setCapture({ ...ev.capture!, stage: 'feed', seq: ++fxSeq });
+      }, eventTimes[i] / animSpeedRef.current);
+      if (phased && ev.actorUid) timers.current.set(() => {
+        if (firstCast && !ev.passive) {
+          windupSeq = ++fxSeq;
+          setFx(p => ({ ...p, [ev.actorUid!]: { cls: ev.kind === 'attack' ? (ranged ? 'fx-ranged' : ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down') : 'fx-cast', seq: windupSeq } }));
+        }
+        if (ev.kind === 'attack' && ev.targetUid) {
+          const strike = { id: ++fxSeq, actorUid: ev.actorUid!, targetUid: ev.targetUid, ranged };
+          setStrikes(p => [...p, strike]);
+          timers.current.set(() => setStrikes(p => p.filter(s => s.id !== strike.id)), HIT_DELAY_MS / animSpeedRef.current);
+        }
+      }, eventTimes[i] / animSpeedRef.current);
       timers.current.set(
         () => {
           setRevealedLogLen((cur) => Math.max(cur, startLen + eventSrcIdx[i] + 1));
           const popId = ++popSeq;
           const actorUid = ev.actorUid;
           const targetUid = ev.targetUid;
+          const transition = (uid: string, kind: LifeAnim['kind']) => {
+            const seq = ++fxSeq;
+            setLife(p => ({ ...p, [uid]: { kind, seq } }));
+            if (kind === 'dying') timers.current.set(() => setLife(p => p[uid]?.seq === seq ? { ...p, [uid]: { kind: 'gone', seq } } : p), 400 / animSpeedRef.current);
+            if (kind === 'rewind' || kind === 'enter') timers.current.set(() => setLife(p => {
+              if (p[uid]?.seq !== seq) return p;
+              const next = { ...p }; delete next[uid]; return next;
+            }), 480 / animSpeedRef.current);
+          };
+          if (ev.hp) for (const [uid, hp] of Object.entries(ev.hp)) {
+            if ((displayedHp[uid] ?? hp) > 0 && hp <= 0) transition(uid, 'dying');
+            displayedHp[uid] = hp;
+          }
+          if (targetUid && (ev.kind === 'rewind' || ev.kind === 'enter')) transition(targetUid, ev.kind);
+          if (ev.impacts) setStatusPulses(p => {
+            const next = { ...p };
+            for (const [uid, change] of Object.entries(ev.impacts!)) {
+              for (const kind of Object.keys(change.addedStatuses ?? {})) {
+                if (kind !== 'burn' && kind !== 'poison') next[uid] = { ...next[uid], [kind]: ++fxSeq };
+              }
+            }
+            return next;
+          });
           // 该事件的动画触发后揭示它附加给目标的新增状态标签（按 kind 增量写入 revealedKinds，
           // 同一目标不同攻击附加的状态可分别在各自的攻击动画时依次显示）
           if (revealAt[i]) {
@@ -760,36 +886,59 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           }
           // 每个 setFx 立即捕获当时的 seq，供 clear 超时精确比对，
           // 避免多次 ++fxSeq 后统一捕获导致 actorSeq/targetSeq 与实际 seq 不匹配
-          let capturedActorSeq = 0;
+          let capturedActorSeq = windupSeq;
           let capturedTargetSeq = 0;
           let debuffTargetSeqs: Record<string, number> | null = null;
-          if (ev.kind === 'attack') {
-            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down', seq: capturedActorSeq } })); }
+          const legacyPop = (pop: PopItem) => { if (ev.impacts === undefined && !ev.notice && !(ev.passive && pop.buff)) setPops(p => [...p, pop]); };
+          const impact = targetUid ? ev.impacts?.[targetUid] : undefined;
+          const hitClass = impact ? (impact.hpLoss > 0 ? 'fx-hit' : impact.shieldLoss > 0 ? 'fx-block' : 'fx-noop') + (impact.shieldBroken ? ' fx-break' : '') : 'fx-hit';
+          if (ev.capture && targetUid) {
+            setCapture({ ...ev.capture, stage: ev.capture.success ? 'success' : 'fail', seq: ++fxSeq });
+            setPops(p => [...p, { id: popId, uid: targetUid, text: ev.capture!.success ? '捕获成功' : '捕获失败', heal: false, kind: 'notice' }]);
+            if (ev.capture.success) transition(targetUid, 'captured');
+          } else if (ev.notice && targetUid) setPops(p => [...p, { id: popId, uid: targetUid, text: ev.notice!, heal: false, kind: 'notice' }]);
+          else if (ev.impacts) {
+            const uids = new Set([...(ev.burstTargets ?? []), ...(ev.debuffTargets ?? []), ...Object.keys(ev.impacts), ...(targetUid ? [targetUid] : [])]);
+            const actualPops: PopItem[] = [];
+            for (const uid of uids) {
+              if (ev.noPop && uid === actorUid) continue;
+              const change = ev.impacts[uid];
+              if (!change) continue;
+              const healing = uid === targetUid && (ev.kind === 'heal' || (ev.kind === 'buff' && (skill?.heal ?? 0) > 0));
+              const damage = uid === targetUid && ['attack', 'dot', 'thorn'].includes(ev.kind);
+              actualPops.push(...impactPops(change, healing, damage, ev.statusKind).map((pop, slot) => ({ ...pop, id: popId, uid, slot })));
+            }
+            setPops(p => [...p, ...actualPops]);
+          }
+          if (ev.notice && targetUid) {
+            capturedTargetSeq = ++fxSeq;
+            setFx(p => ({ ...p, [targetUid]: { cls: 'fx-noop', seq: capturedTargetSeq } }));
+          } else if (ev.kind === 'attack') {
+            if (actorUid && !phased) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down', seq: capturedActorSeq } })); }
             if (targetUid) {
-              ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
+              ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: hitClass, seq: capturedTargetSeq } }));
+              legacyPop({ id: popId, uid: targetUid, text: `-${ev.value}`, heal: false });
             }
           } else if (ev.kind === 'thorn') {
-            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
             if (targetUid) {
-              ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
+              ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: hitClass, seq: capturedTargetSeq } }));
+              legacyPop({ id: popId, uid: targetUid, text: `-${ev.value}`, heal: false });
             }
           } else if (ev.kind === 'heal') {
-            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
+            if (actorUid && !phased && !ev.passive && firstCast) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: 'fx-cast', seq: capturedActorSeq } })); }
             if (targetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq;
-              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-heal', seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: targetUid, text: `+${ev.value}`, heal: true }]);
+              setFx((p) => ({ ...p, [targetUid]: { cls: impact && impact.healing === 0 ? 'fx-noop' : 'fx-heal', seq: capturedTargetSeq } }));
+              legacyPop({ id: popId, uid: targetUid, text: `+${ev.value}`, heal: true });
             }
-          } else if (ev.kind === 'buff') {
+          } else if (ev.kind === 'buff' && !quietDotStatus) {
             // 区分 debuff 和普通 buff：debuff 用抖动动画，buff 用发光动画
             const isDebuffEvt = (ev.debuffTargets && ev.debuffTargets.length > 0) || (ev.addsStatus && ev.addsStatus.some((k) => ['timeLag', 'poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k)));
-            if (actorUid) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: isDebuffEvt ? 'fx-status-cast' : 'fx-cast', seq: capturedActorSeq } })); }
+            if (actorUid && !phased && !ev.passive && firstCast) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: isDebuffEvt ? 'fx-status-cast' : 'fx-cast', seq: capturedActorSeq } })); }
             const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
-            const isShield = sk?.effects?.[0]?.kind === 'shield';
+            const isShield = (impact?.shieldGain ?? 0) > 0 || sk?.effects?.[0]?.kind === 'shield';
             const statusIcon = isShield ? 'shield' : sk?.id === 'chain_link' ? 'chainLink' : undefined;
-            const buffCls = isShield ? 'fx-shield' : 'fx-buff';
+            const buffCls = impact?.shieldBroken ? 'fx-break' : isShield ? 'fx-shield' : 'fx-buff';
             const debuffLabel = (kind?: string) => kind === 'poison' ? '中毒↓' : kind === 'burn' ? '灼烧↓' : kind === 'atkDown' ? '弱化↓' : kind === 'spdDown' ? '迟缓↓' : kind === 'stun' ? '眩晕↓' : kind === 'timeLag' ? '时滞↓' : '▼ debuff';
             if (ev.debuffTargets && ev.debuffTargets.length > 0) {
               // 全体 debuff：所有目标同时显示 debuff 图标 + debuff 飘字；每个目标独立 seq 以便 clear 精确匹配
@@ -798,7 +947,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               for (const uid of ev.debuffTargets) {
                 ++fxSeq; debuffTargetSeqs[uid] = fxSeq;
                 setFx((p) => ({ ...p, [uid]: { cls: 'fx-debuff', seq: fxSeq } }));
-                setPops((p) => [...p, { id: popId, uid, text: dLabel, heal: false, debuff: true }]);
+                legacyPop({ id: popId, uid, text: dLabel, heal: false, debuff: true });
               }
             } else if (targetUid && !ev.noPop) {
               // 区分 debuff（RE_DEBUFF 解析）和普通 buff（RE_BUFF 解析）
@@ -806,45 +955,45 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               if (isDebuffEvent) {
                 ++fxSeq; capturedTargetSeq = fxSeq;
                 setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-debuff', seq: capturedTargetSeq } }));
-                setPops((p) => [...p, { id: popId, uid: targetUid, text: debuffLabel(ev.addsStatus?.[0]), heal: false, debuff: true }]);
+                legacyPop({ id: popId, uid: targetUid, text: debuffLabel(ev.addsStatus?.[0]), heal: false, debuff: true });
               } else {
                 ++fxSeq; capturedTargetSeq = fxSeq;
                 setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
-                setPops((p) => [...p, { id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield, statusIcon }]);
+                legacyPop({ id: popId, uid: targetUid, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield, statusIcon });
               }
             }
             if (ev.secondTargetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq;
               setFx((p) => ({ ...p, [ev.secondTargetUid!]: { cls: buffCls, seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: ev.secondTargetUid!, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield, statusIcon }]);
+              legacyPop({ id: popId, uid: ev.secondTargetUid!, text: buffText(ev.skillName ?? ''), heal: false, buff: !isShield, shield: isShield, statusIcon });
             }
             // 回血效果：buff 技能带 heal 值时，额外显示 +N 绿色飘字
-            if (ev.value > 0 && targetUid) {
-              ++fxSeq;
-              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-heal', seq: fxSeq } }));
-              setPops((p) => [...p, { id: ++popSeq, uid: targetUid, text: `+${ev.value}`, heal: true }]);
+            if (ev.value > 0 && targetUid && (!impact || impact.healing > 0)) {
+              capturedTargetSeq = ++fxSeq;
+              setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-heal', seq: capturedTargetSeq } }));
+              legacyPop({ id: popId, uid: targetUid, text: `+${ev.value}`, heal: true });
             }
           } else if (ev.kind === 'speed') {
             if (targetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq;
               setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-buff', seq: capturedTargetSeq } }));
-              setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度 +${ev.value}`, heal: false, buff: true }]);
+              if (!ev.impacts || !Object.keys(ev.impacts).some(uid => ev.impacts![uid].addedStatuses)) setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度 +${ev.value}`, heal: false, buff: true, kind: 'status' }]);
               setSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + ev.value } : p);
               if (ev.value > 0) setPassiveSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + 1 } : p);
             }
           } else if (ev.kind === 'burst') {
             // 范围伤害：仅挂飘字，不触发任何生物抖动（setFx）；同一 popId 让所有飘字同时出现、同时消失
             for (const uid of ev.burstTargets ?? []) {
-              setPops((p) => [...p, { id: popId, uid, text: `-${ev.value}`, heal: false }]);
+              legacyPop({ id: popId, uid, text: `-${ev.value}`, heal: false });
             }
           } else if (ev.kind === 'summon') {
             // 召唤揭示：清除 summoning 标记，使被召唤的生物可见
             if (targetUid) {
               setRevealedSummons((p) => { const next = new Set(p); next.add(targetUid); return next; });
             }
-          } else if (targetUid) {
-            ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-hit', seq: capturedTargetSeq } }));
-            setPops((p) => [...p, { id: popId, uid: targetUid, text: `-${ev.value}`, heal: false }]);
+          } else if (targetUid && !quietDotStatus && !['rewind', 'enter', 'capture'].includes(ev.kind)) {
+            ++fxSeq; capturedTargetSeq = fxSeq; setFx((p) => ({ ...p, [targetUid]: { cls: ev.kind === 'dot' ? 'fx-dot' : hitClass, seq: capturedTargetSeq } }));
+            legacyPop({ id: popId, uid: targetUid, text: `-${ev.value}`, heal: false, statusIcon: ev.statusKind });
           }
           if (ev.hp) setHpMap(ev.hp);
           if (ev.shields) setShieldMap(ev.shields);
@@ -870,7 +1019,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             CLEAR_MS / animSpeedRef.current,
           );
         },
-        eventSteps[i] * (STEP_MS / animSpeedRef.current),
+        (eventTimes[i] + (ev.capture ? 360 : phased ? HIT_DELAY_MS : 0)) / animSpeedRef.current,
       );
     });
 
@@ -878,6 +1027,11 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     timers.current.set(
       () => {
         setAnimating(false);
+        setFx({});
+        setPops([]);
+        setStrikes([]);
+        setLife({}); setStatusPulses({});
+        setCapture(null); setCaptureGhosts([]);
         setHpMap(null);
         setSpdMap(null);
         setPassiveSpdMap(null);
@@ -888,9 +1042,9 @@ export function useBattleFx(battle: BattleState | null | undefined) {
         setEndingStatuses({});
         setRevealedLogLen(battle.log.length);
       },
-      (animationStep + 1) * (STEP_MS / animSpeedRef.current) + CLEAR_MS / animSpeedRef.current,
+      (timeline + (events[events.length - 1].capture ? 900 : (events[events.length - 1].impacts ? ACTION_MS : STEP_MS) + CLEAR_MS)) / animSpeedRef.current,
     );
-  }, [battle?.log.length]);
+  }, [battle?.log.length, battle?.seed, battle?.enemyUnits[0]?.uid]);
 
   useEffect(() => () => timers.current.clear(), []);
 
@@ -901,15 +1055,22 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     setAnimating(false);
     setFx({});
     setPops([]);
+    setStrikes([]);
+    setLife({}); setStatusPulses({});
+    setCapture(null); setCaptureGhosts([]);
     setHpMap(null);
+    setShieldMap(shieldsOfUnits(battle));
     setSpdMap(null);
     setPassiveSpdMap(null);
     setRockShellHitsMap(null);
+    setThornRoyalHitsMap(null);
     setStatusMap(null);
     setRevealedKinds(allRevealed(newStatuses));
     setEndingStatuses({});
     setRevealedLogLen(battle.log.length);
   }, [animating, battle, newStatuses]);
 
-  return { fx, pops, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed, skipAnim };
+  const pendingCaptured = battle?.log.slice(prevLen.current).filter(entry => entry.capture?.success).map(entry => entry.capture!.targetUid) ?? [];
+  const departingEnemies = [...captureGhosts, ...(prevBattle.current?.enemyUnits ?? []).filter(unit => pendingCaptured.includes(unit.uid) && !captureGhosts.some(ghost => ghost.uid === unit.uid))];
+  return { fx, pops, strikes, life, statusPulses, capture, departingEnemies, effectsPaused, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed: changeAnimSpeed, skipAnim };
 }

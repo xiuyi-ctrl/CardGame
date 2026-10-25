@@ -164,8 +164,8 @@ describe('useBattleFx：新增灼烧/中毒状态与攻击动画同步显示', (
     });
 
     act(() => rerender({ b: b1 }));
-    // 攻击动画事件（0ms）触发：揭示灼烧，层数为施加时的 2 层
-    act(() => vi.advanceTimersByTime(0));
+    // 起手后命中（160ms）：揭示灼烧，层数为施加时的 2 层。
+    act(() => vi.advanceTimersByTime(160));
     expect(result.current.statusMap?.[kUid]?.find((s) => s.kind === 'burn')?.value).toBe(2);
 
     // 敌方行动事件（800ms）：尚未到 dot 结算，仍显示 2 层

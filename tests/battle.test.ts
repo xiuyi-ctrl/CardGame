@@ -178,7 +178,7 @@ describe('驯服', () => {
     expect(attempts).toBeGreaterThanOrEqual(2);
   });
 
-  it('tameChance 随失败次数递增且上限 100%', () => {
+  it('tameChance 失败补偿最多10个百分点', () => {
     const u = makeUnit('kiki', false, 0, true);
     u.hp = Math.floor(u.maxHp * 0.4);
     const c0 = tameChance(u, 'berry');
@@ -186,7 +186,7 @@ describe('驯服', () => {
     u.tameFails = 1;
     expect(tameChance(u, 'berry')).toBeGreaterThan(c0);
     u.tameFails = 100;
-    expect(tameChance(u, 'berry')).toBe(1);
+    expect(tameChance(u, 'berry')).toBeCloseTo(c0 + 0.1);
   });
 
   it('tameChance 血量越低概率越高', () => {

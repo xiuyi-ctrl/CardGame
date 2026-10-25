@@ -139,7 +139,9 @@ describe('煤煤与炉甲獾', () => {
     const queued = playerSkill(chosen, coal.uid, 'furnace_shell', third.uid);
     const targetDied = { ...queued, playerUnits: queued.playerUnits.map(unit => unit.uid === third.uid ? { ...unit, hp: 0 } : unit) };
     const remaining = playerEndTurn(targetDied);
-    expect(remaining.playerUnits.map(unit => unit.shield)).toEqual([3, 0, 0]);
+    expect(remaining.playerUnits.map(unit => unit.shield)).toEqual([0, 0, 0]);
+    expect(remaining.log.some(entry => entry.actorUid === coal.uid && entry.text.includes('本次行动跳过'))).toBe(true);
+    expect(remaining.playerUnits[0].skillCooldowns?.furnace_shell ?? 0).toBe(0);
     const solo = { ...battle, playerUnits: [coal] };
     const shell = playerEndTurn(playerSkill(solo, coal.uid, 'furnace_shell'));
     expect(shell.playerUnits[0].shield).toBe(3);

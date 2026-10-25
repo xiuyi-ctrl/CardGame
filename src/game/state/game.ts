@@ -1432,7 +1432,7 @@ function buildEncounter(
 }
 
 /** 随机事件：多选一抉择，风险与收益并存（结果在生成时用种子预掷，可复现） */
-export function buildEvent(rng: () => number, act: number, region: MainRegionId = 'mixed'): EventNode {
+export function buildEvent(rng: () => number, act: number, region: MainRegionId = 'mixed', previousEventTitles: readonly string[] = []): EventNode {
   // 幕次专属池
   const pool: string[] = [];
   if (act === 1) {
@@ -1442,7 +1442,9 @@ export function buildEvent(rng: () => number, act: number, region: MainRegionId 
               'wheel', 'gambler', 'altar2', 'ruins', 'cursed_chest',
               '精灵', '训练');
   }
-  const pick2 = pool[Math.floor(rng() * pool.length)];
+  // 只降低相邻上一层同类事件的权重，保留重复可能；不额外重抽随机数。
+  const pick2 = previousEventTitles.length === 0 ? pool[Math.floor(rng() * pool.length)]
+    : weightedPick(rng, pool.map(type => [type, previousEventTitles.includes(EVENT_TYPE_LABELS[type]) ? 0.2 : 1] as const));
 
   return buildEventByType(rng, pick2, act, region);
 }
@@ -2060,6 +2062,7 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
   // 为所有节点生成遭遇/首领/事件/奇遇关内容
   for (let row = 0; row < layerCount; row++) {
     const progress = row / (layerCount - 1);
+    const previousEventTitles = row > 0 ? layers[row - 1].filter(n => n.type === 'event').map(n => events[n.id].title) : [];
     for (const n of layers[row]) {
       if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress, actBossPool[region === 'emerald_forest' ? 0 : n.col], undefined, region);
       else if (n.type === 'battle' || n.type === 'elite') encounter[n.id] = buildEncounter(rng, n.type, act, progress, undefined, undefined, region);
@@ -2067,7 +2070,7 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
       else if (n.type === 'gauntlet') encounter[n.id] = buildEncounter(rng, 'gauntlet', act, progress, undefined, n.gauntletSize, region);
       else if (n.type === 'corrupted') encounter[n.id] = buildEncounter(rng, 'battle', act, progress, undefined, undefined, region);
       else if (n.type === 'guardian') encounter[n.id] = buildEncounter(rng, 'guardian', act, progress, undefined, undefined, region);
-      else if (n.type === 'event') events[n.id] = buildEvent(rng, act, region);
+      else if (n.type === 'event') events[n.id] = buildEvent(rng, act, region, previousEventTitles);
       else if (n.type === 'special') specials[n.id] = buildSpecial(rng);
     }
   }

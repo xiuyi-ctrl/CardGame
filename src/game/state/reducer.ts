@@ -17,6 +17,7 @@ import { getGrowthShopStock, GROWTH_SHOP_ITEMS } from '../data/growth-shop';
 import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-special';
 import { restoreFormation } from './formation';
 import type { FormationPosition } from './formation';
+import { CURSE_CN } from './game';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
@@ -220,13 +221,24 @@ function emptyRunStats(): RunStats {
 /** 将旧版或字段不完整的存档迁移为当前 GameState；结构损坏时返回 null。 */
 export function migrateGameState(value: unknown): GameState | null {
   if (!isValidGameState(value)) return null;
+  // 新增立绘的旧单位只补图片，不重算已保存的属性、技能或战斗状态。
+  const restoreArt = (unit: Unit): Unit => !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth'].includes(unit.speciesId)
+    ? { ...unit, image: getMonster(unit.speciesId).image } : unit;
   let battle = value.battle;
   if (battle) {
     // 旧战斗存档的共享行动点不再参与行动资格判断，也不继续保存。
     const { playerAp: _ap, playerApMax: _apMax, enemyAp: _enemyAp, ...currentBattle } = battle as BattleState & {
       playerAp?: number; playerApMax?: number; enemyAp?: number;
     };
-    battle = currentBattle;
+    battle = {
+      ...currentBattle,
+      playerUnits: currentBattle.playerUnits.map(restoreArt),
+      enemyUnits: currentBattle.enemyUnits.map(restoreArt),
+      pendingTame: currentBattle.pendingTame.map(restoreArt),
+      enemyBench: currentBattle.enemyBench?.map(restoreArt),
+      playerBench: currentBattle.playerBench?.map(restoreArt),
+      playerDown: currentBattle.playerDown?.map(restoreArt),
+    };
   }
   const saved = value.runStats;
   // 兼容更新前已停在免费进化选宠页的存档：没有合法对象时退回原奇遇，避免卡住。
@@ -252,6 +264,13 @@ export function migrateGameState(value: unknown): GameState | null {
   };
   return {
     ...value,
+    roster: value.roster.map(restoreArt),
+    deadPets: value.deadPets?.map(restoreArt),
+    tameOverflow: value.tameOverflow?.map(restoreArt),
+    gauntletOrder: value.gauntletOrder?.map(restoreArt),
+    formation: value.formation ? { ...value.formation, units: value.formation.units.map(restoreArt), initialField: value.formation.initialField.map(restoreArt) } : undefined,
+    pendingBattle: value.pendingBattle ? { ...value.pendingBattle, units: value.pendingBattle.units.map(restoreArt) } : undefined,
+    testPick: value.testPick ? { ...value.testPick, playerUnits: value.testPick.playerUnits?.map(restoreArt) } : undefined,
     region: value.runMode === 'proficiency' ? undefined : value.region ?? 'mixed',
     battle,
     runStats,
@@ -957,8 +976,11 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       const ownedFoods = Object.keys(FOODS).filter(id => (state.inventory[id] ?? 0) > 0);
       if (choice.consumeRandomFood && ownedFoods.length === 0) return state;
       let next: GameState = { ...state, gold: state.gold + (choice.goldDelta ?? 0), postBattle: undefined };
+      let consumedFoodId: string | undefined;
+      let curseMessage: string | undefined;
       if (choice.consumeRandomFood) {
         const foodId = ownedFoods[Math.floor(eventRng() * ownedFoods.length)];
+        consumedFoodId = foodId;
         next = { ...next, inventory: { ...next.inventory, [foodId]: next.inventory[foodId] - 1 } };
       }
       if (choice.damagePercent) next = { ...next, roster: next.roster.map(unit => ({ ...unit, hp: Math.max(1, unit.hp - Math.round(unit.maxHp * choice.damagePercent! / 100)) })) };
@@ -979,10 +1001,12 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
           const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
           const rc = curseKinds[Math.floor(eventRng() * curseKinds.length)];
           const ri = Math.floor(eventRng() * next.roster.length);
+          curseMessage = `${next.roster[ri].name} 获得诅咒「${CURSE_CN[rc]}」`;
           next = { ...next, roster: next.roster.map((u, i) => i === ri ? applyCurseToUnit(u, rc) : u) };
         }
       } else if (choice.kind === 'food' && choice.foodId) {
         if (choice.consumeFood) {
+          consumedFoodId = choice.foodId;
           next = { ...next, inventory: { ...next.inventory, [choice.foodId]: Math.max(0, (next.inventory[choice.foodId] ?? 0) - 1) } };
         } else {
           next = { ...next, inventory: { ...next.inventory, [choice.foodId]: (next.inventory[choice.foodId] ?? 0) + 1 } };
@@ -1101,6 +1125,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         const curseIdx = Math.floor(eventRng() * next.roster.length);
         const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
         const randomCurse = curseKinds[Math.floor(eventRng() * curseKinds.length)];
+        curseMessage = `${next.roster[curseIdx].name} 获得诅咒「${CURSE_CN[randomCurse]}」`;
         next = {
           ...next,
           roster: next.roster.map((u, i) => i === curseIdx ? applyCurseToUnit(u, randomCurse) : u),
@@ -1162,10 +1187,22 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         next = { ...next, toast: { msg: `全体恢复 ${choice.amount}% 生命`, kind: 'info' } };
       } else if (choice.kind === 'damage' && (choice.amount ?? 0) > 0) {
         next = { ...next, toast: { msg: `全体受到 ${choice.amount}% 伤害`, kind: 'error' } };
-      } else if (choice.kind === 'curse') {
-        next = { ...next, toast: { msg: '随机宠物被诅咒了！', kind: 'error' } };
+      } else if (choice.kind === 'curse' && curseMessage) {
+        next = { ...next, toast: { msg: curseMessage, kind: 'error' } };
       } else if (choice.kind === 'status' && choice.statusKind === 'poison') {
         next = { ...next, toast: { msg: `全体中毒 ${choice.statusValue ?? 0} 层！`, kind: 'error' } };
+      }
+      if (curseMessage && choice.kind !== 'curse') {
+        next = { ...next, toast: { msg: `${next.toast?.msg ? `${next.toast.msg}；` : ''}${curseMessage}`, kind: 'warning' } };
+      }
+      if (consumedFoodId) {
+        const rewardMessage = choice.itemId
+          ? `获得 ${ITEMS[choice.itemId]?.name ?? choice.itemId} ×1`
+          : next.toast?.msg;
+        next = { ...next, toast: {
+          msg: `消耗 ${FOODS[consumedFoodId]?.name ?? consumedFoodId} ×1${rewardMessage ? `；${rewardMessage}` : ''}`,
+          kind: next.toast?.kind ?? 'info',
+        } };
       }
       // 成长远征模式：处理成长点效果
       if (state.runMode === 'proficiency' && next.roster.length > 0) {
@@ -1897,6 +1934,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
           next = { ...next, log: ['事件战斗胜利', ...next.log].slice(0, 20) };
         } else {
           // 失败：按 penalty 处理，返回地图
+          let curseMessage: string | undefined;
           next = { ...next, screen: 'map' };
           if (eb.penalty.goldLoss) {
             next = { ...next, gold: Math.max(0, next.gold - eb.penalty.goldLoss) };
@@ -1913,6 +1951,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
             const penaltyRng = createRng((state.seed * 6151 + state.currentRow * 9973 + hashStr(state.currentNodeId)) >>> 0);
             const rc = curseKinds[Math.floor(penaltyRng() * curseKinds.length)];
             const ri = Math.floor(penaltyRng() * next.roster.length);
+            curseMessage = `${next.roster[ri].name} 获得诅咒「${CURSE_CN[rc]}」`;
             next = { ...next, roster: next.roster.map((u, i) => i === ri ? applyCurseToUnit(u, rc) : u) };
           }
           // 失败 toast
@@ -1920,8 +1959,11 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
             next = { ...next, toast: { msg: `战斗失败！失去 ${eb.penalty.goldLoss} 金币`, kind: 'error' } };
           } else if (eb.penalty.percent) {
             next = { ...next, toast: { msg: `战斗失败！全体受到 ${eb.penalty.percent}% 伤害`, kind: 'error' } };
-          } else if (eb.penalty.curseTarget) {
-            next = { ...next, toast: { msg: '战斗失败！随机宠物被诅咒了', kind: 'error' } };
+          } else if (curseMessage) {
+            next = { ...next, toast: { msg: `战斗失败！${curseMessage}`, kind: 'error' } };
+          }
+          if (curseMessage && (eb.penalty.goldLoss || eb.penalty.percent)) {
+            next = { ...next, toast: { msg: `${next.toast!.msg}；${curseMessage}`, kind: 'error' } };
           }
           next = { ...next, log: ['事件战斗失败', ...next.log].slice(0, 20) };
         }

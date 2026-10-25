@@ -1,4 +1,4 @@
-import type { BattleState, BattleTelemetryEvent, LogSpan, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
+import type { BattleState, BattleTelemetryEvent, LogEntry, LogSpan, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
 import { getSkill, SKILLS } from '../data/skills';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
@@ -11,8 +11,8 @@ import { getSkillEnhanceLevel, getSkillEnhanceBonus } from './growth';
 import { applyEnemySkillProgression } from './enemy-progression';
 
 export const TAME_THRESHOLD = 0.4;
-/** 每次驯服失败对该敌人捕捉概率的乘法加成（如 0.25 = +25%） */
-export const TAME_FAIL_BONUS = 0.25;
+/** 每次驯服失败增加5个百分点，最多补偿两次，仍受品阶上限限制。 */
+export const TAME_FAIL_BONUS = 0.05;
 /** 战斗棋盘每排列数（前后排各 3 列 = 6 格） */
 export const FIELD_COLS = 3;
 /** 休息指令的特殊 skillId（orders 里用它表示「本回合不行动」，可再次点击取消） */
@@ -918,6 +918,16 @@ function tickStatuses(u: Unit, round?: number): void {
   u.statuses = u.statuses.filter((s) => s.kind === 'burn' || s.kind === 'poison' || s.kind === 'shield' || s.kind === 'emberSeed' || s.kind === 'sunRadiance' || s.kind === 'foxFire' || s.turns > 0);
 }
 
+function addedStatusValues(before: StatusEffect[], after: StatusEffect[]): NonNullable<NonNullable<LogEntry['impacts']>[string]['addedStatuses']> {
+  const added: NonNullable<NonNullable<LogEntry['impacts']>[string]['addedStatuses']> = {};
+  for (const status of after) {
+    if (status.kind === 'shield') continue;
+    const delta = status.value - (before.find(s => s.kind === status.kind)?.value ?? 0);
+    if (delta > 0) added[status.kind] = delta;
+  }
+  return added;
+}
+
 export function pushLog(
   b: BattleState,
   msg: string,
@@ -927,6 +937,8 @@ export function pushLog(
   addsStatus?: string[],
   burstTargets?: string[],
   spans?: LogSpan[],
+  hitImpact?: Partial<NonNullable<LogEntry['impacts']>[string]>,
+  capture?: LogEntry['capture'],
 ): BattleState {
   // 附加当下全体血量快照，供 UI 按动画事件逐步展示血量；log 不截断（由 UI 只展示尾部）
   const hp: Record<string, number> = {};
@@ -938,6 +950,23 @@ export function pushLog(
   // 附加当下全员护盾快照，供 UI 按动画事件逐步更新护盾显示
   const shields: Record<string, number> = {};
   for (const u of [...b.playerUnits, ...b.enemyUnits]) shields[u.uid] = u.shield;
+  const previous = b.log[b.log.length - 1];
+  const impacts: NonNullable<LogEntry['impacts']> = {};
+  if (previous?.hp) for (const u of [...b.playerUnits, ...b.enemyUnits]) {
+    const hpDelta = u.hp - (previous.hp[u.uid] ?? u.hp);
+    const shieldDelta = u.shield - (previous.shields?.[u.uid] ?? u.shield);
+    const addedStatuses = addedStatusValues(previous.statuses?.[u.uid] ?? [], u.statuses);
+    if (hpDelta || shieldDelta || Object.keys(addedStatuses).length || u.uid === targetUid) impacts[u.uid] = {
+      hpLoss: Math.max(0, -hpDelta), healing: Math.max(0, hpDelta),
+      shieldLoss: Math.max(0, -shieldDelta), shieldGain: Math.max(0, shieldDelta),
+      shieldBroken: shieldDelta < 0 && u.shield === 0,
+      ...(Object.keys(addedStatuses).length ? { addedStatuses } : {}),
+    };
+  }
+  // 致命攻击可能立即复活；实际扣血取命中发生处记录，不能由复活后的快照倒推。
+  if (hitImpact && targetUid) impacts[targetUid] = {
+    ...(impacts[targetUid] ?? { hpLoss: 0, healing: 0, shieldLoss: 0, shieldGain: 0, shieldBroken: false }), ...hitImpact,
+  };
   let telemetry = b.telemetry;
   if (telemetry) {
     const events: BattleTelemetryEvent[] = [];
@@ -974,13 +1003,14 @@ export function pushLog(
     }
     telemetry = [...telemetry, ...events];
   }
-  let result: BattleState = { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus, burstTargets, spans }], telemetry, telemetryHp: telemetry ? hp : undefined };
+  let result: BattleState = { ...b, log: [...b.log, { text: msg, side, hp, statuses, shields, actorUid, targetUid, addsStatus, burstTargets, spans, impacts, capture }], telemetry, telemetryHp: telemetry ? hp : undefined };
   const rewound = [...result.playerUnits, ...result.enemyUnits].filter(unit => unit.timeRewindLogPending);
   for (const unit of rewound) {
     result = replaceUnit(result, { ...unit, timeRewindLogPending: undefined });
   }
   for (const unit of rewound) {
-    result = pushLog(result, `${unit.name} 的「时砂回溯」恢复 ${Math.ceil(getEffectiveMaxHp(unit) / 2)} 点生命`, sideOf(unit), unit.uid, unit.uid);
+    result = pushLog(result, `${unit.name} 的「时砂回溯」恢复 ${Math.ceil(getEffectiveMaxHp(unit) / 2)} 点生命`, sideOf(unit), unit.uid, unit.uid,
+      undefined, undefined, undefined, { healing: unit.hp });
   }
   return result;
 }
@@ -2339,6 +2369,10 @@ function resolveAttack(
   for (let i = 0; i < segments.length; i++) {
     let seg = segments[i];
     if (t2.hp <= 0) break;
+    const beforeHitStatuses = i === 0 ? target.statuses : t2.statuses;
+    let actualHpLoss = 0;
+    let actualShieldLoss = 0;
+    let shieldBroken = false;
     if (seg > 0) {
       const tgtPassive = getUnitPassive(t2);
       if (tgtPassive?.kind === 'bigHitGuard' && seg > tgtPassive.value) {
@@ -2362,12 +2396,15 @@ function resolveAttack(
       }
       if (effectiveShield > 0) {
         const shieldAbsorb = Math.min(effectiveShield, remainingDmg);
+        actualShieldLoss = shieldAbsorb;
         t2 = { ...t2, shield: t2.shield - shieldAbsorb };
         remainingDmg -= shieldAbsorb;
         if (t2.shield <= 0) {
+          shieldBroken = true;
           t2 = { ...t2, statuses: t2.statuses.filter((s) => s.kind !== 'shield') };
         }
       }
+      actualHpLoss = Math.min(t2.hp, remainingDmg);
       t2 = { ...t2, hp: Math.max(0, t2.hp - remainingDmg) };
       // 锁链传导：被锁链连接的单位受到伤害时，50%传导给伙伴（传导伤害不再触发连锁）
       const conductChain = (state: BattleState): BattleState => {
@@ -2410,7 +2447,8 @@ function resolveAttack(
           const shieldValue = e.value + enhanceBonus.effectBonus;
           const newShield = { ...shielded, shield: Math.min(99, shielded.shield + shieldValue) };
           nb = replaceUnit(nb, newShield);
-          nb = pushLog(nb, `${shielded.name} 获得 ${shieldValue} 点护盾`, sideOf(shielded), actor.uid, actor.uid);
+          nb = pushLog(nb, `${shielded.name} 获得 ${shieldValue} 点护盾`, sideOf(shielded), actor.uid, actor.uid,
+            undefined, undefined, undefined, { shieldGain: newShield.shield - shielded.shield });
         }
       } else if (e.kind === 'fear') {
         const fearValue = e.value + enhanceBonus.effectBonus;
@@ -2476,7 +2514,8 @@ function resolveAttack(
     } else {
       const msg1 = `${actor.name} 使用「${skill.name}」攻击 ${target.name}，造成 ${seg} 伤害`;
       nb = pushLog(nb, msg1, sideOf(actor), actor.uid, target.uid, hitAdds, undefined,
-        spans(msg1, [['actor', actor.name], ['skill', skill.name], ['target', target.name], ['damage', String(seg)]]));
+        spans(msg1, [['actor', actor.name], ['skill', skill.name], ['target', target.name], ['damage', String(seg)]]),
+        { hpLoss: actualHpLoss, healing: 0, shieldLoss: actualShieldLoss, shieldBroken, addedStatuses: addedStatusValues(beforeHitStatuses, t2.statuses) });
     }
     lastHitLog = nb.log.length > hitLogIndex ? hitLogIndex : undefined;
     t2 = actorFromId(nb, t2.uid)!;
@@ -2930,6 +2969,13 @@ export function mirrorCopyPlan(b: BattleState, actor: Unit): { skill?: SkillDef;
 function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): BattleState {
   const foxBurnBonus = foxFireLayers(actor);
   if (actor.hp <= 0) return b;
+  // 指定目标在轮到本次行动前死亡或离场：跳过，不回退到其他目标或消耗技能。
+  if (explicitTarget && (skill.target === 'single' || skill.target === 'ally')) {
+    const target = actorFromId(b, explicitTarget);
+    if (!target || target.hp <= 0) {
+      return markActed(pushLog(b, `${actor.name} 选择的目标已死亡或离场，本次行动跳过`, sideOf(actor), actor.uid), actor.uid);
+    }
+  }
   if (actor.statuses.some((s) => s.kind === 'stun')) {
     return markActed(pushLog(b, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
@@ -3186,7 +3232,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       r = replaceUnit(r, healed);
       const msgHeal = `${actor.name} 使用「${skill.name}」，治愈 ${t.name} ${totalHeal} 点生命`;
       r = pushLog(r, msgHeal, sideOf(actor), actor.uid, t.uid, addsKinds, undefined,
-        spans(msgHeal, [['actor', actor.name], ['skill', skill.name], ['target', t.name], ['heal', String(totalHeal)]]));
+        spans(msgHeal, [['actor', actor.name], ['skill', skill.name], ['target', t.name], ['heal', String(totalHeal)]]),
+        { healing: Math.max(0, healed.hp - treated.hp), addedStatuses: addedStatusValues(treated.statuses, healed.statuses) });
       if (targets.length === 1) r = cleanseMossAfterHeal(r, actor, t.uid);
     }
     if (targets.length > 1) {
@@ -3227,7 +3274,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         const buffSpans: [LogSpan['kind'], string][] = [['actor', actor.name], ['skill', skill.name]];
         if (skill.heal && skill.heal > 0) buffSpans.push(['heal', `${buffHeal}`]);
         nb = pushLog(nb, msgBuff, sideOf(actor), actor.uid, t.uid, undefined, undefined,
-          spans(msgBuff, buffSpans));
+          spans(msgBuff, buffSpans), { healing: Math.max(0, buffed.hp - t.hp), shieldGain: Math.max(0, buffed.shield - t.shield), addedStatuses: addedStatusValues(t.statuses, buffed.statuses) });
         if (targets.length === 1 && (skill.heal ?? 0) > 0) nb = cleanseMossAfterHeal(nb, actor, t.uid);
       }
       if (targets.length > 1) {
@@ -3583,7 +3630,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
         if (skill.id === 'water_wave' && hit === 0) waterWaveHits += 1;
       }
       if (isGroup) {
-        nb = sealSkillGroup(nb, groupStart);
+        // 连续随机攻击保留逐次命中的快照与动画；命中多个敌人不等于同时群攻。
+        if (skill.target !== 'random' || (skill.hits ?? 1) <= 1) nb = sealSkillGroup(nb, groupStart);
         for (const react of reactions) {
           if (checkEnd(nb).phase !== 'acting') break;
           nb = react(nb);
@@ -3985,10 +4033,13 @@ export function playerSwap(b: BattleState, actorUid: string, otherUid: string): 
 export function tameChance(enemy: Unit, foodId: string): number {
   const food = getFood(foodId);
   const species = getMonster(enemy.speciesId);
-  const hpFactor = 0.4 + 0.6 * (1 - enemy.hp / enemy.maxHp);
-  // 每次驯服失败 +25% 捕捉概率（乘法累加），多次失败后概率显著提高
-  const fails = enemy.tameFails ?? 0;
-  return Math.min(1, food.baseTame * species.tame.difficulty * hpFactor * (1 + fails * TAME_FAIL_BONUS));
+  if (food.guaranteed) return 1;
+  if (food.baseTame <= 0 || species.rank > 3) return 0;
+  const basePercent = 70 - species.rank * 10;
+  const foodBonus = Math.round(food.baseTame * 100) - 60;
+  const hpBonus = 15 * Math.max(0, 1 - enemy.hp / enemy.maxHp / TAME_THRESHOLD);
+  const failBonus = Math.min(enemy.tameFails ?? 0, 2) * TAME_FAIL_BONUS * 100;
+  return Math.min(basePercent + 35, basePercent + foodBonus + hpBonus + failBonus) / 100;
 }
 
 /** 喂食驯服不占用宠物行动。每次失败提高后续捕捉概率；残血到 1 点时必定捕捉。 */
@@ -4025,6 +4076,7 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
         undefined, undefined, undefined, undefined,
         spans(enemy.hp === 1 ? `${enemy.name} 已是强弩之末，被成功驯服！已加入队伍预备役` : `${enemy.name} 被成功驯服！已加入队伍预备役`,
           [['target', enemy.name], ['item', '驯服']]),
+        undefined, { targetUid: enemyUid, foodId, success: true },
       );
     } else {
       after = {
@@ -4033,7 +4085,7 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
       };
       const msgFail = `喂食${food.name}失败，${enemy.name} 抵抗了驯服（下次捕捉概率提高）`;
       after = pushLog(after, msgFail, 'enemy', undefined, undefined, undefined, undefined,
-        spans(msgFail, [['item', food.name], ['target', enemy.name]]));
+        spans(msgFail, [['item', food.name], ['target', enemy.name]]), undefined, { targetUid: enemyUid, foodId, success: false });
     }
     return after;
   });

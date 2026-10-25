@@ -175,7 +175,7 @@ export interface FoodDef {
   name: string;
   emoji: string;
   desc: string;
-  /** 基础驯服成功率 */
+  /** 一阶目标40%生命、未失败时的基准率；普通食物较浆果的差值作为加成。 */
   baseTame: number;
   price: number;
   /** 特殊道具：必定驯服（仍要求残血且可驯服） */
@@ -292,6 +292,16 @@ export interface LogSpan {
   to: number;
 }
 
+/** 表现层使用的实际变化；独立保留，群体统一快照不会覆盖单目标数值。 */
+export interface CombatImpact {
+  hpLoss: number;
+  healing: number;
+  shieldLoss: number;
+  shieldGain: number;
+  shieldBroken: boolean;
+  addedStatuses?: Partial<Record<StatusEffect['kind'], number>>;
+}
+
 export interface LogEntry {
   text: string;
   /** 消息归属：player=我方行动、enemy=敌方行动、info=通用/系统 */
@@ -314,6 +324,10 @@ export interface LogEntry {
   burstTargets?: string[];
   /** 同一次群体技能的一段：共享最终快照与动画起始时间；旧日志缺省时仍逐条播放。 */
   simultaneousGroup?: number;
+  /** 可选实际结果；旧日志缺失时沿用原解析。 */
+  impacts?: Record<string, CombatImpact>;
+  /** 捕获结果的表现元数据；不参与捕获计算。 */
+  capture?: { targetUid: string; foodId: string; success: boolean };
   /** 日志高亮片段，UI 渲染时按 kind 套用不同颜色 */
   spans?: LogSpan[];
 }
