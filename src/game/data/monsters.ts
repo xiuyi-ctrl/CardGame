@@ -555,13 +555,13 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     desc: '特殊蛋孵化的固定形态生物。每场战斗开始时以万变抽取4个主动技能；不可进化、融合或驯服，不进入野生生物池。',
   },
   mirror_beast: {
-    id: 'mirror_beast', name: '镜影兽', emoji: '🪞', eggBorn: true,
+    id: 'mirror_beast', name: '镜影兽', emoji: '🪞', image: '/mirror_beast.png', eggBorn: true,
     baseHp: 18, baseSpd: 5, rank: 2, tame: { difficulty: 0 },
     passive: 'mirror_reflection', skills: ['mirror_speed_up', 'mirror_speed_down'],
     desc: '固定形态的特殊蛋生物，不可进化、融合或驯服。调节本场速度，接在队友之后镜像复制一次其刚使用的技能。',
   },
   crystal_core_beast: {
-    id: 'crystal_core_beast', name: '晶核兽', emoji: '💠', eggBorn: true,
+    id: 'crystal_core_beast', name: '晶核兽', emoji: '💠', image: '/crystal_core_beast.png', eggBorn: true,
     baseHp: 20, baseSpd: 1, rank: 2, tame: { difficulty: 0 },
     passive: 'crystal_conversion', skills: ['core_crystal_spike', 'core_crystal_wall', 'core_crystal_burst', 'core_crystal_cleanse'],
     desc: '特殊蛋孵化的固定形态生物，不可进化、融合或驯服。净化自身持续负面状态获得护盾，再以护盾发动攻击或回合末真实伤害。',

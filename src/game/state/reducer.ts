@@ -223,7 +223,7 @@ function emptyRunStats(): RunStats {
 export function migrateGameState(value: unknown): GameState | null {
   if (!isValidGameState(value)) return null;
   // 新增立绘的旧单位只补图片，不重算已保存的属性、技能或战斗状态。
-  const restoreArt = (unit: Unit): Unit => !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast'].includes(unit.speciesId)
+  const restoreArt = (unit: Unit): Unit => !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast', 'mimi', 'mimi_king', 'mimi_god', 'pipi', 'sisi', 'sisi_god'].includes(unit.speciesId)
     ? { ...unit, image: getMonster(unit.speciesId).image } : unit;
   let battle = value.battle;
   if (battle) {

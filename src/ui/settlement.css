@@ -1,0 +1,94 @@
+.settlement-screen { --report-teal: #096a75; --report-gold: #d68b00; padding: clamp(12px, 3vh, 32px); }
+.settlement-report { width: min(1180px, 100%); padding: 16px 22px; gap: 16px; }
+.settlement-heading { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+.settlement-heading > .flow-icon { width: 52px; height: 52px; }
+.settlement-heading > div { flex: 1; min-width: 0; }
+.settlement-heading > div > span { font-size: 13px; color: #52636c; font-weight: 700; }
+.settlement-heading h1 { margin-top: 4px; font-size: clamp(24px, 2.5vw, 34px); }
+.settlement-status { border: 2px solid #096a75; padding: 7px 12px; font-size: 14px; font-weight: 800; color: #096a75; background: #dfede3; white-space: nowrap; }
+.flow-defeat-screen .settlement-status { color: #913c38; border-color: #913c38; background: #f2dfd5; }
+.settlement-trail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; gap: 8px; flex-shrink: 0; }
+.settlement-trail li { display: flex; align-items: center; gap: 8px; border-bottom: 3px solid #c9c9bc; padding: 7px 10px; color: #75818a; background: #eeeee4; }
+.settlement-trail i { font-style: normal; font-weight: 800; width: 22px; text-align: center; }
+.settlement-trail span { font-weight: 800; }
+.settlement-trail small { margin-left: auto; font-size: 12px; }
+.settlement-trail .is-complete { color: #096a75; border-color: #168d89; background: #dfede3; }
+.settlement-trail .is-current { color: #913c38; border-color: #b54d43; background: #f2dfd5; }
+.settlement-body { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 20px; min-height: 0; overflow-y: auto; scrollbar-width: none; align-items: start; }
+.settlement-body::-webkit-scrollbar { display: none; }
+.settlement-report .settlement-rating { display: grid; grid-template-columns: minmax(100px, .7fr) minmax(0, 1.3fr); grid-column: auto; gap: 16px; margin: 0; padding: 0; align-items: center; }
+.settlement-seal { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 5px; border-right: 2px solid #c9c9bc; padding-right: 16px; }
+.settlement-seal > span { font-size: 13px; color: #52636c; font-weight: 700; }
+.settlement-seal > div { position: relative; width: 120px; height: 112px; display: grid; place-items: center; }
+.settlement-seal .flow-icon { position: absolute; width: 100%; height: 100%; opacity: .65; }
+.settlement-seal strong { position: relative; font-size: 80px; line-height: 1; color: var(--report-gold); -webkit-text-stroke: 2px #101c2c; text-shadow: 2px 3px #ffd15c; }
+.settlement-seal > b { font-size: 30px; line-height: 1.1; color: #101c2c; font-variant-numeric: tabular-nums; }
+.settlement-seal b small { font-size: 13px; color: #52636c; font-weight: 500; }
+.settlement-report h2 { font-family: inherit; font-size: 15px; line-height: 1.3; margin: 0 0 12px; }
+.settlement-breakdown { min-width: 0; }
+.settlement-report .settlement-breakdown .rating-dimensions { display: flex; flex-direction: column; width: 100%; gap: 12px; margin: 0; }
+.settlement-breakdown .rating-dim-row { display: grid; grid-template-columns: 1fr auto; gap: 5px 8px; font-size: 13px; }
+.settlement-breakdown .rating-dim-name { width: auto; text-align: left; }
+.settlement-breakdown .rating-dim-score { width: auto; text-align: right; grid-column: 2; grid-row: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.settlement-report .settlement-breakdown .rating-dim-bar { grid-column: 1 / -1; height: 7px; border: 0; background: #dce1db; }
+.settlement-report .settlement-breakdown .rating-dim-fill { background: #168d89; }
+.settlement-rating-note { font-size: 12px; color: #52636c; margin-top: 12px !important; }
+.settlement-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.settlement-stats > div { display: grid; grid-template-columns: 24px 1fr auto; gap: 7px; align-items: center; border: 0; border-bottom: 2px solid #c9c9bc; background: #eeeee4; padding: 12px 8px; font-size: 13px; }
+.settlement-stats .flow-icon, .settlement-stats img { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
+.settlement-stats strong { font-size: 22px; color: var(--report-teal); font-variant-numeric: tabular-nums; }
+.settlement-team { grid-column: 1 / -1; min-width: 0; border-top: 2px solid #c9c9bc; padding-top: 12px; }
+.settlement-team .flow-team { text-align: left; }
+.settlement-team .flow-team > div { gap: 6px; }
+.settlement-team .flow-team-pet { border: 0; padding: 4px; text-align: center; background: #eeeee4; }
+.settlement-team .flow-team-pet .flow-pet { height: clamp(40px, 7vh, 72px); margin-bottom: 3px; }
+.settlement-unlocks { grid-column: 1 / -1; margin: 0; padding: 8px; }
+.settlement-report > .settlement-actions { margin-top: auto; justify-content: flex-end; align-items: center; gap: 12px; }
+.settlement-actions > span { margin-right: auto; font-size: 13px; color: #52636c; }
+.settlement-actions > button { min-height: 48px; min-width: 180px; }
+.settlement-detail-scores { margin-top: 12px; }
+
+.mobile-ui .settlement-screen { padding: 4px; }
+.mobile-ui .settlement-screen .settlement-report { border-width: 12px; border-image-width: 12px; padding: 3px 6px; gap: 5px; }
+.mobile-ui .settlement-heading { gap: 6px; }
+.mobile-ui .settlement-heading > .flow-icon { width: 28px; height: 28px; }
+.mobile-ui .settlement-heading > div > span { font-size: 12px; }
+.mobile-ui .settlement-heading h1 { margin-top: 0; font-size: clamp(18px, 2.5vw, 24px); }
+.mobile-ui .settlement-status { padding: 4px 6px; font-size: 12px; }
+.mobile-ui .settlement-trail { gap: 4px; }
+.mobile-ui .settlement-trail li { padding: 3px 6px; gap: 3px; border-width: 2px; font-size: 12px; }
+.mobile-ui .settlement-trail i { width: 14px; }
+.mobile-ui .settlement-body { gap: 6px 10px; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); flex: 1; }
+.mobile-ui .settlement-report .settlement-rating { grid-template-columns: 80px minmax(0, 1fr); gap: 8px; }
+.mobile-ui .settlement-seal { gap: 2px; padding-right: 6px; }
+.mobile-ui .settlement-seal > span { font-size: 12px; }
+.mobile-ui .settlement-seal > div { width: 64px; height: 58px; }
+.mobile-ui .settlement-seal strong { font-size: 44px; -webkit-text-stroke-width: 1px; text-shadow: 1px 2px #ffd15c; }
+.mobile-ui .settlement-seal > b { font-size: 23px; }
+.mobile-ui .settlement-seal b small { font-size: 12px; }
+.mobile-ui .settlement-screen .settlement-report h2 { font-size: 12px; margin-bottom: 5px; }
+.mobile-ui .settlement-breakdown { display: flex; flex-direction: column; }
+.mobile-ui .settlement-breakdown > h2 { display: none; }
+.mobile-ui .settlement-breakdown > .mobile-details { order: -1; }
+.mobile-ui .settlement-report .settlement-breakdown .rating-dimensions { gap: 3px; }
+.mobile-ui .settlement-breakdown .rating-dim-row { grid-template-columns: minmax(48px, 1fr) minmax(16px, .6fr) auto; font-size: 12px; gap: 3px; }
+.mobile-ui .settlement-weight { display: none; }
+.mobile-ui .settlement-breakdown .rating-dim-score { grid-column: 3; }
+.mobile-ui .settlement-report .settlement-breakdown .rating-dim-bar { grid-column: 2; grid-row: 1; height: 6px; }
+.mobile-ui .settlement-rating .mobile-details-trigger { min-height: 44px; margin: 0 0 3px; padding: 3px 6px; font-size: 12px; width: 100%; }
+.mobile-ui .settlement-report .settlement-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.mobile-ui .settlement-report .settlement-stats > div { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; padding: 6px 4px; gap: 3px; font-size: 12px; }
+.mobile-ui .settlement-report .settlement-stats .flow-icon, .mobile-ui .settlement-report .settlement-stats img { width: 16px; height: 16px; }
+.mobile-ui .settlement-report .settlement-stats strong { font-size: 14px; white-space: nowrap; }
+.mobile-ui .settlement-stats > div > span { white-space: nowrap; }
+.mobile-ui .settlement-team { padding-top: 3px; }
+.mobile-ui .settlement-team .mobile-details-trigger { min-height: 44px; width: 100%; padding: 4px 8px; font-size: 12px; }
+.mobile-ui .settlement-report > .settlement-actions { gap: 6px; padding-top: 3px; }
+.mobile-ui .settlement-actions > button { min-height: 44px; min-width: 130px; font-size: 16px; }
+.mobile-ui .settlement-actions > span { font-size: 12px; }
+.mobile-ui .settlement-unlocks { padding: 4px; font-size: 12px; }
+@media (max-height: 360px) {
+  .mobile-ui .settlement-heading > div > span { display: none; }
+  .mobile-ui .settlement-trail li { padding-block: 2px; }
+  .mobile-ui .settlement-trail small { display: none; }
+}

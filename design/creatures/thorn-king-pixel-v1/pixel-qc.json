@@ -1,0 +1,20 @@
+{
+  "size": [
+    64,
+    64
+  ],
+  "bbox": [
+    4,
+    9,
+    60,
+    60
+  ],
+  "feet_baseline_exclusive": 60,
+  "opaque_colors": 23,
+  "alpha_values": [
+    0,
+    255
+  ],
+  "resampling": "nearest",
+  "source": "export/raw-sheet-clean.png"
+}

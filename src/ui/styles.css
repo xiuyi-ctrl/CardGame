@@ -5539,6 +5539,10 @@ html:not(.mobile-ui) .postbattle-detail-body::-webkit-scrollbar { display: none;
   line-height: 1;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
 }
+img.unified-creature-art { image-rendering: pixelated; object-fit: contain; border-radius: 0; }
+.starter-select-pet img.unified-creature-art { filter: none; }
+:is(.battle-field, .formation-board) .battle-sprite img.unified-creature-art { width: 95%; height: 105%; object-position: center bottom; image-rendering: pixelated; filter: none; }
+
 .codex-detail-emoji .pet-image {
   width: 56px;
   height: 56px;

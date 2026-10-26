@@ -17,6 +17,7 @@ import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalS
 import { MobileShell } from '../../src/ui/mobile';
 import { preloadImages } from '../../src/ui/imageCache';
 import { FORMATION_SPRITES } from '../../src/ui/formationSprites';
+import { CreatureStylePreview, CREATURE_STYLE_IMAGES } from './CreatureStylePreview';
 import { createInitialState, gameReducer } from '../../src/game/state/reducer';
 import { createBattle, makeUnit, performGauntletSwap, playerTame } from '../../src/game/core/battle';
 import { ITEMS } from '../../src/game/data/items';
@@ -59,6 +60,7 @@ add('region-ecology', ui.RegionScreen, { region: 'emerald_forest' }, false, '查
 add('region-mixed-ecology', ui.RegionScreen, {}, false, '查看生态详情');
 add('difficulty-select', ui.DifficultyScreen, {}, false);
 add('starter', ui.StarterScreen, {}, false);
+add('creature-style-compare', CreatureStylePreview, {}, false);
 add('proficiency-select', ui.ProficiencyStarterScreen, {}, false);
 add('map', ui.MapScreen, {}, false);
 add('forest-map', ui.MapScreen, { region: 'emerald_forest' }, false);
@@ -118,6 +120,8 @@ window.petCard = { platform: 'preview', loadGame: async slot => slot === 1 ? JSO
 const variant = (name: string, original: string, extra = {}, setup?: string) => {
   registry[name] = { ...registry[original], state: { ...structuredClone(registry[original].state), ...extra }, setup };
 };
+variant('creature-style-battle', 'creature-style-compare', {}, '战场卡片');
+variant('creature-style-formation', 'creature-style-compare', {}, '布阵卡片');
 variant('battle-mirror-selected', 'battle-mirror', {}, '.player-area .formation-slot');
 variant('battle-crystal-selected', 'battle-crystal', {}, '.player-area .formation-slot');
 variant('battle-mirror-queued', 'battle-mirror', {}, '.player-area .formation-slot|.battle-skill-grid .skill-btn:nth-child(3)');
@@ -245,6 +249,14 @@ variant('codex-torch-fox-art', 'codex', {}, '传火狐');
 variant('codex-torch-fox-lord-art', 'codex', {}, '传火狐尊');
 variant('codex-time-sand-beast-art', 'codex', {}, '时砂兽');
 variant('codex-mimic-beast-art', 'codex', {}, '百变兽');
+variant('codex-mirror-beast-art', 'codex', {}, '镜影兽');
+variant('codex-crystal-core-beast-art', 'codex', {}, '晶核兽');
+variant('codex-mimi-art', 'codex', {}, '咪咪');
+variant('codex-mangying-art', 'codex', {}, '蟒影');
+variant('codex-abyss-serpent-art', 'codex', {}, '深渊蛇王');
+variant('codex-cici-art', 'codex', {}, '刺刺');
+variant('codex-jiwei-art', 'codex', {}, '棘尾');
+variant('codex-thorn-king-art', 'codex', {}, '棘刺王');
 const mossArt = ['light_moss', 'moss_beast', 'solar_spirit'].map((id, column) => makeUnit(id, true, column as 0 | 1 | 2, false));
 const mossArtEncounter = mossArt.map(unit => ({ speciesId: unit.speciesId }));
 add('light-moss-art-battle', BattleScreen, { roster: mossArt, field: mossArt.map(unit => unit.uid), battle: createBattle(mossArt, mossArtEncounter, 126) }, false);
@@ -269,6 +281,29 @@ const eggArt = ['time_sand_beast', 'mimic_beast'].map((id, column) => makeUnit(i
 const eggArtEncounter = eggArt.map(unit => ({ speciesId: unit.speciesId }));
 add('egg-art-battle', BattleScreen, { roster: eggArt, field: eggArt.map(unit => unit.uid), battle: createBattle(eggArt, eggArtEncounter, 126) }, false);
 add('egg-art-formation', FormationScreen, { roster: eggArt, formation: { ...formation, units: eggArt, initialField: eggArt, encounter: eggArtEncounter } }, false);
+const mineralArt = ['mirror_beast', 'crystal_core_beast'].map((id, column) => makeUnit(id, true, column as 0 | 1, false));
+const mineralArtEncounter = mineralArt.map(unit => ({ speciesId: unit.speciesId }));
+add('mineral-art-battle', BattleScreen, { roster: mineralArt, field: mineralArt.map(unit => unit.uid), battle: createBattle(mineralArt, mineralArtEncounter, 126) }, false);
+add('mineral-art-formation', FormationScreen, { roster: mineralArt, formation: { ...formation, units: mineralArt, initialField: mineralArt, encounter: mineralArtEncounter } }, false);
+const serpentArt = ['mimi', 'mimi_king', 'mimi_god'].map((id, column) => makeUnit(id, true, column as 0 | 1 | 2, false));
+const serpentArtEncounter = serpentArt.map(unit => ({ speciesId: unit.speciesId }));
+add('serpent-art-battle', BattleScreen, { roster: serpentArt, field: serpentArt.map(unit => unit.uid), battle: createBattle(serpentArt, serpentArtEncounter, 126) }, false);
+add('serpent-art-formation', FormationScreen, { roster: serpentArt, formation: { ...formation, units: serpentArt, initialField: serpentArt, encounter: serpentArtEncounter } }, false);
+const thornArt = ['pipi', 'sisi', 'sisi_god'].map((id, column) => makeUnit(id, true, column as 0 | 1 | 2, false));
+const thornArtEncounter = thornArt.map(unit => ({ speciesId: unit.speciesId }));
+add('thorn-art-battle', BattleScreen, { roster: thornArt, field: thornArt.map(unit => unit.uid), battle: createBattle(thornArt, thornArtEncounter, 126) }, false);
+add('thorn-art-formation', FormationScreen, { roster: thornArt, formation: { ...formation, units: thornArt, initialField: thornArt, encounter: thornArtEncounter } }, false);
+const unifiedArt = ['momo', 'mimi', 'coal'].map((id, column) => makeUnit(id, true, column as 0 | 1 | 2, false));
+const simpleSerpentArt = ['mimi', 'mimi_king'].map((id, column) => makeUnit(id, true, column as 0 | 1, false));
+const simpleSerpentEncounter = simpleSerpentArt.map(unit => ({ speciesId: unit.speciesId }));
+add('simple-serpent-battle', BattleScreen, { roster: simpleSerpentArt, field: simpleSerpentArt.map(unit => unit.uid), battle: createBattle(simpleSerpentArt, simpleSerpentEncounter, 126) }, false);
+add('simple-serpent-formation', FormationScreen, { roster: simpleSerpentArt, formation: { ...formation, units: simpleSerpentArt, initialField: simpleSerpentArt, encounter: simpleSerpentEncounter } }, false);
+variant('simple-serpent-roster', 'postbattle', { roster: simpleSerpentArt });
+const unifiedArtEncounter = unifiedArt.map(unit => ({ speciesId: unit.speciesId }));
+add('unified-art-battle', BattleScreen, { roster: unifiedArt, field: unifiedArt.map(unit => unit.uid), battle: createBattle(unifiedArt, unifiedArtEncounter, 126) }, false);
+add('unified-art-formation', FormationScreen, { roster: unifiedArt, formation: { ...formation, units: unifiedArt, initialField: unifiedArt, encounter: unifiedArtEncounter } }, false);
+variant('unified-art-roster', 'postbattle', { roster: unifiedArt });
+variant('codex-unified-xunxun', 'codex', {}, '迅迅');
 const scoreLedger = emptyMainRating();
 for (const act of [1, 2, 3]) {
   scoreLedger.acts[act] = { totalRows: 10, completedRows: Array.from({ length: 10 }, (_, i) => i), bossDefeated: true, challengeTarget: 5 };
@@ -286,6 +321,9 @@ const actLedger = structuredClone(scoreLedger);
 delete actLedger.acts['2']; delete actLedger.acts['3'];
 actLedger.battles = Object.fromEntries(Object.entries(actLedger.battles).filter(([, b]) => b.act === 1));
 variant('rating-v2-interact', 'inter_act', { runStats: { ...scoreStats, rating: actLedger } });
+variant('settlement-forest-full', 'rating-v2-interact', { region: 'emerald_forest', runStats: { ...scoreStats, rating: actLedger, battlesWon: 25, goldEarned: 12345, petsTamed: 18, petsLost: 5, turnsPlayed: 234 } });
+variant('settlement-empty-defeat', 'rating-v2-defeat', { roster: [] });
+variant('settlement-team-details', 'rating-v2-interact', {}, '查看同行伙伴 · 8只');
 variant('rating-legacy-victory', 'victory', { act: 3, runStats: { ...scoreStats, rating: undefined, turnsPlayed: 90 } });
 variant('rating-legacy-details', 'rating-legacy-victory', {}, '.rating-display .mobile-details-trigger');
 variant('postbattle-zhuoren-portrait', 'postbattle', { roster: [makeUnit('fifi_king', true, 0, false)] });
@@ -388,6 +426,7 @@ function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
   backupJson: JSON.stringify({ saveVersion: 1, main: base }),
   async render(name: string, mobile = true) {
     if (!registry[name]?.component) throw Error(`Missing fixture: ${name}`);
+    if (name.startsWith('creature-style-')) await preloadImages(CREATURE_STYLE_IMAGES);
     const battle = registry[name].state.battle;
     await preloadImages([...Object.values(FORMATION_SPRITES), ...[...registry[name].state.roster, ...(battle ? [...battle.playerUnits, ...battle.enemyUnits] : [])]
       .map(unit => unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image)

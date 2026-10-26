@@ -309,10 +309,14 @@ export function SkillTag({
   );
 }
 
+function isUnifiedCreatureArt(src?: string): boolean {
+  return !!src && (/(?:^|\/)(?:01|06(?:-1)?|battle-momo|coal)\.png$/.test(src) || /(?:home-xunxun|starter-mimi)(?:[.-])/.test(src));
+}
+
 /** 内联宠物图标：有 image 时显示小图，否则显示 emoji */
 export function PetIcon({ image, emoji, name, className = '' }: { image?: string; emoji: string; name: string; className?: string }) {
   return image
-    ? <img src={image} className={`pet-icon-inline ${className}`} alt={name} />
+    ? <img src={image} className={`pet-icon-inline ${isUnifiedCreatureArt(image) ? 'unified-creature-art ' : ''}${className}`} alt={name} />
     : <>{emoji}</>;
 }
 
@@ -478,12 +482,13 @@ export function BattlePixelSprite({ src, name }: { src: string; name: string }) 
     else void loadImage(src).then(draw, () => {});
     return () => { cancelled = true; };
   }, [src]);
-  return <canvas ref={canvasRef} width={64} height={64} role="img" aria-label={name} />;
+  return isUnifiedCreatureArt(src) ? <img className="native-creature-art unified-creature-art" src={src} alt={name} draggable={false} /> : <canvas ref={canvasRef} width={64} height={64} role="img" aria-label={name} />;
 }
 
 export function PixelCreature({ unit }: { unit: Unit }) {
   const image = unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image;
-  if (image && ['momo_god', 'lulu_god', 'fifi_god', 'coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast'].includes(unit.speciesId)) return <img className="native-creature-art" src={image} alt={unit.name} draggable={false} />;
+  if (image && isUnifiedCreatureArt(image)) return <BattlePixelSprite src={image} name={unit.name} />;
+  if (image && ['momo_god', 'lulu_god', 'fifi_god', 'coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast', 'mimi_king', 'mimi_god', 'pipi', 'sisi', 'sisi_god'].includes(unit.speciesId)) return <img className="native-creature-art" src={image} alt={unit.name} draggable={false} />;
   return image ? <BattlePixelSprite src={image} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>;
 }
 
@@ -514,7 +519,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
         onClick={onClick}
       >
         <span className="battle-sprite">
-          {imageOverride ? <img src={imageOverride} alt={unit.name} draggable={false} /> : <PixelCreature unit={unit} />}
+          {imageOverride ? <img className={isUnifiedCreatureArt(imageOverride) ? 'unified-creature-art' : undefined} src={imageOverride} alt={unit.name} draggable={false} /> : <PixelCreature unit={unit} />}
         </span>
         {!battleScene && <span className="battle-plinth" aria-hidden="true" />}
         <span className="battle-creature-stats">
@@ -536,7 +541,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
       onClick={onClick}
     >
       <div className={`card-top ${topStats ? 'card-top-stats' : ''}`}>
-        <span className="emoji">{unit.image ? <img src={unit.image} className="pet-image" alt={unit.name} /> : unit.emoji}</span>
+        <span className="emoji">{unit.image ? <img src={unit.image} className={`pet-image${isUnifiedCreatureArt(unit.image) ? ' unified-creature-art' : ''}`} alt={unit.name} /> : unit.emoji}</span>
         {topStats && (
           <div className="card-stats">
             <div className="card-stat" style={spdColor ? { color: spdColor } : undefined}>

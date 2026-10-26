@@ -31,6 +31,7 @@ import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import './backpack.css';
 import { FLOW_ART, FLOW_ICON_NAMES, FlowIcon, FlowHeader, FlowPet, FlowPetStats, FlowTeam, flowChoiceArt } from './MainFlowArt';
 import './mainFlow.css';
+import './settlement.css';
 import './remainingMain.css';
 import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalScreen } from './ProgressionScreens';
 import { CampRestScreen, CampFusionScreen, CampFusionSkillScreen, SpecialTargetScreen } from './CampScreens';
@@ -1641,7 +1642,7 @@ export function StarterScreen({ state, dispatch }: { state?: GameState; dispatch
               return <button key={id} type="button" className={`starter-select-choice ${candidate === id ? 'selected' : ''}`}
                 aria-pressed={candidate === id} onClick={() => setCandidate(id)}>
                 <span className="starter-select-pet">
-                  {starterArt[id] ? <img src={starterArt[id]} alt="" /> : species.image ? <BattlePixelSprite src={species.image} name={species.name} /> : <span className="starter-select-placeholder" role="img" aria-label={species.name}>{species.emoji}</span>}
+                  {starterArt[id] ? <img className={id === 'momo' || id === 'mimi' ? 'unified-creature-art' : undefined} src={starterArt[id]} alt="" /> : species.image ? <BattlePixelSprite src={species.image} name={species.name} /> : <span className="starter-select-placeholder" role="img" aria-label={species.name}>{species.emoji}</span>}
                 </span>
                 <span className="starter-select-ground" aria-hidden="true" />
                 <span className="starter-select-label">
@@ -1655,7 +1656,7 @@ export function StarterScreen({ state, dispatch }: { state?: GameState; dispatch
         <aside className="starter-select-panel" aria-label={`${selected.name}详情`}>
           <div className="starter-select-profile">
             <div className="starter-select-portrait">
-              {starterArt[selected.id] ? <img src={starterArt[selected.id]} alt="" /> : selected.image ? <BattlePixelSprite src={selected.image} name={selected.name} /> : <span className="starter-select-placeholder" role="img" aria-label={selected.name}>{selected.emoji}</span>}
+              {starterArt[selected.id] ? <img className={selected.id === 'momo' || selected.id === 'mimi' ? 'unified-creature-art' : undefined} src={starterArt[selected.id]} alt="" /> : selected.image ? <BattlePixelSprite src={selected.image} name={selected.name} /> : <span className="starter-select-placeholder" role="img" aria-label={selected.name}>{selected.emoji}</span>}
             </div>
             <div><h2>{selected.name}</h2><span className="starter-select-role">{STARTER_ROLES[selected.id]}</span><p>{selected.desc}</p></div>
           </div>
@@ -2862,7 +2863,7 @@ const ACT_THEMES = [
   { emoji: '⚔️', name: '终局之前', flavor: '火焰与铁链的咆哮在身后沉寂。前方，是远征的终点——或是一切湮灭的起点。' },
 ];
 
-function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const stats = state.runStats;
   const snap = stats?.actSnapshot;
   const actStats = snap ? {
@@ -2880,62 +2881,82 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const theme = ACT_THEMES[state.act] ?? ACT_THEMES[1];
   const rating = computeRunRating(state);
   return (
-    <div className="flow-screen flow-report-screen flow-interact-screen">
-      <main className="flow-report flow-frame">
-      <header className="flow-report-heading">
-        <FlowIcon name="next-chapter" /><h1>{state.region === 'emerald_forest' ? FOREST_ACT_NAMES[state.act] : theme.name} · {actName}结算</h1>
-        <p>{state.runMode !== 'proficiency' && `${MAIN_REGIONS[state.region ?? 'mixed'].name} · `}{state.region === 'emerald_forest' ? '整顿行装，继续探索林地深处。' : theme.flavor}</p>
+    <div className="flow-screen flow-report-screen flow-interact-screen settlement-screen">
+      <main className="flow-report flow-frame settlement-report">
+      <header className="settlement-heading">
+        <FlowIcon name="next-chapter" /><div><span>{MAIN_REGIONS[state.region ?? 'mixed'].name} · 远征记录</span><h1>{state.region === 'emerald_forest' ? FOREST_ACT_NAMES[state.act] : theme.name} · {actName}完成</h1></div>
+        <span className="settlement-status">幕间休整</span>
       </header>
-      <div className="flow-report-body">
-      {rating && <div className="flow-act-rating"><FlowIcon name="rating-laurel" /><strong>{rating.grade}</strong><span>{rating.score}分 · {rating.label}{rating.legacy ? '（旧评分）' : ''}</span><small>当前累计评级</small></div>}
-      <div className="flow-act-stats">
+      <SettlementTrail state={state} />
+      <div className="settlement-body">
+      {rating && <RatingDisplay rating={rating} />}
+      <section className="settlement-stat-panel"><h2>本幕记录</h2><div className="flow-act-stats settlement-stats">
         <div><FlowIcon name="battles-won" /><span>战斗场次</span><strong>{actStats.battlesWon + actStats.battlesLost}</strong></div>
         <div><img src="/reward-icons/gold.png" alt="" /><span>金币获取</span><strong>{actStats.goldEarned}</strong></div>
         <div><FlowIcon name="companions-tamed" /><span>驯服宠物</span><strong>{actStats.tamed}</strong></div>
         <div><FlowIcon name="companions-lost" /><span>宠物阵亡</span><strong>{actStats.lost}</strong></div>
         <div><FlowIcon name="turn-hourglass" /><span>行动回合</span><strong>{actStats.turns}</strong></div>
         <div><FlowIcon name="party-completeness" /><span>当前伙伴</span><strong>{state.roster.length}</strong></div>
+      </div></section>
+      <div className="settlement-team"><MobileDetails label="队伍快照" triggerLabel={`查看同行伙伴 · ${state.roster.length}只`}><FlowTeam units={state.roster} /></MobileDetails></div>
       </div>
-      <MobileDetails label="队伍快照"><FlowTeam units={state.roster} /></MobileDetails>
-      </div>
-      <footer className="flow-actions"><button className="flow-primary" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>远征{nextName} <UiSymbol name="arrow-right" /></button></footer>
+      <footer className="flow-actions settlement-actions"><span>下一站 · {nextName}地图</span><button className="flow-primary" onClick={() => dispatch({ type: 'INTER_ACT_CONTINUE' })}>远征{nextName} <UiSymbol name="arrow-right" /></button></footer>
       </main>
     </div>
   );
 }
 
-function RatingDisplay({ rating, color }: { rating: RunRating; color?: string }) {
+function SettlementTrail({ state }: { state: GameState }) {
+  return <ol className="settlement-trail" aria-label="远征进度">{['第一幕', '第二幕', '第三幕'].map((name, index) => {
+    const completed = state.runStats?.rating?.acts[index + 1]?.bossDefeated ?? (index + 1 < state.act || state.screen === 'victory' || (state.screen === 'inter_act' && index + 1 === state.act));
+    return <li key={name} className={completed ? 'is-complete' : index + 1 === state.act ? 'is-current' : ''}><i aria-hidden="true">{completed ? '✓' : index + 1}</i><span>{name}</span><small>{completed ? '已完成' : index + 1 === state.act ? '本次抵达' : '未抵达'}</small></li>;
+  })}</ol>;
+}
+
+function RatingDisplay({ rating }: { rating: RunRating }) {
   return (
-    <div className="rating-display">
-      <div className="rating-grade" style={{ color: color ?? '#4ecdc4' }}>{rating.grade}</div>
-      <div className="rating-score">{rating.score}分 · {rating.label}</div>
-      {rating.note && <small className="rating-note">{rating.note}</small>}
-      <MobileDetails label="评分明细"><div className="rating-dimensions">
+    <section className="rating-display settlement-rating" aria-label="累计评级">
+      <div className="settlement-seal"><span>累计评级{rating.legacy ? ' · 旧评分' : ''}</span><div><FlowIcon name="rating-laurel" /><strong>{rating.grade}</strong></div><b>{rating.score}<small> / 100</small></b><span>{rating.label}</span></div>
+      <div className="settlement-breakdown"><h2>评分构成</h2><div className="rating-dimensions">
         {rating.dimensions.map((d) => (
           <div key={d.key} className="rating-dim-row">
-            <span className="rating-dim-name">{d.name} ({d.weight}分)</span>
+            <span className="rating-dim-name">{d.name}<span className="settlement-weight"> ({d.weight}分)</span></span>
             <div className="rating-dim-bar">
               <div className="rating-dim-fill" style={{ width: `${Math.max(0, Math.min(100, d.score))}%` }} />
             </div>
             <span className="rating-dim-score">{d.points}/{d.weight}</span>
           </div>
         ))}
-      </div></MobileDetails>
-    </div>
+      </div><MobileDetails label="评分明细" details={<><p>{rating.note ?? '评级根据整局远征表现计算。'}</p><div className="settlement-detail-scores">{rating.dimensions.map(d => <p key={d.key}>{d.name}：{d.points} / {d.weight}分</p>)}</div></>}><p className="settlement-rating-note">{rating.note ?? '各项得分累计，随远征进程更新。'}</p></MobileDetails></div>
+    </section>
   );
 }
 
-function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+function SettlementTotals({ state }: { state: GameState }) {
+  const stats = state.runStats;
+  return <section className="settlement-stat-panel"><h2>远征总览</h2><div className="flow-act-stats settlement-stats">
+    <div><FlowIcon name="battles-won" /><span>战斗胜利</span><strong>{stats?.battlesWon ?? 0}</strong></div>
+    <div><img src="/reward-icons/gold.png" alt="" /><span>金币获取</span><strong>{stats?.goldEarned ?? 0}</strong></div>
+    <div><FlowIcon name="companions-tamed" /><span>驯服宠物</span><strong>{stats?.petsTamed ?? 0}</strong></div>
+    <div><FlowIcon name="companions-lost" /><span>宠物阵亡</span><strong>{stats?.petsLost ?? 0}</strong></div>
+    <div><FlowIcon name="turn-hourglass" /><span>行动回合</span><strong>{stats?.turnsPlayed ?? 0}</strong></div>
+    <div><FlowIcon name="party-completeness" /><span>当前伙伴</span><strong>{state.roster.length}</strong></div>
+  </div></section>;
+}
+
+export function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const rating = computeRunRating(state);
   return (
-    <div className="flow-screen flow-report-screen flow-defeat-screen">
-      <main className="flow-report flow-frame">
-      <header className="flow-report-heading"><FlowIcon name="journey-end" /><h1>远征失败</h1><p>阵亡的宠物已永远消失，但这只是旅程的开始</p></header>
-      <div className="flow-report-body">
-      {rating && <RatingDisplay rating={rating} color="#e05555" />}
-      <MobileDetails label="最终队伍"><FlowTeam units={state.roster} /></MobileDetails>
+    <div className="flow-screen flow-report-screen flow-defeat-screen settlement-screen">
+      <main className="flow-report flow-frame settlement-report">
+      <header className="settlement-heading"><FlowIcon name="journey-end" /><div><span>{MAIN_REGIONS[state.region ?? 'mixed'].name} · 远征记录</span><h1>远征失败</h1></div><span className="settlement-status">旅程止步</span></header>
+      <SettlementTrail state={state} />
+      <div className="settlement-body">
+      {rating && <RatingDisplay rating={rating} />}
+      <SettlementTotals state={state} />
+      <div className="settlement-team"><MobileDetails label="最终队伍" triggerLabel={`查看最终队伍 · ${state.roster.length}只`}><FlowTeam units={state.roster} /></MobileDetails></div>
       </div>
-      <footer className="flow-actions"><button onClick={() => dispatch({ type: 'TITLE' })}>
+      <footer className="flow-actions settlement-actions"><span>抵达第{state.act}幕 · 远征记录已结算</span><button onClick={() => dispatch({ type: 'TITLE' })}>
         返回首页
       </button></footer>
       </main>
@@ -2968,22 +2989,24 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
   }, [rating]);
 
   return (
-    <div className="flow-screen flow-report-screen flow-victory-screen">
-      <main className="flow-report flow-frame">
-      <header className="flow-report-heading"><FlowIcon name="victory-crown" /><h1>远征通关</h1><p>你击败了所有首领，驯服了沿途的怪物军团</p></header>
-      <div className="flow-report-body">
-      {rating && <RatingDisplay rating={rating} color="#d68b00" />}
+    <div className="flow-screen flow-report-screen flow-victory-screen settlement-screen">
+      <main className="flow-report flow-frame settlement-report">
+      <header className="settlement-heading"><FlowIcon name="victory-crown" /><div><span>{MAIN_REGIONS[state.region ?? 'mixed'].name} · 远征记录</span><h1>远征通关</h1></div><span className="settlement-status">三幕征服</span></header>
+      <SettlementTrail state={state} />
+      <div className="settlement-body">
+      {rating && <RatingDisplay rating={rating} />}
+      <SettlementTotals state={state} />
       {unlocked.length > 0 && (
-        <div className="flow-unlocks">
+        <div className="flow-unlocks settlement-unlocks">
           <h2><FlowIcon name="unlock" />解锁新内容</h2>
           {unlocked.map((item) => (
             <div key={item} className="unlock-item">{item}</div>
           ))}
         </div>
       )}
-      <MobileDetails label="最终队伍"><FlowTeam units={state.roster} /></MobileDetails>
+      <div className="settlement-team"><MobileDetails label="最终队伍" triggerLabel={`查看最终队伍 · ${state.roster.length}只`}><FlowTeam units={state.roster} /></MobileDetails></div>
       </div>
-      <footer className="flow-actions">
+      <footer className="flow-actions settlement-actions">
       <button className="flow-primary" onClick={() => dispatch({ type: 'RETRY', seed: newSeed() })}>
         再来一次
       </button>
