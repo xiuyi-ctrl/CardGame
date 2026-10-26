@@ -483,7 +483,7 @@ export function BattlePixelSprite({ src, name }: { src: string; name: string }) 
 
 export function PixelCreature({ unit }: { unit: Unit }) {
   const image = unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image;
-  if (image && ['momo_god', 'lulu_god', 'fifi_god', 'coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth'].includes(unit.speciesId)) return <img className="native-creature-art" src={image} alt={unit.name} draggable={false} />;
+  if (image && ['momo_god', 'lulu_god', 'fifi_god', 'coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast'].includes(unit.speciesId)) return <img className="native-creature-art" src={image} alt={unit.name} draggable={false} />;
   return image ? <BattlePixelSprite src={image} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>;
 }
 

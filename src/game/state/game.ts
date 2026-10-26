@@ -1,4 +1,5 @@
 import type { BattleState, FoodDef, Unit } from '../types';
+import type { MainRatingStats } from '../rating';
 import type { FormationPosition } from './formation';
 import type { MainRegionId } from '../data/regions';
 import { MAIN_REGIONS, MIXED_ACT_BOSS_POOLS as ACT_BOSS_POOLS } from '../data/regions';
@@ -220,6 +221,8 @@ export type Screen =
   | 'arena3';
 
 export interface RunStats {
+  /** 仅新主模式远征初始化；缺失表示沿用旧评分。 */
+  rating?: MainRatingStats;
   battlesWon: number;
   battlesLost: number;
   goldEarned: number;

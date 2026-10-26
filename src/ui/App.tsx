@@ -44,7 +44,8 @@ import { getDecodedImage, preloadImages } from './imageCache';
 import { MobileShell, useBackAction, useMobileLayout } from './mobile';
 import { MobileDetails, MobileUnitAbilities, MobileSkillDescription } from './MobileDetails';
 import { SaveBackup } from './SaveBackup';
-import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, deleteSaveMode, clearDeletedSlot, type SaveSlotInfo } from './persistence';
+import { computeRunRating, type RunRating } from '../game/rating';
+import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import homeXunxun from './assets/home-xunxun.png';
 import homePaopao from './assets/home-paopao.png';
 import homeZhuozhuo from './assets/home-zhuozhuo.png';
@@ -923,17 +924,18 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     if (overwriteTarget === null) return;
     const slotNum = overwriteTarget;
     const unlocks = getSlotUnlocks(slots.find((slot) => slot.slot === slotNum));
+    const newRun = gameReducer(createInitialState(), { type: 'STARTER', saveSlot: slotNum, unlocks });
     setOverwriteTarget(null);
-    void deleteSaveMode(slotNum, 'main').then((success) => {
+    clearDeletedSlot(slotNum);
+    void persistSave(newRun).then((success) => {
       if (!success) return;
       setSlots((prev) => {
-        const next = prev.map((s) => s.slot === slotNum ? { ...s, main: null } : s);
+        const next = prev.map((s) => s.slot === slotNum ? { ...s, main: newRun } : s);
         setHasSave(next.some((x) => x.main || x.proficiency));
         return next;
       });
-      clearDeletedSlot(slotNum);
       selectSlot(slotNum);
-      dispatch({ type: 'STARTER', saveSlot: slotNum, unlocks });
+      dispatch({ type: 'LOAD_GAME', state: newRun });
     });
   }
 
@@ -2852,59 +2854,6 @@ function BoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   return <AttributeBoostScreen state={state} dispatch={dispatch} />;
 }
 
-interface RatingDimension {
-  key: string;
-  name: string;
-  weight: number;
-  score: number; // 0-100
-  grade: string;
-}
-
-function computeRating(stats: NonNullable<GameState['runStats']>, rosterSize: number, act: number): {
-  score: number; grade: string; label: string; dimensions: RatingDimension[];
-} {
-  // 通关进度系数：1幕→0.65(最高B)，2幕→0.82(最高A)，3幕→1.0(可达S)
-  const actMultiplier = [0.65, 0.82, 1.0][Math.min(3, Math.max(1, act)) - 1];
-
-  // 征服者 (30%)：总胜率
-  const totalBattles = stats.battlesWon + stats.battlesLost;
-  const winRate = totalBattles > 0 ? stats.battlesWon / totalBattles : 0.5;
-  const conqueror = Math.round(Math.min(1, winRate / 0.9) * 100);
-
-  // 驯兽师 (25%)：驯服成功率
-  const tameRate = stats.tameAttempts > 0 ? stats.petsTamed / stats.tameAttempts : 0.5;
-  const tamer = Math.round(Math.min(1, tameRate / 0.8) * 100);
-
-  // 经济大师 (20%)：金币结余率
-  const goldKeptRate = stats.goldEarned > 0 ? (stats.goldEarned - stats.goldSpent) / stats.goldEarned : 0.5;
-  const economy = Math.round(Math.min(1, goldKeptRate / 0.3) * 100);
-
-  // 战斗效率 (15%)：总回合数 ≤ 90 满分
-  const efficiency = Math.round(Math.max(0, 1 - (stats.turnsPlayed - 90) / 210) * 100);
-
-  // 队伍完整性 (10%)：终局队伍 / 8
-  const completeness = Math.round(Math.min(1, rosterSize / 7) * 100);
-
-  const dimGrade = (s: number) => s >= 90 ? 'S' : s >= 75 ? 'A' : s >= 55 ? 'B' : s >= 40 ? 'C' : 'D';
-
-  const dimensions: RatingDimension[] = [
-    { key: 'conqueror', name: '征服者', weight: 30, score: Math.round(conqueror * actMultiplier), grade: dimGrade(Math.round(conqueror * actMultiplier)) },
-    { key: 'tamer', name: '驯兽师', weight: 25, score: Math.round(tamer * actMultiplier), grade: dimGrade(Math.round(tamer * actMultiplier)) },
-    { key: 'economy', name: '经济大师', weight: 20, score: Math.round(economy * actMultiplier), grade: dimGrade(Math.round(economy * actMultiplier)) },
-    { key: 'efficiency', name: '战斗效率', weight: 15, score: Math.round(efficiency * actMultiplier), grade: dimGrade(Math.round(efficiency * actMultiplier)) },
-    { key: 'completeness', name: '队伍完整性', weight: 10, score: Math.round(completeness * actMultiplier), grade: dimGrade(Math.round(completeness * actMultiplier)) },
-  ];
-
-  const score = Math.round(
-    (conqueror * 0.3 + tamer * 0.25 + economy * 0.2 + efficiency * 0.15 + completeness * 0.1) * actMultiplier
-  );
-
-  if (score >= 90) return { score, grade: 'S', label: '传奇远征者', dimensions };
-  if (score >= 75) return { score, grade: 'A', label: '精锐指挥官', dimensions };
-  if (score >= 55) return { score, grade: 'B', label: '可靠旅人', dimensions };
-  if (score >= 40) return { score, grade: 'C', label: '初生牛犊', dimensions };
-  return { score, grade: 'D', label: '幸存者', dimensions };
-}
 
 const ACT_THEMES = [
   { emoji: '', name: '', flavor: '' },
@@ -2929,7 +2878,7 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   const actName = actNames[state.act] ?? `第${state.act}幕`;
   const nextName = actNames[state.act + 1] ?? `第${state.act + 1}幕`;
   const theme = ACT_THEMES[state.act] ?? ACT_THEMES[1];
-  const rating = stats ? computeRating(stats, state.roster.length, state.act) : null;
+  const rating = computeRunRating(state);
   return (
     <div className="flow-screen flow-report-screen flow-interact-screen">
       <main className="flow-report flow-frame">
@@ -2938,7 +2887,7 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
         <p>{state.runMode !== 'proficiency' && `${MAIN_REGIONS[state.region ?? 'mixed'].name} · `}{state.region === 'emerald_forest' ? '整顿行装，继续探索林地深处。' : theme.flavor}</p>
       </header>
       <div className="flow-report-body">
-      {rating && <div className="flow-act-rating"><FlowIcon name="rating-laurel" /><strong>{rating.grade}</strong><span>{rating.score}分 · {rating.label}</span><small>当前累计评级</small></div>}
+      {rating && <div className="flow-act-rating"><FlowIcon name="rating-laurel" /><strong>{rating.grade}</strong><span>{rating.score}分 · {rating.label}{rating.legacy ? '（旧评分）' : ''}</span><small>当前累计评级</small></div>}
       <div className="flow-act-stats">
         <div><FlowIcon name="battles-won" /><span>战斗场次</span><strong>{actStats.battlesWon + actStats.battlesLost}</strong></div>
         <div><img src="/reward-icons/gold.png" alt="" /><span>金币获取</span><strong>{actStats.goldEarned}</strong></div>
@@ -2955,19 +2904,20 @@ function InterActScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   );
 }
 
-function RatingDisplay({ rating, color }: { rating: NonNullable<ReturnType<typeof computeRating>>; color?: string }) {
+function RatingDisplay({ rating, color }: { rating: RunRating; color?: string }) {
   return (
     <div className="rating-display">
       <div className="rating-grade" style={{ color: color ?? '#4ecdc4' }}>{rating.grade}</div>
       <div className="rating-score">{rating.score}分 · {rating.label}</div>
+      {rating.note && <small className="rating-note">{rating.note}</small>}
       <MobileDetails label="评分明细"><div className="rating-dimensions">
         {rating.dimensions.map((d) => (
           <div key={d.key} className="rating-dim-row">
-            <span className="rating-dim-name">{d.name} ({d.weight}%)</span>
+            <span className="rating-dim-name">{d.name} ({d.weight}分)</span>
             <div className="rating-dim-bar">
-              <div className="rating-dim-fill" style={{ width: `${d.score}%` }} />
+              <div className="rating-dim-fill" style={{ width: `${Math.max(0, Math.min(100, d.score))}%` }} />
             </div>
-            <span className="rating-dim-score">{d.score} {d.grade}</span>
+            <span className="rating-dim-score">{d.points}/{d.weight}</span>
           </div>
         ))}
       </div></MobileDetails>
@@ -2976,7 +2926,7 @@ function RatingDisplay({ rating, color }: { rating: NonNullable<ReturnType<typeo
 }
 
 function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const rating = state.runStats ? computeRating(state.runStats, state.roster.length, state.act) : null;
+  const rating = computeRunRating(state);
   return (
     <div className="flow-screen flow-report-screen flow-defeat-screen">
       <main className="flow-report flow-frame">
@@ -2994,7 +2944,7 @@ function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
 }
 
 function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const rating = useMemo(() => state.runStats ? computeRating(state.runStats, state.roster.length, state.act) : null,
+  const rating = useMemo(() => computeRunRating(state),
     [state.runStats, state.roster.length, state.act]);
   const [unlocked, setUnlocked] = useState<string[]>([]);
 

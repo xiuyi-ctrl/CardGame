@@ -18,6 +18,7 @@ import { getGrowthSpecialRewards, GROWTH_SPECIAL_REWARDS } from '../data/growth-
 import { restoreFormation } from './formation';
 import type { FormationPosition } from './formation';
 import { CURSE_CN } from './game';
+import { emptyMainRating, trackMainRating } from '../rating';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
@@ -222,7 +223,7 @@ function emptyRunStats(): RunStats {
 export function migrateGameState(value: unknown): GameState | null {
   if (!isValidGameState(value)) return null;
   // 新增立绘的旧单位只补图片，不重算已保存的属性、技能或战斗状态。
-  const restoreArt = (unit: Unit): Unit => !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth'].includes(unit.speciesId)
+  const restoreArt = (unit: Unit): Unit => !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast'].includes(unit.speciesId)
     ? { ...unit, image: getMonster(unit.speciesId).image } : unit;
   let battle = value.battle;
   if (battle) {
@@ -247,6 +248,7 @@ export function migrateGameState(value: unknown): GameState | null {
     && !value.roster.some((unit) => nextStage(unit.speciesId) && !evolutionLockReason(value, unit.speciesId));
   const defaults = emptyRunStats();
   const runStats: RunStats = {
+    rating: saved?.rating,
     battlesWon: saved?.battlesWon ?? defaults.battlesWon,
     battlesLost: saved?.battlesLost ?? defaults.battlesLost,
     goldEarned: saved?.goldEarned ?? defaults.goldEarned,
@@ -345,7 +347,7 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
-    runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    runStats: { rating: emptyMainRating(), battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
     difficulty: difficulty ?? 'normal',
     unlocks: unlocks ?? { ...DEFAULT_UNLOCKS },
     relics,
@@ -466,9 +468,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   }
   const result: GameState = { ...settled, roster: healed, rewards };
   // 更新局内统计
-  const curLost = settled.roster.length < state.roster.length
-    ? state.roster.length - settled.roster.length
-    : 0;
+  const curLost = deadPetsList.length;
   const runStats = result.runStats ? {
     ...result.runStats,
     battlesWon: result.runStats.battlesWon + 1,
@@ -735,7 +735,7 @@ function bossCleared(state: GameState): boolean {
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
-  let next = reduceGameAction(state, action);
+  let next = trackMainRating(state, reduceGameAction(state, action), action.type);
   if (!next.carriedEggs?.length || !['map', 'inter_act'].includes(next.screen)) return next;
   const advancesEgg = next !== state && !['LOAD_GAME', 'START_RUN', 'DEBUG_JUMP', 'TITLE', 'BACK_TO_MAP', 'CLOSE_BACKPACK'].includes(action.type);
   const completedId = next.currentNodeId || state.currentNodeId;

@@ -834,6 +834,7 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .rating-grade { font-size: 36px; margin: 0; }
 .mobile-ui .rating-score { font-size: 14px; margin: 0; }
 .mobile-ui .rating-display > .mobile-details { grid-column: 1 / -1; }
+.mobile-ui .rating-display > .rating-note { grid-column: 1 / -1; font-size: 12px; line-height: 1.3; }
 .mobile-ui .proficiency-report-body { display: flex; flex-direction: column; gap: 4px; }
 .mobile-ui .proficiency-report-stats { gap: 4px; }
 .mobile-ui .proficiency-report-stats > div { padding: 3px; }
