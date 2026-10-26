@@ -4035,7 +4035,7 @@ export function tameChance(enemy: Unit, foodId: string): number {
   const species = getMonster(enemy.speciesId);
   if (food.guaranteed) return 1;
   if (food.baseTame <= 0 || species.rank > 3) return 0;
-  const basePercent = 70 - species.rank * 10;
+  const basePercent = 60 - species.rank * 10;
   const foodBonus = Math.round(food.baseTame * 100) - 60;
   const hpBonus = 15 * Math.max(0, 1 - enemy.hp / enemy.maxHp / TAME_THRESHOLD);
   const failBonus = Math.min(enemy.tameFails ?? 0, 2) * TAME_FAIL_BONUS * 100;

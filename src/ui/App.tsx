@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, generateMap, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, EVENT_TYPE_LABELS, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, MAIN_SHOP_REFRESH_COSTS, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, MAIN_SHOP_REFRESH_COSTS, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -45,6 +45,7 @@ import { getDecodedImage, preloadImages } from './imageCache';
 import { MobileShell, useBackAction, useMobileLayout } from './mobile';
 import { MobileDetails, MobileUnitAbilities, MobileSkillDescription } from './MobileDetails';
 import { SaveBackup } from './SaveBackup';
+import { TestSetupScreen, TestSessionFrame } from './TestSetupScreen';
 import { computeRunRating, type RunRating } from '../game/rating';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import homeXunxun from './assets/home-xunxun.png';
@@ -106,6 +107,8 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         starterTiedun, starterMimi, starterCici, '/starter-choice-stone.png',
         '/formation-plinth-occupied.png', '/starter-growth-icons/starter-paw.png',
         ...MAIN_REGIONS[state.region ?? 'mixed'].starters.map(id => getMonster(id).image).filter((src): src is string => !!src)];
+    case 'test-pick':
+      return state.roster.map(unit => unit.image).filter((src): src is string => !!src);
     case 'map':
       return [MAP_BACKGROUNDS[state.runMode === 'proficiency' ? 3 : Math.min(2, Math.max(0, state.act - 1))],
         '/map-node-stele.png',
@@ -218,7 +221,8 @@ export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
   const [readyScreen, setReadyScreen] = useState<string | null>(null);
   const screenKey = state.screen === 'map' ? `${state.screen}-${state.runMode}-${state.act}` : state.screen;
-  const imagesReady = readyScreen === screenKey || [...UI_SYMBOL_IMAGES, ...screenImages(state.screen, state)].every((src) => !!getDecodedImage(src));
+  const imagesReady = state.screen === 'test-type' || state.screen === 'test-config' || readyScreen === screenKey
+    || [...UI_SYMBOL_IMAGES, ...screenImages(state.screen, state)].every((src) => !!getDecodedImage(src));
 
   useEffect(() => { void preloadImages(BATTLE_BUFF_ICON_IMAGES); }, []);
 
@@ -240,7 +244,7 @@ export default function App() {
   }, [screenKey]);
 
   useEffect(() => {
-    if (!NO_SAVE_SCREENS.includes(state.screen)) {
+    if (!state.testRun && !state.screen.startsWith('test-') && !NO_SAVE_SCREENS.includes(state.screen)) {
       const t = setTimeout(() => {
         void persistSave(state);
       }, 400);
@@ -256,6 +260,7 @@ export default function App() {
   }, [state.toast]);
 
   return (
+    <TestSessionFrame state={state} dispatch={dispatch}>
     <div className={['event', 'special', 'tame-overflow', 'inter_act', 'victory', 'gameover', 'watchtower', 'chest', 'gauntlet-order', 'boost', 'custom', 'revive-select', 'achievements', 'rest', 'rest-fusion', 'rest-fusion-skill', 'skill-pick', 'growth-menu', 'blacksmith', 'enhance-stone', 'enhance-reset', 'arena3', 'proficiency-result'].includes(state.screen) || (state.screen === 'roster' && !state.postBattle && (!state.specialPending || state.specialPending.kind === 'evolve' || ['boost', 'arena', 'growthPoint', 'shopSlotUnlock', 'eventBoostHp', 'eventBoostSpd', 'eventResetGrowth', 'eventSkillReplace', 'arena3Exhibition'].includes(state.specialPending.kind))) ? 'screen screen-flow' : state.screen === 'region-select' ? 'screen screen-region' : state.screen === 'title' ? 'screen screen-title' : state.screen === 'reward' ? 'screen screen-reward' : state.screen === 'backpack' ? 'screen screen-backpack' : state.screen === 'starter' || state.screen === 'proficiency-select' ? 'screen screen-starter' : state.screen === 'difficulty-select' ? 'screen screen-difficulty' : 'screen'}>
       {!imagesReady && <div className="screen-assets-loading" role="status" aria-live="polite">正在准备画面…</div>}
       {state.screen === 'title' && <HomeScreen dispatch={dispatch} currentSaveSlot={state.saveSlot} />}
@@ -282,8 +287,8 @@ export default function App() {
       {state.screen === 'chest' && <ChestScreen state={state} dispatch={dispatch} />}
       {state.screen === 'backpack' && <BackpackScreen state={state} dispatch={dispatch} />}
       {state.screen === 'tame-overflow' && <TameOverflowScreen state={state} dispatch={dispatch} />}
-      {state.screen === 'test-type' && <TestTypeScreen dispatch={dispatch} />}
-      {state.screen === 'test-pick' && <TestPickScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'test-type' && <TestTypeScreen state={state} dispatch={dispatch} />}
+      {state.screen === 'test-pick' && <TestPickScreen key={state.testPick?.side} state={state} dispatch={dispatch} />}
       {state.screen === 'test-config' && <TestConfigScreen state={state} dispatch={dispatch} />}
       {state.screen === 'achievements' && <AchievementsScreen state={state} dispatch={dispatch} />}
       {state.screen === 'growth-menu' && <GrowthScreen state={state} dispatch={dispatch} />}
@@ -300,8 +305,9 @@ export default function App() {
           {state.toast.msg}
         </div>
       )}
-      <MobileShell state={state} dispatch={dispatch} canSave={!NO_SAVE_SCREENS.includes(state.screen)} />
+      <MobileShell state={state} dispatch={dispatch} canSave={!state.testRun && !state.screen.startsWith('test-') && !NO_SAVE_SCREENS.includes(state.screen)} />
     </div>
+    </TestSessionFrame>
   );
 }
 
@@ -534,116 +540,24 @@ function FuseDiscardConfirm({
   );
 }
 
-/** 自定义测试可选的全部关卡类型（战斗类需选敌我双方，非战斗类直接进入对应界面） */
-const CUSTOM_TYPES: { value: MapNode['type']; label: string }[] = [
-  { value: 'battle', label: '⚔ 战斗' },
-  { value: 'arena', label: '🆚 斗兽场' },
-  { value: 'gauntlet', label: '🔁 车轮战' },
-  { value: 'corrupted', label: '☠ 被侵蚀' },
-  { value: 'elite', label: '⭐ 精英' },
-  { value: 'boss', label: '👑 首领' },
-  { value: 'guardian', label: '🛡 守卫' },
-  { value: 'rest', label: '🔥 休息' },
-  { value: 'shop', label: '🏪 商店' },
-  { value: 'event', label: '❓ 事件' },
-  { value: 'special', label: '🎁 奇遇' },
-  { value: 'watchtower', label: '🔭 瞭望塔' },
-  { value: 'sync', label: '📦 双生宝箱' },
-  { value: 'keydoor', label: '🗝 钥匙门' },
-];
-
-/** 自定义测试需要选宠的战斗类关卡（非战斗类跳过选宠直接进入） */
-const TEST_BATTLE_TYPES: MapNode['type'][] = ['battle', 'arena', 'gauntlet', 'corrupted', 'elite', 'boss', 'guardian'];
-
-function TestTypeScreen({ dispatch }: { dispatch: Dispatch<GameAction> }) {
-  const [sel, setSel] = useState<MapNode['type']>('battle');
-  const [debuff, setDebuff] = useState<'spd' | 'dmg' | 'burn'>('spd');
-  const [reward, setReward] = useState<'gold' | 'food'>('gold');
-  const [eventType, setEventType] = useState('spring');
-  return (
-    <div className="screen center-col test-type-screen">
-      <div className="hud">
-        <span className="act">⚙ 自定义测试 · 选择关卡类型</span>
-        <button className="home-btn" onClick={() => dispatch({ type: 'TITLE' })}>
-          ↩ 返回首页
-        </button>
-      </div>
-      <div className="side-label">先选择关卡类型，再进入布阵界面依次选我方 / 敌方宠物（同种可上多只）</div>
-      <div className="test-type-grid">
-        {CUSTOM_TYPES.map((t) => (
-          <button
-            key={t.value}
-            className={`debug-cell big-tap ${sel === t.value ? 'selected' : ''}`}
-            onClick={() => setSel(t.value)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {sel === 'corrupted' && (
-        <div className="debug-row">
-          <label>侵蚀</label>
-          <select value={debuff} onChange={(e) => setDebuff(e.target.value as 'spd' | 'dmg' | 'burn')}>
-            <option value="spd">速度 -2</option>
-            <option value="dmg">受伤 +2</option>
-            <option value="burn">每回合 -2HP</option>
-          </select>
-          <label>胜利奖励</label>
-          <select value={reward} onChange={(e) => setReward(e.target.value as 'gold' | 'food')}>
-            <option value="gold">金币</option>
-            <option value="food">食物</option>
-          </select>
-        </div>
-      )}
-      {sel === 'event' && (
-        <div className="debug-row">
-          <label>选择事件</label>
-          <select value={eventType} onChange={(e) => setEventType(e.target.value)}>
-            {Object.entries(EVENT_TYPE_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div className="formation-footer">
-        <button
-          className="primary big-btn"
-          onClick={() =>
-            dispatch({
-              type: 'TEST_TYPE_PICK',
-              nodeType: sel,
-              corruptDebuff: sel === 'corrupted' ? debuff : undefined,
-              corruptReward: sel === 'corrupted' ? reward : undefined,
-              eventType: sel === 'event' ? eventType : undefined,
-            })
-          }
-        >
-          下一步：{TEST_BATTLE_TYPES.includes(sel) ? '选择宠物' : '进入关卡'}
-        </button>
-      </div>
-    </div>
-  );
+export function TestTypeScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  return <TestSetupScreen state={state} dispatch={dispatch} />;
 }
 
-function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const tp = state.testPick;
   if (!tp) return null;
   const isPlayerSide = tp.side === 'player';
+  const touchSlotDrag = useRef<{ uid: string; x: number; y: number; moved: boolean } | null>(null);
+  const suppressSlotClick = useRef(false);
   const [units, setUnits] = useState<Unit[]>(() => {
     if (isPlayerSide) {
-      return [
-        makeUnit('momo_god', true, 0, false),
-        makeUnit('lulu_god', true, 1, false),
-        makeUnit('fifi_god', true, 2, false),
-        makeUnit('momo', true, 0, false, 'back'),
-        makeUnit('lulu', true, 1, false, 'back'),
-        makeUnit('fifi', true, 2, false, 'back'),
-      ];
+      return state.roster.slice(0, FIELD_MAX);
     }
     return [];
   });
 
-  const maxSlots = isPlayerSide ? FIELD_MAX : 6;
+  const maxSlots = isPlayerSide ? tp.returnToNode ? Math.min(6, getMaxRoster(state.runMode)) : FIELD_MAX : 6;
   const fieldCount = units.length;
   const bySlot: Record<string, Unit | undefined> = {};
   for (const u of units) bySlot[`${u.row}-${u.column}`] = u;
@@ -661,11 +575,14 @@ function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
     if (fieldCount >= maxSlots) return;
     const slot = firstEmpty();
     if (!slot) return;
-    const u = makeUnit(speciesId, isPlayerSide, slot.column, false, slot.row);
+    const base = makeUnit(speciesId, isPlayerSide, slot.column, false, slot.row);
+    const u = { ...base, hp: Math.max(1, Math.round(base.maxHp * (state.testScenario?.hpPercent ?? 100) / 100)),
+      growthPoints: state.runMode === 'proficiency' && isPlayerSide ? 100 : undefined };
     setUnits((prev) => [...prev, u]);
   }
 
   function onSlotClick(row: FormationRow, col: 0 | 1 | 2) {
+    if (suppressSlotClick.current) { suppressSlotClick.current = false; return; }
     const existing = bySlot[`${row}-${col}`];
     if (existing) setUnits((prev) => prev.filter((u) => u.uid !== existing.uid));
   }
@@ -673,6 +590,10 @@ function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   function onSlotDrop(e: DragEvent<HTMLDivElement>, row: FormationRow, col: 0 | 1 | 2) {
     e.preventDefault();
     const uid = e.dataTransfer.getData('text/plain');
+    moveSlot(uid, row, col);
+  }
+
+  function moveSlot(uid: string, row: FormationRow, col: 0 | 1 | 2) {
     const from = units.find((u) => u.uid === uid);
     if (!from) return;
     const target = bySlot[`${row}-${col}`];
@@ -730,15 +651,39 @@ function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
                       className={`formation-slot ${u ? '' : 'empty'}`}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => onSlotDrop(e, row, col)}
+                      data-test-row={row} data-test-col={col}
                       onClick={() => onSlotClick(row, col)}
+                      role="button" tabIndex={0} aria-label={`${row === 'front' ? '前排' : '后排'}${col + 1}：${u?.name ?? '空位'}，点击下阵`}
+                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') onSlotClick(row, col); }}
                     >
                       {u ? (
                         <div
                           draggable
                           title="拖拽调整站位，点击下阵"
                           onDragStart={(e) => e.dataTransfer.setData('text/plain', u.uid)}
+                          style={{ touchAction: 'none' }}
+                          onPointerDown={event => {
+                            if (event.pointerType === 'mouse') return;
+                            touchSlotDrag.current = { uid: u.uid, x: event.clientX, y: event.clientY, moved: false };
+                            suppressSlotClick.current = false;
+                            event.currentTarget.setPointerCapture?.(event.pointerId);
+                          }}
+                          onPointerMove={event => {
+                            const drag = touchSlotDrag.current;
+                            if (drag && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8) drag.moved = true;
+                          }}
+                          onPointerUp={event => {
+                            const drag = touchSlotDrag.current;
+                            touchSlotDrag.current = null;
+                            if (!drag?.moved) return;
+                            suppressSlotClick.current = true;
+                            const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-test-row]');
+                            if (target) moveSlot(drag.uid, target.dataset.testRow as FormationRow, Number(target.dataset.testCol) as 0 | 1 | 2);
+                          }}
+                          onPointerCancel={() => { touchSlotDrag.current = null; suppressSlotClick.current = false; }}
                         >
-                          <UnitCard unit={u} small showSkills={false} topStats />
+                          <div className="test-slot-creature"><PetIcon image={u.image} emoji={u.emoji} name={u.name} />
+                            <strong>{u.name}</strong><span>♥{u.hp}/{u.maxHp}　⚡{u.spd}</span></div>
                         </div>
                       ) : (
                         <span className="formation-empty-slot">空</span>
@@ -762,6 +707,7 @@ function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
                   key={m.id}
                   className={`test-pool-item ${full ? 'disabled' : ''} ${cnt > 0 ? 'has-count' : ''}`}
                   onClick={() => addSpecies(m.id)}
+                  disabled={full}
                   title={m.name}
                 >
                   <span className="test-pool-emoji">{m.emoji}</span>
@@ -783,11 +729,11 @@ function TestPickScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   );
 }
 
-function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const pb = state.pendingBattle;
   if (!pb) return null;
   const [gold, setGold] = useState(state.gold);
-  const [seed, setSeed] = useState(1);
+  const [seed, setSeed] = useState(state.seed || 1);
   const [items, setItems] = useState<Record<string, number>>(() => ({ ...state.inventory }));
   const CT_ITEMS: { id: string; label: string }[] = [
     ...Object.keys(FOODS).map((id) => ({ id, label: FOODS[id].name })),
@@ -806,10 +752,10 @@ function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dis
         <div className="side-label">敌方：{enemyDesc}</div>
         <div className="side-label">我方出战：{pb.units.map((u) => u.name).join('、')}</div>
         <div className="debug-row">
-          <label>金币</label>
-          <input type="number" min={0} value={gold} onChange={(e) => setGold(Number(e.target.value))} style={{ width: 80 }} />
-          <label>种子</label>
-          <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} style={{ width: 80 }} />
+          <label htmlFor="test-gold">金币</label>
+          <input id="test-gold" type="number" min={0} value={gold} onChange={(e) => setGold(Number(e.target.value))} style={{ width: 80 }} />
+          <label htmlFor="test-seed">种子</label>
+          <input id="test-seed" type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} style={{ width: 80 }} />
         </div>
         <div className="side-label">调整本次战斗携带的食物/道具数量，确认后开战</div>
         <div className="debug-grid">
@@ -838,7 +784,6 @@ function TestConfigScreen({ state, dispatch }: { state: GameState; dispatch: Dis
 
 function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameAction>; currentSaveSlot?: number }) {
   const [hasSave, setHasSave] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
   const [showSaveMgmt, setShowSaveMgmt] = useState(false);
   const [slots, setSlots] = useState<SaveSlotInfo[]>([]);
@@ -849,17 +794,12 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
   const [overwriteTarget, setOverwriteTarget] = useState<number | null>(null);
   const [profConfirmSlot, setProfConfirmSlot] = useState<number | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(true);
-  const [dbgAct, setDbgAct] = useState(1);
-  const [dbgRow, setDbgRow] = useState(5);
-  const [dbgType, setDbgType] = useState<MapNode['type'] | 'all'>('all');
-  const [dbgSeed, setDbgSeed] = useState(42);
-  useBackAction(showCodex || showSaveMgmt || showDebug || deleteTarget !== null || overwriteTarget !== null || profConfirmSlot !== null, () => {
+  useBackAction(showCodex || showSaveMgmt || deleteTarget !== null || overwriteTarget !== null || profConfirmSlot !== null, () => {
     if (deleteTarget !== null) setDeleteTarget(null);
     else if (overwriteTarget !== null) setOverwriteTarget(null);
     else if (profConfirmSlot !== null) setProfConfirmSlot(null);
     else if (showCodex) setShowCodex(false);
     else if (showSaveMgmt) setShowSaveMgmt(false);
-    else setShowDebug(false);
   });
 
   function selectSlot(slot: number | undefined) {
@@ -1018,29 +958,6 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
     };
   }
 
-  const DEBUG_TYPES_ALL: { value: MapNode['type'] | 'all'; label: string }[] = [
-    { value: 'all', label: '任意' },
-    { value: 'battle', label: '战斗' },
-    { value: 'arena', label: '斗兽场' },
-    { value: 'gauntlet', label: '车轮战' },
-    { value: 'corrupted', label: '被侵蚀' },
-    { value: 'elite', label: '精英' },
-    { value: 'boss', label: '首领' },
-    { value: 'event', label: '事件' },
-    { value: 'shop', label: '商店' },
-    { value: 'special', label: '奇遇' },
-    { value: 'watchtower', label: '瞭望塔' },
-    { value: 'sync', label: '双生宝箱' },
-    { value: 'guardian', label: '守卫' },
-    { value: 'keydoor', label: '钥匙门' },
-  ];
-
-  const dbgMap = useMemo(() => generateMap(dbgSeed, dbgAct), [dbgSeed, dbgAct]);
-  const dbgRows = dbgMap.layers.length;
-  const dbgRowClamped = Math.min(dbgRow, dbgRows - 1);
-  const rowTypes = new Set(dbgMap.layers[dbgRowClamped].map((n) => n.type));
-  const DEBUG_TYPES = DEBUG_TYPES_ALL.filter((t) => t.value === 'all' || rowTypes.has(t.value as MapNode['type']));
-  const dbgTypeEff = rowTypes.has(dbgType as MapNode['type']) ? dbgType : 'all';
   const selectedSave = slots.find((s) => s.slot === selectedSlot);
   const canContinue = Boolean(selectedSave?.main || selectedSave?.proficiency);
 
@@ -1131,9 +1048,9 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                 const unlocks = slotState?.main?.unlocks ?? slotState?.proficiency?.unlocks ?? { ...DEFAULT_UNLOCKS };
                 dispatch({ type: 'ACHIEVEMENTS', unlocks });
               }}><img src={homeAchievementIcon} alt="" aria-hidden="true" /><span>成就</span></button>
-              <button onClick={() => setShowDebug((v) => !v)}>
+              <button onClick={() => dispatch({ type: 'DEBUG_CUSTOM_TEST' })}>
                 <img src={homeSettingsIcon} alt="" aria-hidden="true" />
-                <span>{showDebug ? '收起测试' : '测试关卡'}</span>
+                <span>测试关卡</span>
               </button>
             </div>
           </nav>
@@ -1236,55 +1153,6 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
               <button onClick={profConfirmRestart}>重新开始</button>
             </div>
           </div>
-        </div>
-      )}
-      {showDebug && (
-        <div className="debug-panel">
-          <div className="debug-row">
-            <label>幕</label>
-            <select value={dbgAct} onChange={(e) => setDbgAct(Number(e.target.value))}>
-              {[1, 2, 3].map((a) => (
-                <option key={a} value={a}>
-                  第 {a} 幕
-                </option>
-              ))}
-            </select>
-            <label>层</label>
-            <select value={dbgRowClamped} onChange={(e) => setDbgRow(Number(e.target.value))}>
-              {Array.from({ length: dbgRows }, (_, i) => (
-                <option key={i} value={i}>
-                  第 {i} 层{i === dbgRows - 1 ? '（首领层）' : ''}
-                </option>
-              ))}
-            </select>
-            <label>节点</label>
-            <select value={dbgTypeEff} onChange={(e) => setDbgType(e.target.value as MapNode['type'] | 'all')}>
-              {DEBUG_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-            <label>种子</label>
-            <input
-              type="number"
-              value={dbgSeed}
-              onChange={(e) => setDbgSeed(Number(e.target.value))}
-              style={{ width: 80 }}
-            />
-          </div>
-          <button
-            className="primary big-btn"
-            onClick={() =>
-              dispatch({ type: 'DEBUG_JUMP', act: dbgAct, row: dbgRowClamped, nodeType: dbgTypeEff, seed: dbgSeed })
-            }
-          >
-            直接进入
-          </button>
-          <div className="debug-hint">调试模式：自动配备 3 只最高进化形态宠物、500 金币、3 个跳关道具；节点类型仅显示当前幕当前层实际存在的类型</div>
-          <button className="debug-sub-toggle" onClick={() => dispatch({ type: 'DEBUG_CUSTOM_TEST' })}>
-            ⚙ 自定义测试（选关卡 → 选我方 → 选敌方 → 配置 → 开战）
-          </button>
         </div>
       )}
       {showCodex && createPortal(<CodexScreen onClose={() => setShowCodex(false)} />, document.body)}
@@ -2275,7 +2143,7 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
     </header>
     <main className="postbattle-layout">
       <section className="postbattle-roster-panel" aria-label="存活伙伴">
-        <div className="postbattle-roster-heading"><h2>存活伙伴</h2><span className="postbattle-result">奖励已领取</span></div>
+        <div className="postbattle-roster-heading"><h2>存活伙伴</h2></div>
         <div className="postbattle-roster-grid">
           {Array.from({ length: getMaxRoster(state.runMode) }, (_, index) => {
             const u = state.roster[index];
@@ -2295,7 +2163,7 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
       <aside className="postbattle-detail" aria-label="伙伴详情">
         {focused ? <>
           <div className="postbattle-detail-body">
-          <div className="postbattle-detail-heading"><h2>{focused.name}</h2><span>{focused.hp < focused.maxHp ? '生命未满' : '状态良好'}</span></div>
+          <div className="postbattle-detail-heading"><h2>{focused.name}</h2>{focused.hp < focused.maxHp && <span>生命未满</span>}</div>
           <div className="postbattle-detail-portrait">{formationImage(focused.speciesId, focused.image) ? <BattlePixelSprite src={formationImage(focused.speciesId, focused.image)!} name={focused.name} /> : <PixelCreature unit={focused} />}</div>
           <div className="postbattle-detail-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{focused.hp}/{focused.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{focused.spd}</span></div>
           {focused.curse && <p className="postbattle-curse"><BuffIcon art={CURSE_ART[focused.curse]} /> {CURSE_CN[focused.curse]}</p>}
@@ -2739,7 +2607,7 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
   );
 }
 
-function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const ev = state.map.events[state.currentNodeId];
   if (!ev) return null;
   const hatch = state.pendingEventHatch;

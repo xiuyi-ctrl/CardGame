@@ -116,7 +116,7 @@ describe('地区存档兼容', () => {
 });
 
 describe('混合地区确定性基线', () => {
-  it('27组地图、战后奖励和挑战奖励符合分段布局改版后的确定性快照', () => {
+  it('27组地图、战后奖励和挑战奖励符合品阶与人数进度改版后的确定性快照', () => {
     const results = [];
     for (const difficulty of ['normal', 'hard', 'nightmare'] as const) {
       for (const act of [1, 2, 3]) {
@@ -127,7 +127,7 @@ describe('混合地区确定性基线', () => {
         }
       }
     }
-    // 相邻层重复事件降权后的地图生成基线；旧存档中的地图不会重生成。
-    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('85872b7848882826bb0be8c2b16b5959075db68945c776b9cf48a8a19d47ca4e');
+    // 品阶与人数进度改版后的地图生成基线；旧存档中的地图不会重生成。
+    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('b49ec767b5da5b1410143af12a9cd8ec43098a6b0aea9485b5b7e2f14b27f640');
   });
 });

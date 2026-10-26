@@ -1,4 +1,4 @@
-import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind } from './game';
+import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind, TestScenario } from './game';
 import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, evolutionLockReason, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, MAIN_SHOP_REFRESH_COSTS, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills } from '../core/battle';
@@ -19,6 +19,8 @@ import { restoreFormation } from './formation';
 import type { FormationPosition } from './formation';
 import { CURSE_CN } from './game';
 import { emptyMainRating, trackMainRating } from '../rating';
+import { battleVictoryGold } from './game';
+import { applyTestContent, prepareTestScenario } from './test-scenarios';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
@@ -109,7 +111,8 @@ export type GameAction =
   | { type: 'CLOSE_WATCHTOWER' }
   | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
   | { type: 'DEBUG_CUSTOM_TEST' }
-  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn'; corruptReward?: 'gold' | 'food'; eventType?: string }
+  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn'; corruptReward?: 'gold' | 'food'; eventType?: string; scenario?: TestScenario }
+  | { type: 'TEST_REPLAY' }
   | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
@@ -288,6 +291,9 @@ export function migrateGameState(value: unknown): GameState | null {
           relics: [...(value.unlocks.relics ?? DEFAULT_UNLOCKS.relics)].filter((id) => RELIC_ORDER.includes(id)),
           bestGrade: value.unlocks.bestGrade,
           proficiencyUnlocked: value.unlocks.proficiencyUnlocked ?? false,
+          regionEncounters: value.unlocks.regionEncounters ? Object.fromEntries(Object.entries(value.unlocks.regionEncounters)
+            .filter(([region, ids]) => isMainRegionId(region) && Array.isArray(ids))
+            .map(([region, ids]) => [region, [...new Set(ids.filter(id => typeof id === 'string'))]])) : undefined,
         }
       : { ...DEFAULT_UNLOCKS, difficulties: [...DEFAULT_UNLOCKS.difficulties], relics: [...DEFAULT_UNLOCKS.relics] },
     relics: [...(value.relics ?? [])].filter((id) => RELIC_ORDER.includes(id)),
@@ -347,7 +353,7 @@ function freshRun(starterId: string, companionId: string, seed: number, difficul
     log: [],
     visitedWatchtowers: [],
     visitedNodeIds: [],
-    runStats: { rating: emptyMainRating(), battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
+    runStats: { rating: emptyMainRating(), battlesWon: 0, battlesLost: 0, goldEarned: gold, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { ...zeroSnap } },
     difficulty: difficulty ?? 'normal',
     unlocks: unlocks ?? { ...DEFAULT_UNLOCKS },
     relics,
@@ -362,12 +368,18 @@ function healRoster(state: GameState, pct: number): GameState {
   };
 }
 
+/** 实际收入计入累计获取；消费、损失不会抵扣，退款不走此入口。 */
+function addGoldIncome(state: GameState, amount: number): GameState {
+  return { ...state, gold: state.gold + amount, runStats: state.runStats ? {
+    ...state.runStats, goldEarned: state.runStats.goldEarned + Math.max(0, amount),
+  } : state.runStats };
+}
+
 /** 战斗胜利后：同步存活单位、确认驯服、发放金币与奖励 */
 export function resolveBattle(state: GameState, battle: BattleState): GameState {
   const node = currentNode(state);
   const challenge = node?.type === 'arena' || node?.type === 'gauntlet' || node?.type === 'arena3';
   const bossNode = state.map.boss[state.currentNodeId] !== undefined;
-  const eliteNode = state.map.encounter[state.currentNodeId] !== undefined;
   const corruptNode = node?.type === 'corrupted';
 
   const deadPetsList: Unit[] = [];
@@ -412,19 +424,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     else overflow.push(t);
   }
 
-  const goldGain = node?.type === 'arena3' && state.arena3Pending?.mode === 'challenge'
-    ? 50
-    : challenge
-      ? 0
-      : bossNode
-        ? 30
-        : eliteNode
-          ? corruptNode && node?.corruptReward === 'gold'
-            ? 32
-            : 16
-          : node?.type === 'guardian'
-            ? 16
-            : 8;
+  const goldGain = battleVictoryGold(state);
   // 守卫：击败后发放对应的专用钥匙（守卫不可驯服）
   let inventory = state.inventory;
   const keyLog: string[] = [];
@@ -436,13 +436,12 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   // 本场战斗结束：进入奖励结算
   const prevDead = state.deadPets ?? [];
   const settled: GameState = {
-    ...state,
+    ...addGoldIncome(state, goldGain),
     screen: overflow.length > 0 ? 'tame-overflow' : (state.runMode === 'proficiency' ? 'growth-menu' : 'reward'),
     legendEvolutionUnlocked: state.legendEvolutionUnlocked || (state.runMode !== 'proficiency' && state.act === 1 && node?.type === 'boss'),
     roster,
     deadPets: [...prevDead, ...deadPetsList],
     field: state.field.filter((uid) => roster.some((r) => r.uid === uid)),
-    gold: state.gold + goldGain,
     inventory,
     battle: undefined,
     tameOverflow: overflow.length > 0 ? overflow : undefined,
@@ -456,7 +455,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
       ...state.log,
     ].slice(0, 20),
   };
-  // 战后全体恢复 60%
+  // 战后按难度恢复最大生命的 50% / 40% / 30%
   const healCfg = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'];
   const healRatio = healCfg.healRatio;
   const healed = settled.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * healRatio)) }));
@@ -472,7 +471,6 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   const runStats = result.runStats ? {
     ...result.runStats,
     battlesWon: result.runStats.battlesWon + 1,
-    goldEarned: result.runStats.goldEarned + goldGain,
     petsTamed: result.runStats.petsTamed + battle.pendingTame.length,
     petsLost: result.runStats.petsLost + curLost,
     tameAttempts: result.runStats.tameAttempts + (battle.tameAttempts ?? 0),
@@ -534,7 +532,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
 function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: GameState; text: string } {
   const roll = rollChest(base.seed, base.currentRow, node.id, keydoor);
   let next = base;
-  if (roll.gold) next = { ...next, gold: next.gold + roll.gold };
+  if (roll.gold) next = addGoldIncome(next, roll.gold);
   if (roll.foodId) next = { ...next, inventory: { ...next.inventory, [roll.foodId]: (next.inventory[roll.foodId] ?? 0) + 1 } };
   for (const ex of roll.extras) next = { ...next, inventory: { ...next.inventory, [ex.id]: (next.inventory[ex.id] ?? 0) + 1 } };
   if (roll.healRatio) {
@@ -736,6 +734,22 @@ function bossCleared(state: GameState): boolean {
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   let next = trackMainRating(state, reduceGameAction(state, action), action.type);
+  if (next.testRun && next.testScenario && !next.testSnapshot && !next.screen.startsWith('test-') && next.screen !== 'title') {
+    const { testSnapshot: _snapshot, ...snapshot } = next;
+    next = { ...next, testSnapshot: snapshot };
+  }
+  if (next !== state && next.runMode !== 'proficiency' && next.screen === 'battle' && next.battle) {
+    const region = next.region ?? 'mixed';
+    const ecology = MAIN_REGIONS[region];
+    const pool = [...ecology.basePool, ...ecology.evo1Pool, ...ecology.evo2Pool];
+    const known = next.unlocks?.regionEncounters?.[region] ?? [];
+    const encountered = [...new Set([...known, ...[...next.battle.playerUnits, ...next.battle.enemyUnits]
+      .map(unit => unit.speciesId).filter(id => pool.includes(id))])];
+    if (encountered.length !== known.length) next = { ...next, unlocks: {
+      ...(next.unlocks ?? DEFAULT_UNLOCKS),
+      regionEncounters: { ...next.unlocks?.regionEncounters, [region]: encountered },
+    } };
+  }
   if (!next.carriedEggs?.length || !['map', 'inter_act'].includes(next.screen)) return next;
   const advancesEgg = next !== state && !['LOAD_GAME', 'START_RUN', 'DEBUG_JUMP', 'TITLE', 'BACK_TO_MAP', 'CLOSE_BACKPACK'].includes(action.type);
   const completedId = next.currentNodeId || state.currentNodeId;
@@ -828,6 +842,8 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       ];
       const base: GameState = {
         ...state,
+        testRun: true,
+        saveSlot: undefined,
         seed,
         act,
         map,
@@ -851,10 +867,21 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
 
     case 'DEBUG_CUSTOM_TEST': {
       // 点「⚙ 自定义测试」：先进入关卡类型选择界面
-      return { ...state, screen: 'test-type', testRun: undefined, testPick: undefined, pendingBattle: undefined, formation: undefined };
+      return { ...createInitialState(), screen: 'test-type', testRun: true,
+        testScenario: state.testRun ? state.testScenario : undefined, saveSlot: undefined };
     }
 
+    case 'TEST_REPLAY':
+      return state.testRun && state.testSnapshot ? { ...state.testSnapshot, testSnapshot: state.testSnapshot } : state;
+
     case 'TEST_TYPE_PICK': {
+      if (action.scenario) {
+        const prepared = prepareTestScenario(createInitialState(), { ...action.scenario, nodeType: action.nodeType });
+        if (action.scenario.customParty) return { ...prepared.state, screen: 'test-pick',
+          testPick: { side: 'player', nodeType: action.nodeType, returnToNode: !TEST_BATTLE_TYPES.includes(action.nodeType),
+            corruptDebuff: prepared.node.corruptDebuff, corruptReward: prepared.node.corruptReward } };
+        return applyTestContent(enterNode(prepared.state, prepared.node));
+      }
       const nodeType = action.nodeType;
       const nodeId = 'custom_test';
       const node: MapNode = { id: nodeId, type: nodeType, label: labelOf(nodeType, 0), col: 0 };
@@ -891,7 +918,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         battle: undefined,
         specialPending: undefined,
         shopBought: false,
-        testRun: undefined,
+        testRun: true,
         pendingBattle: undefined,
         testPick: needsPets
           ? { side: 'player', nodeType, corruptDebuff: node.corruptDebuff, corruptReward: node.corruptReward }
@@ -917,8 +944,14 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
     case 'TEST_PICK_PLAYER_CONFIRM': {
       const tp = state.testPick;
       if (!tp || tp.side !== 'player' || action.units.length === 0) return state;
+      if (tp.returnToNode) {
+        const next = { ...state, roster: action.units, field: action.units.map(unit => unit.uid), testPick: undefined };
+        return applyTestContent(enterNode(next, currentNode(next)!));
+      }
       return {
         ...state,
+        roster: action.units,
+        field: action.units.map(unit => unit.uid),
         testPick: { ...tp, side: 'enemy', playerUnits: action.units },
         log: [`[自定义测试] 我方 ${action.units.map((u) => u.name).join('、')}，选择敌方宠物`, ...state.log].slice(0, 20),
       };
@@ -937,15 +970,17 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       // 战斗参数按节点类型生成
       let units = tp.playerUnits;
       let options: BattleOptions = { enemyExact: true };
+      if (state.testScenario) options = { ...options, act: state.act, nodeType: tp.nodeType, difficulty: state.difficulty,
+        ...(state.runMode === 'proficiency' ? { layer: state.currentLayer, untameable: true } : {}) };
       if (tp.nodeType === 'corrupted') options.corruptDebuff = tp.corruptDebuff;
       if (tp.nodeType === 'guardian') options.untameable = true;
       if (tp.nodeType === 'arena') {
         // 斗兽场：1v1 单挑，只取第 1 只上阵
         units = tp.playerUnits.slice(0, 1);
-        options = { untameable: true };
+        options = { ...options, untameable: true };
       } else if (tp.nodeType === 'gauntlet') {
         // 车轮战：按棋盘槽位顺序轮换
-        options = { gauntlet: true, untameable: true };
+        options = { ...options, gauntlet: true, untameable: true };
       }
       return {
         ...state,
@@ -975,7 +1010,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       if (choice.consumeFood && choice.foodId && (state.inventory[choice.foodId] ?? 0) <= 0) return state;
       const ownedFoods = Object.keys(FOODS).filter(id => (state.inventory[id] ?? 0) > 0);
       if (choice.consumeRandomFood && ownedFoods.length === 0) return state;
-      let next: GameState = { ...state, gold: state.gold + (choice.goldDelta ?? 0), postBattle: undefined };
+      let next: GameState = { ...addGoldIncome(state, choice.goldDelta ?? 0), postBattle: undefined };
       let consumedFoodId: string | undefined;
       let curseMessage: string | undefined;
       if (choice.consumeRandomFood) {
@@ -996,7 +1031,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       if (choice.kind === 'heal') {
         next = healRoster(next, (choice.amount ?? 0) / 100);
       } else if (choice.kind === 'gold') {
-        next = { ...next, gold: Math.max(0, next.gold + (choice.amount ?? 0)) };
+        next = addGoldIncome(next, Math.max(0, next.gold + (choice.amount ?? 0)) - next.gold);
         if (choice.curseTarget && next.roster.length > 0) {
           const curseKinds: Array<'hpDown' | 'atkDown' | 'spdDown'> = ['hpDown', 'atkDown', 'spdDown'];
           const rc = curseKinds[Math.floor(eventRng() * curseKinds.length)];
@@ -1274,7 +1309,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       if (state.screen !== 'event') return state;
       const hatch = state.pendingEventHatch;
       const goldReward = hatch ? (getMonster(hatch.monsterId).rank === 1 ? 5 : getMonster(hatch.monsterId).rank === 2 ? 10 : getMonster(hatch.monsterId).rank === 3 ? 15 : 20) : 0;
-      return { ...state, pendingEventHatch: undefined, screen: 'map', postBattle: undefined, gold: state.gold + goldReward, log: [`放生获得 ${goldReward} 金币`, ...state.log].slice(0, 20) };
+      return { ...addGoldIncome(state, goldReward), pendingEventHatch: undefined, screen: 'map', postBattle: undefined, log: [`放生获得 ${goldReward} 金币`, ...state.log].slice(0, 20) };
     }
 
     case 'EVENT_BATTLE_START': {
@@ -1302,7 +1337,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       switch (reward.kind) {
         case 'gold': {
           // 金币宝藏
-          next = { ...next, screen: 'map', postBattle: undefined, gold: next.gold + (reward.amount ?? 0) };
+          next = { ...addGoldIncome(next, reward.amount ?? 0), screen: 'map', postBattle: undefined };
           break;
         }
         case 'item':
@@ -1716,7 +1751,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
           rewards = applyCorruptFoodReward(rewards, base.seed * 11 + base.currentRow * 7);
         }
       }
-      const withRewards: GameState = { ...base, screen: 'reward', gold: base.gold + goldGain, rewards };
+      const withRewards: GameState = { ...addGoldIncome(base, goldGain), screen: 'reward', rewards };
       return {
         ...withRewards,
         skipSelecting: false,
@@ -1843,6 +1878,8 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         ...state,
         screen: 'battle',
         battle,
+        seed,
+        testScenario: state.testScenario ? { ...state.testScenario, seed, gold: Math.max(0, Math.floor(action.gold) || 0) } : undefined,
         inventory,
         gold: Math.max(0, Math.floor(action.gold) || 0),
         pendingBattle: undefined,
@@ -1860,7 +1897,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
     case 'BATTLE_END_CONFIRM': {
       if (!state.battle) return state;
       // 自定义测试：胜负确认后直接回首页，不进入正常结算流程
-      if (state.testRun) {
+      if (state.testRun && !state.testScenario) {
         return { ...createInitialState(), screen: 'title', unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS } };
       }
       // 事件战斗：胜负确认后返回地图或成长点分配界面
@@ -1872,7 +1909,6 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
           const rs = { ...next.runStats, lastBattleRound: 0 };
           if (state.battle.phase === 'won') {
             rs.battlesWon += 1;
-            if (eb.reward.kind === 'gold') rs.goldEarned += (eb.reward.amount ?? 0);
           } else {
             rs.battlesLost += 1;
           }
@@ -1881,7 +1917,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         if (state.battle.phase === 'won') {
           // 胜利：应用奖励
           if (eb.reward.kind === 'gold') {
-            next = { ...next, gold: next.gold + (eb.reward.amount ?? 0) };
+            next = addGoldIncome(next, eb.reward.amount ?? 0);
           } else if (eb.reward.kind === 'food' && eb.reward.foodId) {
             next = { ...next, inventory: { ...next.inventory, [eb.reward.foodId]: (next.inventory[eb.reward.foodId] ?? 0) + 1 } };
           } else if (eb.reward.kind === 'hp') {
@@ -1900,7 +1936,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
             return { ...r, maxHp: b.maxHp, hp: b.hp, spd: Math.max(1, b.spd - (b.mirrorSpdDelta ?? 0)), skills: getMonster(r.speciesId).passive === 'myriad_forms' ? [] : b.skills, statuses: [] };
           });
           next = { ...next, roster: syncedRoster };
-          // 战后回血 80%
+          // 事件战斗沿用对应难度的战后回血比例
           const healCfg = DIFFICULTY_CONFIG[state.difficulty ?? 'normal'];
           const healedRoster = next.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * healCfg.healRatio)) }));
           next = { ...next, roster: healedRoster };
@@ -2043,7 +2079,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
           };
         }
       } else if (reward.kind === 'gold') {
-        next = { ...next, gold: next.gold + (reward.amount ?? 0) };
+        next = addGoldIncome(next, reward.amount ?? 0);
       }
       return next;
     }
@@ -2094,8 +2130,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         goldGain = 5 * monster.rank;
       }
       return {
-        ...state,
-        gold: state.gold + goldGain,
+        ...addGoldIncome(state, goldGain),
         roster: state.roster.filter((u) => u.uid !== action.uid),
         field: state.field.filter((uid) => uid !== action.uid),
         log: goldGain > 0 ? [`释放 ${unit?.name}，获得 ${goldGain} 金币`, ...state.log].slice(0, 20) : state.log,
@@ -2112,10 +2147,9 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       const roster = [...state.roster.filter((u) => u.uid !== discard.uid), tame];
       const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
       const next: GameState = {
-        ...state,
+        ...addGoldIncome(state, goldGain),
         roster,
         field: state.field.filter((uid) => uid !== discard.uid),
-        gold: state.gold + goldGain,
         tameOverflow: overflow,
         log: [`释放 ${discard.name}（+${goldGain}💰），刚驯服的 ${tame.name} 加入队伍`, ...state.log].slice(0, 20),
       };
@@ -2614,7 +2648,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         runMode: 'proficiency',
         currentLayer: 1,
         proficiencyStats: { totalProficiency: 0, totalGrowthPoints: 0, battlesWon: 0, battlesLost: 0, kills: 0 },
-        runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, tameAttempts: 0, petsLost: 0, turnsPlayed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 } },
+        runStats: { battlesWon: 0, battlesLost: 0, goldEarned: 30, goldSpent: 0, petsTamed: 0, petsLost: 0, turnsPlayed: 0, tameAttempts: 0, itemsUsed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0, lastBattleRound: 0, actSnapshot: { battlesWon: 0, battlesLost: 0, goldEarned: 0, goldSpent: 0, petsTamed: 0, tameAttempts: 0, petsLost: 0, turnsPlayed: 0, 圣果Used: 0, fusions: 0, shopVisits: 0 } },
         difficulty: 'normal',
         unlocks: state.unlocks ?? { ...DEFAULT_UNLOCKS },
         relics: [],

@@ -96,6 +96,7 @@ async function writeDualSave(slot: number, ds: DualSave): Promise<void> {
 
 /** 保存当前 GameState 到对应模式分支 */
 export async function persistSave(state: GameState): Promise<boolean> {
+  if (state.testRun || state.screen.startsWith('test-')) return false;
   const slot = state.saveSlot;
   if (typeof slot !== 'number' || slot < 1 || slot > SAVE_SLOT_COUNT) return false;
   if (deletedSlots.has(slot)) return false;

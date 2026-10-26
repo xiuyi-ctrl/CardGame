@@ -534,7 +534,8 @@ describe('DEBUG_JUMP（测试关卡直达）', () => {
     expect(s.roster.map((u) => u.speciesId)).toEqual(['momo_god', 'lulu_god', 'fifi_god', 'momo', 'lulu', 'fifi']);
     expect(s.gold).toBe(500);
     expect(s.inventory.skip).toBe(3);
-    expect(['battle', 'roster', 'event', 'shop', 'special', 'rest']).toContain(s.screen);
+    expect(['formation', 'battle', 'roster', 'event', 'shop', 'special', 'rest']).toContain(s.screen);
+    if (s.screen === 'formation') expect(s.formation!.encounter.length).toBeGreaterThan(0);
   });
 
   it('可直接跳到首领层布阵', () => {

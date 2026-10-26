@@ -10,6 +10,7 @@ import { getFood, FOODS } from '../data/foods';
 import { ITEMS, mainShopItemPool } from '../data/items';
 import { createRng, pick, randInt, shuffle, weightedPick } from '../rng';
 import { computeStats, makeUnit } from '../core/battle';
+import { pickProgressEncounter } from '../data/encounter-progression';
 
 /** 字符串简单哈希（用于按节点 id 派生可复现随机） */
 export function hashStr(s: string): number {
@@ -225,6 +226,7 @@ export interface RunStats {
   rating?: MainRatingStats;
   battlesWon: number;
   battlesLost: number;
+  /** 全部实际金币收入，含开局及遗物赠金；不扣消费/损失，不计退款。 */
   goldEarned: number;
   goldSpent: number;
   petsTamed: number;
@@ -261,6 +263,27 @@ export interface RewardChoice {
   monsterId?: string;
   recruitCandidates?: string[];
   amount?: number;
+}
+
+export interface TestScenario {
+  mode: 'main' | 'proficiency';
+  region: MainRegionId;
+  difficulty: Difficulty;
+  act: number;
+  layer: number;
+  seed: number;
+  gold: number;
+  itemCount: number;
+  hpPercent: number;
+  deadCount: number;
+  partySize?: number;
+  customParty: boolean;
+  nodeType: NodeType;
+  eventType?: string;
+  specialId?: string;
+  bossId?: string;
+  corruptDebuff?: 'spd' | 'dmg' | 'burn';
+  corruptReward?: 'gold' | 'food';
 }
 
 export interface GameState {
@@ -360,8 +383,11 @@ export interface GameState {
   toast?: { msg: string; kind?: 'info' | 'success' | 'error' | 'warning' };
   /** 打开背包前所在的界面（关闭背包时返回） */
   backpackFrom?: Screen;
-  /** 自定义测试进行中：战斗结束后直接回首页 */
+  /** 独立测试进行中，禁止保存至正式存档。 */
   testRun?: boolean;
+  testScenario?: TestScenario;
+  /** 测试局内存快照，不保存至正式存档；重置时还原选择与随机结果。 */
+  testSnapshot?: Omit<GameState, 'testSnapshot'>;
   /** 自定义测试流程暂存：当前阶段（选我方/选敌方）、关卡类型、我方已选宠物 */
   testPick?: {
     side: 'player' | 'enemy';
@@ -369,6 +395,7 @@ export interface GameState {
     corruptDebuff?: 'spd' | 'dmg' | 'burn';
     corruptReward?: 'gold' | 'food';
     playerUnits?: Unit[];
+    returnToNode?: boolean;
   };
   /** 自定义测试：选宠确认后、开战前暂存的战斗数据（test-config 界面确认后创建战斗） */
   pendingBattle?: {
@@ -452,9 +479,9 @@ export interface DifficultyConfig {
 }
 
 export const DIFFICULTY_CONFIG: Record<Difficulty, DifficultyConfig> = {
-  normal:    { label: '普通', enemyHpMult: 1.0, enemySpdBonus: 0, shopPriceMult: 1.0, healRatio: 0.65, eliteBoost: 0, interActMinHpRatio: 0.8 },
-  hard:      { label: '困难', enemyHpMult: 1.15, enemySpdBonus: 1, shopPriceMult: 1.1, healRatio: 0.65, eliteBoost: 0.05, interActMinHpRatio: 0.65 },
-  nightmare: { label: '地狱', enemyHpMult: 1.35, enemySpdBonus: 2, shopPriceMult: 1.25, healRatio: 0.5, eliteBoost: 0.1, interActMinHpRatio: 0.5 },
+  normal:    { label: '普通', enemyHpMult: 1.0, enemySpdBonus: 0, shopPriceMult: 1.0, healRatio: 0.5, eliteBoost: 0, interActMinHpRatio: 0.8 },
+  hard:      { label: '困难', enemyHpMult: 1.15, enemySpdBonus: 1, shopPriceMult: 1.1, healRatio: 0.4, eliteBoost: 0.05, interActMinHpRatio: 0.65 },
+  nightmare: { label: '地狱', enemyHpMult: 1.35, enemySpdBonus: 2, shopPriceMult: 1.25, healRatio: 0.3, eliteBoost: 0.1, interActMinHpRatio: 0.5 },
 };
 
 /** 主线商店刷新费用（按已刷新次数递增，不超过 3 次） */
@@ -478,6 +505,8 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
 export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'beast_master'];
 
 export interface Unlocks {
+  /** 按地区记录实际战斗中遇见的形态，同槽位跨远征保留。 */
+  regionEncounters?: Partial<Record<MainRegionId, string[]>>;
   difficulties: string[];
   relics: string[];
   bestGrade?: string;
@@ -669,11 +698,6 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
 
 // ---------- 地图生成 ----------
 
-const ACT3_PROGRESS_MOD = [
-  { threshold: -0.3, mod: [20, -10, -10, 0] },
-  { threshold: 0.7, mod: [-20, 5, 15, 15] },
-];
-
 // ---- 第 1 幕固定遭遇表（第一幕敌人.md 设计） ----
 // 普通战斗：按规模分表，加权抽取具体组合
 const ACT1_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
@@ -763,11 +787,6 @@ const ACT1_GAUNTLET_3: readonly { sequence: string[]; weight: number }[] = [
 ];
 
 // ---- 第 2 幕固定遭遇表（第二幕敌人.md 设计） ----
-const ACT2_BASE_W = [70, 30, 0]; // 1v1 / 2v2 / 3v3 基础权重
-const ACT2_PROGRESS_MOD = [
-  { threshold: -0.3, mod: [20, 10, -10] },   // progress < 0.3
-  { threshold: 0.7, mod: [-20, 5, 15] },     // progress > 0.7
-];
 const ACT2_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle'], weight: 1 },
   { species: ['phantom_tail_fox'], weight: 1 },
@@ -900,29 +919,7 @@ const ACT2_GAUNTLET_3: readonly { species: string[]; weight: number }[] = [
   { species: ['fifi_king', 'sisi', 'momo_queen'], weight: 14 },
 ];
 
-function applyProgressModifier(progress: number, baseW: number[], progressMod: { threshold: number; mod: number[] }[]): number[] {
-  const w = [...baseW];
-  for (const m of progressMod) {
-    if ((m.threshold < 0 && progress < Math.abs(m.threshold)) || (m.threshold > 0 && progress > m.threshold)) {
-      for (let i = 0; i < m.mod.length && i < w.length; i++) w[i] += m.mod[i];
-    }
-  }
-  return w;
-}
-
-function weightedPickEncounterSize(rng: () => number, adjusted: number[]): { count: number; kinds: number } {
-  const total = adjusted.reduce((a, b) => a + b, 0);
-  const roll = rng() * total;
-  let acc = 0;
-  for (let i = 0; i < adjusted.length; i++) {
-    acc += adjusted[i];
-    if (roll < acc) return { count: i + 1, kinds: i + 1 };
-  }
-  return { count: adjusted.length, kinds: adjusted.length };
-}
-
 // ---- 第 3 幕固定遭遇表（第三幕敌人.md 设计） ----
-const ACT3_BASE_W = [10, 40, 45, 5]; // 1v1 / 2v2 / 3v3 / 4v4 基础权重
 const ACT3_ENCOUNTERS_1V1: readonly { species: string[]; weight: number }[] = [
   { species: ['molten_beetle'], weight: 8 },
   { species: ['phantom_tail_fox'], weight: 8 },
@@ -1236,7 +1233,7 @@ function eventBattleEnemies(rng: () => number, act: number, count: number, regio
   return species.map(speciesId => ({ speciesId }));
 }
 
-function buildEncounter(
+export function buildEncounter(
   rng: () => number,
   type: NodeType,
   act: number,
@@ -1275,6 +1272,12 @@ function buildEncounter(
     const minions = BOSS_MINIONS[id] ?? [];
     return [{ speciesId: id }, ...minions.map((m) => ({ speciesId: m }))];
   }
+  if (type === 'battle' && act >= 1 && act <= 3) {
+    const tables = act === 1 ? [ACT1_ENCOUNTERS_1V1, ACT1_ENCOUNTERS_2V2, ACT1_ENCOUNTERS_3V3]
+      : act === 2 ? [ACT2_ENCOUNTERS_1V1, ACT2_ENCOUNTERS_2V2, ACT2_ENCOUNTERS_3V3, ACT2_ENCOUNTERS_4V4]
+        : [ACT3_ENCOUNTERS_1V1, ACT3_ENCOUNTERS_2V2, ACT3_ENCOUNTERS_3V3, ACT3_ENCOUNTERS_4V4];
+    return pickProgressEncounter(rng, act, progress, tables, region);
+  }
   // ---- 第 1 幕：固定遭遇表（加权抽取） ----
   if (act === 1) {
     if (type === 'elite') {
@@ -1292,43 +1295,6 @@ function buildEncounter(
     if (type === 'guardian') {
       return [{ speciesId: weightedPick(rng, ACT1_ELITE_ENCOUNTERS) }];
     }
-    // battle：按规模从固定遭遇表抽取
-    if (progress === 0) {
-      return [{ speciesId: weightedPick(rng, ACT1_ENCOUNTERS_1V1.map((e) => [e.species[0], e.weight] as const)) }];
-    }
-    if (progress < 0.15) {
-      const roll = rng() * 100;
-      if (roll < 30) {
-        // 30% 1v1
-        return [{ speciesId: weightedPick(rng, ACT1_ENCOUNTERS_1V1.map((e) => [e.species[0], e.weight] as const)) }];
-      }
-      // 70% 2v2
-      const picked = weightedPick(rng, ACT1_ENCOUNTERS_2V2.map((e) => [e, e.weight] as const));
-      return picked.species.map((speciesId) => ({ speciesId }));
-    }
-    // 主体行：用 baseWeights 选规模，再从对应表抽取
-    const [w22, w33] = [70, 30] as const;
-    let aw22 = w22;
-    let aw33 = w33;
-    if (progress < 0.3) {
-      aw22 += 20;
-      aw33 -= 10;
-    } else if (progress > 0.7) {
-      aw22 -= 20;
-      aw33 += 5;
-    }
-    const roll = rng() * 100;
-    if (roll < aw22) {
-      const picked = weightedPick(rng, ACT1_ENCOUNTERS_2V2.map((e) => [e, e.weight] as const));
-      return picked.species.map((speciesId) => ({ speciesId }));
-    }
-    if (roll < aw22 + aw33) {
-      const picked = weightedPick(rng, ACT1_ENCOUNTERS_3V3.map((e) => [e, e.weight] as const));
-      return picked.species.map((speciesId) => ({ speciesId }));
-    }
-    // Act1 baseWeights 第三项为 0，理论上不会到这里；兜底给 3v3
-    const fallback = ACT1_ENCOUNTERS_3V3[0];
-    return fallback.species.map((speciesId) => ({ speciesId }));
   }
   // ---- 第 2 幕：固定遭遇表（第二幕敌人.md 设计） ----
   if (act === 2) {
@@ -1346,36 +1312,6 @@ function buildEncounter(
     if (type === 'guardian') {
       return [{ speciesId: weightedPick(rng, ACT2_ELITE_ENCOUNTERS.map((e) => [e, e.weight] as const)).species }];
     }
-    // battle — 固定遭遇表 + 进度决定规模
-    if (progress === 0) {
-      const picked = weightedPick(rng, ACT2_ENCOUNTERS_1V1.map((e) => [e, e.weight] as const));
-      return picked.species.map((speciesId) => ({ speciesId }));
-    }
-    if (progress < 0.15) {
-      const roll = rng() * 100;
-      if (roll < 30) {
-        const picked = weightedPick(rng, ACT2_ENCOUNTERS_1V1.map((e) => [e, e.weight] as const));
-        return picked.species.map((speciesId) => ({ speciesId }));
-      }
-      const picked = weightedPick(rng, ACT2_ENCOUNTERS_2V2.map((e) => [e, e.weight] as const));
-      return picked.species.map((speciesId) => ({ speciesId }));
-    }
-    const adjusted = applyProgressModifier(progress, ACT2_BASE_W, ACT2_PROGRESS_MOD);
-    const picked = weightedPickEncounterSize(rng, adjusted);
-    if (picked.kinds === 1) {
-      const t = weightedPick(rng, ACT2_ENCOUNTERS_1V1.map((e) => [e, e.weight] as const));
-      return t.species.map((speciesId) => ({ speciesId }));
-    }
-    if (picked.kinds === 2) {
-      const t = weightedPick(rng, ACT2_ENCOUNTERS_2V2.map((e) => [e, e.weight] as const));
-      return t.species.map((speciesId) => ({ speciesId }));
-    }
-    if (picked.kinds === 3) {
-      const t = weightedPick(rng, ACT2_ENCOUNTERS_3V3.map((e) => [e, e.weight] as const));
-      return t.species.map((speciesId) => ({ speciesId }));
-    }
-    const t = weightedPick(rng, ACT2_ENCOUNTERS_4V4.map((e) => [e, e.weight] as const));
-    return t.species.map((speciesId) => ({ speciesId }));
   }
   // ---- 第 3 幕：固定遭遇表（第三幕敌人.md 设计） ----
   if (act === 3) {
@@ -1399,36 +1335,6 @@ function buildEncounter(
       }
       return [{ speciesId: weightedPick(rng, ACT3_GUARDIAN_1V1.map((e) => [e, e.weight] as const)).species }];
     }
-    // battle — 固定遭遇表 + 进度决定规模
-    if (progress === 0) {
-      const picked = weightedPick(rng, ACT3_ENCOUNTERS_1V1.map((e) => [e, e.weight] as const));
-      return picked.species.map((speciesId) => ({ speciesId }));
-    }
-    if (progress < 0.15) {
-      const roll = rng() * 100;
-      if (roll < 30) {
-        const picked = weightedPick(rng, ACT3_ENCOUNTERS_1V1.map((e) => [e, e.weight] as const));
-        return picked.species.map((speciesId) => ({ speciesId }));
-      }
-      const picked = weightedPick(rng, ACT3_ENCOUNTERS_2V2.map((e) => [e, e.weight] as const));
-      return picked.species.map((speciesId) => ({ speciesId }));
-    }
-    const adjusted = applyProgressModifier(progress, ACT3_BASE_W, ACT3_PROGRESS_MOD);
-    const picked = weightedPickEncounterSize(rng, adjusted);
-    if (picked.kinds === 1) {
-      const t = weightedPick(rng, ACT3_ENCOUNTERS_1V1.map((e) => [e, e.weight] as const));
-      return t.species.map((speciesId) => ({ speciesId }));
-    }
-    if (picked.kinds === 2) {
-      const t = weightedPick(rng, ACT3_ENCOUNTERS_2V2.map((e) => [e, e.weight] as const));
-      return t.species.map((speciesId) => ({ speciesId }));
-    }
-    if (picked.kinds === 3) {
-      const t = weightedPick(rng, ACT3_ENCOUNTERS_3V3.map((e) => [e, e.weight] as const));
-      return t.species.map((speciesId) => ({ speciesId }));
-    }
-    const t = weightedPick(rng, ACT3_ENCOUNTERS_4V4.map((e) => [e, e.weight] as const));
-    return t.species.map((speciesId) => ({ speciesId }));
   }
   // fallback — 理论上不会到这里
   return [{ speciesId: 'momo' }];
@@ -1822,14 +1728,13 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
       layers.push(Array.from({ length: m }, (_, i) => make('boss', row, region === 'emerald_forest' ? 1 : i)));
       continue;
     }
-    let count = Math.max(prevCount - 1, randInt(rng, 3, 5));
+    const branchIncrease = Math.min(2, Math.max(0, act - 1));
+    let count = Math.max(prevCount - 1, randInt(rng, 3 + branchIncrease, 5 + branchIncrease));
     // 可达性：本行数量 ≤ 上一行+1，避免上一行只有 3 个节点时下一行 5 个导致最右节点无父、不可达。
     // 第 1 行除外：出发层（row 0）可直达下一层任意节点，不受列约束。
     if (row > 1) count = Math.min(count, prevCount + 1);
-    // 末层数量纯随机 2~3，为保无死路需倒数第二行 ≤3（k≥2 时 p≤k+1）。
-    // 而倒数第二行被压到 ≤3 时，倒数第三行必须 ≤4，否则其最右列走不到倒数第二行。
-    if (row === layerCount - 2) count = Math.min(3, count);
-    else if (row === layerCount - 3) count = Math.min(4, count);
+    // 首领前逐层收拢，最多每层减少一列，防止后两幕较宽的分支形成死路。
+    count = Math.min(3 + layerCount - 2 - row, count);
     prevCount = count;
     const progress = row / (layerCount - 1);
     const nodes: MapNode[] = [];
@@ -1879,10 +1784,13 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
   const placeSupport = (row: number, type: 'shop' | 'event' | 'watchtower') => {
     const candidates = layers[row].filter(n => n.type !== 'shop' && n.type !== 'event'
       && n.type !== 'watchtower' && n.type !== 'special');
-    // 商店居中，让两侧分支都能提前转入；事件保留列上的随机性。
+    // 商店靠近中间，并覆盖前三层最右分支的三步转入范围。
+    const supportCol = type === 'shop'
+      ? Math.max((layers[row].length - 1) / 2, layers[Math.max(0, row - 3)].length - 4)
+      : (layers[row].length - 1) / 2;
     const node = type === 'event' ? pick(rng, candidates)
-      : [...candidates].sort((a, b) => Math.abs(a.col - (layers[row].length - 1) / 2)
-        - Math.abs(b.col - (layers[row].length - 1) / 2))[0];
+      : [...candidates].sort((a, b) => Math.abs(a.col - supportCol)
+        - Math.abs(b.col - supportCol))[0];
     setType(node, type);
     node.gauntletSize = undefined;
   };
@@ -2064,7 +1972,7 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
 
   // 为所有节点生成遭遇/首领/事件/奇遇关内容
   for (let row = 0; row < layerCount; row++) {
-    const progress = row / (layerCount - 1);
+    const progress = (row - 1) / (layerCount - 3);
     const previousEventTitles = row > 0 ? layers[row - 1].filter(n => n.type === 'event').map(n => events[n.id].title) : [];
     for (const n of layers[row]) {
       if (n.type === 'boss') boss[n.id] = buildEncounter(rng, n.type, act, progress, actBossPool[region === 'emerald_forest' ? 0 : n.col], undefined, region);
@@ -2083,6 +1991,18 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
 /** 当前所在节点（按 currentRow + currentNodeId 定位） */
 export function currentNode(state: GameState): MapNode | undefined {
   return state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
+}
+
+/** 胜利提示与实际结算共用，不包含随后手动领取的金币奖励卡。 */
+export function battleVictoryGold(state: GameState): number {
+  if (state.testRun && !state.testScenario) return 0;
+  if (state.eventBattle) return state.eventBattle.reward.kind === 'gold' ? state.eventBattle.reward.amount ?? 0 : 0;
+  const node = currentNode(state);
+  if (node?.type === 'arena3' && state.arena3Pending?.mode === 'challenge') return 50;
+  if (node?.type === 'arena' || node?.type === 'gauntlet' || node?.type === 'arena3') return 0;
+  if (state.map.boss[state.currentNodeId] !== undefined) return 30;
+  if (state.map.encounter[state.currentNodeId] !== undefined) return node?.type === 'corrupted' && node.corruptReward === 'gold' ? 32 : 16;
+  return node?.type === 'guardian' ? 16 : 8;
 }
 
 export function labelOf(t: NodeType, row: number): string {

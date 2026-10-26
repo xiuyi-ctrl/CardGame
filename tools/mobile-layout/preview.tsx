@@ -15,6 +15,7 @@ import { Arena3Screen } from '../../src/ui/Arena3Screen';
 import { CampFusionScreen, CampFusionSkillScreen, CampRestScreen, SpecialTargetScreen } from '../../src/ui/CampScreens';
 import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalScreen } from '../../src/ui/ProgressionScreens';
 import { MobileShell } from '../../src/ui/mobile';
+import { TestSessionFrame } from '../../src/ui/TestSetupScreen';
 import { preloadImages } from '../../src/ui/imageCache';
 import { FORMATION_SPRITES } from '../../src/ui/formationSprites';
 import { CreatureStylePreview, CREATURE_STYLE_IMAGES } from './CreatureStylePreview';
@@ -23,6 +24,7 @@ import { createBattle, makeUnit, performGauntletSwap, playerTame } from '../../s
 import { ITEMS } from '../../src/game/data/items';
 import { FOODS } from '../../src/game/data/foods';
 import { emptyMainRating } from '../../src/game/rating';
+import { generateMap } from '../../src/game/state/game';
 import type { GameState } from '../../src/game/state/game';
 import type { StatusEffect } from '../../src/game/types';
 import '../../src/ui/styles.css';
@@ -58,11 +60,14 @@ add('region-select', ui.RegionScreen, {}, false);
 add('region-forest', ui.RegionScreen, { region: 'emerald_forest' }, false);
 add('region-ecology', ui.RegionScreen, { region: 'emerald_forest' }, false, '查看生态详情');
 add('region-mixed-ecology', ui.RegionScreen, {}, false, '查看生态详情');
+add('region-ecology-discovered', ui.RegionScreen, { region: 'emerald_forest', unlocks: { ...base.unlocks, regionEncounters: { emerald_forest: ['momo', 'torch_fox', 'mimi_king'] } } }, false, '查看生态详情');
 add('difficulty-select', ui.DifficultyScreen, {}, false);
 add('starter', ui.StarterScreen, {}, false);
 add('creature-style-compare', CreatureStylePreview, {}, false);
 add('proficiency-select', ui.ProficiencyStarterScreen, {}, false);
 add('map', ui.MapScreen, {}, false);
+add('map-act2-wide', ui.MapScreen, { act: 2, map: generateMap(1, 2), currentRow: 1, currentNodeId: 'n2_1_2' }, false);
+add('map-act3-wide', ui.MapScreen, { act: 3, region: 'emerald_forest', map: generateMap(1, 3, 'normal', 'emerald_forest'), currentRow: 1, currentNodeId: 'n3_1_2' }, false);
 add('forest-map', ui.MapScreen, { region: 'emerald_forest' }, false);
 add('formation', FormationScreen, { formation }, false);
 add('gauntlet-order', GauntletOrderScreen, { gauntletOrder: base.roster.slice(0, 4) });
@@ -99,6 +104,16 @@ add('chest', ui.ChestScreen, { chestResult: ['左侧宝箱：金币30、浆果2'
 add('backpack', ui.BackpackScreen, {}, false);
 add('tame-overflow', ui.TameOverflowScreen, { tameOverflow: [makeUnit('momo', true, 0, false)] });
 add('test-type', ui.TestTypeScreen, {}, false);
+add('test-home-entry', ui.default, {}, false, '测试关卡');
+const testSettings = { mode: 'main' as const, region: 'mixed' as const, difficulty: 'normal' as const, act: 2, layer: 5,
+  seed: 42, gold: 500, itemCount: 2, hpPercent: 50, deadCount: 1, customParty: false, nodeType: 'event' as const, eventType: 'merchant' };
+add('test-events-config', ui.TestTypeScreen, { testScenario: testSettings }, false);
+add('test-prof-special-config', ui.TestTypeScreen, { testScenario: { ...testSettings, mode: 'proficiency', nodeType: 'special', specialId: 'revive' } }, false);
+const testEventState = gameReducer(createInitialState(), { type: 'TEST_TYPE_PICK', nodeType: 'event', scenario: testSettings });
+function TestEventPreview({ state, dispatch }: any) {
+  return <TestSessionFrame state={state} dispatch={dispatch}><div className="screen screen-flow"><ui.EventScreen state={state} dispatch={dispatch} /></div></TestSessionFrame>;
+}
+add('test-event-playing', TestEventPreview, testEventState, false);
 add('test-pick', ui.TestPickScreen, { testPick: { side: 'player', nodeType: 'battle' } }, false);
 add('test-config', ui.TestConfigScreen, { pendingBattle: { units: base.roster.slice(0, 3), encounter, seed: 123, nodeType: 'battle' } }, false);
 add('achievements', ui.AchievementsScreen);

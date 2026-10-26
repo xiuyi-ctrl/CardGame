@@ -127,13 +127,13 @@ describe('地图生成', () => {
       for (const n of prevRow) {
         expect(last.some((m) => Math.abs(m.col - n.col) <= 1)).toBe(true);
       }
-      // col 列号连续递增；中间行宽度 3~5
+      // col 列号连续递增；分支随幕次增加，首领前收拢。
       for (const row of map.layers) {
         row.forEach((n, i) => expect(n.col).toBe(i));
       }
       for (const row of map.layers.slice(1, -1)) {
         expect(row.length).toBeGreaterThanOrEqual(3);
-        expect(row.length).toBeLessThanOrEqual(5);
+        expect(row.length).toBeLessThanOrEqual(act + 4);
       }
       // 出发后第 1 行强制全战斗
       expect(map.layers[1].every((n) => n.type === 'battle')).toBe(true);

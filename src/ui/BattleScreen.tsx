@@ -3,7 +3,7 @@ import { useBackAction, useMobileLayout } from './mobile';
 import type { CSSProperties, Dispatch, PointerEvent as ReactPointerEvent } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
-import { currentFoodList } from '../game/state/game';
+import { battleVictoryGold, currentFoodList } from '../game/state/game';
 import {
   REST_SKILL_ID,
   battleCollapseDamage,
@@ -933,9 +933,9 @@ export function BattleScreen({ state, dispatch }: Props) {
             <div className="popup-result-mark" aria-hidden="true" />
             <h2>{isChallenge ? '挑战胜利' : '战斗胜利'}</h2>
             <p className="popup-result-detail">
-              {isChallenge
-                ? `驯服了 ${battle.pendingTame.length} 只宠物，获得挑战奖励`
-                : `驯服了 ${battle.pendingTame.length} 只宠物，获得金币`}
+              {`驯服了 ${battle.pendingTame.length} 只宠物${battleVictoryGold(state) > 0
+                ? `，获得 ${battleVictoryGold(state)} 金币`
+                : isChallenge ? '，获得挑战奖励' : ''}`}
             </p>
             <button className="primary big-btn" onClick={() => dispatch({ type: 'BATTLE_END_CONFIRM' })}>
               确认收获

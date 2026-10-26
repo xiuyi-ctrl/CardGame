@@ -24,7 +24,8 @@ describe('战后休整界面', () => {
     const { container } = render(createElement(PostBattleRosterScreen, { state, dispatch }));
 
     expect(screen.getByText('战后休整')).toBeTruthy();
-    expect(screen.getByText('奖励已领取')).toBeTruthy();
+    expect(screen.queryByText('奖励已领取')).toBeNull();
+    expect(screen.queryByText('状态良好')).toBeNull();
     expect(container.querySelectorAll('.postbattle-pet')).toHaveLength(3);
     expect(container.querySelectorAll('.postbattle-empty')).toHaveLength(5);
     expect(screen.queryByText('出战阵容')).toBeNull();

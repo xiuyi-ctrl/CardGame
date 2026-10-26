@@ -38,9 +38,24 @@
 .region-ecology button { min-width: 44px; min-height: 44px; border: 3px solid #101c2c; background: #ffb51c; font: inherit; color: inherit; }
 .region-ecology-body { min-height: 0; overflow: auto; padding: 8px 12px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .region-ecology-body p { margin: 4px 0 10px; }
-.region-ecology table { width: 100%; table-layout: fixed; border-collapse: collapse; }
-.region-ecology th, .region-ecology td { padding: 6px; border: 1px solid #8a979b; text-align: center; }
-.region-ecology th { background: #d6e8d8; }
+.region-ecology-body { position: relative; background: #e6e1cb; }
+.region-ecology-collection { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.region-ecology-stage { min-width: 0; padding: 8px; border: 2px solid #7d8f85; background: #fff9e9; box-shadow: 2px 2px 0 #babda9; }
+.region-ecology-stage h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: #176b61; font-size: 14px; text-align: center; }
+.region-ecology-stage h3::before, .region-ecology-stage h3::after { content: ''; flex: 1; height: 2px; background: #a4b4a4; }
+.region-ecology-stage:last-child h3 { color: #946620; }
+.region-ecology-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.region-ecology-creature { display: grid; place-items: center; min-width: 0; aspect-ratio: 1; padding: 4px; border: 2px solid #648c7c; background: #e4edda; box-shadow: inset 0 0 0 2px #fff9e9, 1px 2px 0 #c3c4ac; }
+.region-ecology-portrait { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; }
+.region-ecology-creature img.pet-icon-inline { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.region-ecology-creature.undiscovered { border-color: #a8ac9c; background: #e9e5d5; }
+.region-ecology-creature.undiscovered .region-ecology-portrait { filter: brightness(0); }
+.region-ecology-body.is-loading .region-ecology-collection { visibility: hidden; }
+.region-ecology-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #176b61; font-weight: 700; }
 .mobile-ui .region-ecology-body { font-size: 12px; padding: 4px 8px; }
-.mobile-ui .region-ecology th, .mobile-ui .region-ecology td { padding: 4px; }
+.mobile-ui .region-ecology-collection { gap: 6px; }
+.mobile-ui .region-ecology-stage { padding: 4px; }
+.mobile-ui .region-ecology-stage h3 { margin-bottom: 4px; font-size: 12px; }
+.mobile-ui .region-ecology-grid { gap: 4px; }
+.mobile-ui .region-ecology-creature { padding: 3px; }
 .mobile-ui .region-footer p { flex: 1; }

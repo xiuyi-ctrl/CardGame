@@ -62,6 +62,7 @@ describe('双生宝箱奖励', () => {
       expect(opened.chestResult).toHaveLength(rolls.length);
       expect(opened.chestResult?.[0]).toContain(rolls[0].text);
       expect(opened.gold).toBe(state.gold + rolls.reduce((sum, roll) => sum + roll.gold, 0));
+      expect(opened.runStats!.goldEarned - state.runStats!.goldEarned).toBe(opened.gold - state.gold);
       expect(opened.roster).toEqual(state.roster);
       const expected: GameState['inventory'] = { ...state.inventory, twin: 0 };
       for (const roll of rolls) {

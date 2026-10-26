@@ -9,10 +9,21 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { simulateRun } from '../src/game/simulation/runner';
 
 describe('统一数值调整', () => {
+  it.each([['normal', 11], ['hard', 9], ['nightmare', 7]] as const)('%s普通及事件战斗按最大生命50/40/30%%回血', (difficulty, expectedHp) => {
+    const base = gameReducer(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'lulu', seed: 7, difficulty });
+    const unit = { ...base.roster[0], hp: 1, maxHp: 20 };
+    const battle = createBattle([unit], [{ speciesId: 'momo' }], 1);
+    battle.phase = 'won';
+    for (const eventBattle of [undefined, { enemies: [{ speciesId: 'momo' }], reward: { kind: 'gold' as const, amount: 0 }, penalty: {} }]) {
+      const settled = gameReducer({ ...base, screen: 'battle', roster: [unit], battle, eventBattle }, { type: 'BATTLE_END_CONFIRM' });
+      expect(settled.roster[0].hp).toBe(expectedHp);
+    }
+  });
+
   it('三档难度使用新的属性、经济、回复与幕间配置', () => {
-    expect(DIFFICULTY_CONFIG.normal).toMatchObject({ enemyHpMult: 1, enemySpdBonus: 0, shopPriceMult: 1, healRatio: 0.65, eliteBoost: 0, interActMinHpRatio: 0.8 });
-    expect(DIFFICULTY_CONFIG.hard).toMatchObject({ enemyHpMult: 1.15, enemySpdBonus: 1, shopPriceMult: 1.1, healRatio: 0.65, eliteBoost: 0.05, interActMinHpRatio: 0.65 });
-    expect(DIFFICULTY_CONFIG.nightmare).toMatchObject({ enemyHpMult: 1.35, enemySpdBonus: 2, shopPriceMult: 1.25, healRatio: 0.5, eliteBoost: 0.1, interActMinHpRatio: 0.5 });
+    expect(DIFFICULTY_CONFIG.normal).toMatchObject({ enemyHpMult: 1, enemySpdBonus: 0, shopPriceMult: 1, healRatio: 0.5, eliteBoost: 0, interActMinHpRatio: 0.8 });
+    expect(DIFFICULTY_CONFIG.hard).toMatchObject({ enemyHpMult: 1.15, enemySpdBonus: 1, shopPriceMult: 1.1, healRatio: 0.4, eliteBoost: 0.05, interActMinHpRatio: 0.65 });
+    expect(DIFFICULTY_CONFIG.nightmare).toMatchObject({ enemyHpMult: 1.35, enemySpdBonus: 2, shopPriceMult: 1.25, healRatio: 0.3, eliteBoost: 0.1, interActMinHpRatio: 0.5 });
   });
 
   it('熟练度生命分段成长、速度每10层离散增加', () => {
