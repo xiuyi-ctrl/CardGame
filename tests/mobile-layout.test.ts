@@ -24,7 +24,7 @@ describe('手机开局页面布局约束', () => {
   });
 
   it('难度页保持横向主区，卡片和图片可收缩，底部下一步单独占行', () => {
-    expect(declarations('.mobile-ui .difficulty-screen')).toMatchObject({ display: 'grid', overflow: 'hidden', 'grid-template-rows': 'var(--mobile-header) minmax(0, 1fr) clamp(56px, 16dvh, 68px)' });
+    expect(declarations('.mobile-ui .difficulty-screen')).toMatchObject({ display: 'grid', overflow: 'hidden', 'grid-template-rows': 'var(--mobile-header) minmax(0, 1fr) clamp(64px, 18dvh, 76px)' });
     expect(declarations('.mobile-ui .difficulty-main').display).toBe('grid');
     expect(declarations('.mobile-ui .difficulty-choices')['min-height']).toBe('0');
     expect(declarations('.mobile-ui .difficulty-tablet')).toMatchObject({ height: '100%', 'min-height': '0' });

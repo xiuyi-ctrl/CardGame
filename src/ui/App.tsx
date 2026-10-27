@@ -4,14 +4,15 @@ import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, MAIN_SHOP_REFRESH_COSTS, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, BASE_POOL, getMonster } from '../game/data/monsters';
 import { MAIN_REGIONS } from '../game/data/regions';
+import { finalEvolutionPaths, mainShopRefreshCost } from '../game/state/game';
 import { FOREST_ACT_NAMES, RegionScreen } from './RegionScreen';
 export { RegionScreen } from './RegionScreen';
-import { FOODS } from '../game/data/foods';
+import { FOODS, isCaptureFood } from '../game/data/foods';
 import { ITEMS } from '../game/data/items';
 import { getSkill } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
@@ -46,6 +47,7 @@ import { MobileShell, useBackAction, useMobileLayout } from './mobile';
 import { MobileDetails, MobileUnitAbilities, MobileSkillDescription } from './MobileDetails';
 import { SaveBackup } from './SaveBackup';
 import { TestSetupScreen, TestSessionFrame } from './TestSetupScreen';
+import { getMainShopOffer } from '../game/data/main-shop';
 import { computeRunRating, type RunRating } from '../game/rating';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
 import homeXunxun from './assets/home-xunxun.png';
@@ -97,7 +99,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
     case 'difficulty-select':
       return [HOME_BACKGROUND,
         ...['difficulty-header', 'difficulty-normal', 'difficulty-hard', 'difficulty-nightmare',
-          'traveler_charm', 'elite_badge', 'beast_master', 'difficulty-shop', 'difficulty-recovery']
+          ...RELIC_ORDER, 'difficulty-shop', 'difficulty-recovery']
           .map((name) => `/starter-growth-icons/${name}.png`)];
     case 'region-select':
       return [HOME_BACKGROUND, MAP_BACKGROUNDS[0]];
@@ -144,16 +146,20 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
       return ['/roster-camp-background.png', '/formation-camp.png', `${FLOW_ART}/partner-camp.png`, `${FLOW_ART}/encounter-shrine.png`, homePawIcon, ...BATTLE_BUFF_ICON_IMAGES, ...creatureImages(state.roster),
         ...state.roster.flatMap((unit) => {
           const image = formationImage(unit.speciesId, unit.image);
-          const next = nextStage(unit.speciesId);
-          const nextImage = next ? formationImage(next, getMonster(next).image) : undefined;
-          return [image, nextImage].filter((src): src is string => !!src);
+          const targets = state.specialPending?.kind === 'evolve' && state.specialPending.toFinal
+            ? finalEvolutionPaths(unit.speciesId).map(path => path.at(-1)!) : [nextStage(unit.speciesId)];
+          return [image, ...targets.map(next => next ? formationImage(next, getMonster(next).image) : undefined)].filter((src): src is string => !!src);
         })];
     case 'shop':
       return ['/shop-stall-background.png', '/reward-icons/gold.png', homePawIcon,
         '/starter-growth-icons/difficulty-shop.png', '/page-special-icons/shop-refresh.png',
-        ...(state.shopStock ?? []).flatMap((id) => BACKPACK_ITEM_ART[id] ? [BACKPACK_ITEM_ART[id]] : [])];
+        ...(state.shopStock ?? []).flatMap((id) => {
+          const icon = state.runMode === 'proficiency' ? id : getMainShopOffer(id)?.iconId ?? id;
+          return BACKPACK_ITEM_ART[icon] ? [BACKPACK_ITEM_ART[icon]] : [];
+        })];
     case 'backpack':
       return ['/roster-camp-background.png', homeContinueIcon, homePawIcon, '/reward-icons/gold.png',
+        ...((state.carriedEggs?.length ?? 0) > 0 ? [BACKPACK_ITEM_ART.mystery_egg] : []),
         ...Object.entries(state.inventory).flatMap(([id, count]) => count > 0 && BACKPACK_ITEM_ART[id] ? [BACKPACK_ITEM_ART[id]] : []),
         ...state.roster.flatMap((unit) => {
           const image = formationImage(unit.speciesId, unit.image);
@@ -206,7 +212,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
       return [`${FLOW_ART}/partner-camp.png`, `${FLOW_ART}/encounter-shrine.png`, homeAchievementIcon,
         `${FLOW_ART}/icons/rating-laurel.png`, `${FLOW_ART}/icons/journey-end.png`,
         ...(screen === 'achievements' ? ['difficulty-normal', 'difficulty-hard', 'difficulty-nightmare',
-          'traveler_charm', 'elite_badge', 'beast_master'].map((name) => `/starter-growth-icons/${name}.png`) : []),
+          ...RELIC_ORDER].map((name) => `/starter-growth-icons/${name}.png`) : []),
         ...(screen === 'custom' ? ['custom_guardian', 'custom_fury', 'custom_gale'].map(id => `/page-special-icons/creation-${id}.png`) : []),
         ...[...state.roster, ...(state.deadPets ?? [])].flatMap(unit => {
           const image = formationImage(unit.speciesId, unit.image);
@@ -1402,11 +1408,11 @@ export function DifficultyScreen({ state, dispatch }: { state: GameState; dispat
         </section>
         <section className="relic-cabinet" aria-label="选择初始遗物">
           <div className="relic-cabinet-heading"><h2>初始遗物</h2><span>可选一件</span></div>
+          <div className="relic-grid">
           <button className={`relic-none ${selectedRelic === '' ? 'selected' : ''}`}
             aria-pressed={selectedRelic === ''} onClick={() => setSelectedRelic('')}>
             <span className="relic-none-icon" aria-hidden="true" /><span>不携带遗物</span>
           </button>
-          <div className="relic-grid">
             {RELIC_ORDER.map((id) => {
               const def = RELIC_DEFS[id];
               const locked = !unlocks.relics.includes(id);
@@ -2199,14 +2205,13 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
   const isProf = state.runMode === 'proficiency';
   const profShopIds = ['heal_potion', 'gold_bag', 'book_small', 'book_medium', 'book_large', 'growth_stone', 'stat_boost', 'slot_unlock', 'skill_replace', 'forget_stone', 'pet_recruit', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
   const stock = (state.shopStock ?? []).filter((id) =>
-    isProf ? profShopIds.includes(id) : (!!FOODS[id] || !!ITEMS[id])
+    isProf ? profShopIds.includes(id) : !!getMainShopOffer(id)
   );
   const refreshCount = state.shopRefreshCount ?? 0;
   const refreshCost = isProf
     ? 5 + refreshCount * 5
-    : Math.round((MAIN_SHOP_REFRESH_COSTS[refreshCount] ?? MAIN_SHOP_REFRESH_COSTS[2]) * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult);
+    : mainShopRefreshCost(state);
   const canRefresh = refreshCount < 3 && state.gold >= refreshCost;
-  const canRest = state.roster.some((u) => u.hp < u.maxHp);
   return (
     <div className="shop-screen">
       <header className="shop-header">
@@ -2221,7 +2226,7 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
         </div>
       </header>
       <main className="shop-catalog">
-        <div className="shop-catalog-heading"><h2>今日货架</h2><span>随机上架 · {stock.length} 件</span></div>
+        <div className="shop-catalog-heading"><h2>今日货架</h2><span>{isProf ? '随机上架' : '食物与药水保底'} · {stock.length} 件</span></div>
         <div className="shop-stock">
         {stock.map((id) => {
           const profShopData: Record<string, { label: string; desc: string; price: number }> = {
@@ -2241,18 +2246,18 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
             revival_stone: { label: '复活石', desc: '复活1只死亡宠物（保留50%属性）', price: 60 },
           };
           const profItem = isProf ? profShopData[id] : undefined;
-          const f = !isProf ? FOODS[id] : undefined;
-          const it = !isProf ? ITEMS[id] : undefined;
-          const name = profItem?.label ?? f?.name ?? it?.name ?? id;
-          const desc = profItem?.desc ?? f?.desc ?? it?.desc ?? '';
-          const rawPrice = profItem?.price ?? f?.price ?? it?.price ?? 0;
+          const offer = !isProf ? getMainShopOffer(id) : undefined;
+          const iconId = offer?.iconId ?? id;
+          const name = profItem?.label ?? offer?.name ?? id;
+          const desc = profItem?.desc ?? offer?.desc ?? '';
+          const rawPrice = profItem?.price ?? offer?.price ?? 0;
           const price = isProf ? rawPrice : Math.round(rawPrice * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult);
           const soldOut = boughtItems.includes(id);
           const affordable = state.gold >= price;
           return (
             <article key={id} className={`shop-product ${soldOut ? 'is-sold' : ''} ${!soldOut && !affordable ? 'is-unaffordable' : ''}`}>
               {soldOut && <span className="shop-sold-badge">已购买</span>}
-              <div className="shop-product-icon">{BACKPACK_ITEM_ART[id] ? <img src={BACKPACK_ITEM_ART[id]} alt="" draggable={false} /> : <ShopItemIcon itemId={id} />}</div>
+              <div className="shop-product-icon">{BACKPACK_ITEM_ART[iconId] ? <img src={BACKPACK_ITEM_ART[iconId]} alt="" draggable={false} /> : <ShopItemIcon itemId={iconId} />}</div>
               <div className="shop-product-copy"><h3>{name}</h3><MobileDetails label={`${name}说明`} triggerLabel={desc}><p>{desc}</p></MobileDetails></div>
               <span className="shop-price"><img src="/reward-icons/gold.png" alt="金币" />{price}</span>
               <button
@@ -2268,12 +2273,7 @@ export function ShopScreen({ state, dispatch }: { state: GameState; dispatch: Di
           );
         })}
         </div>
-        <div className={`shop-utilities ${isProf ? 'shop-utilities-single' : ''}`}>
-        {!isProf && (
-          <div className="shop-utility shop-utility-rest"><span className="shop-utility-icon" aria-hidden="true"><MapNodeIcon type="rest" /></span><div><h3>立即休整</h3><p>免费让全队回满血，不解除诅咒</p></div>
-            <button type="button" disabled={!canRest} onClick={() => dispatch({ type: 'SHOP_REST' })}>{canRest ? '休整' : '已满血'}</button>
-          </div>
-        )}
+        <div className="shop-utilities shop-utilities-single">
         <div className="shop-utility"><span className="shop-utility-icon" aria-hidden="true"><img src="/page-special-icons/shop-refresh.png" alt="" draggable={false} /></span><div><h3>刷新货架</h3><p>{refreshCount >= 3 ? '刷新次数已用尽' : `花费 ${refreshCost} 金币 · 剩余 ${3 - refreshCount} 次`}</p></div>
           <button type="button" disabled={!canRefresh} onClick={() => dispatch(isProf ? { type: 'PROF_SHOP_REFRESH' } : { type: 'SHOP_REFRESH' })}>{refreshCount >= 3 ? '已用完' : '刷新'}</button>
         </div>
@@ -2428,7 +2428,7 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
   );
 }
 
-function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const mobile = useMobileLayout();
   const [mobileDetail, setMobileDetail] = useState(false);
   const [confirm, setConfirm] = useState<PetConfirm>(null);
@@ -2442,9 +2442,12 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
   });
   const isProf = state.runMode === 'proficiency';
   const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
-  const items = Object.entries(state.inventory).filter(([id, count]) => count > 0 && (FOODS[id] || ITEMS[id]) && (!isProf || growthItemIds.includes(id)));
+  const eggCount = state.carriedEggs?.length ?? 0;
+  const eggItem = { name: '随机蛋', emoji: '🥚', desc: '带问号的神秘蛋。每完成一次关卡推进孵化，可重复同一关；打开背包、查看情报和读档不计数。' };
+  const backpackInventory: Record<string, number> = { ...state.inventory, mystery_egg: eggCount };
+  const items = Object.entries(backpackInventory).filter(([id, count]) => count > 0 && (FOODS[id] || ITEMS[id] || id === 'mystery_egg') && (!isProf || growthItemIds.includes(id)));
   const itemId = items.find(([id]) => id === selectedItemId)?.[0] ?? items[0]?.[0];
-  const item = itemId ? ITEMS[itemId] ?? FOODS[itemId] : undefined;
+  const item = itemId === 'mystery_egg' ? eggItem : itemId ? ITEMS[itemId] ?? FOODS[itemId] : undefined;
   const food = itemId && !growthItemIds.includes(itemId) ? FOODS[itemId] : undefined;
   const growthItem = !!itemId && growthItemIds.includes(itemId);
   const battleItem = !!itemId && !!ITEMS[itemId]?.usableInBattle;
@@ -2494,7 +2497,7 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
           <h2>{tab === 'items' ? '物品收纳' : '队伍伙伴'}</h2>
           {tab === 'items' ? <div className="backpack-item-grid">
             {items.map(([id, count]) => {
-              const definition = ITEMS[id] ?? FOODS[id];
+              const definition = id === 'mystery_egg' ? eggItem : ITEMS[id] ?? FOODS[id];
               return <button key={id} className={`backpack-item ${itemId === id ? 'selected' : ''}`} aria-pressed={itemId === id} aria-label={`查看${definition.name}，持有${count}个`} onClick={() => { setSelectedItemId(id); if (mobile) setMobileDetail(true); }}>
                 <span className="backpack-item-count">×{count}</span>
                 {BACKPACK_ITEM_ART[id] ? <img src={BACKPACK_ITEM_ART[id]} alt="" draggable={false} /> : <span className="backpack-item-emoji">{definition.emoji}</span>}
@@ -2520,8 +2523,9 @@ function BackpackScreen({ state, dispatch }: { state: GameState; dispatch: Dispa
             <div className="backpack-detail-body">
               <div className="backpack-detail-heading"><h2>{item.name}</h2><span>{food ? '捕获食物' : growthItem ? '远征道具' : battleItem ? '战斗药水' : itemId === 'purify' ? '净化道具' : '地图道具'}</span></div>
               <div className="backpack-detail-art">{BACKPACK_ITEM_ART[itemId] ? <img src={BACKPACK_ITEM_ART[itemId]} alt="" /> : <span className="backpack-item-emoji">{item.emoji}</span>}</div>
-              <p className="backpack-detail-count">持有 ×{state.inventory[itemId]}</p>
+              <p className="backpack-detail-count">持有 ×{backpackInventory[itemId]}</p>
               <p className="backpack-description">{item.desc}</p>
+              {itemId === 'mystery_egg' && <ul className="backpack-egg-progress">{state.carriedEggs?.map((egg, index) => <li key={egg.id}>随机蛋 {index + 1}：{egg.remaining > 0 ? `还需经过${egg.remaining}次关卡` : '即将孵化'}</li>)}</ul>}
               {food && <p className="backpack-food-rate">{food.guaranteed ? '残血且可驯服时必定成功' : `一阶40%生命基准率 ${Math.round(food.baseTame * 100)}%`}</p>}
               <p className="backpack-use-note">{useNote}</p>
             </div>
@@ -2608,6 +2612,7 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
 }
 
 export function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  const [coinChoice, setCoinChoice] = useState<string>();
   const ev = state.map.events[state.currentNodeId];
   if (!ev) return null;
   const hatch = state.pendingEventHatch;
@@ -2625,14 +2630,18 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
           {ev.choices.map((c) => {
             const cost = c.goldDelta ?? 0;
             const cantAfford = state.gold + cost < 0 || (c.consumeFood && c.foodId && (state.inventory[c.foodId] ?? 0) <= 0)
-              || (c.consumeRandomFood && !Object.keys(FOODS).some(id => (state.inventory[id] ?? 0) > 0));
+              || (c.consumeRandomFood && Object.keys(FOODS).filter(isCaptureFood).reduce((sum, id) => sum + (state.inventory[id] ?? 0), 0) < (c.foodCost ?? 1))
+              || ((c.kind === 'coin' || c.kind === 'purifyChoice' || c.kind === 'boost') && !state.roster.some(unit => unit.hp > 0))
+              || (c.kind === 'sacrifice' && state.roster.length <= 1);
             return (
               <button type="button"
                 key={c.id}
-                className="flow-choice" disabled={!!cantAfford}
+                className="flow-choice" disabled={!!cantAfford || !!state.pendingEventTarget}
                 onClick={() => {
                   if (cantAfford) return;
-                  if (c.kind === 'recruit' && c.monsterId) {
+                  if (c.kind === 'coin') {
+                    setCoinChoice(c.id);
+                  } else if (c.kind === 'recruit' && c.monsterId) {
                     dispatch({ type: 'EVENT_HATCH_PREVIEW', choiceId: c.id, monsterId: c.monsterId });
                   } else if (c.kind === 'battle' && c.battleEnemies) {
                     dispatch({
@@ -2654,6 +2663,25 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
           })}
         </div>
       </main>
+      {coinChoice && <div className="confirm-overlay">
+        <section className="confirm-box event-decision-popup" role="dialog" aria-modal="true" aria-label="猜硬币">
+          <div className="section-title">猜硬币 · 选择正面或反面</div>
+          <div className="popup-body"><p>猜中：指定伙伴永久+1速度；猜错：随机伙伴获得迟缓。</p>
+            <div className="event-coin-options">{(['heads', 'tails'] as const).map(side => <button key={side} type="button" onClick={() => { dispatch({ type: 'EVENT_CHOICE', choiceId: coinChoice, coinSide: side }); setCoinChoice(undefined); }}>
+              <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill={side === 'heads' ? '#f8c65c' : '#b4d7cb'} stroke="#203243" strokeWidth="3" /><circle cx="20" cy="20" r="13" fill="none" stroke="#86652a" strokeWidth="2" />{side === 'heads' ? <path d="m20 9 3 8 9 1-7 5 2 9-7-5-7 5 2-9-7-5 9-1Z" fill="#86652a" /> : <path d="M11 27C10 15 19 11 29 11c0 11-4 19-16 18m0 0 13-14" fill="none" stroke="#287e69" strokeWidth="3" />}</svg>
+              {side === 'heads' ? '正面' : '反面'}
+            </button>)}</div>
+          </div><button type="button" onClick={() => setCoinChoice(undefined)}>取消</button>
+        </section>
+      </div>}
+      {state.pendingEventTarget && <div className="confirm-overlay">
+        <section className="confirm-box event-decision-popup" role="dialog" aria-modal="true" aria-label="选择事件伙伴">
+          <div className="section-title">{state.pendingEventTarget.kind === 'spd' ? '猜中了！选择伙伴永久+1速度' : '选择伙伴清除诅咒'}</div>
+          <div className="popup-body event-target-grid">{state.roster.map(unit => <button key={unit.uid} type="button" disabled={unit.hp <= 0} onClick={() => dispatch({ type: 'EVENT_TARGET_CONFIRM', uid: unit.uid })}>
+            <span className="event-target-portrait"><PixelCreature unit={unit} /></span><strong>{unit.name}</strong><span>{state.pendingEventTarget?.kind === 'spd' ? `速度 ${unit.spd} → ${unit.spd + 1}` : unit.curse ? CURSE_CN[unit.curse] : '无诅咒'}</span>
+          </button>)}</div>
+        </section>
+      </div>}
       {hatch && hatchMonster && (
         <div className="confirm-overlay" onClick={() => dispatch({ type: 'EVENT_HATCH_CANCEL' })}>
           <div className="confirm-box scout-popup" onClick={(e) => e.stopPropagation()}>
@@ -2676,13 +2704,12 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
   );
 }
 
-function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const sp = state.map.specials[state.currentNodeId];
   if (!sp) return null;
-  const hasEvolvable = state.roster.some((u) => nextStage(u.speciesId) && !evolutionLockReason(state, u.speciesId));
   const rosterFull = state.roster.length >= getMaxRoster(state.runMode);
   const disabled = (r: SpecialReward) =>
-    ((r.kind === 'evolve' || r.kind === 'superevolve') && !hasEvolvable) ||
+    ((r.kind === 'evolve' || r.kind === 'superevolve') && !state.roster.some(u => nextStage(u.speciesId) && !evolutionLockReason(state, u.speciesId, r.toFinal))) ||
     (r.kind === 'custom' && rosterFull);
   return (
     <div className="flow-screen flow-special-screen">
@@ -2705,9 +2732,9 @@ function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
             </button>
           ))}
         </div>
-        {!hasEvolvable && (
+        {sp.rewards.some(r => r.kind === 'evolve' || r.kind === 'superevolve') && sp.rewards.filter(r => r.kind === 'evolve' || r.kind === 'superevolve').every(disabled) && (
           <p className="flow-notice">
-            当前没有可进化的宠物，进化/超进化不可选{state.roster.some((u) => evolutionLockReason(state, u.speciesId)) ? '。传奇进化需击败第一幕首领后解锁。' : ''}
+            当前伙伴无法选择进化奖励；最终形态、蛋生生物与造物不可进化。
           </p>
         )}
       </main>
@@ -2814,6 +2841,7 @@ function SettlementTotals({ state }: { state: GameState }) {
 
 export function GameOverScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const rating = computeRunRating(state);
+  useEffect(() => { if (!state.testRun) void persistSave(state); }, [state]);
   return (
     <div className="flow-screen flow-report-screen flow-defeat-screen settlement-screen">
       <main className="flow-report flow-frame settlement-report">
@@ -2822,6 +2850,7 @@ export function GameOverScreen({ state, dispatch }: { state: GameState; dispatch
       <div className="settlement-body">
       {rating && <RatingDisplay rating={rating} />}
       <SettlementTotals state={state} />
+      {!!state.newRelicUnlocks?.length && <div className="flow-unlocks settlement-unlocks"><h2>解锁新遗物</h2>{state.newRelicUnlocks.map(id => <div key={id} className="unlock-item">{RELIC_DEFS[id].name}</div>)}</div>}
       <div className="settlement-team"><MobileDetails label="最终队伍" triggerLabel={`查看最终队伍 · ${state.roster.length}只`}><FlowTeam units={state.roster} /></MobileDetails></div>
       </div>
       <footer className="flow-actions settlement-actions"><span>抵达第{state.act}幕 · 远征记录已结算</span><button onClick={() => dispatch({ type: 'TITLE' })}>
@@ -2841,8 +2870,8 @@ function VictoryScreen({ state, dispatch }: { state: GameState; dispatch: Dispat
     if (!rating) return;
     const currentUnlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
     const rosterInfo = state.roster.map((u) => ({ speciesId: u.speciesId, passive: u.passive }));
-    const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo, state.difficulty, state.runStats);
-    const newItems: string[] = [];
+    const nextUnlocks = detectUnlocks(currentUnlocks, rating.grade, rosterInfo, state.difficulty, state.runStats, state.gold);
+    const newItems: string[] = (state.newRelicUnlocks ?? []).map(id => `遗物：${RELIC_DEFS[id].name}`);
     for (const d of nextUnlocks.difficulties) {
       if (!currentUnlocks.difficulties.includes(d)) newItems.push(`难度：${DIFFICULTY_CONFIG[d as Difficulty].label}`);
     }

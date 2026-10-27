@@ -47,26 +47,30 @@ describe('四类事件改版', () => {
     expect(after.gold).toBe(100);
     expect(choose(after, 'e2')).toBe(after);
   });
-  it('金币祈愿扣40，随机一只永久加1速度，余额不足不扣不加', () => {
+  it('财富祈愿扣50，随机一只永久强化，余额不足不扣不加', () => {
     const state = eventState('altar');
-    state.gold = 39;
+    state.gold = 49;
     expect(choose(state)).toBe(state);
-    state.gold = 40;
+    state.gold = 50;
     const after = choose(state);
     expect(after.gold).toBe(0);
-    expect(after.roster.map(u => u.bonusStats?.spd ?? 0).sort()).toEqual([0, 1]);
+    const choice = state.map.events.origin.choices[0];
+    expect(after.roster.map(u => u.bonusStats?.[choice.boostStat!] ?? 0).sort()).toEqual([0, choice.amount]);
   });
   it('祭坛强化不会丢掉迅迅已生效的被动速度', () => {
     const state = eventState('altar');
     state.roster = [makeUnit('momo', true, 0, false)];
-    expect(choose(state).roster[0].spd).toBe(state.roster[0].spd + 1);
+    const choice = state.map.events.origin.choices[0];
+    const after = choose(state).roster[0];
+    expect(after.spd).toBe(state.roster[0].spd + (choice.boostStat === 'spd' ? 1 : 0));
   });
-  it('生命祈愿全体失去最大生命40%，仅一只永久加2最大生命，最低保留1血', () => {
+  it('鲜血祈愿全体失去最大生命40%，仅一只永久强化，最低保留1血', () => {
     const state = eventState('altar');
     state.roster.forEach(u => { u.hp = 1; });
     const after = choose(state, 'e2');
     expect(after.roster.every(u => u.hp >= 1)).toBe(true);
-    expect(after.roster.map(u => u.bonusStats?.hp ?? 0).sort()).toEqual([0, 2]);
+    const choice = state.map.events.origin.choices[1];
+    expect(after.roster.map(u => u.bonusStats?.[choice.boostStat!] ?? 0).sort()).toEqual([0, choice.amount]);
     expect(after.gold).toBe(100);
     expect(choose(state, 'e3').roster).toEqual(state.roster);
   });
@@ -93,7 +97,7 @@ describe('四类事件改版', () => {
     expect(after.screen).toBe('tame-overflow');
     expect(after.tameOverflow?.[0].speciesId).toBe(choice.monsterId);
   });
-  it('带走选项50%战斗／50%携带，携带中10%特殊预定结果且可复现', () => {
+  it('带走选项50%战斗／50%携带，携带中30%特殊预定结果且可复现', () => {
     let battles = 0, specials = 0;
     for (let seed = 1; seed <= 1000; seed++) {
       const state = eventState('egg', seed), egg = state.map.events.origin.choices[1].carriedEgg!;
@@ -103,19 +107,18 @@ describe('四类事件改版', () => {
       expect(buildEventByType(createRng(seed), 'egg', 2)).toEqual(state.map.events.origin);
     }
     expect(battles).toBeGreaterThan(400); expect(battles).toBeLessThan(600);
-    expect(specials).toBeGreaterThan(25); expect(specials).toBeLessThan(80);
+    expect(specials).toBeGreaterThan(110); expect(specials).toBeLessThan(190);
   });
-  it.each([false, true])('不同三关后普通蛋孵化，满员=%s，读档与重复关卡不重抽不多计', full => {
+  it.each([false, true])('三次关卡后普通蛋孵化，满员=%s，读档不重抽，重复关卡计数', full => {
     let state = carried(false, full);
     const count = state.roster.length;
     expect(state.carriedEggs?.[0].remaining).toBe(3);
     state = passNode(state, 'a');
     state = passNode(state, 'a');
-    expect(state.carriedEggs?.[0].remaining).toBe(2);
+    expect(state.carriedEggs?.[0].remaining).toBe(1);
     state = parseDualSave(JSON.stringify(state))!.main!;
-    state = passNode(state, 'b');
     expect(state.roster.length).toBe(count);
-    state = passNode(state, 'c');
+    state = passNode(state, 'a');
     expect(state.carriedEggs).toEqual([]);
     expect(state.screen).toBe(full ? 'tame-overflow' : 'map');
     expect(full ? state.tameOverflow?.[0].speciesId : state.roster.at(-1)?.speciesId).toBe('momo');

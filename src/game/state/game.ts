@@ -11,6 +11,7 @@ import { ITEMS, mainShopItemPool } from '../data/items';
 import { createRng, pick, randInt, shuffle, weightedPick } from '../rng';
 import { computeStats, makeUnit } from '../core/battle';
 import { pickProgressEncounter } from '../data/encounter-progression';
+import { generateMainShopStock, getMainShopOffer } from '../data/main-shop';
 
 /** 字符串简单哈希（用于按节点 id 派生可复现随机） */
 export function hashStr(s: string): number {
@@ -76,13 +77,26 @@ export function canStepTo(
   return Math.abs(node.col - currentCol) <= 1;
 }
 
+export interface EventBattleReward {
+  kind: 'gold' | 'food' | 'hp' | 'recruit';
+  amount?: number;
+  foodId?: string;
+  monsterId?: string;
+}
+
 export interface EventChoice {
   id: string;
   label: string;
   desc: string;
   kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none'
       | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status' | 'revive' | 'growthPoint'
-      | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace' | 'carryEgg';
+      | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace' | 'carryEgg' | 'coin' | 'purifyChoice' | 'feedRecruit';
+  foodCost?: number;
+  recruitBonus?: { stat: 'hp' | 'spd'; amount: number };
+  coinResult?: 'heads' | 'tails';
+  purifySuccess?: boolean;
+  foodRewards?: { foodId: string; amount: number }[];
+  extraBoost?: { stat: 'hp' | 'spd'; amount: number };
   /** heal/damage=百分比，gold=金额 */
   amount?: number;
   /** 复活属性保留比例（0~1） */
@@ -109,7 +123,7 @@ export interface EventChoice {
   /** gold 选项附加：随机宠物诅咒 */
   curseTarget?: boolean;
   /** 战斗胜利奖励 */
-  battleReward?: { kind: 'gold' | 'food' | 'hp'; amount?: number; foodId?: string };
+  battleReward?: EventBattleReward;
   /** 战斗失败惩罚 */
   battlePenalty?: { percent?: number; goldLoss?: number; curseTarget?: boolean };
   /** 战斗胜利额外奖励 */
@@ -133,7 +147,7 @@ export interface EventNode {
 }
 
 /** 奇遇关高级奖励类型 */
-export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item' | 'growthPoint' | 'slotUnlock' | 'recruit' | 'revive' | 'reviveHalf';
+export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item' | 'growthPoint' | 'slotUnlock' | 'recruit' | 'revive' | 'reviveHalf' | 'egg';
 
 export interface SpecialReward {
   id: string;
@@ -144,6 +158,10 @@ export interface SpecialReward {
   amount?: number;
   /** item 的（道具或食物）id */
   itemId?: string;
+  monsterId?: string;
+  hpBonus?: number;
+  spdBonus?: number;
+  toFinal?: boolean;
 }
 
 export interface SpecialNode {
@@ -153,14 +171,13 @@ export interface SpecialNode {
 }
 
 export const SPECIAL_REWARDS: SpecialReward[] = [
-  { id: 'sr-evolve', label: '进化之光', desc: '选择一只宠物免费融合进化到下一形态', kind: 'evolve' },
-  { id: 'sr-gold', label: '龙之宝藏', desc: '获得 80 金币', kind: 'gold', amount: 80 },
-  { id: 'sr-golden-fruit', label: '圣果', desc: '获得 2 个必定驯服的圣果', kind: 'item', itemId: 'golden_fruit', amount: 2 },
-  { id: 'sr-boost', label: '属性强化', desc: '选择一只宠物，永久提升生命+5 或速度+2', kind: 'boost' },
+  { id: 'sr-evolve', label: '完美进化', desc: '将1只指定生物直接进化到最终形态，不附加新诅咒', kind: 'evolve', toFinal: true },
+  { id: 'sr-gold', label: '龙之宝藏', desc: '获得120金币', kind: 'gold', amount: 120 },
+  { id: 'sr-golden-fruit', label: '圣果宝藏', desc: '获得2个必定驯服的「圣果」', kind: 'item', itemId: 'golden_fruit', amount: 2 },
+  { id: 'sr-boost', label: '属性重塑', desc: '选择1只宠物，永久生命+6或永久速度+3', kind: 'boost', hpBonus: 6, spdBonus: 3 },
   { id: 'sr-custom', label: '造物·自创生物', desc: '从三种属性模板中创造一只独特生物，技能随机组合', kind: 'custom' },
-  { id: 'sr-superevolve', label: '超进化', desc: '选择一只宠物免费融合进化到最高形态，但附带随机负面诅咒', kind: 'superevolve' },
+  { id: 'sr-egg', label: '神秘蛋', desc: '获得随机蛋，经过3次关卡后必定孵化1只特殊生物', kind: 'egg' },
   { id: 'sr-purify', label: '净化药水', desc: '获得 2 瓶清除负面诅咒的药水', kind: 'item', itemId: 'purify', amount: 2 },
-  { id: 'sr-skip', label: '跳关道具', desc: '获得 3 个可跳过战斗关卡的跳关道具', kind: 'item', itemId: 'skip', amount: 3 },
 ];
 
 export const CUSTOM_PRESETS = ['custom_guardian', 'custom_fury', 'custom_gale'] as const;
@@ -229,7 +246,11 @@ export interface RunStats {
   /** 全部实际金币收入，含开局及遗物赠金；不扣消费/损失，不计退款。 */
   goldEarned: number;
   goldSpent: number;
+  /** 商人商品购买与刷新实付金币，不含事件损失；旧档缺失时从0开始。 */
+  shopGoldSpent?: number;
   petsTamed: number;
+  /** 本局已达最终进化形态的驯服生物UID，累计去重，释放/阵亡不减。 */
+  finalTamedUids?: string[];
   petsLost: number;
   turnsPlayed: number;
   tameAttempts: number;
@@ -308,8 +329,8 @@ export interface GameState {
   log: string[];
   /** 奇遇关奖励进行中：进化/超进化（等待玩家在队伍中点选）或属性强化（等待选属性）；斗兽场等待选择出战宠物 */
   specialPending?:
-    | { kind: 'evolve'; super: boolean }
-    | { kind: 'boost'; uid: string }
+    | { kind: 'evolve'; super: boolean; toFinal?: boolean }
+    | { kind: 'boost'; uid: string; hpBonus?: number; spdBonus?: number }
     | { kind: 'arena'; uid: string }
     | { kind: 'growthPoint'; uid: string; amount?: number }
     | { kind: 'shopGrantGrowthPoint'; uid: string; amount: number }
@@ -409,11 +430,14 @@ export interface GameState {
   postBattle?: boolean;
   /** 孵化预览：点击「孵化它」后暂存，弹出确认弹窗显示将孵化的宠物 */
   pendingEventHatch?: { choiceId: string; monsterId: string };
+  pendingEventTarget?: { kind: 'spd' | 'purify'; choiceId: string };
+  /** 历史瞭望塔查看不算再次完成关卡。 */
+  watchtowerReopened?: boolean;
   carriedEggs?: { id: string; remaining: number; special: boolean; monsterId: string; passedNodeIds: string[] }[];
   /** 事件战斗：记录战斗数据（敌人、奖励、惩罚），战斗结束后处理结果 */
   eventBattle?: {
     enemies: { speciesId: string }[];
-    reward: { kind: 'gold' | 'food' | 'hp'; amount?: number; foodId?: string };
+    reward: EventBattleReward;
     penalty: { percent?: number; goldLoss?: number; curseTarget?: boolean };
     bonusReward?: { kind: 'food'; foodId: string };
   };
@@ -422,6 +446,8 @@ export interface GameState {
   difficulty?: Difficulty;
   /** 本局携带的遗物 ID */
   relics?: string[];
+  cauldronClaimedShops?: string[];
+  newRelicUnlocks?: string[];
   /** 跨局解锁（持久化到 localStorage） */
   unlocks?: Unlocks;
   /** 远征模式标记 */
@@ -497,12 +523,36 @@ export interface RelicDef {
 }
 
 export const RELIC_DEFS: Record<string, RelicDef> = {
-  traveler_charm: { name: '旅者护符', emoji: '🧭', desc: '开局金币 +30', unlockCondition: 'B 级通关' },
+  traveler_charm: { name: '旅者护符', emoji: '🧭', desc: '开局金币 +50', unlockCondition: 'B 级通关' },
   elite_badge:    { name: '精锐之证', emoji: '⚔️', desc: '初始赠送每种道具各 1 个', unlockCondition: '单局使用 20 个及以上道具' },
   beast_master:   { name: '驯兽大师', emoji: '🍖', desc: '初始赠送每种捕获物各 1 个', unlockCondition: '单局捕捉 15 只及以上生物' },
+  greedy_eye: { name: '贪婪之眼', emoji: '👁️', desc: '战斗胜利直接结算金币+50%；商店刷新价格翻倍', unlockCondition: '单局结束时金币结余≥200' },
+  metal_cauldron: { name: '金属坩埚', emoji: '⚗️', desc: '每个商人节点免费获得1个随机食物或道具（各50%）', unlockCondition: '单局商店累计消费≥300金币（含刷新）' },
+  horn_of_plenty: { name: '丰收之角', emoji: '🌽', desc: '食物基础驯服效果×1.1，仍受原品阶概率上限限制', unlockCondition: '单局累计5只驯服所得生物达到最终进化形态（含直接捕获）' },
+  spare_candle: { name: '备用的蜡烛', emoji: '🕯️', desc: '每场首次我方阵亡时，自动以1血复活，全队限1次', unlockCondition: '以8只满编队伍、全局无宠物阵亡通关' },
 };
 
-export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'beast_master'];
+export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'beast_master', 'greedy_eye', 'metal_cauldron', 'horn_of_plenty', 'spare_candle'];
+
+export function growthRelicUnlocks(unlocks: Unlocks, stats?: Partial<Pick<RunStats, 'finalTamedUids' | 'petsLost'>>, victoryRosterSize?: number): Unlocks {
+  const relics = [...unlocks.relics];
+  if (new Set(stats?.finalTamedUids ?? []).size >= 5 && !relics.includes('horn_of_plenty')) relics.push('horn_of_plenty');
+  if (victoryRosterSize === 8 && stats?.petsLost === 0 && !relics.includes('spare_candle')) relics.push('spare_candle');
+  return { ...unlocks, relics };
+}
+
+export function economicRelicUnlocks(unlocks: Unlocks, gold: number, shopGoldSpent = 0): Unlocks {
+  const relics = [...unlocks.relics];
+  if (gold >= 200 && !relics.includes('greedy_eye')) relics.push('greedy_eye');
+  if (shopGoldSpent >= 300 && !relics.includes('metal_cauldron')) relics.push('metal_cauldron');
+  return { ...unlocks, relics };
+}
+
+export function mainShopRefreshCost(state: GameState): number {
+  const base = MAIN_SHOP_REFRESH_COSTS[state.shopRefreshCount ?? 0] ?? MAIN_SHOP_REFRESH_COSTS[2];
+  return Math.round(base * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult)
+    * (state.runMode !== 'proficiency' && state.relics?.includes('greedy_eye') ? 2 : 1);
+}
 
 export interface Unlocks {
   /** 按地区记录实际战斗中遇见的形态，同槽位跨远征保留。 */
@@ -647,22 +697,19 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
       // 与进入商店时的库存生成保持一致（同一 seed 公式），保证侦查/瞭望塔看到的就是实际可购商品
       const row = state.map.layers.findIndex((r) => r.includes(n));
       const rng = createRng(state.seed * 7919 + row * 104729 + hashStr(n.id));
-      const pool = [...Object.keys(FOODS).filter((id) => FOODS[id].shop !== false), ...Object.keys(ITEMS).filter((id) => ITEMS[id].price > 0 && ITEMS[id].shop !== false)];
-      const stock = shuffle(rng, pool).slice(0, 4);
+      const stock = generateMainShopStock(rng);
       const goods = stock
         .map((id) => {
-          const f = FOODS[id];
-          if (f) return `${f.emoji} ${f.name} ${f.price} 金`;
-          const it = ITEMS[id];
-          return `${it.emoji} ${it.name} ${it.price} 金`;
+          const offer = getMainShopOffer(id)!;
+          return `${offer.name} ${Math.round(offer.price * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult)} 金`;
         })
         .join('、');
       return {
         icon: NODE_ICON.shop,
         title: '商店',
-        detail: `本店出售：${goods}（每种限购 1 次，花 5 金可休整）`,
+        detail: `本店出售：${goods}（每件限购1次）`,
         shopItems: stock.map(id => {
-          const item = FOODS[id] ?? ITEMS[id];
+          const item = getMainShopOffer(id)!;
           return { name: item.name, price: Math.round(item.price * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult) };
         }),
       };
@@ -1396,12 +1443,13 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
     };
   }
   if (type === 'altar') {
+    const boost = () => rng() < 0.5 ? { boostStat: 'spd' as const, amount: 1 } : { boostStat: 'hp' as const, amount: 2 };
     return {
       title: '古老祭坛',
       desc: '一座刻满符文的祭坛散发着危险而诱人的力量。',
       choices: [
-        c(1, '献上金币祈愿', '损失40金币，随机1只宠物永久+1速度', 'boost', { amount: 1, boostStat: 'spd', goldDelta: -40 }),
-        c(2, '献上生命祈愿', '全体失去40%生命，随机1只宠物永久+2最大生命', 'boost', { amount: 2, boostStat: 'hp', damagePercent: 40 }),
+        c(1, '献上财富', '损失50金币，随机1只宠物永久+1速度或+2最大生命（各50%）', 'boost', { ...boost(), goldDelta: -50 }),
+        c(2, '献上鲜血', '全体失去40%生命，随机1只宠物永久+1速度或+2最大生命（各50%）', 'boost', { ...boost(), damagePercent: 40 }),
         c(3, '离开', '无事', 'none'),
       ],
     };
@@ -1429,17 +1477,18 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
   }
   if (type === 'egg') {
     const pools = MAIN_REGIONS[region];
-    const eggMonsterId = pick(rng, pools.basePool);
+    const normalEggPool = [...pools.basePool, ...pools.evo1Pool];
+    const eggMonsterId = pick(rng, normalEggPool);
     const ambush = rng() < 0.5;
-    const special = rng() < 0.1;
-    const carriedEgg = { ambush, special, monsterId: pick(rng, special ? SPECIAL_EGG_POOL : pools.basePool) };
+    const special = rng() < 0.3;
+    const carriedEgg = { ambush, special, monsterId: pick(rng, special ? SPECIAL_EGG_POOL : normalEggPool) };
     const battleEnemies = eventBattleEnemies(rng, act, 2, region);
     return {
       title: '神秘蛋',
       desc: '一颗布满奇异纹路的蛋静静躺在草丛中，轻轻颤动。',
       choices: [
         c(1, '孵化它', '随机普通生物加入队伍；队伍满则进入处理界面', 'recruit', { monsterId: eggMonsterId }),
-        c(2, '带走它', '50%触发战斗，50%带走；经过3关后孵化（90%普通生物，10%蛋生特殊生物）', 'carryEgg', { carriedEgg, battleEnemies }),
+        c(2, '带走它', '50%触发战斗，50%带走；经过3次关卡后孵化（70%一、二阶普通生物，30%蛋生特殊生物；可重复关卡）', 'carryEgg', { carriedEgg, battleEnemies }),
       ],
     };
   }
@@ -1448,9 +1497,8 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
       title: '神秘行商',
       desc: '一位兜售奇物符文的游商，称他的货能解开远古双生宝箱的秘密。',
       choices: [
-        c(1, '购得侦察符', '获得 1 个「侦察符」（使用后可查看指定一关的情报）', 'item', { itemId: 'scout' }),
-        c(2, '购得双生符', '获得 1 个「双生符」（抵达双生宝箱时可同时开启两个宝箱）', 'item', { itemId: 'twin' }),
-        c(3, '离开', '继续赶路', 'none'),
+        c(1, '购得侦察符', '获得2个「侦察符」', 'item', { itemId: 'scout', amount: 2 }),
+        c(2, '购得双生符', '获得2个「双生符」', 'item', { itemId: 'twin', amount: 2 }),
       ],
     };
   }
@@ -1482,56 +1530,28 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
     };
   }
   if (type === 'ruins') {
-    // 宠物遗迹（幕1-2）
-    const explore = Math.floor(rng() * 100);
-    if (explore < 30) {
-      const f1 = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
-      return {
-        title: '宠物遗迹',
-        desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
-        choices: [
-          c(1, '探索', '可能找到宝物或触发陷阱', 'food', { foodId: f1 }),
-          c(2, '带走遗物', '随机 1 只宠物永久 +1 速度', 'boost', { boostStat: 'spd', amount: 1 }),
-          c(3, '离开', '谨慎行事', 'none'),
-        ],
-      };
-    }
-    if (explore < 70) {
-      return {
-        title: '宠物遗迹',
-        desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
-        choices: [
-          c(1, '探索', '可能找到宝物或触发陷阱', 'damage', { amount: 30 }),
-          c(2, '带走遗物', '随机 1 只宠物永久 +1 速度', 'boost', { boostStat: 'spd', amount: 1 }),
-          c(3, '离开', '谨慎行事', 'none'),
-        ],
-      };
-    }
+    const roll = rng();
+    const desc = '20%获得随机食物或道具（各半），30%全体失去30%生命，30%失去30金币，20%随机伙伴永久+4生命、随机伙伴永久+2速度（可为同一只）';
+    let explore: EventChoice;
+    if (roll < .2) explore = rng() < .5
+      ? c(1, '探索', desc, 'food', { foodId: pick(rng, ['berry', 'meat', 'gem']) })
+      : c(1, '探索', desc, 'item', { itemId: pick(rng, mainShopItemPool()) });
+    else if (roll < .5) explore = c(1, '探索', desc, 'damage', { amount: 30 });
+    else if (roll < .8) explore = c(1, '探索', desc, 'gold', { amount: -30 });
+    else explore = c(1, '探索', desc, 'boost', { boostStat: 'hp', amount: 4, extraBoost: { stat: 'spd', amount: 2 } });
     return {
-      title: '宠物遗迹',
-      desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
-      choices: [
-        c(1, '探索', '可能找到宝物或触发陷阱', 'item', { itemId: pick(rng, mainShopItemPool()) }),
-        c(2, '带走遗物', '随机 1 只宠物永久 +1 速度', 'boost', { boostStat: 'spd', amount: 1 }),
-        c(3, '离开', '谨慎行事', 'none'),
-      ],
+      title: '宠物遗迹', desc: '你发现了一处古老的遗迹，空气中弥漫着神秘的气息……',
+      choices: [explore,
+        c(2, '带走遗物', '随机1只宠物永久+1速度', 'boost', { boostStat: 'spd', amount: 1 }),
+        c(3, '离开', '谨慎行事', 'none')],
     };
   }
   if (type === 'gambler') {
-    // 神秘商人的赌局（赌博，幕2-3）
-    const guess = Math.floor(rng() * 100);
-    const shopItemPool = mainShopItemPool();
-    const gambleFood = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
-    const gambleWin = rng() < 0.5;
     return {
-      title: '神秘商人的赌局',
-      desc: '一个蒙面商人向你提出一个赌约……',
+      title: '神秘商人的赌局', desc: '一个蒙面商人举起一枚硬币，请你猜测落下的一面。',
       choices: [
-        guess < 50
-          ? c(1, '猜硬币', '猜中赢稀有道具，猜错损失金币', 'item', { itemId: shopItemPool[0], goldDelta: 0 })
-          : c(1, '猜硬币', '猜中赢稀有道具，猜错损失金币', 'gold', { amount: -25, goldDelta: 0 }),
-        c(2, '以小博大', '消耗 1 个随机食物，赌赢获金币，赌输丢金币', 'food', { goldDelta: gambleWin ? 50 : -50, foodId: gambleFood }),
-        c(3, '离开', '不参与赌博', 'none'),
+        c(1, '猜硬币', '选择正面或反面；50%指定伙伴永久+1速度，50%随机伙伴获得迟缓诅咒', 'coin', { coinResult: rng() < .5 ? 'heads' : 'tails' }),
+        c(2, '离开', '无事发生', 'none'),
       ],
     };
   }
@@ -1541,47 +1561,38 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
       title: '灵魂祭坛',
       desc: '一座古老的祭坛散发着幽蓝的光芒，似乎在呼唤着什么……',
       choices: [
-        c(1, '献祭', '随机放生 1 只宠物，全队永久 +3 生命上限', 'sacrifice', { boostStat: 'hp', amount: 3 }),
-        c(2, '净化', '消耗 40 金币，随机 1 只宠物清除诅咒', 'purify', { goldDelta: -40 }),
+        c(1, '献祭', '随机放生1只宠物，其余伙伴永久+2生命上限', 'sacrifice', { boostStat: 'hp', amount: 2 }),
+        c(2, '净化？', '50%指定1只宠物清除诅咒，50%随机1只宠物获得随机诅咒', 'purifyChoice', { purifySuccess: rng() < .5 }),
         c(3, '离开', '敬畏地绕开', 'none'),
       ],
     };
   }
   if (type === 'cursed_chest') {
-    // 诅咒宝箱（赌博/联动，幕2-3）
-    const open = Math.floor(rng() * 100);
-    const shopItemPool = mainShopItemPool();
-    const smashCurse = rng() < 0.5;
+    const foodRewards = rng() < .5 ? [{ foodId: 'golden_fruit', amount: 1 }]
+      : Array.from({ length: 2 }, () => ({ foodId: pick(rng, ['berry', 'meat', 'gem']), amount: 1 }));
     return {
-      title: '诅咒宝箱',
-      desc: '一个漆黑的宝箱散发着不祥的气息，上面缠绕着暗色的藤蔓……',
+      title: '诅咒宝箱', desc: '一个漆黑的宝箱散发着不祥的气息，上面缠绕着暗色的藤蔓……',
       choices: [
-        open < 50
-          ? c(1, '打开', '可能获得宝物或被诅咒', 'curse', { amount: 0 })
-          : c(1, '打开', '可能获得宝物或被诅咒', 'item', { itemId: shopItemPool[0] }),
-        c(2, '砸碎', '获得 30 金币，50% 随机宠物获诅咒', 'gold', { amount: 30, ...(smashCurse ? { curseTarget: true } : {}) }),
-        c(3, '离开', '远离不祥之物', 'none'),
+        c(1, '打开宝箱', '必得食物：50%获得1个圣果，50%获得2个随机普通食物；另有50%概率使随机1只宠物获得随机诅咒', 'food', { foodRewards, curseTarget: rng() < .5 }),
+        c(2, '离开', '远离不祥之物', 'none'),
       ],
     };
   }
   if (type === '精灵') {
     // 流浪精灵（战斗交互，全幕）
-    const enemyCount = rng() < 0.6 ? 1 : 2;
-    const enemies = eventBattleEnemies(rng, act, enemyCount, region);
-    const f1 = pick(rng, Object.keys(FOODS).filter((id) => FOODS[id].shop !== false));
-    const giftWin = rng() < 0.5;
+    const enemies = eventBattleEnemies(rng, act, 1, region);
+    const monsterId = enemies[0].speciesId;
+    const recruitBonus = rng() < .6 ? (rng() < .5 ? { stat: 'spd' as const, amount: 1 } : { stat: 'hp' as const, amount: 2 }) : undefined;
     return {
       title: '流浪精灵',
       desc: '一只散发着微光的精灵挡在路中央，似乎想要较量一番……',
       choices: [
-        c(1, '挑战', `战斗（${enemyCount} 只精灵），胜利获 30 金+随机食物，失败失去 20 金`, 'battle', {
+        c(1, '挑战', `战斗（1只${getMonster(monsterId).name}，当前幕次池）；胜利获得该生物和20金币，失败全队损失20%生命`, 'battle', {
           battleEnemies: enemies,
-          goldDelta: 0,
-          bonusReward: { kind: 'food', foodId: f1 },
-          battleReward: { kind: 'gold', amount: 30 },
-          battlePenalty: { goldLoss: 20 },
+          battleReward: { kind: 'recruit', monsterId, amount: 20 },
+          battlePenalty: { percent: 20 },
         }),
-        c(2, '赠送食物', '消耗 1 个随机食物，50% 获 20 金，50% 获随机道具', 'food', { foodId: f1, consumeFood: true, goldDelta: giftWin ? 20 : 0, ...(giftWin ? {} : { itemId: pick(rng, mainShopItemPool()) }) }),
+        c(2, '喂食', `消耗2个随机持有的捕捉食物，获得${getMonster(monsterId).name}；60%概率永久+1速度或+2生命（强化内各半）`, 'feedRecruit', { monsterId, consumeRandomFood: true, foodCost: 2, recruitBonus }),
         c(3, '离开', '绕道而行', 'none'),
       ],
     };
@@ -1594,7 +1605,7 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
       title: '训练场挑战',
       desc: '前方是一个训练场，几位训练家正在切磋……',
       choices: [
-        c(1, '接受挑战', `战斗（${enemyCount} 只对手），胜利全体永久 +1 最大 HP，失败随机宠物诅咒`, 'battle', {
+        c(1, '接受挑战', `战斗（${enemyCount}只对手，当前幕次较强搭配）；胜利全体永久+1最大HP，失败随机宠物诅咒`, 'battle', {
           battleEnemies: enemies,
           battleReward: { kind: 'hp', amount: 1 },
           battlePenalty: { curseTarget: true },
@@ -1629,7 +1640,8 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
 
 /** 奇遇关：从高级奖励池洗牌抽 3 个（种子预掷，可复现） */
 export function buildSpecial(rng: () => number): SpecialNode {
-  const rewards = shuffle(rng, [...SPECIAL_REWARDS]).slice(0, 3);
+  const rewards = shuffle(rng, [...SPECIAL_REWARDS]).slice(0, 3)
+    .map(reward => reward.kind === 'egg' ? { ...reward, monsterId: pick(rng, SPECIAL_EGG_POOL) } : reward);
   const titles = ['神秘裂隙', '命运回廊', '星辉祭坛'];
   return {
     title: pick(rng, titles),
@@ -1994,15 +2006,22 @@ export function currentNode(state: GameState): MapNode | undefined {
 }
 
 /** 胜利提示与实际结算共用，不包含随后手动领取的金币奖励卡。 */
-export function battleVictoryGold(state: GameState): number {
+function baseBattleVictoryGold(state: GameState): number {
   if (state.testRun && !state.testScenario) return 0;
-  if (state.eventBattle) return state.eventBattle.reward.kind === 'gold' ? state.eventBattle.reward.amount ?? 0 : 0;
+  if (state.eventBattle) return ['gold', 'recruit'].includes(state.eventBattle.reward.kind) ? state.eventBattle.reward.amount ?? 0 : 0;
   const node = currentNode(state);
   if (node?.type === 'arena3' && state.arena3Pending?.mode === 'challenge') return 50;
   if (node?.type === 'arena' || node?.type === 'gauntlet' || node?.type === 'arena3') return 0;
   if (state.map.boss[state.currentNodeId] !== undefined) return 30;
-  if (state.map.encounter[state.currentNodeId] !== undefined) return node?.type === 'corrupted' && node.corruptReward === 'gold' ? 32 : 16;
-  return node?.type === 'guardian' ? 16 : 8;
+  if (state.runMode === 'proficiency') return state.map.encounter[state.currentNodeId] !== undefined ? 16 : 8;
+  if (node?.type === 'elite' || node?.type === 'guardian') return 20;
+  if (node?.type === 'corrupted' && node.corruptReward === 'gold') return 20;
+  return 10;
+}
+
+export function battleVictoryGold(state: GameState): number {
+  const amount = baseBattleVictoryGold(state);
+  return state.runMode !== 'proficiency' && state.relics?.includes('greedy_eye') ? Math.floor(amount * 1.5) : amount;
 }
 
 export function labelOf(t: NodeType, row: number): string {
@@ -2096,11 +2115,21 @@ export function nextStage(speciesId: string): string | undefined {
   return getMonster(speciesId).evolutions?.[0]?.to;
 }
 
+/** 各条进化分支到最终形态的合法路径；蛋生、造物和最终形态不可进化。 */
+export function finalEvolutionPaths(speciesId: string): string[][] {
+  const species = getMonster(speciesId);
+  if (species.eggBorn) return [];
+  return (species.evolutions ?? []).flatMap(({ to }) => {
+    const paths = finalEvolutionPaths(to);
+    return paths.length ? paths.map(path => [to, ...path]) : [[to]];
+  });
+}
+
 /** 只限制主模式传奇进化，不影响图鉴、纯属性预览及熟练度营火融合。 */
-export function evolutionLockReason(state: GameState, speciesId: string): string | undefined {
+export function evolutionLockReason(state: GameState, speciesId: string, toFinal = false): string | undefined {
   const target = nextStage(speciesId);
   if (state.runMode !== 'proficiency' && state.act < 2 && !state.legendEvolutionUnlocked
-    && target && getMonster(target).rank === 3) {
+    && (toFinal ? finalEvolutionPaths(speciesId).some(path => getMonster(path.at(-1)!).rank === 3) : target && getMonster(target).rank === 3)) {
     return '击败第一幕首领后解锁传奇进化';
   }
   return undefined;
@@ -2133,6 +2162,7 @@ export function fuseUnit(primary: Unit, targetSpeciesId?: string): Unit | null {
   return {
     ...fresh,
     uid: primary.uid,
+    ...(primary.tamedOrigin ? { tamedOrigin: true } : {}),
     hp,
     maxHp: hp,
     spd,

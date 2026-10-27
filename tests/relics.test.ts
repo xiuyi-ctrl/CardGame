@@ -16,13 +16,13 @@ function startWithRelic(relic: string) {
 }
 
 describe('遗物改版', () => {
-  it('只保留三件指定遗物', () => {
-    expect(RELIC_ORDER).toEqual(['traveler_charm', 'elite_badge', 'beast_master']);
+  it('保留原遗物并新增经济、捕捉与复活遗物', () => {
+    expect(RELIC_ORDER).toEqual(['traveler_charm', 'elite_badge', 'beast_master', 'greedy_eye', 'metal_cauldron', 'horn_of_plenty', 'spare_candle']);
     expect(Object.keys(RELIC_DEFS)).toEqual(RELIC_ORDER);
   });
 
-  it('旅者护符使开局金币增加 30', () => {
-    expect(startWithRelic('traveler_charm').gold).toBe(50);
+  it('旅者护符使开局金币增加 50', () => {
+    expect(startWithRelic('traveler_charm').gold).toBe(70);
   });
 
   it('精锐之证赠送每种主模式道具各一个', () => {

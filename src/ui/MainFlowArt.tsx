@@ -48,7 +48,9 @@ export function FlowTeam({ units }: { units: Unit[] }) {
 export function flowChoiceArt(kind: string, itemId?: string): string {
   if (itemId && BACKPACK_ITEM_ART[itemId]) return BACKPACK_ITEM_ART[itemId];
   const existing: Record<string, string> = { gold: '/reward-icons/gold.png', heal: '/reward-icons/heal.png',
-    food: '/reward-icons/food.png', purify: BACKPACK_ITEM_ART.purify, boost: BACKPACK_ITEM_ART.hp_up };
+      food: '/reward-icons/food.png', feedRecruit: '/reward-icons/food.png', purify: BACKPACK_ITEM_ART.purify, purifyChoice: BACKPACK_ITEM_ART.purify,
+      carryEgg: BACKPACK_ITEM_ART.mystery_egg, egg: BACKPACK_ITEM_ART.mystery_egg,
+      coin: '/reward-icons/gold.png', boost: BACKPACK_ITEM_ART.hp_up };
   if (existing[kind]) return existing[kind];
   const names: Record<string, string> = { recruit: 'new-companion', revive: 'new-companion', reviveHalf: 'new-companion',
     battle: 'battles-won', none: 'next-chapter', damage: 'companions-lost', sacrifice: 'companions-lost',

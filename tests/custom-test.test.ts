@@ -201,21 +201,22 @@ describe('自定义测试：非战斗类节点（不需要宠物，跳过选宠�
     expect(s.map.specials.custom_test.rewards).toHaveLength(3);
   });
 
-  it('进化之光：基础形态可进化，最高进化形态无法再进化', () => {
+  it('第二幕完美进化：基础形态直接进化到最终形态', () => {
     let s = startTest('special');
-    // 覆盖奇遇奖励为「进化之光」
+    // 第一幕无奇遇；覆盖第二幕奖励为完美进化。
     s = {
       ...s,
+      act: 2,
       map: { ...s.map, specials: { ...s.map.specials, custom_test: { title: '奇遇', desc: 'x', rewards: [SPECIAL_REWARDS.find((r) => r.kind === 'evolve')!] } } },
     };
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'sr-evolve' });
     // roster 中有基础形态（momo/lulu/fifi）可进化，进入选择界面
     expect(s.screen).toBe('roster');
-    expect(s.specialPending).toEqual({ kind: 'evolve', super: false });
+    expect(s.specialPending).toEqual({ kind: 'evolve', super: false, toFinal: true });
     // 选择 momo 进化
     const momo = s.roster.find((u) => u.speciesId === 'momo')!;
     s = dispatch(s, { type: 'EVOLVE_ONE', uid: momo.uid });
-    expect(s.roster.find((u) => u.uid === momo.uid)!.speciesId).toBe('momo_queen');
+    expect(s.roster.find((u) => u.uid === momo.uid)!.speciesId).toBe('momo_god');
     expect(s.specialPending).toBeUndefined();
   });
 

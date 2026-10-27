@@ -56,6 +56,7 @@ function applyBattleCollapse(b: BattleState): BattleState {
 
 /** 创建战斗的可选参数（地图节点特殊模式） */
 export interface BattleOptions {
+  relics?: string[];
 /** 被侵蚀 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 */
 corruptDebuff?: 'spd' | 'dmg' | 'burn';
   /** 车轮战：敌方 2~3 只轮换上阵 */
@@ -409,6 +410,7 @@ export function createBattle(
     c.timeRewindRound = undefined;
     c.timeRewindExtraPending = undefined;
     c.timeRewindLogPending = undefined;
+    c.candleReviveLogPending = undefined;
     c.statuses = c.statuses.filter(s => s.kind !== 'timeLag');
     c.radianceGainedThisRound = undefined;
     c.statuses = c.statuses.filter(s => s.kind !== 'emberSeed' && s.kind !== 'sunRadiance' && s.kind !== 'foxFire' && s.kind !== 'foxTailGuard');
@@ -437,6 +439,7 @@ export function createBattle(
     act: options?.act,
     nodeType: options?.nodeType,
     difficulty: options?.difficulty,
+    relics: options?.relics ? [...options.relics] : undefined,
   };
   const untameable = options?.untameable === true;
   const difficulty = options?.difficulty;
@@ -859,6 +862,11 @@ function replaceUnit(b: BattleState, unit: Unit): BattleState {
     unit = { ...unit, hp: Math.ceil(getEffectiveMaxHp(unit) / 2), statuses: unit.statuses.filter(s => !negative.includes(s.kind)),
       battleBuffs: buffs, timeRewindUsed: true, timeRewindRound: b.round, timeRewindExtraPending: true, timeRewindLogPending: true };
   }
+  if (unit.hp <= 0 && previous && previous.hp > 0 && unit.isPlayer
+    && b.relics?.includes('spare_candle') && !b.spareCandleUsed) {
+    unit = { ...unit, hp: 1, candleReviveLogPending: true };
+    b = { ...b, spareCandleUsed: true };
+  }
   const side = unit.isPlayer ? 'playerUnits' : 'enemyUnits';
   const list = b[side].map((u) => (u.uid === unit.uid ? unit : u));
   return { ...b, [side]: list };
@@ -1011,6 +1019,12 @@ export function pushLog(
   for (const unit of rewound) {
     result = pushLog(result, `${unit.name} 的「时砂回溯」恢复 ${Math.ceil(getEffectiveMaxHp(unit) / 2)} 点生命`, sideOf(unit), unit.uid, unit.uid,
       undefined, undefined, undefined, { healing: unit.hp });
+  }
+  const revived = result.playerUnits.filter(unit => unit.candleReviveLogPending);
+  for (const unit of revived) result = replaceUnit(result, { ...unit, candleReviveLogPending: undefined });
+  for (const unit of revived) {
+    result = pushLog(result, `备用的蜡烛使 ${unit.name} 以 1 点生命复活`, 'player', unit.uid, unit.uid,
+      undefined, undefined, undefined, { healing: 1 });
   }
   return result;
 }
@@ -4030,13 +4044,13 @@ export function playerSwap(b: BattleState, actorUid: string, otherUid: string): 
 }
 
 /** 计算对某敌人使用某食物的捕捉概率（0..1）。不含 1 血/圣果的必定成功判定，由调用方另行判断。 */
-export function tameChance(enemy: Unit, foodId: string): number {
+export function tameChance(enemy: Unit, foodId: string, relics?: readonly string[]): number {
   const food = getFood(foodId);
   const species = getMonster(enemy.speciesId);
   if (food.guaranteed) return 1;
   if (food.baseTame <= 0 || species.rank > 3) return 0;
   const basePercent = 60 - species.rank * 10;
-  const foodBonus = Math.round(food.baseTame * 100) - 60;
+  const foodBonus = Math.round(food.baseTame * (relics?.includes('horn_of_plenty') ? 1.1 : 1) * 100) - 60;
   const hpBonus = 15 * Math.max(0, 1 - enemy.hp / enemy.maxHp / TAME_THRESHOLD);
   const failBonus = Math.min(enemy.tameFails ?? 0, 2) * TAME_FAIL_BONUS * 100;
   return Math.min(basePercent + 35, basePercent + foodBonus + hpBonus + failBonus) / 100;
@@ -4054,7 +4068,7 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
     return pushLog(b, `${enemy.name} 生命值过高，无法驯服`, 'enemy');
   }
   const food = getFood(foodId);
-  const chance = tameChance(enemy, foodId);
+  const chance = tameChance(enemy, foodId, b.relics);
   // 驯服尝试计数 +1；圣果使用计数
   const nb0 = { ...b, tameAttempts: (b.tameAttempts ?? 0) + 1, 圣果Used: (b.圣果Used ?? 0) + (foodId === 'golden_fruit' ? 1 : 0) };
 
@@ -4064,6 +4078,7 @@ export function playerTame(b: BattleState, foodId: string, enemyUid: string): Ba
     let after: BattleState = nb2;
     if (success) {
       const tamed = makeUnit(enemy.speciesId, true, 2, false);
+      tamed.tamedOrigin = true;
       after = {
         ...nb2,
         enemyUnits: nb2.enemyUnits.filter((u) => u.uid !== enemyUid),

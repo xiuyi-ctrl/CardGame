@@ -22,7 +22,7 @@ describe('自主测试场景', () => {
     expect(state.testRun).toBe(true);
     expect(state.saveSlot).toBeUndefined();
     for (const choice of state.map.events.custom_test.choices) {
-      expect(gameReducer(state, { type: 'EVENT_CHOICE', choiceId: choice.id })).not.toBe(state);
+      expect(gameReducer(state, { type: 'EVENT_CHOICE', choiceId: choice.id, ...(choice.kind === 'coin' ? { coinSide: 'heads' as const } : {}) })).not.toBe(state);
     }
   });
   it.each(GROWTH_EVENT_TYPES)('熟练度可指定事件%s，墓地和成长点满足测试前提', eventType => {

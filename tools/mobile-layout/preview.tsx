@@ -24,7 +24,8 @@ import { createBattle, makeUnit, performGauntletSwap, playerTame } from '../../s
 import { ITEMS } from '../../src/game/data/items';
 import { FOODS } from '../../src/game/data/foods';
 import { emptyMainRating } from '../../src/game/rating';
-import { generateMap } from '../../src/game/state/game';
+import { generateMap, buildEventByType, SPECIAL_REWARDS, RELIC_ORDER } from '../../src/game/state/game';
+import { createRng } from '../../src/game/rng';
 import type { GameState } from '../../src/game/state/game';
 import type { StatusEffect } from '../../src/game/types';
 import '../../src/ui/styles.css';
@@ -62,6 +63,12 @@ add('region-ecology', ui.RegionScreen, { region: 'emerald_forest' }, false, '查
 add('region-mixed-ecology', ui.RegionScreen, {}, false, '查看生态详情');
 add('region-ecology-discovered', ui.RegionScreen, { region: 'emerald_forest', unlocks: { ...base.unlocks, regionEncounters: { emerald_forest: ['momo', 'torch_fox', 'mimi_king'] } } }, false, '查看生态详情');
 add('difficulty-select', ui.DifficultyScreen, {}, false);
+add('relics-five-unlocked', ui.DifficultyScreen, { relics: ['greedy_eye'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
+add('relics-cauldron-selected', ui.DifficultyScreen, { relics: ['metal_cauldron'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
+add('relics-horn-selected', ui.DifficultyScreen, { relics: ['horn_of_plenty'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
+add('relics-candle-selected', ui.DifficultyScreen, { relics: ['spare_candle'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
+add('relics-achievements', ui.AchievementsScreen, {}, true, '遗物');
+add('shop-greedy-eye', ui.ShopScreen, { relics: ['greedy_eye'], shopStock: ['berry', 'atk_up', 'scout', 'bundle_gem'], shopRefreshCount: 1, gold: 40 }, false);
 add('starter', ui.StarterScreen, {}, false);
 add('creature-style-compare', CreatureStylePreview, {}, false);
 add('proficiency-select', ui.ProficiencyStarterScreen, {}, false);
@@ -82,6 +89,9 @@ add('recruit', ui.RewardScreen, { rewards, pendingRecruitRewardId: 'recruit' }, 
 add('roster', ui.RosterScreen);
 add('postbattle', ui.PostBattleRosterScreen, { postBattle: true }, false);
 add('shop', ui.ShopScreen, { shopStock: ['atk_up', 'meat', 'scout', 'gem'], shopBoughtItems: ['meat'], gold: 10 }, false);
+add('shop-bundle-berry', ui.ShopScreen, { shopStock: ['bundle_berry', 'meat', 'atk_up', 'scout'], gold: 100 }, false);
+add('shop-bundle-meat', ui.ShopScreen, { shopStock: ['bundle_meat', 'berry', 'spd_up', 'twin'], shopBoughtItems: ['bundle_meat'], gold: 10 }, false);
+add('shop-bundle-gem', ui.ShopScreen, { shopStock: ['bundle_gem', 'berry', 'hp_up', 'scout'], difficulty: 'nightmare', gold: 20 }, false);
 add('shop-prof', ui.ShopScreen, { runMode: 'proficiency', shopStock: ['book_large', 'skill_enhance_stone', 'revival_stone', 'reset_stone'] }, false);
 add('rest', CampRestScreen, { runMode: 'proficiency' });
 add('rest-fusion', CampFusionScreen, { runMode: 'proficiency', fusionMainUid: first.uid, fusionSubUid: base.roster[1].uid });
@@ -93,6 +103,14 @@ const specialNode = Object.keys(base.map.specials)[0];
 add('special', ui.SpecialScreen, { currentNodeId: specialNode ?? 'preview-special', map: { ...base.map, specials: { ...base.map.specials, 'preview-special': { title: '林间奇遇', desc: '选择适合队伍的成长方向。', rewards: [{ id: 'gold', kind: 'gold', amount: 30, label: '金币补给', desc: '获得30金币' }, { id: 'evolve', kind: 'evolve', label: '进化之光', desc: '选择一位伙伴进化' }, { id: 'custom', kind: 'custom', label: '神秘造物', desc: '选择一个造物模板' }] } } } });
 add('custom', CreationScreen);
 add('boost', AttributeBoostScreen, { specialPending: { kind: 'boost', uid: first.uid } });
+for (const ids of [['sr-evolve', 'sr-gold', 'sr-golden-fruit'], ['sr-egg', 'sr-boost', 'sr-purify']]) {
+  add(ids.includes('sr-egg') ? 'special-revised-egg' : 'special-revised-perfect', ui.SpecialScreen, { screen: 'special', act: 2, currentNodeId: 'new-special',
+    map: { ...base.map, specials: { 'new-special': { title: '林间奇遇', desc: '选择一项奖励。', rewards: SPECIAL_REWARDS.filter(reward => ids.includes(reward.id)) } } } });
+}
+add('perfect-evolution', ProgressionChoiceScreen, { act: 2, specialPending: { kind: 'evolve', super: false, toFinal: true } });
+add('perfect-evolution-branch', ProgressionChoiceScreen, { act: 2, roster: [makeUnit('fire_fox', true, 0, false)], specialPending: { kind: 'evolve', super: false, toFinal: true } });
+add('reshape-choice', ProgressionChoiceScreen, { act: 2, specialPending: { kind: 'boost', uid: '', hpBonus: 6, spdBonus: 3 } });
+add('reshape-stat', AttributeBoostScreen, { act: 2, specialPending: { kind: 'boost', uid: first.uid, hpBonus: 6, spdBonus: 3 } });
 add('evolve', ProgressionChoiceScreen, { specialPending: { kind: 'evolve' } });
 add('special-target', SpecialTargetScreen, { specialPending: { kind: 'eventBoostHp', amount: 5 } });
 add('gameover', ui.GameOverScreen);
@@ -102,6 +120,16 @@ add('forest-interact', ui.InterActScreen, { region: 'emerald_forest' });
 add('watchtower', ui.WatchtowerScreen);
 add('chest', ui.ChestScreen, { chestResult: ['左侧宝箱：金币30、浆果2', '右侧宝箱：侦查符1、全队恢复生命'] });
 add('backpack', ui.BackpackScreen, {}, false);
+const eggPreview = { id: 'egg-preview', remaining: 3, special: false, monsterId: 'momo', passedNodeIds: [] };
+add('backpack-eggs', ui.BackpackScreen, { screen: 'backpack', carriedEggs: [eggPreview, { ...eggPreview, id: 'egg-2', remaining: 1 }] }, false, '随机蛋');
+for (const type of ['spring', 'altar', 'gambler', '行商', 'egg', 'ruins', 'altar2', 'cursed_chest', '精灵', '训练']) {
+  const extra = { screen: 'event', currentNodeId: 'revised', map: { ...base.map, events: { revised: buildEventByType(createRng(42), type, 2) } } };
+  add(`event-revised-${type}`, ui.EventScreen, extra, true);
+  if (type === 'gambler') {
+    add('event-coin-picker', ui.EventScreen, extra, true, '猜硬币');
+    add('event-target-picker', ui.EventScreen, { ...extra, pendingEventTarget: { kind: 'spd', choiceId: 'e1' } }, true);
+  }
+}
 add('tame-overflow', ui.TameOverflowScreen, { tameOverflow: [makeUnit('momo', true, 0, false)] });
 add('test-type', ui.TestTypeScreen, {}, false);
 add('test-home-entry', ui.default, {}, false, '测试关卡');

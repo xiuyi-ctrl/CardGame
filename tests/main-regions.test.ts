@@ -127,7 +127,7 @@ describe('混合地区确定性基线', () => {
         }
       }
     }
-    // 品阶与人数进度改版后的地图生成基线；旧存档中的地图不会重生成。
-    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('b49ec767b5da5b1410143af12a9cd8ec43098a6b0aea9485b5b7e2f14b27f640');
+    // 含2026-10-27十类事件与七项奇遇新奖励的基线；旧存档中的地图不会重生成。
+    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('c66fff8efa58c11e6ddc8bd896344c223372219023ce1595f1a73ef47c146bc0');
   });
 });

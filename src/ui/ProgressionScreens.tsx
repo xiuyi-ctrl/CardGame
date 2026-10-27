@@ -3,7 +3,7 @@ import type { Dispatch } from 'react';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import type { Unit } from '../game/types';
-import { nextStage, evolutionLockReason, CURSE_CN, CUSTOM_PRESETS } from '../game/state/game';
+import { nextStage, finalEvolutionPaths, evolutionLockReason, CURSE_CN, CUSTOM_PRESETS } from '../game/state/game';
 import { getMonster } from '../game/data/monsters';
 import { getPassive } from '../game/data/passives';
 import { getSkill } from '../game/data/skills';
@@ -35,23 +35,26 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
   const pending = state.specialPending;
   const isEvolution = pending?.kind === 'evolve';
   const isSuper = isEvolution && pending.super;
+  const isFinal = isEvolution && !!pending.toFinal;
+  const targetsFor = (unit: Unit) => isFinal ? finalEvolutionPaths(unit.speciesId).map(path => path.at(-1)!) : (getMonster(unit.speciesId).evolutions ?? []).map(branch => branch.to);
+  const isReshape = pending?.kind === 'boost' && pending.hpBonus === 6 && pending.spdBonus === 3;
   const focused = state.roster.find(unit => unit.uid === focusedUid)
-    ?? state.roster.find(unit => !isEvolution || (nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId))) ?? state.roster[0];
-  const lockReason = focused && isEvolution ? evolutionLockReason(state, focused.speciesId) : undefined;
-  const evolved = focused && isEvolution && !lockReason ? evolutionPreview(focused, evolutionTargets[focused.uid]) : undefined;
+    ?? state.roster.find(unit => !isEvolution || (nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId, isFinal))) ?? state.roster[0];
+  const lockReason = focused && isEvolution ? evolutionLockReason(state, focused.speciesId, isFinal) : undefined;
+  const evolved = focused && isEvolution && !lockReason ? evolutionPreview(focused, evolutionTargets[focused.uid] ?? targetsFor(focused)[0]) : undefined;
   const oldPassive = focused ? getPassive(focused.passive) : undefined;
   const newPassive = evolved ? getPassive(evolved.passive) : undefined;
-  const title = isEvolution ? (isSuper ? '超进化' : '进化之光') : '属性强化 · 选择伙伴';
+  const title = isEvolution ? (isSuper ? '超进化' : isFinal ? '完美进化' : '进化之光') : `${isReshape ? '属性重塑' : '属性强化'} · 选择伙伴`;
   return <div className={`flow-screen progression-choice-screen ${isSuper ? 'is-super-evolution' : ''}`}>
     <FlowHeader title={title} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
     <main className="progression-choice-layout">
       <section className="flow-frame progression-roster"><h2>{isEvolution ? '可选进化伙伴' : '选择强化对象'}</h2>
         <div className="progression-roster-grid">{state.roster.map(unit => {
-          const unitLockReason = isEvolution ? evolutionLockReason(state, unit.speciesId) : undefined;
+          const unitLockReason = isEvolution ? evolutionLockReason(state, unit.speciesId, isFinal) : undefined;
           const eligible = !isEvolution || (!!nextStage(unit.speciesId) && !unitLockReason);
           return <button type="button" key={unit.uid} className={`progression-pet-option ${focused?.uid === unit.uid ? 'is-focused' : ''}`} disabled={!eligible}
             onMouseEnter={() => setFocusedUid(unit.uid)} onFocus={() => setFocusedUid(unit.uid)} onClick={() => {
-              if (isEvolution && (getMonster(unit.speciesId).evolutions?.length ?? 0) > 1) { setFocusedUid(unit.uid); return; }
+              if (isEvolution && targetsFor(unit).length > 1) { setFocusedUid(unit.uid); return; }
               dispatch(isEvolution ? { type: 'EVOLVE_ONE', uid: unit.uid } : { type: 'SPECIAL_TARGET', uid: unit.uid });
             }}>
             <span className="progression-pet-label">{unitLockReason ? '传奇未解锁' : eligible ? (isEvolution ? '可进化' : '可强化') : '最终形态'}</span>
@@ -60,7 +63,7 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
         })}</div>
       </section>
       <section className="flow-frame progression-preview"><h2>{isEvolution ? '进化预览' : '伙伴资料'}</h2>
-        {isEvolution && focused && (getMonster(focused.speciesId).evolutions?.length ?? 0) > 1 && <div className="progression-branch-choice"><label>进化形态 <select aria-label="进化形态" value={evolutionTargets[focused.uid] ?? nextStage(focused.speciesId)} onChange={event => setEvolutionTargets(values => ({ ...values, [focused.uid]: event.target.value }))}>{getMonster(focused.speciesId).evolutions!.map(branch => <option key={branch.to} value={branch.to}>{getMonster(branch.to).name}</option>)}</select></label><button type="button" className="primary" disabled={!!lockReason} onClick={() => dispatch({ type: 'EVOLVE_ONE', uid: focused.uid, targetSpeciesId: evolutionTargets[focused.uid] ?? nextStage(focused.speciesId) })}>确认进化</button></div>}
+        {isEvolution && focused && targetsFor(focused).length > 1 && <div className="progression-branch-choice"><label>进化形态 <select aria-label="进化形态" value={evolutionTargets[focused.uid] ?? targetsFor(focused)[0]} onChange={event => setEvolutionTargets(values => ({ ...values, [focused.uid]: event.target.value }))}>{targetsFor(focused).map(target => <option key={target} value={target}>{getMonster(target).name}</option>)}</select></label><button type="button" className="primary" disabled={!!lockReason} onClick={() => dispatch({ type: 'EVOLVE_ONE', uid: focused.uid, targetSpeciesId: evolutionTargets[focused.uid] ?? targetsFor(focused)[0] })}>确认进化</button></div>}
         <div className="progression-preview-body">{focused && <>
           {evolved ? <>
             <div className="evolution-portraits"><div><FlowPet unit={focused} /><strong>{focused.name}</strong></div><span aria-hidden="true"><UiSymbol name="arrow-right" /></span><div><FlowPet unit={evolved} /><strong>{evolved.name}</strong></div></div>
@@ -71,7 +74,7 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
             <p className="progression-note">保留原有强化、自创技能与诅咒。{isSuper && '以上尚未计入本次随机诅咒。'}</p></MobileDetails>
           </> : <><div className="progression-single-pet"><FlowPet unit={focused} /><h3>{focused.name}</h3><FlowPetStats unit={focused} /></div>
             {oldPassive && <div className="flow-passive"><b>{oldPassive.name}</b><p>{oldPassive.desc}</p></div>}
-            <p className="progression-note">{lockReason ?? (isEvolution ? '该伙伴已是最终形态。' : '点击左侧伙伴后，选择生命 +5 或速度 +2。')}</p>
+            <p className="progression-note">{lockReason ?? (isEvolution ? '该伙伴已是最终形态。' : `点击左侧伙伴后，选择生命 +${pending?.kind === 'boost' ? pending.hpBonus ?? 5 : 5} 或速度 +${pending?.kind === 'boost' ? pending.spdBonus ?? 2 : 2}。`)}</p>
           </>}
         </>}</div>
         {isSuper && <aside className="super-evolution-warning"><h3>随机诅咒</h3><p>进化后随机附带一种负面诅咒</p><div>{(['hpDown', 'atkDown', 'spdDown'] as const).map(curse => <span key={curse}><BuffIcon art={CURSE_ART[curse]} />{CURSE_CN[curse]}</span>)}</div></aside>}
@@ -82,13 +85,15 @@ export function ProgressionChoiceScreen({ state, dispatch }: { state: GameState;
 }
 
 export function AttributeBoostScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
-  const uid = state.specialPending?.kind === 'boost' ? state.specialPending.uid : '';
+  const pending = state.specialPending?.kind === 'boost' ? state.specialPending : undefined;
+  const uid = pending?.uid ?? '';
+  const hpBonus = pending?.hpBonus ?? 5, spdBonus = pending?.spdBonus ?? 2;
   const unit = state.roster.find(candidate => candidate.uid === uid);
   if (!unit) return null;
   return <div className="flow-screen attribute-boost-screen">
-    <FlowHeader title="属性强化 · 选择一项永久提升" state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
+    <FlowHeader title={`${hpBonus === 6 && spdBonus === 3 ? '属性重塑' : '属性强化'} · 选择一项永久提升`} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
     <main className="flow-frame attribute-boost-panel"><section className="attribute-boost-target"><h2>强化对象</h2><FlowPet unit={unit} /><h3>{unit.name}</h3><FlowPetStats unit={unit} /></section>
-      <div className="attribute-boost-options">{([{ stat: 'hp', value: 5, name: '生命', old: unit.maxHp }, { stat: 'spd', value: 2, name: '速度', old: unit.spd }] as const).map(option => <button type="button" key={option.stat} onClick={() => dispatch({ type: 'BOOST_STAT', stat: option.stat })}>
+      <div className="attribute-boost-options">{([{ stat: 'hp', value: hpBonus, name: '生命', old: unit.maxHp }, { stat: 'spd', value: spdBonus, name: '速度', old: unit.spd }] as const).map(option => <button type="button" key={option.stat} onClick={() => dispatch({ type: 'BOOST_STAT', stat: option.stat })}>
         <i className={`starter-stat-icon ${option.stat === 'hp' ? 'starter-stat-heart' : 'starter-stat-speed'}`} aria-hidden="true" />
         <div><h2>{option.name} <em>+{option.value}</em></h2><p>永久提升{option.stat === 'hp' ? '最大生命' : '速度'}</p><strong>{option.stat === 'hp' ? '最大生命' : '速度'} {option.old} → <em>{option.old + option.value}</em></strong></div>
       </button>)}</div>

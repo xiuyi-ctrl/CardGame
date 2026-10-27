@@ -61,18 +61,18 @@ describe('主模式遭遇职责', () => {
       const enemies = event.choices.find(c => c.kind === 'battle')!.battleEnemies!;
       const team = enemies.map(u => u.speciesId);
       expect(team.length).toBeGreaterThanOrEqual(type === '精灵' ? 1 : 2);
-      expect(team.length).toBeLessThanOrEqual(type === '精灵' ? 2 : 3);
+      expect(team.length).toBeLessThanOrEqual(type === '精灵' ? 1 : 3);
       team.forEach(id => expect(getMonster(id).rank).toBe(act));
       if (team.length === 1) expect(soloBlocked.has(team[0])).toBe(false);
       else {
         expect(team.some(id => !soloBlocked.has(id))).toBe(true);
         expect(team.filter(id => healers.has(id)).length).toBeLessThanOrEqual(1);
       }
-      // 模拟旧实现消耗的规模抽签、每只敌人抽签及后续奖励随机数。
+      // 新精灵固定单体，仅抽取喂食强化；训练仍先抽规模再抽每只敌人。
       const legacyRng = createRng(seed);
-      const expectedCount = type === '精灵' ? legacyRng() < 0.6 ? 1 : 2 : 2 + Math.floor(legacyRng() * 2);
+      const expectedCount = type === '精灵' ? 1 : 2 + Math.floor(legacyRng() * 2);
       for (let i = 0; i < expectedCount; i++) legacyRng();
-      if (type === '精灵') { legacyRng(); legacyRng(); if (event.choices[1].itemId) legacyRng(); }
+      if (type === '精灵' && legacyRng() < .6) legacyRng();
       expect(rng()).toBe(legacyRng());
       expect(buildEventByType(createRng(seed), type, act, region)).toEqual(event);
     }

@@ -1,8 +1,8 @@
 import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furnaceShellTargets, getActablePlayerUnits, getEffectiveSpd, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
 import { applyGrowthChoice, applySkillEnhance, getSkillEnhanceCost } from '../core/growth';
-import { FOODS } from '../data/foods';
-import { ITEMS } from '../data/items';
+import { FOODS, isCaptureFood } from '../data/foods';
 import { MAIN_REGIONS } from '../data/regions';
+import { getMainShopOffer } from '../data/main-shop';
 import { getSkill } from '../data/skills';
 import type { BattleState, Unit } from '../types';
 import { createInitialState, gameReducer, type GameAction } from '../state/reducer';
@@ -126,11 +126,16 @@ function mapStep(state: GameState): GameState {
 }
 
 function deterministicEventChoice(state: GameState): GameState {
+  if (state.pendingEventTarget) {
+    const unit = state.roster.find(unit => unit.hp > 0 && (state.pendingEventTarget?.kind !== 'purify' || unit.curse)) ?? state.roster[0];
+    return dispatch(state, { type: 'EVENT_TARGET_CONFIRM', uid: unit.uid });
+  }
   const event = state.map.events[state.currentNodeId];
   if (!event) return dispatch(state, { type: 'NEXT_NODE' });
   const valid = event.choices.filter((choice) => {
     if ((choice.goldDelta ?? 0) < 0 && state.gold + (choice.goldDelta ?? 0) < 0) return false;
     if (choice.consumeFood && choice.foodId && (state.inventory[choice.foodId] ?? 0) <= 0) return false;
+    if (choice.consumeRandomFood && Object.keys(state.inventory).filter(isCaptureFood).reduce((sum, id) => sum + state.inventory[id], 0) < (choice.foodCost ?? 1)) return false;
     return choice.chance === undefined || choice.chance >= 1;
   });
   const safe = valid.filter((choice) => !['sacrifice', 'curse'].includes(choice.kind));
@@ -139,7 +144,7 @@ function deterministicEventChoice(state: GameState): GameState {
     ? ['heal', 'growthPoint', 'permanentBoost', 'food', 'item', 'gold', 'none', 'battle']
     : ['recruit', 'heal', 'food', 'item', 'none', 'gold', 'battle'];
   const choice = priorities.map((kind) => pool.find((item) => item.kind === kind)).find(Boolean) ?? pool[0];
-  return choice ? dispatch(state, { type: 'EVENT_CHOICE', choiceId: choice.id }) : dispatch(state, { type: 'NEXT_NODE' });
+  return choice ? dispatch(state, { type: 'EVENT_CHOICE', choiceId: choice.id, ...(choice.kind === 'coin' ? { coinSide: 'heads' as const } : {}) }) : dispatch(state, { type: 'NEXT_NODE' });
 }
 
 function improveUnit(unit: Unit): Unit | undefined {
@@ -181,19 +186,18 @@ function specialStep(state: GameState): GameState {
     ? ['growthPoint', 'boost', 'slotUnlock', 'gold', 'item', 'recruit', 'revive']
     : ['gold', 'item', 'evolve', 'boost', 'custom', 'superevolve'];
   const available = special.rewards.filter((item) => !['evolve', 'superevolve'].includes(item.kind)
-    || state.roster.some((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId)));
+    || state.roster.some((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId, item.toFinal)));
   const reward = priorities.map((kind) => available.find((item) => item.kind === kind)).find(Boolean) ?? available[0];
   return reward ? dispatch(state, { type: 'SPECIAL_CHOICE', rewardId: reward.id }) : dispatch(state, { type: 'NEXT_NODE' });
 }
 
 function shopStep(state: GameState): GameState {
   if (state.runMode !== 'proficiency') {
-    if (!state.shopBought && state.gold >= 5 && state.roster.some((unit) => unit.hp / unit.maxHp < 0.5)) return dispatch(state, { type: 'SHOP_REST' });
     const stock = state.shopStock ?? [];
     const priorities = ['gem', 'meat', 'berry', ...stock];
     const item = priorities.find((id) => {
       if (!stock.includes(id) || (state.shopBoughtItems ?? []).includes(id)) return false;
-      const rawPrice = FOODS[id]?.price ?? ITEMS[id]?.price ?? Infinity;
+      const rawPrice = getMainShopOffer(id)?.price ?? Infinity;
       return state.gold >= Math.round(rawPrice * DIFFICULTY_CONFIG[state.difficulty ?? 'normal'].shopPriceMult);
     });
     if (item) return dispatch(state, { type: 'SHOP_BUY', foodId: item });
@@ -215,7 +219,7 @@ function shopStep(state: GameState): GameState {
 function rosterStep(state: GameState): GameState {
   const target = [...state.roster].sort((a, b) => b.maxHp - a.maxHp)[0];
   if (state.specialPending?.kind === 'evolve') {
-    const evolvable = state.roster.find((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId));
+    const evolvable = state.roster.find((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId, state.specialPending?.kind === 'evolve' && state.specialPending.toFinal));
     if (evolvable) return dispatch(state, { type: 'EVOLVE_ONE', uid: evolvable.uid });
   }
   if (state.specialPending && target) {

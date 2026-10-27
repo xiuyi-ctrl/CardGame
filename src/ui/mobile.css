@@ -185,7 +185,7 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .home-companion { width: clamp(56px, 22dvh, 96px); height: clamp(56px, 25dvh, 110px); }
 
 /* 难度页明确覆盖桌面最小高度和窄窗口的竖向堆叠。 */
-.mobile-ui .difficulty-screen { display: grid; grid-template-rows: var(--mobile-header) minmax(0, 1fr) clamp(56px, 16dvh, 68px); min-height: 0; height: 100%; gap: var(--mobile-gap); overflow: hidden; }
+.mobile-ui .difficulty-screen { display: grid; grid-template-rows: var(--mobile-header) minmax(0, 1fr) clamp(64px, 18dvh, 76px); min-height: 0; height: 100%; gap: var(--mobile-gap); overflow: hidden; }
 .mobile-ui .difficulty-header { flex: none; min-height: 0; margin: 0; padding: 2px 6px; gap: 6px; border-width: 3px; box-shadow: inset 0 0 0 2px #dddcd3; }
 .mobile-ui .difficulty-header h1 { font-size: var(--mobile-heading); text-shadow: 1px 1px var(--difficulty-ink); }
 .mobile-ui .difficulty-header-emblem { width: 28px; }
@@ -202,23 +202,23 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .difficulty-stats > span { min-height: 18px; gap: 2px; font-size: clamp(12px, 3.6dvh, 14px); }
 .mobile-ui .difficulty-stats i { width: 16px; height: 16px; }
 .mobile-ui .difficulty-tablet em { min-height: 22px; margin-top: 2px; font-size: 12px; }
-.mobile-ui .relic-cabinet { display: grid; grid-template-rows: auto 44px minmax(0, 1fr); min-height: 0; margin: 0; padding: 4px; gap: 4px; border-width: 3px; box-shadow: inset 0 0 0 1px #aab3b1; }
+.mobile-ui .relic-cabinet { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; margin: 0; padding: 4px; gap: 4px; border-width: 3px; box-shadow: inset 0 0 0 1px #aab3b1; }
 .mobile-ui .relic-cabinet h2 { font-size: 18px; }
 .mobile-ui .relic-cabinet-heading { padding: 0; }
 .mobile-ui .relic-cabinet-heading > span { font-size: 12px; }
-.mobile-ui .relic-none { min-height: 44px; padding: 2px 4px; gap: 4px; font-size: 14px; border-width: 2px; }
-.mobile-ui .relic-none-icon { flex-basis: 24px; height: 24px; }
-.mobile-ui .relic-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(44px, 1fr); overflow-y: auto; gap: 3px; }
+.mobile-ui .relic-none { flex-direction: column; justify-content: center; min-height: 44px; padding: 2px 0; gap: 2px; font-size: 12px; border-width: 2px; }
+.mobile-ui .relic-none-icon { flex-basis: 24px; width: 24px; height: 24px; }
+.mobile-ui .relic-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(44px, 1fr)); overflow-y: auto; gap: 3px; }
 .mobile-ui .relic-tile { min-height: 44px; padding: 2px 4px; gap: 4px; border-width: 2px; }
-.mobile-ui .relic-symbol { flex-basis: 24px; height: 24px; }
+.mobile-ui .relic-symbol { flex-basis: 24px; width: 24px; min-width: 24px; height: 24px; }
 .mobile-ui .relic-copy strong { font-size: 14px; }
 .mobile-ui .relic-copy small { font-size: 12px; }
-.mobile-ui .relic-lock { font-size: 14px; margin: 0; }
+.mobile-ui .relic-lock { position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; font-size: 10px; margin: 0; }
 .mobile-ui .difficulty-footer { flex: initial; flex-wrap: nowrap; min-height: 0; margin: 0; padding: 3px; gap: 6px; border-width: 3px; box-shadow: none; }
-.mobile-ui .difficulty-summary { flex-basis: auto; grid-template-columns: 32px minmax(0, 1fr); column-gap: 4px; }
+.mobile-ui .difficulty-summary { flex-basis: auto; grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 4px; }
 .mobile-ui .difficulty-summary-emblem { width: 30px; height: 30px; }
 .mobile-ui .difficulty-summary strong { font-size: 16px; }
-.mobile-ui .difficulty-summary > span:last-child { font-size: 12px; }
+.mobile-ui .difficulty-summary > span:last-child { font-size: 12px; white-space: normal; overflow: visible; line-height: 1.2; }
 .mobile-ui .difficulty-next { flex-basis: 40%; min-height: 44px; padding: 2px; font-size: 16px; border-width: 2px; box-shadow: inset 0 0 0 2px #ffc434; }
 
 .mobile-ui .starter-selection { min-height: 0; height: 100%; overflow: hidden; }
@@ -708,7 +708,8 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .formation-pet-status { font-size: 12px; padding: 0 2px; }
 .mobile-ui .formation-pet-empty small { display: none; }
 .mobile-ui .relic-copy small { display: none; }
-.mobile-ui .relic-tile { flex-direction: column; justify-content: center; }
+.mobile-ui .relic-tile { flex-direction: column; justify-content: center; gap: 2px; }
+.mobile-ui .relic-copy { flex: none; }
 .mobile-ui .relic-copy strong { font-size: 12px; }
 .mobile-ui .starter-select-note { margin: 0; }
 .mobile-ui .shop-catalog-heading, .mobile-ui .shop-heading p { display: none; }
@@ -943,3 +944,12 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
   .mobile-ui .toast { animation: none; }
   .mobile-ui * { scroll-behavior: auto; }
 }
+.mobile-ui .event-decision-popup { width: min(720px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.mobile-ui .event-decision-popup .section-title { flex-shrink: 0; font-size: clamp(14px, 2.5vh, 18px); margin: 0; }
+.mobile-ui .event-decision-popup .popup-body { min-height: 0; overflow-y: auto; font-size: 12px; }
+.mobile-ui .event-coin-options { margin: 8px 0; gap: 12px; }
+.mobile-ui .event-coin-options button { min-height: 48px; }
+.mobile-ui .event-coin-options svg { width: 36px; height: 36px; }
+.mobile-ui .event-target-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.mobile-ui .event-target-grid button { min-height: 72px; padding: 4px; font-size: 12px; }
+.mobile-ui .event-target-portrait { width: 32px; height: 32px; }

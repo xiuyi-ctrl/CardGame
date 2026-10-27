@@ -111,7 +111,7 @@ describe('林地地图与首领路线', () => {
     expect(parseDualSave(JSON.stringify(legacy))!.main!.map).toEqual(legacy.map);
   });
 
-  it('流浪精灵、训练场挑战的敌人也来自林地，但不改事件奖励', () => {
+  it('流浪精灵、训练场挑战的敌人来自林地，精灵奖励物种随地区变更', () => {
     for (const type of ['精灵', '训练']) {
       for (let act = 1; act <= 3; act++) {
         for (let seed = 1; seed <= 20; seed++) {
@@ -123,7 +123,10 @@ describe('林地地图与首领路线', () => {
             expect(getMonster(unit.speciesId).rank).toBe(act);
           });
           const mixed = buildEventByType(createRng(seed), type, act);
-          expect(battle.battleReward).toEqual(mixed.choices.find(choice => choice.kind === 'battle')!.battleReward);
+          const mixedReward = mixed.choices.find(choice => choice.kind === 'battle')!.battleReward!;
+          expect(battle.battleReward?.kind).toBe(mixedReward.kind);
+          expect(battle.battleReward?.amount).toBe(mixedReward.amount);
+          if (type === '精灵') expect(battle.battleReward?.monsterId).toBe(battle.battleEnemies![0].speciesId);
         }
       }
     }

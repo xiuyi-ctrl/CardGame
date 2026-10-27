@@ -9,7 +9,7 @@ import { BattleScreen } from '../src/ui/BattleScreen';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function victory(type: NodeType, amount: number): GameState {
+function victory(type: NodeType, _amount: number): GameState {
   const state = createInitialState();
   const node = { id: 'gold-test', type, col: 0, label: '测试战斗', corruptReward: 'gold' as const };
   const roster = [makeUnit('momo', true, 0, false)];
@@ -18,12 +18,12 @@ function victory(type: NodeType, amount: number): GameState {
   battle.phase = 'won'; battle.log = [];
   battle.enemyUnits.forEach(unit => { unit.hp = 0; });
   return { ...state, roster, screen: 'battle', battle, gold: 100, currentRow: 0, currentNodeId: node.id,
-    map: { ...state.map, layers: [[node]], encounter: amount === 16 || amount === 32 ? { [node.id]: encounter } : {},
+    map: { ...state.map, layers: [[node]], encounter: type !== 'boss' ? { [node.id]: encounter } : {},
       boss: type === 'boss' ? { [node.id]: encounter } : {} },
     arena3Pending: type === 'arena3' ? { mode: 'challenge' } : undefined };
 }
 
-it.each([['battle', 8], ['elite', 16], ['corrupted', 32], ['boss', 30], ['guardian', 16], ['arena3', 50]] as const)(
+it.each([['battle', 10], ['elite', 20], ['corrupted', 20], ['boss', 30], ['guardian', 20], ['arena3', 50]] as const)(
   '%s胜利显示%d金币，与确认后的实际增量一致', async (type, amount) => {
     const state = victory(type, amount);
     render(createElement(BattleScreen, { state, dispatch: vi.fn() }));

@@ -14,7 +14,7 @@ function event(state: GameState, choice: EventChoice): GameState {
 describe('全部金币收入统计', () => {
   it('开局及遗物赠金计入首幕，熟练度也记录起始金币', () => {
     expect(income(fresh())).toBe(20);
-    expect(income(fresh('traveler_charm'))).toBe(50);
+    expect(income(fresh('traveler_charm'))).toBe(70);
     expect(fresh('traveler_charm').runStats!.actSnapshot.goldEarned).toBe(0);
     const prof = gameReducer(createInitialState(), { type: 'START_PROFICIENCY_PICKED', seed: 42, starterId: 'momo', companionId: 'lulu' });
     expect(income(prof)).toBe(prof.gold);

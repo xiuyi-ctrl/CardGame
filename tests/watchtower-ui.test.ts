@@ -5,8 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { WatchtowerScreen } from '../src/ui/App';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { DIFFICULTY_CONFIG, type Difficulty, type GameState } from '../src/game/state/game';
-import { FOODS } from '../src/game/data/foods';
-import { ITEMS } from '../src/game/data/items';
+import { getMainShopOffer } from '../src/game/data/main-shop';
 import { getMonster } from '../src/game/data/monsters';
 import { makeUnit } from '../src/game/core/battle';
 import { BattleUnitInspectPanel } from '../src/ui/BattleScreen';
@@ -38,7 +37,7 @@ describe('瞭望塔情报卡', () => {
     fireEvent.click(screen.getByRole('button', { name: '第 3 层' }));
     const list = container.querySelector('.watchtower-shop-items')!;
     const entered = gameReducer({ ...state, roster: [makeUnit('momo', true, 0, false)], screen: 'map', currentRow: 1, currentNodeId: 'arena' }, { type: 'MOVE', nodeId: 'shop' });
-    const goods = (entered.shopStock ?? []).map(id => FOODS[id] ?? ITEMS[id]);
+    const goods = (entered.shopStock ?? []).map(id => getMainShopOffer(id)!);
     expect(goods).toHaveLength(4);
     expect([...list.querySelectorAll('dt')].map(item => item.textContent)).toEqual(goods.map(item => item.name));
     expect([...list.querySelectorAll('dd')].map(item => item.textContent)).toEqual(goods.map(item => `${Math.round(item.price * DIFFICULTY_CONFIG[difficulty].shopPriceMult)} 金`));

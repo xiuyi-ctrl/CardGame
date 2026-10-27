@@ -1,4 +1,4 @@
-import { DEFAULT_UNLOCKS, RELIC_ORDER, type GameState, type RunStats, type Unlocks } from '../game/state/game';
+import { DEFAULT_UNLOCKS, RELIC_ORDER, economicRelicUnlocks, growthRelicUnlocks, type GameState, type RunStats, type Unlocks } from '../game/state/game';
 import { migrateGameState } from '../game/state/reducer';
 import { isAndroid, readSaveFile, writeSaveFile, removeSaveFile, shareSaveFile, reportSaveError } from './platform';
 
@@ -213,7 +213,8 @@ export function detectUnlocks(
   grade: string,
   _roster: { speciesId: string; passive?: string }[],
   difficulty?: string,
-  runStats?: Pick<RunStats, 'itemsUsed' | 'petsTamed'>,
+  runStats?: Pick<RunStats, 'itemsUsed' | 'petsTamed'> & Partial<Pick<RunStats, 'shopGoldSpent' | 'finalTamedUids' | 'petsLost'>>,
+  endingGold?: number,
 ): Unlocks {
   const next = {
     ...currentUnlocks,
@@ -228,5 +229,5 @@ export function detectUnlocks(
   if ((runStats?.itemsUsed ?? 0) >= 20 && !next.relics.includes('elite_badge')) next.relics.push('elite_badge');
   if ((runStats?.petsTamed ?? 0) >= 15 && !next.relics.includes('beast_master')) next.relics.push('beast_master');
   if (next.bestGrade === undefined || rank > (gradeRank[next.bestGrade] ?? 0)) next.bestGrade = grade;
-  return next;
+  return growthRelicUnlocks(economicRelicUnlocks(next, endingGold ?? 0, runStats?.shopGoldSpent), runStats, _roster.length);
 }

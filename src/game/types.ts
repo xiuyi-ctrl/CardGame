@@ -207,6 +207,8 @@ export interface Unit {
   tameable: boolean;
   /** 敌方专用：本场战斗中已驯服失败的次数（每次失败提高后续捕捉概率） */
   tameFails?: number;
+  /** 本局通过战斗或事件喂食驯服，随主宠进化保留。 */
+  tamedOrigin?: boolean;
   /** 本回合是否已行动（回合内排序用） */
   acted: boolean;
   /** 炉火本回合已触发次数，按攻击技能行动而非伤害段数计数。 */
@@ -222,6 +224,7 @@ export interface Unit {
   timeRewindRound?: number;
   timeRewindExtraPending?: boolean;
   timeRewindLogPending?: boolean;
+  candleReviveLogPending?: boolean;
   radianceGainedThisRound?: boolean;
   /** 专属被动技能 id（随物种固定） */
   passive?: string;
@@ -371,6 +374,9 @@ export interface PlayerOrder {
 }
 
 export interface BattleState {
+  /** 仅主模式携带的遗物；随战斗存档保留。 */
+  relics?: string[];
+  spareCandleUsed?: boolean;
   lastAllySkill?: Partial<Record<'player' | 'enemy', { actorUid: string; skillId: string; targetUid?: string }>>;
   /** 万变抽技结果已锁定，确认预览后才能操作；随战斗存档保存。 */
   mimicPreviewPending?: boolean;

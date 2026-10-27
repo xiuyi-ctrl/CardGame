@@ -85,10 +85,10 @@ describe('林地战后招募', () => {
 });
 
 describe('林地孵化与事件', () => {
-  it('新版神秘蛋三幕均在地区一阶池内等概率孵化', () => {
+  it('新版神秘蛋三幕均在地区一二阶池内等概率孵化', () => {
     const seen = new Set<string>();
     for (const act of [1, 2, 3]) {
-      const pool = forest.basePool;
+      const pool = [...forest.basePool, ...forest.evo1Pool];
       pool.forEach((id, index) => {
         let first = true;
         const rng = createRng(42);
@@ -97,7 +97,7 @@ describe('林地孵化与事件', () => {
         seen.add(id);
       });
     }
-    expect([...seen].sort()).toEqual([...forest.basePool].sort());
+    expect([...seen].sort()).toEqual([...forest.basePool, ...forest.evo1Pool].sort());
   });
 
   it.each([false, true])('孵化预览绑定已生成物种，读档、确认与满员到账一致 full=%s', full => {
@@ -140,7 +140,7 @@ describe('林地孵化与事件', () => {
             if (choice.kind !== 'recruit' || !choice.monsterId) continue;
             eggs++;
             expect(allowed).toContain(choice.monsterId);
-            expect(getMonster(choice.monsterId).rank).toBeLessThanOrEqual(act);
+            expect(getMonster(choice.monsterId).rank).toBeLessThanOrEqual(2);
             expect(nodeInfo(state, node).detail).not.toContain(getMonster(choice.monsterId).name);
           }
         }
@@ -149,7 +149,7 @@ describe('林地孵化与事件', () => {
     expect(eggs).toBeGreaterThan(0);
   });
 
-  it('已生成旧奖励不按新地区重抽；奇遇的固定造物、进化不新增随机伙伴', () => {
+  it('旧奖励不按新地区重抽；仅奇遇特殊蛋预生成蛋生伙伴', () => {
     const state = rewardState(42);
     state.rewards = [{ id: 'old', label: '旧招募', desc: '', kind: 'recruit', monsterId: 'fifi' }];
     const loaded = parseDualSave(JSON.stringify(state))!.main!;
@@ -160,7 +160,10 @@ describe('林地孵化与事件', () => {
     const preview = gameReducer(restored, { type: 'EVENT_HATCH_PREVIEW', choiceId: restored.map.events.egg.choices[0].id, monsterId: 'fifi' });
     expect(gameReducer(preview, { type: 'EVENT_HATCH_CONFIRM' }).roster.at(-1)!.speciesId).toBe('fifi');
     for (let seed = 1; seed <= 30; seed++) {
-      expect(buildSpecial(createRng(seed)).rewards.every(reward => !('monsterId' in reward))).toBe(true);
+      for (const reward of buildSpecial(createRng(seed)).rewards) {
+        if (reward.kind === 'egg') expect(getMonster(reward.monsterId!).eggBorn).toBe(true);
+        else expect(reward.monsterId).toBeUndefined();
+      }
     }
   });
 });

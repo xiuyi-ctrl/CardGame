@@ -511,7 +511,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (!u.tameable) return '不可捕捉';
     if (u.hp / u.maxHp > TAME_THRESHOLD) return `需血量 ≤ ${Math.round(TAME_THRESHOLD * 100)}%`;
     if (!pendingTame) return '';
-    return `捕获概率 ${u.hp === 1 || getFood(pendingTame).guaranteed ? 100 : Math.round(tameChance(u, pendingTame) * 100)}%`;
+    return `捕获概率 ${u.hp === 1 || getFood(pendingTame).guaranteed ? 100 : Math.round(tameChance(u, pendingTame, battle?.relics) * 100)}%`;
   }
 
   // 战斗记录只显示已揭示的条目（随攻击动画逐条出现），最多 6 条

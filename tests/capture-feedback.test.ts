@@ -101,4 +101,13 @@ describe('捕获表现与原规则', () => {
     fireEvent.click(target); fireEvent.click(target);
     expect(dispatch.mock.calls.filter(([action]) => action.type === 'PLAYER_TAME')).toHaveLength(1);
   });
+  it.each([['berry', '浆果', 56], ['meat', '鲜肉', 67], ['gem', '秘晶', 78]] as const)('丰收之角%s铭牌与食物基础参数加成一致', (food, name, percent) => {
+    const b = fixture(); b.relics = ['horn_of_plenty'];
+    b.enemyUnits[0] = { ...b.enemyUnits[0], hp: 40, maxHp: 100 };
+    const state = { ...createInitialState(), screen: 'battle' as const, battle: b, inventory: { [food]: 2 } };
+    const { container } = render(createElement(BattleScreen, { state, dispatch: vi.fn() }));
+    fireEvent.click(screen.getByRole('button', { name: '捕获' }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name) }));
+    expect(container.querySelector('.tame-tip')?.textContent).toBe(`捕获概率 ${percent}%`);
+  });
 });

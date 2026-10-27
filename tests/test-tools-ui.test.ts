@@ -42,12 +42,12 @@ it('可选具体事件、设定物资、重置和重选，不需要重新进入�
   expect((screen.getByLabelText('具体事件') as HTMLSelectElement).value).toBe('merchant');
 });
 
-it('主模式13事件、8奇遇及熟练度10事件、6奇遇均可独立选择', () => {
+it('主模式13事件、7奇遇及熟练度10事件、6奇遇均可独立选择', () => {
   render(createElement(Flow));
   fireEvent.click(screen.getByRole('button', { name: '事件' }));
   expect(screen.getByLabelText('具体事件').querySelectorAll('option')).toHaveLength(13);
   fireEvent.click(screen.getByRole('button', { name: '奇遇' }));
-  expect(screen.getByLabelText('具体奇遇').querySelectorAll('option')).toHaveLength(9);
+  expect(screen.getByLabelText('具体奇遇').querySelectorAll('option')).toHaveLength(8);
   fireEvent.change(screen.getByLabelText('模式'), { target: { value: 'proficiency' } });
   fireEvent.click(screen.getByRole('button', { name: '事件' }));
   expect(screen.getByLabelText('具体事件').querySelectorAll('option')).toHaveLength(10);

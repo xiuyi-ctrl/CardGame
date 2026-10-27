@@ -100,7 +100,7 @@ describe('地区开局流程', () => {
     expect(state.roster.map((u: { speciesId: string }) => u.speciesId)).toEqual(['fire_fox', 'fire_fox', 'kiki']);
     expect(state.difficulty).toBe('hard');
     expect(state.relics).toEqual(['traveler_charm']);
-    expect(state.gold).toBe(50);
+    expect(state.gold).toBe(70);
     expect(state.saveSlot).toBe(3);
     expect(state.unlocks).toEqual(unlocks);
     expect(parseDualSave(JSON.stringify(state))!.main!.region).toBe('emerald_forest');

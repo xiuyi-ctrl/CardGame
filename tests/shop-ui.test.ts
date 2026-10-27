@@ -9,7 +9,27 @@ import { ShopScreen } from '../src/ui/App';
 afterEach(cleanup);
 
 describe('商店界面', () => {
-  it('主线显示四件商品、难度实付价格、购买状态及休整', () => {
+  it('贪婪之眼刷新按难度实付价格翻倍，商品单价不变', () => {
+    const state = { ...createInitialState(), screen: 'shop' as const, difficulty: 'hard' as const,
+      relics: ['greedy_eye'], shopRefreshCount: 1, gold: 40, shopStock: ['berry', 'atk_up', 'gem', 'scout'] };
+    render(createElement(ShopScreen, { state, dispatch: vi.fn() }));
+    expect(screen.getByText('花费 34 金币 · 剩余 2 次')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '购买 浆果' })).toBeTruthy();
+  });
+  it('组合包显示数量、食物图标和难度价格，沿用购买与售罄状态', () => {
+    const dispatch = vi.fn();
+    const { container } = render(createElement(ShopScreen, { dispatch, state: {
+      ...createInitialState(), screen: 'shop', difficulty: 'hard', gold: 40,
+      shopStock: ['bundle_berry', 'bundle_meat', 'bundle_gem', 'atk_up'], shopBoughtItems: ['bundle_meat'],
+    } }));
+    expect(container.querySelectorAll('.shop-product-icon img, .shop-product-icon svg')).toHaveLength(4);
+    expect([...container.querySelectorAll('.shop-price')].map(el => el.textContent)).toEqual(['28', '39', '55', '33']);
+    expect(screen.getByRole('button', { name: '已购买 鲜肉组合包 ×2' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: '金币不足 秘晶组合包 ×2' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '购买 浆果组合包 ×3' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'SHOP_BUY', foodId: 'bundle_berry' });
+  });
+  it('主线显示四件商品、难度实付价格、购买状态及移除休整', () => {
     const dispatch = vi.fn();
     const unit = { ...makeUnit('momo', true, 0, false), hp: 0 };
     const state = {
@@ -27,11 +47,11 @@ describe('商店界面', () => {
     expect(screen.getByRole('button', { name: '金币不足 秘晶' }).hasAttribute('disabled')).toBe(true);
     expect([...container.querySelectorAll('.shop-price')].map((el) => el.textContent)).toEqual(['11', '22', '33', '22']);
     fireEvent.click(screen.getByRole('button', { name: '购买 浆果' }));
-    fireEvent.click(screen.getByRole('button', { name: '休整' }));
+    expect(screen.queryByRole('button', { name: '休整' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
     fireEvent.click(screen.getByRole('button', { name: '离开' }));
     expect(dispatch.mock.calls.map(([action]) => action)).toEqual([
-      { type: 'SHOP_BUY', foodId: 'berry' }, { type: 'SHOP_REST' },
+      { type: 'SHOP_BUY', foodId: 'berry' },
       { type: 'SHOP_REFRESH' }, { type: 'NEXT_NODE' },
     ]);
   });

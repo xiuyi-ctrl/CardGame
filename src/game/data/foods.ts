@@ -28,3 +28,8 @@ export function getFood(id: string): FoodDef {
   if (!f) throw new Error(`未知食物: ${id}`);
   return f;
 }
+
+/** 捕捉食物不包含因历史数据而存于FOODS表内的治疗圣水。 */
+export function isCaptureFood(id: string): boolean {
+  return !!FOODS[id] && FOODS[id].baseTame > 0;
+}

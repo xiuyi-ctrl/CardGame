@@ -421,7 +421,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
     const gold0 = s.gold;
     s = { ...s, battle: { ...s.battle!, phase: 'won' } };
     s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
-    expect(s.gold).toBe(gold0 + 32); // 16 * 2
+    expect(s.gold).toBe(gold0 + 20); // 10 * 2
   });
 
   it('胜利后食物奖励翻倍（corruptReward=food）', () => {
@@ -435,7 +435,7 @@ describe('被侵蚀（暗影 debuff + 奖励翻倍）', () => {
     s = { ...s, battle: { ...s.battle!, phase: 'won' } };
     s = dispatch(s, { type: 'BATTLE_END_CONFIRM' });
     // 金币不翻倍
-    expect(s.gold).toBe(gold0 + 16);
+    expect(s.gold).toBe(gold0 + 10);
     // 奖励池必含食物且数量为 2
     const foodReward = s.rewards.find((r) => r.kind === 'food');
     expect(foodReward).toBeDefined();
@@ -478,7 +478,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
     const gold0 = s.gold;
     s = dispatch(s, { type: 'USE_SKIP', nodeId: c.id });
     expect(s.screen).toBe('reward');
-    expect(s.gold).toBe(gold0 + 16);
+    expect(s.gold).toBe(gold0 + 20);
   });
 
   it('跳过被侵蚀（corruptReward=food）：奖励池必含双份食物', () => {
@@ -499,7 +499,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
     const gold0 = s.gold;
     s = dispatch(s, { type: 'USE_SKIP', nodeId: b.id });
     expect(s.screen).toBe('reward');
-    expect(s.gold).toBe(gold0 + 8);
+    expect(s.gold).toBe(gold0 + 10);
     const foodReward = s.rewards.find((r) => r.kind === 'food');
     if (foodReward) {
       expect(foodReward.amount).toBeUndefined();
@@ -515,7 +515,7 @@ describe('跳关道具：可跳过 3 种新战斗节点', () => {
     const gold0 = s.gold;
     s = dispatch(s, { type: 'USE_SKIP', nodeId: e.id });
     expect(s.screen).toBe('reward');
-    expect(s.gold).toBe(gold0 + 16);
+    expect(s.gold).toBe(gold0 + 20);
     const foodReward = s.rewards.find((r) => r.kind === 'food');
     if (foodReward) {
       expect(foodReward.amount).toBeUndefined();

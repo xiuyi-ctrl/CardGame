@@ -10,8 +10,7 @@ import type { GameState } from '../src/game/state/game';
 import { generateMap, fuseUnit, fusionNeedCount, nextStage, nodeInfo, recomputeStats, ROSTER_MAX, ACT_BOSS_POOLS, buildEvent, type SpecialReward, type MapNode } from '../src/game/state/game';
 import { createBattle, makeUnit, isTameable } from '../src/game/core/battle';
 import { createRng } from '../src/game/rng';
-import { FOODS } from '../src/game/data/foods';
-import { ITEMS } from '../src/game/data/items';
+import { getMainShopOffer } from '../src/game/data/main-shop';
 
 function dispatch(state: GameState, action: GameAction): GameState {
   return gameReducer(state, action);
@@ -729,7 +728,7 @@ describe('奇遇关', () => {
     const gold0 = s.gold;
     s = dispatch(s, { type: 'USE_SKIP', nodeId: first.id });
     expect(s.screen).toBe('reward');
-    expect(s.gold).toBe(gold0 + 8);
+    expect(s.gold).toBe(gold0 + 10);
     expect(s.inventory.skip).toBe(0);
     expect(s.currentNodeId).toBe(first.id);
     expect(s.rewards.length).toBeGreaterThan(0);
@@ -757,8 +756,8 @@ describe('奇遇关', () => {
   });
 });
 
-describe('商人·立即休整', () => {
-  it('未购买时可花 5 金币回满血并离开，扣金币不解诅咒', () => {
+describe('商人不再休整，独立休整节点保留', () => {
+  it('旧休整动作不再恢复生命或改变金币与诅咒', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
@@ -772,14 +771,14 @@ describe('商人·立即休整', () => {
       roster: s.roster.map((u, i) => ({ ...u, hp: i === 0 ? 1 : u.hp, curse: i === 0 ? ('atkDown' as const) : u.curse })),
     };
     const gold0 = s.gold;
-    const after = dispatch(s, { type: 'SHOP_REST' });
+    const after = dispatch(s, { type: 'SHOP_REST' } as unknown as GameAction);
     expect(after.screen).toBe('shop');
     expect(after.gold).toBe(gold0);
-    expect(after.roster.every((u) => u.hp === u.maxHp)).toBe(true);
+    expect(after).toBe(s);
     expect(after.roster.find((u) => u.curse)?.curse).toBe('atkDown');
   });
 
-  it('购买食物后仍可休整', () => {
+  it('购买后旧休整动作仍无效', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
@@ -788,19 +787,19 @@ describe('商人·立即休整', () => {
     s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
     s = dispatch(s, { type: 'SHOP_BUY', foodId: s.shopStock![0] });
     expect(s.shopBought).toBe(false);
-    const after = dispatch(s, { type: 'SHOP_REST' });
+    const after = dispatch(s, { type: 'SHOP_REST' } as unknown as GameAction);
     expect(after.screen).toBe('shop');
     expect(after.gold).toBe(s.gold);
   });
 
-  it('金币不足休整被拒，仍停留商店', () => {
+  it('旧休整动作保持原状态', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
     const parent = run.map.layers[row - 1].find((n) => Math.abs(n.col - shopNode.col) <= 1) ?? run.map.layers[row - 1][0];
     let s: GameState = { ...run, screen: 'map', currentRow: row - 1, currentNodeId: parent.id, gold: 3 };
     s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
-    const after = dispatch(s, { type: 'SHOP_REST' });
+    const after = dispatch(s, { type: 'SHOP_REST' } as unknown as GameAction);
     expect(after.screen).toBe('shop');
     expect(after.gold).toBe(3);
   });
@@ -831,14 +830,14 @@ describe('商人·每店限购', () => {
     let s = enterShop(100);
     expect(s.shopBoughtItems).toEqual([]);
     const id = s.shopStock![0];
-    const before = s.inventory[id] ?? 0;
+    const before = s.inventory[getMainShopOffer(id)!.inventoryId] ?? 0;
     s = dispatch(s, { type: 'SHOP_BUY', foodId: id });
     expect(s.shopBoughtItems).toEqual([id]);
-    expect(s.inventory[id]).toBe(before + 1);
+    expect(s.inventory[getMainShopOffer(id)!.inventoryId]).toBe(before + getMainShopOffer(id)!.amount);
     const gold = s.gold;
     const again = dispatch(s, { type: 'SHOP_BUY', foodId: id });
     expect(again.gold).toBe(gold);
-    expect(again.inventory[id]).toBe(s.inventory[id]);
+    expect(again.inventory[getMainShopOffer(id)!.inventoryId]).toBe(s.inventory[getMainShopOffer(id)!.inventoryId]);
     expect(again.shopBoughtItems).toEqual([id]);
   });
 
@@ -850,8 +849,8 @@ describe('商人·每店限购', () => {
     s = dispatch(s, { type: 'SHOP_BUY', foodId: a });
     s = dispatch(s, { type: 'SHOP_BUY', foodId: b });
     expect(s.shopBoughtItems).toEqual([a, b]);
-    expect(s.inventory[a]).toBeGreaterThan(0);
-    expect(s.inventory[b]).toBeGreaterThan(0);
+    expect(s.inventory[getMainShopOffer(a)!.inventoryId]).toBeGreaterThan(0);
+    expect(s.inventory[getMainShopOffer(b)!.inventoryId]).toBeGreaterThan(0);
   });
 
   it('重新进入商店节点后重置限购，可再次购买', () => {
@@ -866,9 +865,9 @@ describe('商人·每店限购', () => {
     expect(s.screen).toBe('shop');
     expect(s.shopBoughtItems).toEqual([]);
     expect(s.shopStock).toEqual(expect.arrayContaining([id]));
-    const count = s.inventory[id] ?? 0;
+    const count = s.inventory[getMainShopOffer(id)!.inventoryId] ?? 0;
     s = dispatch(s, { type: 'SHOP_BUY', foodId: id });
-    expect(s.inventory[id]).toBe(count + 1);
+    expect(s.inventory[getMainShopOffer(id)!.inventoryId]).toBe(count + getMainShopOffer(id)!.amount);
   });
 });
 
@@ -1113,7 +1112,7 @@ describe('守卫与钥匙门', () => {
     const gold0 = cur.gold;
     cur = resolveBattle(cur, { ...battle, phase: 'won' });
     expect(cur.inventory[`key_${guardian.id}`]).toBe(1);
-    expect(cur.gold).toBe(gold0 + 16);
+    expect(cur.gold).toBe(gold0 + 20);
     // 守卫不可被 USE_SKIP 跳过
     const parent = cur.map.layers[gRow - 1].find((n) => Math.abs(n.col - guardian.col) <= 1)!;
     const skipTry: GameState = { ...cur, screen: 'map', currentRow: gRow - 1, currentNodeId: parent.id, inventory: { ...cur.inventory, skip: 1 } };
@@ -1176,13 +1175,13 @@ describe('守卫与钥匙门', () => {
     // 购买第一件在售商品，库存 +1、金币减少
     const before = s.gold;
     const buyId = s.shopStock![0];
-    const invBefore = s.inventory[buyId] ?? 0;
+    const invBefore = s.inventory[getMainShopOffer(buyId)!.inventoryId] ?? 0;
     s = dispatch(s, { type: 'SHOP_BUY', foodId: buyId });
-    expect(s.inventory[buyId]).toBe(invBefore + 1);
+    expect(s.inventory[getMainShopOffer(buyId)!.inventoryId]).toBe(invBefore + getMainShopOffer(buyId)!.amount);
     expect(s.gold).toBeLessThan(before);
   });
 
-  it('侦查/瞭望塔的商店情报与实际库存一致（含价格与休整说明）', () => {
+  it('侦查/瞭望塔的商店情报与实际库存一致（含价格，不再提供休整）', () => {
     const run = dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 });
     const shopNode = run.map.layers.flat().find((n) => n.type === 'shop')!;
     const row = run.map.layers.findIndex((r) => r.includes(shopNode));
@@ -1191,10 +1190,10 @@ describe('守卫与钥匙门', () => {
     s = dispatch(s, { type: 'MOVE', nodeId: shopNode.id });
     const info = nodeInfo(s, shopNode);
     expect(info.title).toBe('商店');
-    expect(info.detail).toContain('休整');
+    expect(info.detail).not.toContain('休整');
     // 情报展示的商品名必须与本次实际库存一致（同一 seed 公式）
     for (const id of s.shopStock ?? []) {
-      const name = (FOODS[id] ?? ITEMS[id])?.name;
+      const name = getMainShopOffer(id)?.name;
       expect(info.detail).toContain(name);
     }
   });
@@ -1645,7 +1644,7 @@ describe('事件系统升级', () => {
         const sacrificeChoice = ev.choices.find((c) => c.kind === 'sacrifice');
         expect(sacrificeChoice).toBeDefined();
         expect(sacrificeChoice!.boostStat).toBe('hp');
-        expect(sacrificeChoice!.amount).toBe(3);
+        expect(sacrificeChoice!.amount).toBe(2);
         break;
       }
     }
