@@ -213,7 +213,7 @@ export function detectUnlocks(
   grade: string,
   _roster: { speciesId: string; passive?: string }[],
   difficulty?: string,
-  runStats?: Pick<RunStats, 'itemsUsed' | 'petsTamed'> & Partial<Pick<RunStats, 'shopGoldSpent' | 'finalTamedUids' | 'petsLost'>>,
+  runStats?: Pick<RunStats, 'itemsUsed' | 'petsTamed'> & Partial<Pick<RunStats, 'shopGoldSpent' | 'finalTamedUids' | 'petsLost' | 'watchtowerVisits'>>,
   endingGold?: number,
 ): Unlocks {
   const next = {

@@ -58,7 +58,7 @@ export function TestSetupScreen({ state, dispatch }: { state: GameState; dispatc
             <option value="">按幕次／层数生成</option>{Object.values(MONSTERS).filter(monster => monster.rank === 4 && !monster.id.startsWith('boss_minion')).map(monster => <option key={monster.id} value={monster.id}>{monster.name}</option>)}
           </select></label>}
           {config.nodeType === 'corrupted' && <><label>侵蚀效果<select value={config.corruptDebuff ?? 'spd'} onChange={event => set({ corruptDebuff: event.target.value as TestScenario['corruptDebuff'] })}>
-            <option value="spd">速度-2</option><option value="dmg">受伤+2</option><option value="burn">每回合-2生命</option></select></label>
+            <option value="spd">速度-2</option><option value="dmg">受伤+2</option><option value="burn">每回合-2生命</option><option value="immune">敌人免疫负面效果</option></select></label>
             <label>侵蚀奖励<select value={config.corruptReward ?? 'gold'} onChange={event => set({ corruptReward: event.target.value as TestScenario['corruptReward'] })}><option value="gold">金币翻倍</option><option value="food">食物翻倍</option></select></label></>}
           {numberField('金币', 'gold', 0, 99999)}{numberField('每种食物／道具数量', 'itemCount', 0, 99)}
           {numberField('伙伴当前生命%', 'hpPercent', 1, 100)}{numberField('墓地伙伴数量', 'deadCount', 0, 3)}

@@ -44,8 +44,8 @@ export interface MapNode {
   label: string;
   /** 列序号：本行第几个节点，用于判断下一层相邻路线 */
   col: number;
-/** 被侵蚀节点 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 */
-corruptDebuff?: 'spd' | 'dmg' | 'burn';
+/** 被侵蚀节点 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 | 'immune' 敌人免疫负面效果 */
+corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune';
   /** 被侵蚀节点奖励翻倍方式：'gold' 金币翻倍 | 'food' 食物翻倍 */
   corruptReward?: 'gold' | 'food';
   /** 车轮战敌人数：2 或 3 */
@@ -248,6 +248,8 @@ export interface RunStats {
   goldSpent: number;
   /** 商人商品购买与刷新实付金币，不含事件损失；旧档缺失时从0开始。 */
   shopGoldSpent?: number;
+  /** 本局实际走入的不同瞭望塔节点次数，跨幕累计；远程查看不计。 */
+  watchtowerVisits?: number;
   petsTamed: number;
   /** 本局已达最终进化形态的驯服生物UID，累计去重，释放/阵亡不减。 */
   finalTamedUids?: string[];
@@ -303,7 +305,7 @@ export interface TestScenario {
   eventType?: string;
   specialId?: string;
   bossId?: string;
-  corruptDebuff?: 'spd' | 'dmg' | 'burn';
+  corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune';
   corruptReward?: 'gold' | 'food';
 }
 
@@ -369,8 +371,8 @@ export interface GameState {
   legendEvolutionUnlocked?: boolean;
   /** 队伍已满（ROSTER_MAX）时捕捉溢出、等待玩家处理的宠物（替换/融合/放弃） */
   tameOverflow?: Unit[];
-  /** 溢出处理完毕后返回的界面：战斗驯服→'reward'；孵化→'map'；招募→'roster' */
-  tameOverflowReturn?: 'reward' | 'map' | 'roster';
+  /** 溢出处理后返回：战斗驯服→reward；孵化→map；招募→roster；宝箱伙伴→chest。 */
+  tameOverflowReturn?: 'reward' | 'map' | 'roster' | 'chest';
   /** 上次普通布阵的站位，按生物 uid 记忆；缺席位置留空，不自动补位。 */
   lastFormation?: Record<string, FormationPosition>;
   /** 布阵：进入普通/精英/被侵蚀/守卫战斗前选择站位（FORMATION_CONFIRM 确认后创建战斗） */
@@ -380,7 +382,7 @@ export interface GameState {
     initialField: Unit[];
     encounter: { speciesId: string }[];
     nodeId: string;
-    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn'; untameable?: boolean; act?: number; nodeType?: string; difficulty?: Difficulty };
+    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune'; untameable?: boolean; act?: number; nodeType?: string; difficulty?: Difficulty };
     /** 移动前的位置（BACK_TO_MAP 时恢复） */
     prevRow?: number;
     prevNodeId?: string;
@@ -413,7 +415,7 @@ export interface GameState {
   testPick?: {
     side: 'player' | 'enemy';
     nodeType: MapNode['type'];
-    corruptDebuff?: 'spd' | 'dmg' | 'burn';
+    corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune';
     corruptReward?: 'gold' | 'food';
     playerUnits?: Unit[];
     returnToNode?: boolean;
@@ -423,7 +425,7 @@ export interface GameState {
     units: Unit[];
     encounter: { speciesId: string }[];
     seed: number;
-    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn'; gauntlet?: boolean; untameable?: boolean; enemyExact?: boolean };
+    options?: { corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune'; gauntlet?: boolean; untameable?: boolean; enemyExact?: boolean };
     nodeType: NodeType;
   };
   /** 战斗胜利后进入队伍管理界面：禁止选择出战，只能释放/融合 */
@@ -530,14 +532,16 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   metal_cauldron: { name: '金属坩埚', emoji: '⚗️', desc: '每个商人节点免费获得1个随机食物或道具（各50%）', unlockCondition: '单局商店累计消费≥300金币（含刷新）' },
   horn_of_plenty: { name: '丰收之角', emoji: '🌽', desc: '食物基础驯服效果×1.1，仍受原品阶概率上限限制', unlockCondition: '单局累计5只驯服所得生物达到最终进化形态（含直接捕获）' },
   spare_candle: { name: '备用的蜡烛', emoji: '🕯️', desc: '每场首次我方阵亡时，自动以1血复活，全队限1次', unlockCondition: '以8只满编队伍、全局无宠物阵亡通关' },
+  explorer_compass: { name: '探险家罗盘', emoji: '🧭', desc: '无需经过节点，即可随时查看本幕所有瞭望塔后三层的情报', unlockCondition: '单局实际访问5个不同瞭望塔节点' },
 };
 
-export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'beast_master', 'greedy_eye', 'metal_cauldron', 'horn_of_plenty', 'spare_candle'];
+export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'beast_master', 'greedy_eye', 'metal_cauldron', 'horn_of_plenty', 'spare_candle', 'explorer_compass'];
 
-export function growthRelicUnlocks(unlocks: Unlocks, stats?: Partial<Pick<RunStats, 'finalTamedUids' | 'petsLost'>>, victoryRosterSize?: number): Unlocks {
+export function growthRelicUnlocks(unlocks: Unlocks, stats?: Partial<Pick<RunStats, 'finalTamedUids' | 'petsLost' | 'watchtowerVisits'>>, victoryRosterSize?: number): Unlocks {
   const relics = [...unlocks.relics];
   if (new Set(stats?.finalTamedUids ?? []).size >= 5 && !relics.includes('horn_of_plenty')) relics.push('horn_of_plenty');
   if (victoryRosterSize === 8 && stats?.petsLost === 0 && !relics.includes('spare_candle')) relics.push('spare_candle');
+  if ((stats?.watchtowerVisits ?? 0) >= 5 && !relics.includes('explorer_compass')) relics.push('explorer_compass');
   return { ...unlocks, relics };
 }
 
@@ -612,6 +616,7 @@ export interface NodeInfo {
 export interface ChestRoll {
   gold: number;
   foodId?: string;
+  monsterId?: string;
   healRatio?: number;
   extras: { id: string; name: string }[];
   text: string;
@@ -621,7 +626,7 @@ export interface ChestRoll {
  * 确定性宝箱掷骰（钥匙门 / 双生宝箱共用），与 openChest 使用完全相同的 RNG 调用顺序。
  * row 必须为节点所在行（openChest 用 base.currentRow，瞭望塔/侦察符用 layers.findIndex）。
  */
-export function rollChest(seed: number, row: number, nodeId: string, keydoor: boolean): ChestRoll {
+export function rollChest(seed: number, row: number, nodeId: string, keydoor: boolean, region: MainRegionId = 'mixed'): ChestRoll {
   const rng = createRng(seed * 7919 + row * 104729 + hashStr(nodeId));
   const foodPool = Object.keys(FOODS).filter((id) => FOODS[id].shop !== false);
   if (keydoor) {
@@ -643,18 +648,22 @@ export function rollChest(seed: number, row: number, nodeId: string, keydoor: bo
     return { gold: amt, foodId, extras, text: `获得 ${amt} 金币、1 个${food.name}${extraText}` };
   }
   const roll = rng();
-  if (roll < 0.4) {
-    const amt = 12 + Math.floor(rng() * 9);
+  if (roll < 0.3) {
+    const amt = 20 + Math.floor(rng() * 31);
     return { gold: amt, extras: [], text: `获得 ${amt} 金币` };
   }
-  if (roll < 0.7) {
+  if (roll < 0.6) {
     const foodId = foodPool[Math.floor(rng() * foodPool.length)];
     const food = getFood(foodId);
     return { gold: 0, foodId, extras: [], text: `获得 1 个${food.name}` };
   }
-  const itemId = pick(rng, mainShopItemPool());
-  const item = ITEMS[itemId];
-  return { gold: 0, extras: [{ id: itemId, name: item.name }], text: `获得 1 个${item.name}` };
+  if (roll < 0.9) {
+    const itemId = pick(rng, mainShopItemPool());
+    const item = ITEMS[itemId];
+    return { gold: 0, extras: [{ id: itemId, name: item.name }], text: `获得 1 个${item.name}` };
+  }
+  const monsterId = pick(rng, MAIN_REGIONS[region].basePool);
+  return { gold: 0, monsterId, extras: [], text: `获得 1 只${getMonster(monsterId).name}` };
 }
 
 /** 查看单个节点的情报（侦查符 / 瞭望塔共用）：按节点类型展示敌人/货物/事件/宝箱奖励等内容 */
@@ -733,7 +742,7 @@ export function nodeInfo(state: GameState, n: MapNode): NodeInfo {
     }
     case 'sync': {
       const row = state.map.layers.findIndex((r) => r.includes(n));
-      const roll = rollChest(state.seed, row, n.id, false);
+      const roll = rollChest(state.seed, row, n.id, false, state.region ?? 'mixed');
       return { icon: NODE_ICON.sync, title: n.label, detail: `宝箱奖励：${roll.text}（与配对宝箱二选一，持双生符可同时开启）` };
     }
     case 'blacksmith':
@@ -1896,7 +1905,7 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
       const n = battles[Math.floor(rng() * battles.length)];
       n.type = 'corrupted';
       n.label = labelOf('corrupted', row);
-      n.corruptDebuff = (['spd', 'dmg', 'burn'] as const)[Math.floor(rng() * 3)];
+      n.corruptDebuff = (['spd', 'dmg', 'burn', 'immune'] as const)[Math.floor(rng() * 4)];
       n.corruptReward = rng() < 0.5 ? 'gold' : 'food';
       lastCorruptRow = row;
     }
@@ -2177,7 +2186,7 @@ export function fuseUnit(primary: Unit, targetSpeciesId?: string): Unit | null {
 export function makeCustomUnit(presetId: string, rng: () => number): Unit {
   const s = getMonster(presetId);
   const u = makeUnit(presetId, true, 0, false);
-  const customSkills = shuffle(rng, [...s.skills]).slice(0, 3);
+  const customSkills = shuffle(rng, [...s.skills]).slice(0, 4);
   u.customSkills = customSkills;
   u.skills = customSkills;
   return u;

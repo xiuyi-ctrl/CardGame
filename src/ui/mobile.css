@@ -45,6 +45,7 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .battle-screen > .hud .act { font-size: 14px; }
 .mobile-ui .battle-hud-round { padding-left: 5px; border-left-width: 1px; }
 .mobile-ui .battle-screen > .hud .chip { max-width: 115px; overflow: hidden; text-overflow: ellipsis; }
+.mobile-ui .battle-screen > .hud .battle-corruption-chip { max-width: clamp(124px, 27vw, 180px); white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
 .mobile-ui .battle-screen > .hud .home-btn { display: none; }
 .mobile-ui .battle-main { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) minmax(260px, 38%); grid-template-rows: minmax(0, 1fr); gap: 4px; min-height: 0; }
 .mobile-ui .battle-field { padding: 2px 2px 2px 48px; border-width: 2px; min-height: 0; }
@@ -533,6 +534,8 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .watchtower-footer { gap: 2px; }
 .mobile-ui .watchtower-footer p { display: none; }
 .mobile-ui .watchtower-footer button { font-size: 16px; }
+.mobile-ui .watchtower-compass-footer { flex-wrap: nowrap; gap: 4px; }
+.mobile-ui .watchtower-compass-footer button { min-height: 44px; padding: 3px; }
 .mobile-ui .watchtower-intel { grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr)); gap: 4px; }
 .mobile-ui .watchtower-intel-card { padding: 3px; }
 .mobile-ui .watchtower-card-heading { flex-direction: row; justify-content: center; gap: 4px; padding-bottom: 2px; }

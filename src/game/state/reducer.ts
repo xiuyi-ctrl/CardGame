@@ -113,7 +113,7 @@ export type GameAction =
   | { type: 'CLOSE_WATCHTOWER' }
   | { type: 'DEBUG_JUMP'; act: number; row: number; nodeType: string; seed: number }
   | { type: 'DEBUG_CUSTOM_TEST' }
-  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn'; corruptReward?: 'gold' | 'food'; eventType?: string; scenario?: TestScenario }
+  | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune'; corruptReward?: 'gold' | 'food'; eventType?: string; scenario?: TestScenario }
   | { type: 'TEST_REPLAY' }
   | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
@@ -227,9 +227,12 @@ function emptyRunStats(): RunStats {
 /** 将旧版或字段不完整的存档迁移为当前 GameState；结构损坏时返回 null。 */
 export function migrateGameState(value: unknown): GameState | null {
   if (!isValidGameState(value)) return null;
-  // 新增立绘的旧单位只补图片，不重算已保存的属性、技能或战斗状态。
-  const restoreArt = (unit: Unit): Unit => !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast', 'mimi', 'mimi_king', 'mimi_god', 'pipi', 'sisi', 'sisi_god'].includes(unit.speciesId)
-    ? { ...unit, image: getMonster(unit.speciesId).image } : unit;
+  // 旧单位只补图片与造物旧名称，不重算已保存的属性、技能或战斗状态。
+  const restoreArt = (savedUnit: Unit): Unit => {
+    const unit = savedUnit.speciesId === 'custom_fury' && savedUnit.name === '狂焰兽' ? { ...savedUnit, name: '狂狼兽' } : savedUnit;
+    return !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast', 'mimi', 'mimi_king', 'mimi_god', 'pipi', 'sisi', 'sisi_god'].includes(unit.speciesId)
+      ? { ...unit, image: getMonster(unit.speciesId).image } : unit;
+  };
   let battle = value.battle;
   if (battle) {
     // 旧战斗存档的共享行动点不再参与行动资格判断，也不继续保存。
@@ -259,6 +262,7 @@ export function migrateGameState(value: unknown): GameState | null {
     goldEarned: saved?.goldEarned ?? defaults.goldEarned,
     goldSpent: saved?.goldSpent ?? defaults.goldSpent,
     shopGoldSpent: saved?.shopGoldSpent ?? 0,
+    watchtowerVisits: saved?.watchtowerVisits ?? new Set(value.visitedWatchtowers ?? []).size,
     finalTamedUids: [...new Set(saved?.finalTamedUids ?? [])],
     petsTamed: saved?.petsTamed ?? defaults.petsTamed,
     petsLost: saved?.petsLost ?? defaults.petsLost,
@@ -541,13 +545,18 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
   return withStats;
 }
 
-/** 开启宝箱：普通双生宝箱随机金币/食物（不含圣果）/1个商店可售道具，钥匙门为高级宝箱（金币+食物+概率道具）。结果文本进 chestResult。共用 rollChest 保证与瞭望塔/侦察符预览完全一致。 */
+/** 双生宝箱四类奖励互斥；钥匙门仍为高级宝箱。预览与实际开启共用确定性掷骰。 */
 function openChest(base: GameState, node: MapNode, keydoor: boolean): { next: GameState; text: string } {
-  const roll = rollChest(base.seed, base.currentRow, node.id, keydoor);
+  const roll = rollChest(base.seed, base.currentRow, node.id, keydoor, base.region ?? 'mixed');
   let next = base;
   if (roll.gold) next = addGoldIncome(next, roll.gold);
   if (roll.foodId) next = { ...next, inventory: { ...next.inventory, [roll.foodId]: (next.inventory[roll.foodId] ?? 0) + 1 } };
   for (const ex of roll.extras) next = { ...next, inventory: { ...next.inventory, [ex.id]: (next.inventory[ex.id] ?? 0) + 1 } };
+  if (roll.monsterId) {
+    const unit = makeUnit(roll.monsterId, true, 0, false);
+    next = next.roster.length < getMaxRoster(next.runMode) ? { ...next, roster: [...next.roster, unit] }
+      : { ...next, tameOverflow: [...(next.tameOverflow ?? []), unit] };
+  }
   if (roll.healRatio) {
     const healed = next.roster.map((u) => ({ ...u, hp: Math.min(u.maxHp, u.hp + Math.round(u.maxHp * roll.healRatio!)) }));
     next = { ...next, roster: healed };
@@ -672,6 +681,7 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
       watchtowerReopened: false,
       watchtowerPreviewNodeId: node.id,
       visitedWatchtowers: visited.includes(node.id) ? visited : [...visited, node.id],
+      runStats: base.runStats ? { ...base.runStats, watchtowerVisits: (base.runStats.watchtowerVisits ?? new Set(visited).size) + (visited.includes(node.id) ? 0 : 1) } : undefined,
     };
   }
   if (node.type === 'boss') {
@@ -2610,7 +2620,8 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       const targetNode = state.map.layers.flat().find((n) => n.id === targetId);
       if (!targetNode || targetNode.type !== 'watchtower') return state;
       const visited = state.visitedWatchtowers ?? [];
-      if (!visited.includes(targetId)) return state;
+      const remote = state.screen === 'map' && state.runMode !== 'proficiency' && state.relics?.includes('explorer_compass');
+      if (!visited.includes(targetId) && !remote) return state;
       return { ...state, screen: 'watchtower', watchtowerPreviewNodeId: targetId, watchtowerReopened: true };
     }
 
@@ -2620,6 +2631,9 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
     }
 
     case 'NEXT_NODE': {
+      if (state.screen === 'chest' && state.tameOverflow?.length) {
+        return { ...state, screen: 'tame-overflow', tameOverflowReturn: 'chest' };
+      }
       // 熟练度远征模式：层数递增
       if (state.runMode === 'proficiency') {
         const nextLayer = (state.currentLayer ?? 1) + 1;

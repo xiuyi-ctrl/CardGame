@@ -73,7 +73,7 @@ describe('地图生成：新战斗节点', () => {
             expect(map.encounter[n.id]?.length).toBe(n.gauntletSize);
           } else if (n.type === 'corrupted') {
             sawCorrupted = true;
-            expect(['spd', 'dmg', 'burn']).toContain(n.corruptDebuff);
+            expect(['spd', 'dmg', 'burn', 'immune']).toContain(n.corruptDebuff);
             expect(['gold', 'food']).toContain(n.corruptReward);
             expect(map.encounter[n.id]).toBeDefined();
           }

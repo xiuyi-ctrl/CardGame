@@ -79,7 +79,8 @@ export function trackMainRating(state: GameState, next: GameState, action: strin
   if (finishedBattle) rating = recordBattle(rating, state, state.battle!);
   const won = finishedBattle && state.battle!.phase === 'won';
   const nonBattle = node && !['battle', 'elite', 'boss', 'corrupted', 'guardian', 'arena', 'gauntlet'].includes(node.type);
-  const completed = node && (won || (finishedBattle && next.screen !== 'gameover') || action === 'NEXT_NODE' || (action === 'USE_SKIP' && next.screen === 'reward')
+  const completed = node && !(action === 'CLOSE_WATCHTOWER' && state.watchtowerReopened)
+    && (won || (finishedBattle && next.screen !== 'gameover') || action === 'NEXT_NODE' || (action === 'USE_SKIP' && next.screen === 'reward')
     || (nonBattle && next.screen === 'map' && next.currentNodeId === state.currentNodeId && !['BACK_TO_MAP', 'CLOSE_BACKPACK', 'CANCEL_SKIP', 'CANCEL_SCOUT', 'CLEAR_TOAST', 'SHOW_TOAST', 'OPEN_SKIP', 'OPEN_SCOUT'].includes(action)));
   // 跳关的新节点在next中，其他完成入口在state中。
   const progressState = action === 'USE_SKIP' && next.screen === 'reward' ? next : state;

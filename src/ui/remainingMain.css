@@ -34,6 +34,9 @@
 .watchtower-footer { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .watchtower-footer p { color: #52636c; text-align: center; font-size: 13px; }
 .watchtower-footer button { min-height: 44px; width: min(360px, 100%); font-size: 22px; }
+.watchtower-compass-footer { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+.watchtower-compass-footer p { flex-basis: 100%; }
+.watchtower-compass-footer button { flex: 1; min-width: 0; width: auto; max-width: 300px; }
 .chest-results-panel { width: min(1000px, 90%); max-height: 100%; align-self: center; justify-self: center; display: flex; flex-direction: column; gap: 18px; padding: 12px 24px; }
 .chest-results-heading { flex-shrink: 0; text-align: center; }
 .chest-results-heading > img { width: 140px; height: 140px; object-fit: contain; image-rendering: pixelated; }

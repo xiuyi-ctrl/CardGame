@@ -706,19 +706,27 @@ describe('奇遇关', () => {
     expect(dispatch(s, { type: 'BOOST_STAT', stat })).toBe(s);
   });
 
-  it('造物：选择模板后随机技能自创生物加入队伍', () => {
+  it.each([
+    ['custom_guardian', 30, 2],
+    ['custom_fury', 25, 5],
+    ['custom_gale', 20, 8],
+  ] as const)('造物：%s 使用模板属性并随机生成四个技能', (presetId, maxHp, spd) => {
     let s = atSpecial(dispatch(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 3 }), [
       reward('c', 'custom'),
     ]);
     const len0 = s.roster.length;
     s = dispatch(s, { type: 'SPECIAL_CHOICE', rewardId: 'c' });
     expect(s.screen).toBe('custom');
-    s = dispatch(s, { type: 'PICK_CUSTOM', presetId: 'custom_fury' });
+    s = dispatch(s, { type: 'PICK_CUSTOM', presetId });
     expect(s.screen).toBe('map');
     expect(s.roster.length).toBe(len0 + 1);
     const created = s.roster[s.roster.length - 1];
-    expect(created.speciesId).toBe('custom_fury');
-    expect(created.skills.length).toBe(3);
+    expect(created.speciesId).toBe(presetId);
+    expect(created.maxHp).toBe(maxHp);
+    expect(created.hp).toBe(maxHp);
+    expect(created.spd).toBe(spd);
+    expect(created.skills.length).toBe(4);
+    expect(new Set(created.skills).size).toBe(4);
   });
 
   it('USE_SKIP 跳过战斗节点直接结算奖励，首领/非战斗节点拒绝', () => {

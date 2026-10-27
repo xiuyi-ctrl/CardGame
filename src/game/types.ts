@@ -1,6 +1,6 @@
 export interface StatusEffect {
   // 火种战斗内保留至首次攻击命中，每只最多1层。
-  kind: 'timeLag' | 'emberSeed' | 'burn' | 'burnBrand' | 'sunRadiance' | 'foxFire' | 'foxTailGuard' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
+  kind: 'bloodDrain' | 'timeLag' | 'emberSeed' | 'burn' | 'burnBrand' | 'sunRadiance' | 'foxFire' | 'foxTailGuard' | 'poison' | 'atkUp' | 'atkDown' | 'stun' | 'healTick' | 'shield' | 'taunt' | 'spdDown' | 'thorns' | 'shieldCounter' | 'thornSpikes' | 'rageThorn' | 'waterCurtain' | 'flameShield' | 'windSpd' | 'comboBoost' | 'shadowMark' | 'sporeShield' | 'toxicBurstReady' | 'chainLink' | 'skillSeal' | 'skillSealPending' | 'fear';
   /** atkUp/atkDown 为固定伤害修正（±整数）；burn/poison 为**层数**（可叠加，每回合结算 ceil(层数/2) 伤并消耗等量层数，归 0 移除，不使用 turns） */
   value: number;
   /** 除 burn/poison 外各状态的持续回合数；burn/poison 忽略此字段 */
@@ -69,6 +69,8 @@ export type PassiveKind =
   | 'thornEntangle' // 荆棘缠绕：攻击时概率使目标伤害-1（古树之主在场时概率更高）
   | 'drain' // 吸血：造成伤害时恢复 value 点生命
   | 'power' // 力量：所有技能伤害 + value
+  | 'harmony' // 攻守调和：攻击后护盾、增益后蓄势
+  | 'reactiveGuard' // 首次受击后获得护盾及本回合减伤
   | 'guard' // 守护：受到的所有伤害 - value
   | 'venom' // 毒牙：攻击命中附加中毒 value（2 回合）
   | 'scorch' // 炽热：攻击命中附加灼烧 value（2 回合）
@@ -207,18 +209,28 @@ export interface Unit {
   tameable: boolean;
   /** 敌方专用：本场战斗中已驯服失败的次数（每次失败提高后续捕捉概率） */
   tameFails?: number;
+  /** 侵蚀战斗专用，不随捕捉或战后带回队伍。 */
+  debuffImmune?: boolean;
+  blockedDebuffPending?: boolean;
   /** 本局通过战斗或事件喂食驯服，随主宠进化保留。 */
   tamedOrigin?: boolean;
   /** 本回合是否已行动（回合内排序用） */
   acted: boolean;
   /** 炉火本回合已触发次数，按攻击技能行动而非伤害段数计数。 */
   furnaceTriggers?: number;
+  reactiveGuardRound?: number;
+  gatherShieldsRound?: number;
+  harmonyAttackRound?: number;
+  harmonyBuffRound?: number;
+  harmonyCharged?: boolean;
   /** 长明之光本回合是否已触发，每只生物独立计次。 */
   eternalLightUsed?: boolean;
   burnStripUsed?: boolean;
   flameRelayUsed?: boolean;
   mirrorOwnSkillUsed?: boolean;
-  /** 镜像加减速在本场累计造成的基础速度变化，战后扣除。 */
+  /** 镜影复制本回合已自动判定，额外行动不重复触发。 */
+  mirrorCopyRound?: number;
+  /** 镜像加减速与乘风在本场累计造成的基础速度变化，战后扣除。 */
   mirrorSpdDelta?: number;
   timeRewindUsed?: boolean;
   timeRewindRound?: number;
@@ -407,8 +419,8 @@ export interface BattleState {
   rngCount: number;
   /** 玩家已下达的技能指令（uid → 指令；结束回合统一结算后清空） */
   orders?: Record<string, PlayerOrder>;
-/** 被侵蚀节点的暗影 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 */
-corruptDebuff?: 'spd' | 'dmg' | 'burn';
+/** 被侵蚀节点的暗影 debuff：'spd' 我方速度 -2 | 'dmg' 我方受到伤害 +2 | 'burn' 每回合结束受到 2 点伤害 | 'immune' 敌人免疫负面效果 */
+corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune';
   /** 车轮战：total 总场数、current 当前上场序号（从 1 开始） */
   gauntlet?: { total: number; current: number };
   /** 车轮战：尚未上场的敌方后备队列 */

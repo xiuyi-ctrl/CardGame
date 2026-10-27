@@ -39,6 +39,7 @@ app.whenReady().then(async () => {
   for (const name of ['battle-mirror-selected', 'battle-mirror-queued', 'battle-mirror-used']) oneScreen.add(name);
   oneScreen.add('battle-five-skills');
   oneScreen.add('battle-crystal-selected');
+  for (const name of ['chest-creature', 'chest-creature-overflow']) oneScreen.add(name);
   oneScreen.add('battle-summary-long');
   oneScreen.add('watchtower-cards');
   for (const name of ['watchtower-utilities', 'watchtower-challenges', 'watchtower-training']) oneScreen.add(name);

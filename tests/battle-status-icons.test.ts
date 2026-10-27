@@ -67,7 +67,7 @@ describe('战场右侧状态图标', () => {
     render(createElement(BattleStatusIcons, { unit }));
     expect(screen.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual(['灼烧', '中毒', '技能封印']);
     expect(screen.getByAltText('灼烧').title).toContain('3');
-    expect(BATTLE_BUFF_ICON_IMAGES).toHaveLength(38);
+    expect(BATTLE_BUFF_ICON_IMAGES).toHaveLength(39);
     for (const src of BATTLE_BUFF_ICON_IMAGES) expect(existsSync(resolve('public', src.slice(1)))).toBe(true);
   });
 

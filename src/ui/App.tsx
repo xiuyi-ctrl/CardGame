@@ -1793,12 +1793,13 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                 const reachCls = isCurrent ? '' : nearIds.has(n.id) ? 'reach-1' : hoverReachIds.has(n.id) ? 'reach-2' : '';
                 const visitedWatchtowers = state.visitedWatchtowers ?? [];
                 const isVisitedWatchtower = n.type === 'watchtower' && visitedWatchtowers.includes(n.id);
+                const compassTower = n.type === 'watchtower' && !isProficiency && state.relics?.includes('explorer_compass');
                 const cls = [
                   isCurrent ? 'current' : isOptionRow ? (selectable ? 'option' : 'dim') : isPast && isVisited ? 'visited' : 'dim',
                   reachCls,
                   isDisabled(n) && !isVisited && !isCurrent ? 'node-off' : '',
                   isLocked(n) ? 'node-locked' : '',
-                  isVisitedWatchtower ? 'visited-watchtower' : '',
+                  isVisitedWatchtower || compassTower ? 'visited-watchtower' : '',
                   scoutable ? 'node-scoutable' : '',
                   skipable ? 'node-skipable' : '',
                 ]
@@ -1814,7 +1815,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                     : n.type === 'guardian'
                     ? '守卫：强力怪物，击败获得专用钥匙'
                     : undefined;
-                const watchtowerAction = n.type === 'watchtower' && (isCurrent || (isVisitedWatchtower && isPast));
+                const watchtowerAction = n.type === 'watchtower' && (compassTower || isCurrent || (isVisitedWatchtower && isPast));
                 const actionable = skipable || scoutable || selectable || watchtowerAction;
                 return (
                   <button
@@ -1826,7 +1827,7 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                     className={`node ${cls}`}
                     data-node-id={n.id}
                     data-type={n.type}
-                    aria-label={`第${ri + 1}层 ${n.label}${isLocked(n) ? '，需要钥匙' : ''}`}
+                    aria-label={`第${ri + 1}层 ${n.label}${isLocked(n) ? '，需要钥匙' : ''}${compassTower ? '，查看罗盘情报' : ''}`}
                     aria-disabled={!actionable}
                     tabIndex={actionable ? 0 : -1}
                     title={nodeHint}
@@ -1839,6 +1840,8 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
                         ? () => dispatch({ type: 'USE_SKIP', nodeId: n.id })
                         : scoutable
                           ? () => dispatch({ type: 'USE_SCOUT', nodeId: n.id })
+                          : compassTower
+                            ? () => dispatch({ type: 'OPEN_WATCHTOWER', nodeId: n.id })
                           : selectable
                             ? () => dispatch({ type: 'MOVE', nodeId: n.id })
                             : isCurrent && n.type === 'watchtower'
@@ -2309,6 +2312,13 @@ export function WatchtowerScreen({ state, dispatch }: { state: GameState; dispat
   const [selRow, setSelRow] = useState<number>(rows[0] ?? previewRow);
   const [detailSpeciesId, setDetailSpeciesId] = useState<string | null>(null);
   const sel = rows.includes(selRow) ? selRow : rows[0] ?? previewRow;
+  const compassPreview = state.watchtowerReopened && state.runMode !== 'proficiency' && state.relics?.includes('explorer_compass');
+  const firstStep = state.currentNodeId === '';
+  const travelRow = firstStep ? state.currentRow : state.currentRow + 1;
+  const currentCol = state.map.layers[state.currentRow]?.find(node => node.id === state.currentNodeId)?.col;
+  const canEnterTower = compassPreview && previewNode && previewRow === travelRow && !state.map.disabled?.[previewNode.id]
+    && !(state.visitedNodeIds ?? []).some(id => state.map.layers[travelRow]?.some(node => node.id === id && id !== previewNode.id))
+    && (firstStep || canStepTo(state.currentRow, currentCol, previewNode, state.map));
 
   return (
     <div className="flow-screen watchtower-screen">
@@ -2347,7 +2357,8 @@ export function WatchtowerScreen({ state, dispatch }: { state: GameState; dispat
           );
         })}
       </div>
-      <footer className="watchtower-footer"><p>情报仅供预览，不会进入节点</p>
+      <footer className={`watchtower-footer${compassPreview ? ' watchtower-compass-footer' : ''}`}><p>{compassPreview ? '罗盘远程瞭望 · 不计访问次数' : '情报仅供预览，不会进入节点'}</p>
+        {canEnterTower && <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'MOVE', nodeId: previewNode.id })}>前往此瞭望塔</button>}
         <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'CLOSE_WATCHTOWER' })}>
           关闭瞭望
         </button>
@@ -2397,6 +2408,7 @@ function WatchtowerCreatureDetails({ speciesId, onClose }: { speciesId: string; 
 function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const results = state.chestResult ?? [];
   const resultArt = (text: string) => {
+    if (text.includes('1 只')) return '/starter-growth-icons/starter-paw.png';
     const food = Object.values(FOODS).find(item => text.includes(item.name));
     const item = Object.values(ITEMS).find(item => text.includes(item.name));
     if (text.includes('金币')) return '/reward-icons/gold.png';
@@ -2408,7 +2420,7 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
     <div className="flow-screen chest-results-screen">
       <FlowHeader title={`宝箱结果 · 第${state.act}幕`} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
       <main className="flow-frame chest-results-panel">
-        <header className="chest-results-heading"><img src={chestOpenArt} alt="已开启的宝箱" /><h2>宝箱已开启</h2><p>奖励已结算，物品已放入背包</p></header>
+        <header className="chest-results-heading"><img src={chestOpenArt} alt="已开启的宝箱" /><h2>宝箱已开启</h2><p>{state.tameOverflow?.length ? '奖励已结算，队伍已满，请处理新伙伴' : '奖励已结算'}</p></header>
         <div className="chest-results-content">{results.map((text, index) => {
           const separator = text.indexOf('：');
           const title = separator >= 0 ? text.slice(0, separator) : '宝箱奖励';
@@ -2419,9 +2431,9 @@ function ChestScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch
         </div>
         <footer className="chest-results-footer">
           <button type="button" className="flow-primary" onClick={() => dispatch({ type: 'NEXT_NODE' })}>
-            继续前进 <UiSymbol name="arrow-right" />
+            {state.tameOverflow?.length ? '处理新伙伴' : '继续前进'} <UiSymbol name="arrow-right" />
           </button>
-          <p>已获得全部奖励</p>
+          <p>{state.tameOverflow?.length ? '新伙伴等待处理' : '已获得全部奖励'}</p>
         </footer>
       </main>
     </div>

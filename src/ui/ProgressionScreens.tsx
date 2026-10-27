@@ -104,11 +104,11 @@ export function AttributeBoostScreen({ state, dispatch }: { state: GameState; di
 export function CreationScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   return <div className="flow-screen creation-screen">
     <FlowHeader title="造物 · 自创生物" state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />
-    <main className="flow-frame creation-panel"><header><h2>三种模板，选择其一</h2><p>从所选模板技能池随机组合3个技能</p></header>
+    <main className="flow-frame creation-panel"><header><h2>三种模板，选择其一</h2><p>从所选模板技能池随机组合4个不同技能</p></header>
       <div className="creation-options">{CUSTOM_PRESETS.map((id, index) => {
         const species = getMonster(id); const stats = computeStats(id); const passive = getPassive(species.passive);
         return <button type="button" className="creation-option" key={id} onClick={() => dispatch({ type: 'PICK_CUSTOM', presetId: id })}>
-          <h3>{species.name}</h3><span className="creation-role">{['坚韧模板', '输出模板', '高速模板'][index]}</span>
+          <h3>{species.name}</h3><span className="creation-role">{['坚韧模板', '均衡模板', '高速模板'][index]}</span>
           <div className="creation-template-symbol" aria-hidden="true"><img src={`/page-special-icons/creation-${id}.png`} alt="" draggable={false} /><b>?</b></div>
           <div className="flow-pet-stats"><span><i className="starter-stat-icon starter-stat-heart" />{stats.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" />{stats.spd}</span></div>
           <h4>技能池</h4><div className="flow-skill-chips">{species.skills.map(skill => <span key={skill} title={getSkill(skill).desc}>{getSkill(skill).name}</span>)}</div>

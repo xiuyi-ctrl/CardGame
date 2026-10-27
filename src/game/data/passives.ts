@@ -4,7 +4,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   crystal_conversion: { id: 'crystal_conversion', name: '晶核转化', kind: 'crystalConversion', value: 2,
     desc: '每回合结束时，消耗自身全部护盾，对随机两名不同的存活敌人各造成护盾值一半（向上取整）的真实伤害，无视护盾与减伤。只有一名敌人时只命中一次；没有护盾时不触发。' },
   mirror_reflection: { id: 'mirror_reflection', name: '镜影复制', kind: 'mirrorCopy', value: 1,
-    desc: '每场限1次，以镜影复制指令占用本次行动，复制本回合最近一次其他友方成功使用的主动技能。按自身状态及基础技能结算，不消耗原单位次数、不借用原施法者被动或强化。使用镜像加速或减速的当回合不能触发；无记录、技能被禁止或条件不满足时保留次数，不改抄更早技能。' },
+    desc: '每回合自身行动时，自动复制本回合最近一次其他友方成功使用的主动技能，占用本次行动。按自身状态及基础技能结算，不消耗原单位次数、不借用原施法者被动或强化。主动选择自身技能或休息时不触发；无记录、技能被禁止或条件不满足时跳过，下回合仍可触发，不改抄更早技能。' },
   myriad_forms: { id: 'myriad_forms', name: '万变', kind: 'mimic', value: 4,
     desc: '每场战斗开始时，从初始场上双方存活单位的可复制主动技能中，去重后随机抽取4个；不足时重复补足，没有候选时使用3伤害爪击保底。不复制被动、强化和原持有者层数；本场固定、读档不重抽，下场重新抽取。召唤、碎岩重组及依赖专属首领机制的技能不进入池。' },
   time_rewind: { id: 'time_rewind', name: '时砂回溯', kind: 'timeRewind', value: 1,
@@ -87,8 +87,8 @@ export const PASSIVES: Record<string, PassiveDef> = {
   flame_aura: { id: 'flame_aura', name: '烈焰环绕', desc: '被攻击时 30% 概率使攻击者灼烧 2 层（熔火领主在场时 100%）', kind: 'flameAura', value: 2 },
 
   // —— 奇遇自创生物 ——
-  stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '受到的所有伤害 -2', kind: 'guard', value: 2 },
-  berserk: { id: 'berserk', name: '狂战', desc: '生命低于 50% 时伤害 +2', kind: 'frenzy', value: 2 },
+  stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '每回合首次受到敌方攻击技能命中后，获得3点护盾，本回合内自身后续受到的伤害-1', kind: 'reactiveGuard', value: 3 },
+  berserk: { id: 'berserk', name: '攻守调和', desc: '使用攻击技能后，自身获得2点护盾；使用护盾或增益技能后，自身下次攻击技能首次命中时伤害+2。两种效果各每回合最多触发一次，伤害加成不可叠加', kind: 'harmony', value: 2 },
   swift_wind: { id: 'swift_wind', name: '迅风', desc: '造成伤害时恢复 1 点生命', kind: 'drain', value: 1 },
 
   // —— 初级一阶进化专属 ——

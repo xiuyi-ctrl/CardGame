@@ -10,6 +10,10 @@ import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
 
 /** 技能数值简述：仅伤害/治疗/buff效果数值，如 "5"、"3×2"、"7" */
 export function skillBrief(s: SkillDef, enhanced: number = 0): string {
+  if (s.id === 'bloodlust') return `吸血+${2 + getSkillEnhanceBonus(s.id, enhanced).effectBonus}·2回合`;
+  if (s.id === 'gather_shields') return '全队护盾→自身';
+  if (s.id === 'ride_wind') return `本场+${1 + getSkillEnhanceBonus(s.id, enhanced).effectBonus}速`;
+  if (s.id === 'wind_assault') return `速度差${enhanced > 0 ? '+' + getSkillEnhanceBonus(s.id, enhanced).damageBonus : ''}`;
   if (s.id === 'mirror_speed_up') return '本场+1速';
   if (s.id === 'mirror_speed_down') return '本场−1速';
   if (s.id === 'core_crystal_cleanse') return '净化≤6→盾';
@@ -38,6 +42,8 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
 function effectText(e: StatusEffect): string {
   const turns = e.turns > 0 ? `，持续 ${e.turns} 回合` : '';
   switch (e.kind) {
+    case 'bloodDrain':
+      return `攻击每次造成伤害时回复 ${e.value} 点生命${turns}`;
     case 'emberSeed':
       return '火种1层；下一次攻击首次命中额外附加2层灼烧，触发后消失；战斗内不衰减';
     case 'foxFire':
@@ -120,6 +126,7 @@ function getDescEffectBonus(s: SkillDef, effectBonus: number, enhanced: number, 
 export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   let desc = s.desc;
+  if (s.id === 'bloodlust') desc = desc.replace('吸血+2', `吸血+${2 + bonus.effectBonus}`).replace('回复2点生命', `回复${2 + bonus.effectBonus}点生命`);
   if (s.id === 'core_crystal_spike') desc = desc.replace('造成3点伤害', `造成${3 + bonus.damageBonus}点伤害`);
   if (s.id === 'core_crystal_burst') desc = desc.replace('造成2加', `造成${2 + bonus.damageBonus}加`);
   if (s.id === 'pass_flame') desc = desc.replace('2层灼烧', `${2 + bonus.effectBonus}层灼烧`);
@@ -659,6 +666,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   timeLag: () => '本回合尚未执行的行动延后至最后，不改变速度、不增加行动',
   burn: (v) => `每回合受到 ${Math.ceil(v / 2)} 点灼烧伤害（${v} 层，向上进位）`,
   poison: (v) => `每回合受到 ${Math.ceil(v / 2)} 点中毒伤害（${v} 层，向上进位）`,
+  bloodDrain: (v) => `攻击每次造成伤害时回复 ${v} 点生命`,
   atkUp: (v) => `技能伤害 +${v}`,
   atkDown: (v) => `技能伤害 -${v}`,
   stun: () => '跳过下次行动',
@@ -692,7 +700,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
   // 计算被动当前层数/加成（仅动态计数显示数字，固定效果数值在描述文字中）
   const passiveStacks = (() => {
     if (!passive) return null;
-    if (passive.kind === 'mirrorCopy') return (unit.skillUses?.mirror_copy ?? 1) > 0 ? '本场可用1次' : '本场已触发';
+    if (passive.kind === 'mirrorCopy') return '每回合自动触发';
     if (passive.kind === 'timeRewind') return unit.timeRewindUsed ? '本场已触发' : '本场可用1次';
     if (passive.kind === 'sunRadiance') return `日华 ${unit.statuses.find(s => s.kind === 'sunRadiance')?.value ?? 0}/3`;
     if (passive.kind === 'foxFlame') return `狐火 ${unit.statuses.find(s => s.kind === 'foxFire')?.value ?? 0}/${passive.value}`;

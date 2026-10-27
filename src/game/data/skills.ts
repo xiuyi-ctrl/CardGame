@@ -9,8 +9,9 @@ export const SKILLS: Record<string, SkillDef> = {
     desc: '立即消耗自身最多5点护盾，攻击单个敌人，造成2加实际消耗护盾数的伤害；没有护盾时仍可使用。' },
   core_crystal_cleanse: { id: 'core_crystal_cleanse', name: '晶核净化', kind: 'buff', target: 'self', hideEffects: true,
     desc: '按灼烧、中毒、恐惧的顺序，合计移除自身最多6层状态，获得与实际移除层数等量的护盾。' },
-  mirror_copy: { id: 'mirror_copy', name: '镜影复制', kind: 'status', target: 'self', uses: 1, hideEffects: true,
-    desc: '行动时复制本回合上一名行动友方成功使用的技能，占用本次行动；不复制强化或原施法者被动，不消耗其次数。条件不满足保留次数，每场限1次。' },
+  // 保留内部结算标识及旧存档指令兼容，不作为可点击的主动技能。
+  mirror_copy: { id: 'mirror_copy', name: '镜影复制', kind: 'status', target: 'self', hideEffects: true,
+    desc: '每回合自身行动时自动复制本回合上一名行动友方成功使用的技能，占用本次行动；不复制强化或原施法者被动，不消耗其次数。本回合选择自身技能或休息时不触发。' },
   mirror_speed_up: { id: 'mirror_speed_up', name: '镜像加速', kind: 'buff', target: 'self', hideEffects: true,
     desc: '自身速度本场永久提升1点；本回合不能触发镜影复制，战后恢复。' },
   mirror_speed_down: { id: 'mirror_speed_down', name: '镜像减速', kind: 'buff', target: 'self', hideEffects: true,
@@ -250,9 +251,26 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'shockwave', name: '冲击波', desc: '贯穿攻击一列敌人',
     target: 'single', kind: 'attack', damage: 5, reach: 'pierce',
   },
+  bloodlust: {
+    id: 'bloodlust', name: '嗜血', desc: '自身吸血+2，持续2回合；攻击每次造成伤害时回复2点生命，重复使用不叠加、刷新持续时间',
+    target: 'self', kind: 'buff', hideEffects: true,
+    effects: [{ kind: 'bloodDrain', value: 2, turns: 2 }],
+  },
+  gather_shields: {
+    id: 'gather_shields', name: '集盾', desc: '先手，自身获得等同于当前我方全体（含自身）护盾总数的护盾；回合结束时自身失去所有护盾；冷却1回合，每场限3次',
+    target: 'self', kind: 'buff', priority: 'first', cooldown: 1, uses: 3, hideEffects: true,
+  },
+  ride_wind: {
+    id: 'ride_wind', name: '乘风', desc: '本场战斗永久提升自身1点速度',
+    target: 'self', kind: 'buff', hideEffects: true,
+  },
+  wind_assault: {
+    id: 'wind_assault', name: '风袭', desc: '攻击单个敌人，造成等同于自身速度减去目标速度的伤害，最低为0；按当前速度计算',
+    target: 'single', kind: 'attack', damage: 0, hideEffects: true,
+  },
   snipe: {
     id: 'snipe', name: '狙击', desc: '跳过前排，直接攻击后排敌人',
-    target: 'single', kind: 'attack', damage: 6, reach: 'back',
+    target: 'single', kind: 'attack', damage: 7, reach: 'back',
   },
   pierce_strike: {
     id: 'pierce_strike', name: '穿刺', desc: '无视前后排，指定攻击任意位置敌人',

@@ -18,21 +18,23 @@ function setup(used = false, queued = false) {
   return { actor, dispatch };
 }
 describe('镜影兽战斗入口', () => {
-  it('两个自身技能之外显示独立复制入口，不需要选择自身目标', () => {
-    const { actor, dispatch } = setup();
+  it('只显示两个自身技能与休息，默认提示自动复制，无主动复制入口', () => {
+    const { dispatch } = setup();
     expect(screen.getByRole('button', { name: /^镜像加速/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^镜像减速/ })).toBeTruthy();
     expect(screen.getByText('本场+1速')).toBeTruthy();
     expect(screen.getByText('本场−1速')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /^镜影复制/ }));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: 'mirror_copy' });
+    expect(screen.queryByRole('button', { name: /^镜影复制/ })).toBeNull();
+    expect(screen.getByText('自动判定')).toBeTruthy();
+    expect(dispatch).not.toHaveBeenCalled();
   });
-  it('本场用尽后复制入口禁用', () => {
+  it('旧档的一次性消耗记录不再展示用尽按钮', () => {
     setup(true);
-    expect((screen.getByRole('button', { name: /^镜影复制/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /^镜影复制/ })).toBeNull();
+    expect(screen.getByText('自动判定')).toBeTruthy();
   });
   it('排队提示不误显示为复制自身', () => {
     setup(false, true);
-    expect(screen.getByText('✓ 镜影复制 → 行动时判定')).toBeTruthy();
+    expect(screen.getByText('自动判定')).toBeTruthy();
   });
 });

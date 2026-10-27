@@ -1608,6 +1608,7 @@ button.primary {
   color: #233545;
   white-space: nowrap;
 }
+.battle-screen > .hud .battle-corruption-chip { background: #e9e2f3; border-color: #9e83b5; color: #49266c; }
 
 .battle-screen > .hud .home-btn {
   border: 3px solid #0c1a2a;
@@ -5274,7 +5275,7 @@ html:not(.mobile-ui) .postbattle-detail-body::-webkit-scrollbar { display: none;
 }
 .relic-none { flex: 0 0 16%; min-height: 72px; padding: 6px clamp(8px, 1vw, 16px); font-size: clamp(16px, 1.7vw, 27px); font-weight: 900; }
 .relic-none-icon { flex: 0 0 clamp(44px, 5vw, 72px); height: clamp(44px, 5vw, 72px); background: url('/ui-symbol-icons/none.png') center / contain no-repeat; image-rendering: pixelated; }
-.relic-grid { display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(44px, 1fr)); gap: 9px; min-height: 0; }
+.relic-grid { display: grid; flex: 1; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(44px, 1fr)); gap: 9px; min-height: 0; }
 .relic-tile { padding: 2px clamp(8px, 1vw, 16px); }
 .relic-none:hover, .relic-tile:hover:not(:disabled), .relic-none.selected, .relic-tile.selected { border-color: #ff8c00; box-shadow: inset 0 0 0 2px #ffbc42; }
 .relic-tile:disabled { opacity: 1; cursor: not-allowed; }
@@ -7204,10 +7205,11 @@ img.unified-creature-art { image-rendering: pixelated; object-fit: contain; bord
   .relic-cabinet h2 { font-size: 28px; }
   .relic-none { flex: 0 0 44px; min-height: 44px; }
   .relic-none-icon { flex-basis: 32px; width: 32px; height: 32px; }
-  .relic-grid { grid-template-rows: repeat(4, minmax(44px, 1fr)); gap: 4px; }
+  .relic-grid { grid-template-rows: repeat(3, minmax(44px, 1fr)); gap: 4px; }
   .relic-grid > button { flex-direction: column; justify-content: center; gap: 4px; min-height: 44px; padding: 4px; text-align: center; }
   .relic-grid .relic-copy { flex: none; }
+  .relic-grid .relic-copy strong { font-size: clamp(14px, 1.1vw, 20px); }
   .relic-grid .relic-copy small { display: none; }
   .relic-grid .relic-lock { position: absolute; top: 4px; right: 2px; font-size: 14px; }
-  .relic-grid .relic-none { font-size: 17px; }
+  .relic-grid .relic-none { font-size: clamp(14px, 1.1vw, 20px); }
 }

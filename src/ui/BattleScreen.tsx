@@ -307,20 +307,20 @@ export function BattleScreen({ state, dispatch }: Props) {
   const inspectedEnemy = inspectEnemy ? battle.enemyUnits.find((u) => u.uid === inspectEnemy && u.hp > 0) : undefined;
   const inspectedAlly = inspectAlly ? battle.playerUnits.find((u) => u.uid === inspectAlly) : undefined;
   const selectedSkills: SkillDef[] = useMemo(
-    () => (selected && selected.hp > 0 ? [...selected.skills, ...(getPassive(selected.passive)?.kind === 'mirrorCopy' ? ['mirror_copy'] : [])].map((id) => getSkill(id)) : []),
+    () => (selected && selected.hp > 0 ? selected.skills.filter(id => id !== 'mirror_copy').map((id) => getSkill(id)) : []),
     [selected],
   );
   const selectedOrder = selected ? battle.orders?.[selected.uid] : undefined;
   const selectedOrderLabel = selectedOrder ? (() => {
     if (selectedOrder.skillId === REST_SKILL_ID) return '✓ 休息';
-    if (selectedOrder.skillId === 'mirror_copy') return '✓ 镜影复制 → 行动时判定';
+    if (selectedOrder.skillId === 'mirror_copy') return '自动判定';
     const skill = getSkill(selectedOrder.skillId);
     const targetName = (skill.target === 'single' || skill.target === 'ally')
       ? [...battle.playerUnits, ...battle.enemyUnits].find(unit => unit.uid === selectedOrder.targetUid)?.name ?? '目标已离场'
       : ({ all: skill.reach === 'front' ? '敌方前排优先' : skill.reach === 'back' ? '敌方后排' : '敌方全体', allyAll: '我方全体', self: '自身', random: '随机敌方' } as const)[skill.target];
     const friendly = skill.target === 'ally' || skill.target === 'allyAll' || skill.target === 'self';
     return <>✓ {skill.name} → <span className={`battle-order-target-${friendly ? 'ally' : 'enemy'}`}>{targetName}</span></>;
-  })() : '';
+  })() : selected && getPassive(selected.passive)?.kind === 'mirrorCopy' ? '自动判定' : '';
 
   const foods = currentFoodList(state);
   const battleItems = BATTLE_ITEM_IDS.map((id) => getItem(id)).filter((it) => (state.inventory[it.id] ?? 0) > 0);
@@ -657,8 +657,8 @@ export function BattleScreen({ state, dispatch }: Props) {
           </span>
         )}
         {battle.corruptDebuff && (
-          <span className="chip" title="被侵蚀区域的暗影 debuff">
-            🌑 暗影侵蚀：{battle.corruptDebuff === 'spd' ? '我方速度 -2' : battle.corruptDebuff === 'dmg' ? '我方受到伤害 +2' : '我方每回合受到 2 点侵蚀伤害'}
+          <span className="chip battle-corruption-chip" title="被侵蚀区域的暗影 debuff">
+            {mobile ? '' : '🌑 暗影侵蚀：'}{battle.corruptDebuff === 'spd' ? '我方速度 -2' : battle.corruptDebuff === 'dmg' ? '我方受到伤害 +2' : battle.corruptDebuff === 'immune' ? '敌人免疫负面效果' : '我方每回合受到 2 点侵蚀伤害'}
           </span>
         )}
         <button
@@ -726,7 +726,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                             </span>
                           ) : null;
                         })()}
-                        {selectedOrder ? (
+                        {selectedOrder || (!selected.acted && getPassive(selected.passive)?.kind === 'mirrorCopy') ? (
                           <span className="order-badge battle-order-summary" role="status">{selectedOrderLabel}</span>
                         ) : selected.acted ? (
                           <span className="order-badge">已行动</span>

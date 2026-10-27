@@ -67,6 +67,7 @@ add('relics-five-unlocked', ui.DifficultyScreen, { relics: ['greedy_eye'], unloc
 add('relics-cauldron-selected', ui.DifficultyScreen, { relics: ['metal_cauldron'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
 add('relics-horn-selected', ui.DifficultyScreen, { relics: ['horn_of_plenty'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
 add('relics-candle-selected', ui.DifficultyScreen, { relics: ['spare_candle'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
+add('relics-compass-selected', ui.DifficultyScreen, { relics: ['explorer_compass'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
 add('relics-achievements', ui.AchievementsScreen, {}, true, '遗物');
 add('shop-greedy-eye', ui.ShopScreen, { relics: ['greedy_eye'], shopStock: ['berry', 'atk_up', 'scout', 'bundle_gem'], shopRefreshCount: 1, gold: 40 }, false);
 add('starter', ui.StarterScreen, {}, false);
@@ -79,6 +80,7 @@ add('forest-map', ui.MapScreen, { region: 'emerald_forest' }, false);
 add('formation', FormationScreen, { formation }, false);
 add('gauntlet-order', GauntletOrderScreen, { gauntletOrder: base.roster.slice(0, 4) });
 add('battle', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false);
+add('battle-corrupt-immune', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123, { corruptDebuff: 'immune' }) }, false);
 add('battle-mimic', BattleScreen, { battle: createBattle([makeUnit('mimic_beast', true, 0, false)], [{ speciesId: 'boss_vine' }], 123) }, false);
 add('battle-mirror', BattleScreen, { battle: createBattle([makeUnit('mirror_beast', true, 0, false), makeUnit('momo', true, 1, false)], encounter, 123) }, false);
 add('battle-crystal', BattleScreen, { battle: createBattle([makeUnit('crystal_core_beast', true, 0, false), makeUnit('momo', true, 1, false)], encounter, 123) }, false);
@@ -119,6 +121,9 @@ add('inter_act', ui.InterActScreen);
 add('forest-interact', ui.InterActScreen, { region: 'emerald_forest' });
 add('watchtower', ui.WatchtowerScreen);
 add('chest', ui.ChestScreen, { chestResult: ['左侧宝箱：金币30、浆果2', '右侧宝箱：侦查符1、全队恢复生命'] });
+add('chest-creature', ui.ChestScreen, { chestResult: ['开启「双生宝箱」：获得 1 只火狐'] });
+add('chest-creature-overflow', ui.ChestScreen, { chestResult: ['开启「双生宝箱」：获得 1 只火狐', '开启「双生宝箱」：获得 1 只光苔球'],
+  tameOverflow: [makeUnit('fire_fox', true, 0, false), makeUnit('light_moss', true, 0, false)] });
 add('backpack', ui.BackpackScreen, {}, false);
 const eggPreview = { id: 'egg-preview', remaining: 3, special: false, monsterId: 'momo', passedNodeIds: [] };
 add('backpack-eggs', ui.BackpackScreen, { screen: 'backpack', carriedEggs: [eggPreview, { ...eggPreview, id: 'egg-2', remaining: 1 }] }, false, '随机蛋');
@@ -132,6 +137,8 @@ for (const type of ['spring', 'altar', 'gambler', '行商', 'egg', 'ruins', 'alt
 }
 add('tame-overflow', ui.TameOverflowScreen, { tameOverflow: [makeUnit('momo', true, 0, false)] });
 add('test-type', ui.TestTypeScreen, {}, false);
+add('test-corrupt-immune', ui.TestTypeScreen, { testScenario: { mode: 'main', region: 'mixed', difficulty: 'normal', act: 1, layer: 5, seed: 1,
+  gold: 500, itemCount: 2, hpPercent: 60, deadCount: 1, customParty: false, nodeType: 'corrupted', corruptDebuff: 'immune' } }, false);
 add('test-home-entry', ui.default, {}, false, '测试关卡');
 const testSettings = { mode: 'main' as const, region: 'mixed' as const, difficulty: 'normal' as const, act: 2, layer: 5,
   seed: 42, gold: 500, itemCount: 2, hpPercent: 50, deadCount: 1, customParty: false, nodeType: 'event' as const, eventType: 'merchant' };
@@ -167,7 +174,7 @@ variant('creature-style-battle', 'creature-style-compare', {}, '战场卡片');
 variant('creature-style-formation', 'creature-style-compare', {}, '布阵卡片');
 variant('battle-mirror-selected', 'battle-mirror', {}, '.player-area .formation-slot');
 variant('battle-crystal-selected', 'battle-crystal', {}, '.player-area .formation-slot');
-variant('battle-mirror-queued', 'battle-mirror', {}, '.player-area .formation-slot|.battle-skill-grid .skill-btn:nth-child(3)');
+variant('battle-mirror-queued', 'battle-mirror', {}, '.player-area .formation-slot|.battle-skill-grid .skill-btn:nth-child(1)');
 const usedMirrorBattle = structuredClone(registry['battle-mirror'].state.battle!);
 usedMirrorBattle.playerUnits[0].skillUses = { mirror_copy: 0 };
 variant('battle-mirror-used', 'battle-mirror', { battle: usedMirrorBattle }, '.player-area .formation-slot');
@@ -185,6 +192,8 @@ const watchtowerMap = { ...base.map, layers: [
   'preview-gauntlet': [{ speciesId: 'momo' }, { speciesId: 'fifi' }, { speciesId: 'lulu' }],
 }, boss: { ...base.map.boss, 'preview-boss': [{ speciesId: 'boss_vine' }] }, events: { ...base.map.events, 'preview-event': { title: '林间旅人', desc: '交谈', choices: [{ id: 'talk', label: '营地交流', kind: 'none', desc: '交流' }, { id: 'leave', label: '继续前进', kind: 'none', desc: '离开' }] } }, specials: { ...base.map.specials, 'preview-special': { title: '神秘蛋', desc: '选择', rewards: [{ id: 'gold', kind: 'gold', amount: 30, label: '孵化它', desc: '孵化' }, { id: 'leave', kind: 'gold', amount: 1, label: '离开', desc: '离开' }] } } };
 variant('watchtower-cards', 'watchtower', { currentRow: 0, currentNodeId: 'preview-tower', watchtowerPreviewNodeId: 'preview-tower', map: watchtowerMap });
+variant('watchtower-compass', 'watchtower-cards', { relics: ['explorer_compass'], currentRow: 0, currentNodeId: '', watchtowerReopened: true });
+variant('map-compass', 'map', { relics: ['explorer_compass'], currentRow: 0, currentNodeId: '', map: watchtowerMap });
 variant('watchtower-creature-detail', 'watchtower-cards', {}, '九尾炎尊');
 variant('watchtower-utilities', 'watchtower-cards', {}, '第 3 层');
 variant('watchtower-challenges', 'watchtower-cards', {}, '第 4 层');

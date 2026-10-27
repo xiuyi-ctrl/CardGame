@@ -17,7 +17,7 @@ function startWithRelic(relic: string) {
 
 describe('遗物改版', () => {
   it('保留原遗物并新增经济、捕捉与复活遗物', () => {
-    expect(RELIC_ORDER).toEqual(['traveler_charm', 'elite_badge', 'beast_master', 'greedy_eye', 'metal_cauldron', 'horn_of_plenty', 'spare_candle']);
+    expect(RELIC_ORDER).toEqual(['traveler_charm', 'elite_badge', 'beast_master', 'greedy_eye', 'metal_cauldron', 'horn_of_plenty', 'spare_candle', 'explorer_compass']);
     expect(Object.keys(RELIC_DEFS)).toEqual(RELIC_ORDER);
   });
 

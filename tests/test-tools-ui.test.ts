@@ -10,6 +10,16 @@ import { persistSave, clearDeletedSlot } from '../src/ui/persistence';
 beforeEach(() => { localStorage.clear(); clearDeletedSlot(1); });
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals(); });
 
+it('测试入口可选第四种侵蚀并传递免疫配置', () => {
+  const dispatch = vi.fn();
+  render(createElement(TestTypeScreen, { state: { ...createInitialState(), testScenario: { mode: 'main', region: 'mixed', difficulty: 'normal', act: 1,
+    layer: 5, seed: 1, gold: 500, itemCount: 2, hpPercent: 60, deadCount: 1, customParty: false, nodeType: 'corrupted' } }, dispatch }));
+  fireEvent.change(screen.getByLabelText('侵蚀效果'), { target: { value: 'immune' } });
+  expect((screen.getByLabelText('侵蚀效果') as HTMLSelectElement).value).toBe('immune');
+  fireEvent.click(screen.getByRole('button', { name: '进入测试' }));
+  expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'TEST_TYPE_PICK', nodeType: 'corrupted', scenario: expect.objectContaining({ corruptDebuff: 'immune' }) }));
+});
+
 it.each([false, true])('首页测试按钮直接打开测试页 mobile=%s', mobile => {
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   render(createElement(App));

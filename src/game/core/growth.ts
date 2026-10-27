@@ -56,17 +56,18 @@ function isMultiHitSkill(skillId: string): boolean {
 
 /** 判断技能是否为速度增益类（buff 且 effect 为 atkUp 用于速度提升） */
 function isSpeedBuffSkill(skillId: string): boolean {
+  if (skillId === 'ride_wind') return true;
   const sk = SKILLS[skillId];
   if (!sk || sk.kind !== 'buff' || !sk.effects) return false;
   // 速度增益技能通常有 atkUp 效果，但这里用特殊标记检查
-  // 风羽（wind_feather）是唯一的速度增益技能
+  // 风羽与乘风按速度增益技能封顶。
   return skillId === 'wind_feather';
 }
 
 /** 获取技能最大强化等级（连击/速度类最多2次，其他最多3次） */
 export function getSkillEnhanceMaxLevel(skillId: string): number {
   if (skillId.startsWith('mirror_') || skillId === 'core_crystal_cleanse') return 0;
-  if (skillId === 'burn_tail' || skillId === 'clean_flame_care') return 0;
+  if (skillId === 'gather_shields' || skillId === 'burn_tail' || skillId === 'clean_flame_care') return 0;
   if (isMultiHitSkill(skillId) || isSpeedBuffSkill(skillId)) return 2;
   return 3;
 }
@@ -106,6 +107,8 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
   hitsBonus: number;
   effectBonus: number;
 } {
+  if (skillId === 'gather_shields') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  if (skillId === 'ride_wind') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: Math.max(0, level) };
   if (level <= 0) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   if (skillId.startsWith('mirror_') || skillId === 'core_crystal_cleanse') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   if (skillId === 'time_lag') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
