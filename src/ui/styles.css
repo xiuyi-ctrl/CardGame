@@ -7179,6 +7179,9 @@ img.unified-creature-art { image-rendering: pixelated; object-fit: contain; bord
 .fusion-result-skills .skill-head { width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; }
 .fusion-result-skills .skill-icons { display: none; }
 .fusion-result-skills .skill-num { color: #101c2c; }
+.fusion-controls { min-width: 0; }
+.fusion-materials { display: flex; gap: 12px; }
+.fusion-materials label { flex: 1; min-width: 0; }
 .fusion-confirm .fusion-actions { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
 @media (max-height: 700px), (max-width: 700px) {
   .fusion-result-card { padding: 8px; gap: 8px; }

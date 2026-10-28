@@ -25,11 +25,11 @@ describe('火狐与幻尾火狐', () => {
     const primary = makeUnit('fire_fox', true, 0, false);
     expect([primary.maxHp, primary.spd, primary.skills]).toEqual([11, 4, ['sealed_style_foxfire', 'illusory_flame']]);
     primary.bonusStats = { hp: 5, spd: 2 };
-    const state = { ...createInitialState(), screen: 'roster' as const, roster: [primary, makeUnit('fire_fox', true, 1, false)] };
+    const state = { ...createInitialState(), screen: 'roster' as const, roster: [primary, makeUnit('fire_fox', true, 1, false), makeUnit('fire_fox', true, 2, false)] };
     const after = gameReducer(state, { type: 'FUSE', primaryUid: primary.uid });
     expect(after.roster).toHaveLength(1);
     expect(after.roster[0]).toMatchObject({ speciesId: 'phantom_tail_fox', hp: 21, maxHp: 21, spd: 7, skills: ['twin_tail_flames', 'illusory_flame', 'burn_tail'] });
-    expect(fusionNeedCount('fire_fox')).toBe(2);
+    expect(fusionNeedCount('fire_fox')).toBe(3);
     expect(nextStage('fire_fox')).toBe('phantom_tail_fox');
     expect(nextStage('phantom_tail_fox')).toBe('nine_tail_sovereign');
     expect([...STARTER_GROUP_1, ...STARTER_GROUP_2]).not.toContain('fire_fox');

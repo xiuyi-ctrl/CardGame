@@ -168,6 +168,48 @@ describe('起手、命中与清理', () => {
     expect(result.current.pops).toEqual([expect.objectContaining({ text: '+2', kind: 'shield-gain' })]);
     expect(result.current.fx[uid]?.cls).toBe('fx-shield');
   });
+  it.each(['poison_mist', 'stoke_fire'])('纯对敌负面技能%s播放施法、目标动画及新增层数', skill => {
+    vi.useFakeTimers();
+    const b = fixture(skill, 2);
+    if (skill === 'stoke_fire') b.enemyUnits[0].statuses = [{ kind: 'burn', value: 2, turns: 2 }];
+    const after = cast(b, skill);
+    const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
+    act(() => rerender({ battle: after }));
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current.fx[b.playerUnits[0].uid]?.cls).toBe('fx-status-cast');
+    expect(result.current.pops).toHaveLength(0);
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
+    const targets = skill === 'poison_mist' ? b.enemyUnits : [b.enemyUnits[0]];
+    for (const target of targets) {
+      expect(result.current.fx[target.uid]?.cls).toBe('fx-debuff');
+      expect(result.current.statusPulses[target.uid]?.[skill === 'poison_mist' ? 'poison' : 'burn']).toBeGreaterThan(0);
+      expect(result.current.pops).toEqual(expect.arrayContaining([expect.objectContaining({ uid: target.uid, kind: 'status', statusIcon: skill === 'poison_mist' ? 'poison' : 'burn' })]));
+    }
+  });
+  it('攻击附带中毒仍不显示附加层数或图标轻弹', () => {
+    vi.useFakeTimers();
+    const b = fixture('poison_sting');
+    const after = cast(b, 'poison_sting');
+    const uid = b.enemyUnits[0].uid;
+    const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
+    act(() => rerender({ battle: after }));
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
+    expect(result.current.pops.some(pop => pop.kind === 'status' && pop.statusIcon === 'poison')).toBe(false);
+    expect(result.current.statusPulses[uid]?.poison).toBeUndefined();
+    expect(result.current.statusMap?.[uid]?.some(status => status.kind === 'poison')).toBe(true);
+  });
+  it('毒雾不能为免疫目标播放成功施加反馈', () => {
+    vi.useFakeTimers();
+    const b = fixture('poison_mist', 2);
+    b.enemyUnits[0].debuffImmune = true;
+    const after = cast(b, 'poison_mist');
+    const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
+    act(() => rerender({ battle: after }));
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
+    expect(result.current.statusPulses[b.enemyUnits[0].uid]?.poison).toBeUndefined();
+    expect(result.current.pops.some(pop => pop.uid === b.enemyUnits[0].uid && pop.kind === 'status')).toBe(false);
+    expect(result.current.fx[b.enemyUnits[0].uid]?.cls).not.toBe('fx-debuff');
+  });
   it('纯附加灼烧不播放施法或受击动画，状态仍随快照揭示', () => {
     vi.useFakeTimers();
     const b = fixture('pass_flame');

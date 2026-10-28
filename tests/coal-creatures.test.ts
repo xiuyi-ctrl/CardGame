@@ -36,9 +36,9 @@ describe('煤煤与炉甲獾', () => {
     expect([coal.maxHp, coal.spd]).toEqual([13, 1]);
     expect(coal.skills).toEqual(['coal_claw', 'furnace_shell']);
     const material = makeUnit('coal', true, 1, false);
-    const state = { ...createInitialState(), screen: 'roster' as const, roster: [coal, material] };
+    const state = { ...createInitialState(), screen: 'roster' as const, roster: [coal, material, makeUnit('coal', true, 2, false)] };
     const after = gameReducer(state, { type: 'FUSE', primaryUid: coal.uid });
-    expect(fusionNeedCount('coal')).toBe(2);
+    expect(fusionNeedCount('coal')).toBe(3);
     expect(after.roster).toHaveLength(1);
     expect(after.roster[0].speciesId).toBe('coal_guard');
     expect([after.roster[0].maxHp, after.roster[0].spd]).toEqual([22, 2]);

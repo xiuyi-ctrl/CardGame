@@ -13,7 +13,7 @@ export interface FeedbackPop {
 }
 
 /** 只格式化结算元数据，不模拟伤害或用共享群攻快照倒推数值。 */
-export function impactPops(impact: CombatImpact, healingAction = false, damageAction = false, dotKind?: StatusEffect['kind']): FeedbackPop[] {
+export function impactPops(impact: CombatImpact, healingAction = false, damageAction = false, dotKind?: StatusEffect['kind'], showDotApplication = false): FeedbackPop[] {
   const pops: FeedbackPop[] = [];
   const damage = impact.hpLoss + impact.shieldLoss;
   if (damage > 0) pops.push({ text: `−${damage}`, heal: false, kind: 'damage', heavy: damage >= 6, statusIcon: dotKind });
@@ -21,7 +21,7 @@ export function impactPops(impact: CombatImpact, healingAction = false, damageAc
   if (impact.shieldGain > 0) pops.push({ text: `+${impact.shieldGain}`, heal: false, shield: true, kind: 'shield-gain', statusIcon: 'shield' });
   for (const [key, value] of Object.entries(impact.addedStatuses ?? {})) {
     const kind = key as StatusEffect['kind'];
-    if (value && !['shield', 'burn', 'poison'].includes(kind)) pops.push({ text: `${STATUS_ART[kind][0]} +${value}`, heal: false, kind: 'status', statusIcon: kind });
+    if (value && kind !== 'shield' && (showDotApplication || (kind !== 'burn' && kind !== 'poison'))) pops.push({ text: `${STATUS_ART[kind][0]} +${value}`, heal: false, kind: 'status', statusIcon: kind });
   }
   if (healingAction && impact.healing === 0) pops.push({ text: '生命已满', heal: false, kind: 'notice' });
   if (damageAction && impact.hpLoss === 0 && impact.shieldLoss === 0) pops.push({ text: '未造成伤害', heal: false, kind: 'notice' });

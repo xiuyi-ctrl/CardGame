@@ -45,7 +45,7 @@ describe('融合确认信息', () => {
     const primary = { ...makeUnit('momo', true, 1, false), bonusStats: { hp: 5, spd: 2 }, curse: 'spdDown' as const };
     const first = makeUnit('momo', true, 0, false);
     const chosen = { ...makeUnit('momo', true, 2, false), bonusStats: { hp: 10 } };
-    const state: GameState = { ...createInitialState(), screen: 'roster', roster: [primary, first, chosen], field: [primary.uid, chosen.uid] };
+    const state: GameState = { ...createInitialState(), screen: 'roster', roster: [primary, first, chosen, makeUnit('momo', true, 0, false)], field: [primary.uid, chosen.uid] };
     const dispatch = vi.fn();
     const onClose = vi.fn();
     const { container } = render(createElement(FusionConfirm, { primary, state, dispatch, onClose }));
@@ -62,11 +62,13 @@ describe('融合确认信息', () => {
     expect(container.querySelector('.fusion-actions')).toBeTruthy();
     expect(container.querySelectorAll('.fusion-result-skills .skill-desc')).toHaveLength(0);
     expect(Array.from(container.querySelectorAll('.fusion-result-skills .skill-name')).map(el => el.textContent)).toEqual(['迅针', '飞叶', '冲击波']);
-    fireEvent.change(screen.getByRole('combobox', { name: '融合材料' }), { target: { value: chosen.uid } });
+    fireEvent.change(screen.getByRole('combobox', { name: '融合材料1' }), { target: { value: chosen.uid } });
+    expect(screen.getByRole('button', { name: '确定融合' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByRole('combobox', { name: '融合材料2' }), { target: { value: first.uid } });
     expect(screen.queryByText(/队伍人数|空出一个出战位置|保留主宠|将被消耗/)).toBeNull();
     expect(container.querySelectorAll('.fusion-pet-row')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: '确定融合' }));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'FUSE', primaryUid: primary.uid, materialUid: chosen.uid });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'FUSE', primaryUid: primary.uid, materialUids: [chosen.uid, first.uid] });
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -87,9 +89,9 @@ describe('融合确认信息', () => {
   });
 
   it('新伙伴处理中选择队伍内材料，仍走队伍内融合动作', () => {
-    const primary = makeUnit('momo', true, 0, false);
-    const material = makeUnit('momo', true, 1, false);
-    const state: GameState = { ...createInitialState(), screen: 'tame-overflow', roster: [primary, material], tameOverflow: [makeUnit('fifi', false, 0, false)] };
+    const primary = makeUnit('momo_queen', true, 0, false);
+    const material = makeUnit('momo_queen', true, 1, false);
+    const state: GameState = { ...createInitialState(), act: 2, screen: 'tame-overflow', roster: [primary, material], tameOverflow: [makeUnit('fifi', false, 0, false)] };
     const dispatch = vi.fn();
     render(createElement(FusionConfirm, { primary, state, dispatch, onClose: vi.fn() }));
     fireEvent.click(screen.getByRole('button', { name: '确定融合' }));

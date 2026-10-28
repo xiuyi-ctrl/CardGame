@@ -71,15 +71,15 @@ describe('战场右侧状态图标', () => {
     for (const src of BATTLE_BUFF_ICON_IMAGES) expect(existsSync(resolve('public', src.slice(1)))).toBe(true);
   });
 
-  it('护盾不重复，药水和诅咒可显示，状态清除后移除图标', () => {
+  it('护盾不重复、药水可显示，诅咒不占用战场状态栏', () => {
     const unit = makeUnit('momo', true, 0, false);
     unit.shield = 4;
     unit.statuses = [{ kind: 'shield', value: 4, turns: 0 }];
     unit.battleBuffs = { spdUp: 2 };
     unit.curse = 'hpDown';
     const { rerender } = render(createElement(BattleStatusIcons, { unit }));
-    expect(screen.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual(['护盾', '药水·速度提升', '血脆诅咒']);
-    rerender(createElement(BattleStatusIcons, { unit: { ...unit, shield: 0, statuses: [], battleBuffs: undefined, curse: undefined } }));
+    expect(screen.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual(['护盾', '药水·速度提升']);
+    rerender(createElement(BattleStatusIcons, { unit: { ...unit, shield: 0, statuses: [], battleBuffs: undefined } }));
     expect(screen.queryAllByRole('img')).toHaveLength(0);
   });
 

@@ -1,5 +1,5 @@
 import type { Unit } from '../game/types';
-import { STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
+import { STATUS_ART, BATTLE_BUFF_ART } from './BuffIcon';
 import type { IconArt } from './BuffIcon';
 export { BATTLE_BUFF_ICON_IMAGES } from './BuffIcon';
 
@@ -21,10 +21,6 @@ export function BattleStatusIcons({ unit, pulses = {} }: { unit: Unit; pulses?: 
     if (value <= 0) continue;
     const art = BATTLE_BUFF_ART[key];
     icons.push({ id: `buff-${key}`, art, detail: `${art[0]}${key === 'skillSpd' ? ` +${value}` : `，剩余 ${value} 回合`}` });
-  }
-  if (unit.curse) {
-    const art = CURSE_ART[unit.curse];
-    icons.push({ id: 'curse', art, detail: art[0] });
   }
   if (icons.length === 0) return null;
   return (

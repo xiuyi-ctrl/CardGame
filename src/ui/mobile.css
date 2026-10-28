@@ -956,3 +956,8 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .event-target-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .mobile-ui .event-target-grid button { min-height: 72px; padding: 4px; font-size: 12px; }
 .mobile-ui .event-target-portrait { width: 32px; height: 32px; }
+
+/* 融合材料与确认操作同屏，结果详情在正文内滚动。 */
+.mobile-ui .fusion-materials { gap: 6px; }
+.mobile-ui .fusion-materials label { font-size: 12px; }
+.mobile-ui .fusion-materials select { min-height: 44px; margin: 2px 0 4px; padding: 4px; font-size: 12px; }

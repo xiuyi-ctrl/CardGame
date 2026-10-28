@@ -128,6 +128,6 @@ describe('混合地区确定性基线', () => {
       }
     }
     // 含2026-10-27十类事件、七项奇遇及第四种侵蚀；旧存档中的地图不会重生成。
-    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('a216f1bc8c945070a82a08a381670bbcd95027648efad5bd91065f2f0481cb81');
+    expect(createHash('sha256').update(JSON.stringify(results)).digest('hex')).toBe('388effae2ffbaaace8d222dece78343c266de1e31464d979d339041432bb66e8');
   });
 });

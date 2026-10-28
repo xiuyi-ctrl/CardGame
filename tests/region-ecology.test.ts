@@ -4,6 +4,7 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { getSlotUnlocks, parseDualSave } from '../src/ui/persistence';
 import type { GameState } from '../src/game/state/game';
 import { readFileSync } from 'node:fs';
+import { SPECIAL_EGG_POOL } from '../src/game/data/monsters';
 import { MAIN_REGIONS } from '../src/game/data/regions';
 
 function formation(): GameState {
@@ -15,7 +16,7 @@ function formation(): GameState {
 
 describe('地区生态发现', () => {
   it('所有地区候选都具有不超过128像素的小图，避免弹窗加载原始大立绘', () => {
-    const ids = new Set(Object.values(MAIN_REGIONS).flatMap(region => [...region.basePool, ...region.evo1Pool, ...region.evo2Pool]));
+    const ids = new Set(Object.values(MAIN_REGIONS).flatMap(region => [...region.basePool, ...region.evo1Pool, ...region.evo2Pool, ...SPECIAL_EGG_POOL]));
     for (const id of ids) {
       const png = readFileSync(`public/ecology/${id}.png`);
       expect(png.readUInt32BE(16)).toBeLessThanOrEqual(128);
@@ -43,4 +44,32 @@ describe('地区生态发现', () => {
     const loaded = parseDualSave(JSON.stringify({ ...state, screen: 'map', formation: undefined }))!.main!;
     expect(loaded.unlocks?.regionEncounters?.emerald_forest).toBeUndefined();
   });
+});
+
+
+describe('蛋生生态轮廓解锁', () => {
+  it.each(['mixed', 'emerald_forest'] as const)('%s 实际开战也能记录四只蛋生生物', region => {
+    const state = formation();
+    const units = SPECIAL_EGG_POOL.map(id => makeUnit(id, true, 0, false));
+    const next = gameReducer({ ...state, region, roster: units,
+      formation: { ...state.formation!, units, initialField: units } }, { type: 'FORMATION_CONFIRM', units });
+    expect(next.unlocks?.regionEncounters?.[region]).toEqual(expect.arrayContaining(SPECIAL_EGG_POOL));
+  });
+  for (const region of ['mixed', 'emerald_forest'] as const) {
+    for (const monsterId of SPECIAL_EGG_POOL) {
+      it.each([false, true])(`${region} ${monsterId} 真正孵化时解锁，满员=%s`, full => {
+        const initial = formation();
+        const roster = full ? Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)) : initial.roster;
+        const state: GameState = { ...initial, region, screen: 'event', currentNodeId: 'hatch', roster,
+          carriedEggs: [{ id: 'special-egg', monsterId, special: true, remaining: 1, passedNodeIds: [] }],
+          map: { ...initial.map, events: { hatch: { title: '过关', desc: '', choices: [{ id: 'done', label: '完成', desc: '', kind: 'none' }] } } } };
+        expect(state.unlocks?.regionEncounters).toBeUndefined();
+        const next = gameReducer(state, { type: 'EVENT_CHOICE', choiceId: 'done' });
+        expect(next.screen).toBe(full ? 'tame-overflow' : 'map');
+        expect(next.unlocks?.regionEncounters?.[region]).toEqual([monsterId]);
+        expect(next.unlocks?.regionEncounters?.[region === 'mixed' ? 'emerald_forest' : 'mixed']).toBeUndefined();
+        expect(parseDualSave(JSON.stringify(next))!.main!.unlocks?.regionEncounters).toEqual(next.unlocks?.regionEncounters);
+      });
+    }
+  }
 });

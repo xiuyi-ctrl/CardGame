@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { MAIN_REGIONS, type MainRegionId } from '../game/data/regions';
-import { getMonster } from '../game/data/monsters';
+import { getMonster, SPECIAL_EGG_POOL } from '../game/data/monsters';
 import type { GameState } from '../game/state/game';
 import type { GameAction } from '../game/state/reducer';
 import { useBackAction } from './mobile';
@@ -17,7 +17,7 @@ export const FOREST_ACT_NAMES = ['', '林缘营地', '幽暗密林', '古树遗�
 
 function ecologyImages(regionId: MainRegionId): string[] {
   const region = MAIN_REGIONS[regionId];
-  return [...region.basePool, ...region.evo1Pool, ...region.evo2Pool].map(id => `/ecology/${id}.png`);
+  return [...region.basePool, ...region.evo1Pool, ...region.evo2Pool, ...SPECIAL_EGG_POOL].map(id => `/ecology/${id}.png`);
 }
 
 function RegionEcology({ regionId, encountered, onClose }: { regionId: MainRegionId; encountered: readonly string[]; onClose: () => void }) {
@@ -40,8 +40,8 @@ function RegionEcology({ regionId, encountered, onClose }: { regionId: MainRegio
     <div className={`region-ecology-body${ready ? '' : ' is-loading'}`} aria-busy={!ready}>
       {!ready && <div className="region-ecology-loading" role="status">正在展开生态图鉴…</div>}
       <div className="region-ecology-collection">
-      {([['一阶', region.basePool], ['二阶', region.evo1Pool], ['传奇', region.evo2Pool]] as const).map(([label, pool]) =>
-      <section className="region-ecology-stage" key={label} aria-label={label}>
+      {([['一阶', region.basePool], ['二阶', region.evo1Pool], ['传奇', region.evo2Pool], ['蛋生', SPECIAL_EGG_POOL]] as const).map(([label, pool]) =>
+      <section className={`region-ecology-stage${label === '蛋生' ? ' region-ecology-eggs' : ''}`} key={label} aria-label={label}>
         <h3>{label}</h3>
         <div className="region-ecology-grid">
         {pool.map(id => {

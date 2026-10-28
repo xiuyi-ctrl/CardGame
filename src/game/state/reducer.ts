@@ -72,7 +72,7 @@ export type GameAction =
   | { type: 'EVOLVE_ONE'; uid: string; targetSpeciesId?: string }
   | { type: 'SPECIAL_TARGET'; uid: string }
   | { type: 'BOOST_STAT'; stat: 'hp' | 'spd' }
-  | { type: 'FUSE'; primaryUid: string; materialUid?: string; targetSpeciesId?: string }
+  | { type: 'FUSE'; primaryUid: string; materialUid?: string; materialUids?: string[]; targetSpeciesId?: string }
   | { type: 'PICK_CUSTOM'; presetId: string }
   | { type: 'USE_PURIFY'; uid: string }
   | { type: 'USE_SKIP'; nodeId: string; free?: boolean }
@@ -85,10 +85,10 @@ export type GameAction =
   | { type: 'OPEN_BACKPACK' }
   | { type: 'CLOSE_BACKPACK' }
   | { type: 'TAME_OVERFLOW_REPLACE'; tameUid: string; discardUid: string }
-  | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string; targetSpeciesId?: string }
+  | { type: 'TAME_OVERFLOW_FUSE'; tameUid: string; primaryUid: string; materialUids?: string[]; targetSpeciesId?: string }
   | { type: 'TAME_OVERFLOW_DISCARD'; tameUid: string }
   | { type: 'TAME_OVERFLOW_JOIN'; tameUid: string }
-  | { type: 'FUSE_IN_OVERFLOW'; uid: string; materialUid?: string; targetSpeciesId?: string }
+  | { type: 'FUSE_IN_OVERFLOW'; uid: string; materialUid?: string; materialUids?: string[]; targetSpeciesId?: string }
   | { type: 'PLAYER_SKILL'; actorUid: string; skillId: string; targetUid?: string }
   | { type: 'PLAYER_REST'; actorUid: string }
   | { type: 'PLAYER_CANCEL_ORDER'; actorUid: string }
@@ -791,7 +791,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   if (next !== state && next.runMode !== 'proficiency' && next.screen === 'battle' && next.battle) {
     const region = next.region ?? 'mixed';
     const ecology = MAIN_REGIONS[region];
-    const pool = [...ecology.basePool, ...ecology.evo1Pool, ...ecology.evo2Pool];
+    const pool = [...ecology.basePool, ...ecology.evo1Pool, ...ecology.evo2Pool, ...SPECIAL_EGG_POOL];
     const known = next.unlocks?.regionEncounters?.[region] ?? [];
     const encountered = [...new Set([...known, ...[...next.battle.playerUnits, ...next.battle.enemyUnits]
       .map(unit => unit.speciesId).filter(id => pool.includes(id))])];
@@ -821,6 +821,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     const unit = makeUnit(egg.special ? (getMonster(egg.monsterId).eggBorn ? egg.monsterId : 'time_sand_beast') : egg.monsterId, true, 0, false);
     if (next.roster.length < getMaxRoster(next.runMode)) next = { ...next, roster: [...next.roster, unit] };
     else next = { ...next, screen: 'tame-overflow', tameOverflow: [...(next.tameOverflow ?? []), unit], tameOverflowReturn: 'map' };
+    if (egg.special && next.runMode !== 'proficiency') {
+      const region = next.region ?? 'mixed';
+      const known = next.unlocks?.regionEncounters?.[region] ?? [];
+      next = { ...next, unlocks: { ...(next.unlocks ?? DEFAULT_UNLOCKS),
+        regionEncounters: { ...next.unlocks?.regionEncounters, [region]: [...new Set([...known, unit.speciesId])] } } };
+    }
     next = { ...next, toast: { msg: `神秘蛋孵化：${unit.name}！`, kind: 'success' }, log: [`神秘蛋孵化：${unit.name}`, ...next.log].slice(0, 20) };
   }
   return next;
@@ -1513,7 +1519,6 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
           return { ...next, screen: 'revive-select' };
         }
         case 'custom':
-          if (next.roster.length >= getMaxRoster(state.runMode)) return state;
           next = { ...next, screen: 'custom' };
           break;
       }
@@ -1768,16 +1773,17 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
 
     case 'PICK_CUSTOM': {
       if (state.screen !== 'custom') return state;
-      if (state.roster.length >= getMaxRoster(state.runMode)) return state;
       if (!CUSTOM_PRESETS.some((p) => p === action.presetId)) return state;
       const rng = createRng(state.seed * 7 + state.act * 13 + state.roster.length * 3 + state.currentRow);
       const unit = makeCustomUnit(action.presetId, rng);
+      const full = state.roster.length >= getMaxRoster(state.runMode);
       return {
         ...state,
-        screen: 'map',
+        screen: full ? 'tame-overflow' : 'map',
         postBattle: undefined,
-        roster: [...state.roster, unit],
-        log: [`造物：${unit.name} 加入了队伍`, ...state.log].slice(0, 20),
+        ...(full ? { tameOverflow: [...(state.tameOverflow ?? []), unit], tameOverflowReturn: 'map' as const }
+          : { roster: [...state.roster, unit] }),
+        log: [`造物：${unit.name}${full ? ' 等待加入队伍' : ' 加入了队伍'}`, ...state.log].slice(0, 20),
       };
     }
 
@@ -2249,7 +2255,9 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
       if (same.length < need) return state;
       // 主宠保留原 uid；其余同物种材料（need-1 只）从队伍移除
-      const materials = same.filter((u) => u.uid !== primary.uid && (!action.materialUid || u.uid === action.materialUid)).slice(0, need - 1);
+      const selected = action.materialUids ?? (action.materialUid ? [action.materialUid] : undefined);
+      if (selected && (selected.length !== need - 1 || new Set(selected).size !== selected.length)) return state;
+      const materials = same.filter((u) => u.uid !== primary.uid && (!selected || selected.includes(u.uid))).slice(0, need - 1);
       if (materials.length !== need - 1) return state;
       const evolved = fuseUnit(primary, action.targetSpeciesId);
       if (!evolved) return state;
@@ -2311,18 +2319,19 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       if (!primary || primary.speciesId !== tame.speciesId) return state;
       if (!nextStage(primary.speciesId) || evolutionLockReason(state, primary.speciesId)) return state;
       const need = fusionNeedCount(primary.speciesId);
-      // 同物种（现有队伍中，不含刚驯服的这只）数量 + 刚驯服的这只 = 总数，需 >= need
-      const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
-      if (same.length + 1 < need) return state;
-      // 材料：现有同物种中除主宠外取 need-2 只，再加上刚驯服的这只，共 need-1 只
-      const useExisting = same.filter((u) => u.uid !== primary.uid).slice(0, need - 2);
+      const candidates = [...state.roster, ...(state.tameOverflow ?? [])].filter(u => u.uid !== primary.uid && u.speciesId === primary.speciesId);
+      const selected = action.materialUids;
+      if (selected && (selected.length !== need - 1 || new Set(selected).size !== selected.length || !selected.includes(tame.uid))) return state;
+      const materials = selected ? candidates.filter(u => selected.includes(u.uid)) : [tame, ...state.roster.filter(u => u.uid !== primary.uid && u.speciesId === primary.speciesId).slice(0, need - 2)];
+      if (materials.length !== need - 1) return state;
+      const useExisting = materials.filter(u => state.roster.some(existing => existing.uid === u.uid));
       const evolved = fuseUnit(primary, action.targetSpeciesId);
       if (!evolved) return state;
       const roster = state.roster
         .filter((u) => !useExisting.some((m) => m.uid === u.uid))
         .map((u) => (u.uid === primary.uid ? evolved : u));
-      const overflow = (state.tameOverflow ?? []).filter((u) => u.uid !== tame.uid);
-      const materialNames = [...useExisting.map((m) => m.name), tame.name].join('、');
+      const overflow = (state.tameOverflow ?? []).filter((u) => !materials.some(material => material.uid === u.uid));
+      const materialNames = materials.map(m => m.name).join('、');
       const next: GameState = {
         ...state,
         roster,
@@ -2369,7 +2378,9 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       const need = fusionNeedCount(primary.speciesId);
       const same = state.roster.filter((u) => u.speciesId === primary.speciesId);
       if (same.length < need) return state;
-      const materials = same.filter((u) => u.uid !== primary.uid && (!action.materialUid || u.uid === action.materialUid)).slice(0, need - 1);
+      const selected = action.materialUids ?? (action.materialUid ? [action.materialUid] : undefined);
+      if (selected && (selected.length !== need - 1 || new Set(selected).size !== selected.length)) return state;
+      const materials = same.filter((u) => u.uid !== primary.uid && (!selected || selected.includes(u.uid))).slice(0, need - 1);
       if (materials.length !== need - 1) return state;
       const evolved = fuseUnit(primary, action.targetSpeciesId);
       if (!evolved) return state;

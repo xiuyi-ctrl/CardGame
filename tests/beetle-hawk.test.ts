@@ -30,8 +30,8 @@ describe('熔甲虫与焚风鹰', () => {
   ] as const)('%s两只融合为%s，保留主宠强化与诅咒', (base, evolved, hp, spd, skills) => {
     const main = { ...makeUnit(base, true, 0, false), bonusStats: { hp: 5, spd: 2 }, curse: 'atkDown' as const };
     const material = { ...makeUnit(base, true, 1, false), bonusStats: { hp: 50, spd: 50 }, skills: ['heal_light'] };
-    const next = gameReducer({ ...createInitialState(), screen: 'roster', roster: [main, material] }, { type: 'FUSE', primaryUid: main.uid });
-    expect(fusionNeedCount(base)).toBe(2);
+    const next = gameReducer({ ...createInitialState(), screen: 'roster', roster: [main, material, makeUnit(base, true, 2, false)] }, { type: 'FUSE', primaryUid: main.uid });
+    expect(fusionNeedCount(base)).toBe(3);
     expect(nextStage(base)).toBe(evolved);
     expect(nextStage(evolved)).toBe(evolved === 'molten_beetle' ? 'molten_beast' : 'solar_eagle');
     expect(next.roster).toHaveLength(1);

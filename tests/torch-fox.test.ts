@@ -29,13 +29,14 @@ describe('火狐分支与火种', () => {
   });
   it('融合确认可切换分支，预览固定技能并派发所选形态', () => {
     const a = makeUnit('fire_fox', true, 0, false), b = makeUnit('fire_fox', true, 1, false);
-    const state = { ...createInitialState(), screen: 'roster' as const, roster: [a, b] };
+    const c = makeUnit('fire_fox', true, 2, false);
+    const state = { ...createInitialState(), screen: 'roster' as const, roster: [a, b, c] };
     const dispatch = vi.fn();
     render(createElement(FusionConfirm, { primary: a, state, dispatch, onClose: vi.fn() }));
     fireEvent.change(screen.getByLabelText('进化形态'), { target: { value: 'torch_fox' } });
     expect(screen.getByText('传火之尾')).toBeTruthy();
     fireEvent.click(screen.getByText('确定融合'));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'FUSE', primaryUid: a.uid, materialUid: b.uid, targetSpeciesId: 'torch_fox' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'FUSE', primaryUid: a.uid, materialUids: [b.uid, c.uid], targetSpeciesId: 'torch_fox' });
     const next = gameReducer(state, dispatch.mock.calls[0][0]);
     expect(next.roster).toHaveLength(1);
     expect(next.roster[0].speciesId).toBe('torch_fox');

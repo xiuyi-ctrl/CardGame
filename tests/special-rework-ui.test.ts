@@ -46,3 +46,18 @@ it('奇遇新文案和蛋图标正确，不出现已移除的超进化和跳关'
   expect(container.querySelector('img[src="/backpack-item-icons/mystery_egg.png"]')).toBeTruthy();
   expect(container.textContent).not.toMatch(/超进化|跳关/);
 });
+
+
+it.each([false, true])('满队伍仍可点击造物奖励 mobile=%s', mobile => {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  const initial = base();
+  const state: GameState = { ...initial, screen: 'special', currentNodeId: 's',
+    roster: Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)),
+    map: { ...initial.map, specials: { s: { title: '奇遇', desc: '', rewards: SPECIAL_REWARDS.filter(reward => reward.kind === 'custom') } } } };
+  const dispatch = vi.fn();
+  render(createElement(SpecialScreen, { state, dispatch }));
+  const button = screen.getByRole('button', { name: /造物·自创生物/ }) as HTMLButtonElement;
+  expect(button.disabled).toBe(false);
+  fireEvent.click(button);
+  expect(dispatch).toHaveBeenCalledWith({ type: 'SPECIAL_CHOICE', rewardId: 'sr-custom' });
+});

@@ -4,7 +4,7 @@ import { makeCustomUnit } from '../src/game/state/game';
 import { createRng } from '../src/game/rng';
 import { getSkill } from '../src/game/data/skills';
 import { getSkillEnhanceBonus, getSkillEnhanceMaxLevel } from '../src/game/core/growth';
-import { createInitialState, migrateGameState } from '../src/game/state/reducer';
+import { createInitialState, migrateGameState, gameReducer } from '../src/game/state/reducer';
 import { getMonster } from '../src/game/data/monsters';
 import { getPassive } from '../src/game/data/passives';
 import { skillBrief, skillFullDesc } from '../src/ui/components';
@@ -156,5 +156,53 @@ describe('狂狼兽攻守调和与嗜血', () => {
     const unit = { ...makeUnit('custom_fury', true, 0, false), name: '狂焰兽', hp: 12, maxHp: 18, skills: ['bite'] };
     const next = migrateGameState({ ...createInitialState(), roster: [unit] })!;
     expect(next.roster[0]).toMatchObject({ name: '狂狼兽', hp: 12, maxHp: 18, skills: ['bite'] });
+  });
+});
+
+
+describe('满员领取造物', () => {
+  function fullCreation() {
+    const run = gameReducer(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 42 });
+    return { ...run, act: 2, screen: 'special' as const, currentNodeId: 'creation',
+      roster: Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)),
+      map: { ...run.map, specials: { creation: { title: '奇遇', desc: '', rewards: [
+        { id: 'custom', kind: 'custom' as const, label: '造物·自创生物', desc: '' },
+      ] } } } };
+  }
+  it('满员也能选奖励和模板，四技能造物保存后可替换入队', () => {
+    const initial = fullCreation();
+    const choosing = gameReducer(initial, { type: 'SPECIAL_CHOICE', rewardId: 'custom' });
+    expect(choosing.screen).toBe('custom');
+    const pending = gameReducer(choosing, { type: 'PICK_CUSTOM', presetId: 'custom_fury' });
+    expect(pending.screen).toBe('tame-overflow');
+    expect(pending.roster).toEqual(initial.roster);
+    expect(pending.tameOverflowReturn).toBe('map');
+    expect(pending.tameOverflow).toHaveLength(1);
+    const creature = pending.tameOverflow![0];
+    expect(creature.name).toBe('狂狼兽');
+    expect(new Set(creature.skills).size).toBe(4);
+    const saved = migrateGameState(JSON.parse(JSON.stringify(pending)))!;
+    expect(saved.tameOverflow![0]).toEqual(creature);
+    const retry = gameReducer(saved, { type: 'PICK_CUSTOM', presetId: 'custom_gale' });
+    expect(retry.tameOverflow).toEqual(saved.tameOverflow);
+    const joined = gameReducer(saved, { type: 'TAME_OVERFLOW_REPLACE', tameUid: creature.uid, discardUid: initial.roster[0].uid });
+    expect(joined.screen).toBe('map');
+    expect(joined.roster).toHaveLength(8);
+    expect(joined.roster.some(u => u.uid === initial.roster[0].uid)).toBe(false);
+    expect(joined.roster.find(u => u.uid === creature.uid)).toEqual(creature);
+    expect(joined.tameOverflow).toBeUndefined();
+    expect(joined.tameOverflowReturn).toBeUndefined();
+  });
+  it('放弃待处理造物后回地图，不发第二只，也不删除原队伍', () => {
+    const initial = fullCreation();
+    const choosing = gameReducer(initial, { type: 'SPECIAL_CHOICE', rewardId: 'custom' });
+    const pending = gameReducer(choosing, { type: 'PICK_CUSTOM', presetId: 'custom_guardian' });
+    const result = gameReducer(pending, { type: 'TAME_OVERFLOW_DISCARD', tameUid: pending.tameOverflow![0].uid });
+    expect(result.screen).toBe('map');
+    expect(result.roster).toEqual(initial.roster);
+    expect(result.tameOverflow).toBeUndefined();
+    const retry = gameReducer(result, { type: 'SPECIAL_CHOICE', rewardId: 'custom' });
+    expect(retry.screen).toBe('map');
+    expect(retry.roster).toEqual(initial.roster);
   });
 });

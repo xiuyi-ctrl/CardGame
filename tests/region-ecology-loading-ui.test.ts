@@ -20,8 +20,9 @@ it('进入地区页提前准备小图；打开后整组解码完成才统一展�
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function(this: HTMLDialogElement) { this.setAttribute('open', ''); } });
   Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function(this: HTMLDialogElement) { this.removeAttribute('open'); } });
   render(createElement(RegionScreen, { state: { ...createInitialState(), region: 'emerald_forest' }, dispatch: vi.fn() }));
-  expect(images.sources[0]).toHaveLength(23);
+  expect(images.sources[0]).toHaveLength(27);
   expect(images.sources[0].every(src => src.startsWith('/ecology/'))).toBe(true);
+  expect(images.sources[0]).toEqual(expect.arrayContaining(['/ecology/time_sand_beast.png', '/ecology/mimic_beast.png', '/ecology/mirror_beast.png', '/ecology/crystal_core_beast.png']));
   fireEvent.click(screen.getByRole('button', { name: '查看生态详情' }));
   const body = screen.getByRole('dialog').querySelector('.region-ecology-body')!;
   expect(body.classList.contains('is-loading')).toBe(true);

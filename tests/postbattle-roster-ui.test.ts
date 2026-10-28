@@ -13,6 +13,7 @@ function postBattleState(runMode: 'main' | 'proficiency' = 'main') {
     makeUnit('momo', true, 0, false),
     makeUnit('lulu', true, 1, false),
     { ...makeUnit('momo', true, 2, false), hp: 8 },
+    makeUnit('momo', true, 1, false),
   ];
   return { ...createInitialState(), screen: 'roster' as const, postBattle: true, runMode, roster, field: [roster[0].uid] };
 }
@@ -26,15 +27,15 @@ describe('战后休整界面', () => {
     expect(screen.getByText('战后休整')).toBeTruthy();
     expect(screen.queryByText('奖励已领取')).toBeNull();
     expect(screen.queryByText('状态良好')).toBeNull();
-    expect(container.querySelectorAll('.postbattle-pet')).toHaveLength(3);
-    expect(container.querySelectorAll('.postbattle-empty')).toHaveLength(5);
+    expect(container.querySelectorAll('.postbattle-pet')).toHaveLength(4);
+    expect(container.querySelectorAll('.postbattle-empty')).toHaveLength(4);
     expect(screen.queryByText('出战阵容')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '查看泡泡，生命14/14，速度3' }));
     expect(screen.getByRole('heading', { name: '泡泡' })).toBeTruthy();
     expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'SET_FIELD' }));
 
     fireEvent.click(screen.getByRole('button', { name: '查看迅迅，生命8/10，速度5' }));
-    expect(screen.getByText('融合条件：同物种 2 / 2')).toBeTruthy();
+    expect(screen.getByText('融合条件：同物种 3 / 3')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '融合进化' }));
     expect(screen.getByText('确认融合')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '取消' }));

@@ -32,11 +32,11 @@ describe('光苔球与光苔兽', () => {
     expect([first.maxHp, first.spd, first.passive, first.skills]).toEqual([12, 3, 'heat_moss', ['aqua_shot', 'light_bath']]);
     first.bonusStats = { hp: 5, spd: 2 };
     first.curse = 'atkDown';
-    const state = { ...createInitialState(), screen: 'roster' as const, roster: [first, makeUnit('light_moss', true, 1, false)] };
+    const state = { ...createInitialState(), screen: 'roster' as const, roster: [first, makeUnit('light_moss', true, 1, false), makeUnit('light_moss', true, 2, false)] };
     const after = gameReducer(state, { type: 'FUSE', primaryUid: first.uid });
     expect(after.roster).toHaveLength(1);
     expect(after.roster[0]).toMatchObject({ speciesId: 'moss_beast', maxHp: 23, hp: 23, spd: 6, passive: 'clean_moss', curse: 'atkDown', skills: ['light_bath', 'burn_reversal', 'purifying_orb'] });
-    expect(fusionNeedCount('light_moss')).toBe(2);
+    expect(fusionNeedCount('light_moss')).toBe(3);
     expect(nextStage('light_moss')).toBe('moss_beast');
     expect(nextStage('moss_beast')).toBe('solar_spirit');
     expect(planEnemyLayout([{ speciesId: 'kiki' }, { speciesId: 'moss_beast' }])[1].row).toBe('back');

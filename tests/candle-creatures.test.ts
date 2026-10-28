@@ -24,7 +24,7 @@ describe('烛烛与灯翅蛾', () => {
     const first = makeUnit('candle', true, 0, false);
     expect([first.maxHp, first.spd]).toEqual([9, 5]);
     expect(first.skills).toEqual(['candle_flame', 'stoke_fire']);
-    const state = { ...createInitialState(), screen: 'roster' as const, roster: [first, makeUnit('candle', true, 1, false)] };
+    const state = { ...createInitialState(), screen: 'roster' as const, roster: [first, makeUnit('candle', true, 1, false), makeUnit('candle', true, 2, false)] };
     const after = gameReducer(state, { type: 'FUSE', primaryUid: first.uid });
     expect(after.roster).toHaveLength(1);
     expect(after.roster[0].speciesId).toBe('lantern_moth');

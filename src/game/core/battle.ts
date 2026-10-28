@@ -275,7 +275,12 @@ export function computeTurnOrder(b: BattleState): string[] {
         if (avail) cFirst = 1;
       }
       if (aFirst !== cFirst) return cFirst - aFirst;
-      return getEffectiveSpd(c) - getEffectiveSpd(a) || (a.isPlayer === c.isPlayer ? 0 : a.isPlayer ? -1 : 1);
+      const speed = getEffectiveSpd(c) - getEffectiveSpd(a);
+      if (speed) return speed;
+      if (a.isPlayer !== c.isPlayer) return a.isPlayer ? -1 : 1;
+      // 同速按前排到后排、我方左到右排序；敌方左右镜像。
+      return Number(a.row === 'back') - Number(c.row === 'back')
+        || (a.isPlayer ? a.column - c.column : c.column - a.column);
     });
   return all.map((u) => u.uid);
 }

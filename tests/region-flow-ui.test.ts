@@ -43,7 +43,7 @@ describe('地区开局流程', () => {
       fireEvent.click(screen.getByRole('button', { name: /翠影林地.*神秘林地/ }));
       fireEvent.click(screen.getByRole('button', { name: '查看生态详情' }));
       const detail = within(screen.getByRole('dialog'));
-      expect(detail.getAllByRole('img', { name: '未遇见生物' })).toHaveLength(23);
+      expect(detail.getAllByRole('img', { name: '未遇见生物' })).toHaveLength(27);
       expect(detail.queryByText('棘刺王')).toBeNull();
       expect(detail.queryByText('九尾炎尊')).toBeNull();
       expect(detail.queryByText('焚风雏鹰')).toBeNull();
@@ -66,12 +66,14 @@ describe('地区开局流程', () => {
     Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function(this: HTMLDialogElement) { this.removeAttribute('open'); } });
     try {
       const state = { ...createInitialState(), region: 'emerald_forest' as const,
-        unlocks: { ...unlocks, regionEncounters: { emerald_forest: ['momo'], mixed: ['lulu'] } } };
+        unlocks: { ...unlocks, regionEncounters: { emerald_forest: ['momo', 'time_sand_beast'], mixed: ['lulu'] } } };
       render(createElement(RegionScreen, { state, dispatch: vi.fn() }));
       fireEvent.click(screen.getByRole('button', { name: '查看生态详情' }));
       const detail = within(screen.getByRole('dialog'));
       expect(detail.getByRole('img', { name: '迅迅' }).closest('.undiscovered')).toBeNull();
-      expect(detail.getAllByRole('img', { name: '未遇见生物' })).toHaveLength(22);
+      expect(detail.getAllByRole('img', { name: '未遇见生物' })).toHaveLength(25);
+      expect(detail.getByRole('region', { name: '蛋生' }).querySelectorAll('.undiscovered')).toHaveLength(3);
+      expect(detail.getByRole('img', { name: '时砂兽' }).closest('.undiscovered')).toBeNull();
       expect(detail.queryByRole('img', { name: '泡泡' })).toBeNull();
     } finally {
       cleanup();

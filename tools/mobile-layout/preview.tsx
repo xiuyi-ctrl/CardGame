@@ -61,7 +61,7 @@ add('region-select', ui.RegionScreen, {}, false);
 add('region-forest', ui.RegionScreen, { region: 'emerald_forest' }, false);
 add('region-ecology', ui.RegionScreen, { region: 'emerald_forest' }, false, '查看生态详情');
 add('region-mixed-ecology', ui.RegionScreen, {}, false, '查看生态详情');
-add('region-ecology-discovered', ui.RegionScreen, { region: 'emerald_forest', unlocks: { ...base.unlocks, regionEncounters: { emerald_forest: ['momo', 'torch_fox', 'mimi_king'] } } }, false, '查看生态详情');
+add('region-ecology-discovered', ui.RegionScreen, { region: 'emerald_forest', unlocks: { ...base.unlocks, regionEncounters: { emerald_forest: ['momo', 'torch_fox', 'mimi_king', 'time_sand_beast', 'mirror_beast'] } } }, false, '查看生态详情');
 add('difficulty-select', ui.DifficultyScreen, {}, false);
 add('relics-five-unlocked', ui.DifficultyScreen, { relics: ['greedy_eye'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
 add('relics-cauldron-selected', ui.DifficultyScreen, { relics: ['metal_cauldron'], unlocks: { ...base.unlocks, relics: RELIC_ORDER } }, false);
@@ -228,7 +228,7 @@ variant('chest-empty', 'chest', { chestResult: [] });
 variant('event-long', 'event', { map: { ...base.map, events: { [eventNode]: { ...base.map.events[eventNode], desc: '旅途中，你遇到一群带着补给和消息的冒险者。'.repeat(20) } } } });
 variant('proficiency-lost', 'proficiency-result', { proficiencyResult: 'lost', roster: [] });
 variant('skill-replace', 'skill-pick', { skillPick: undefined, skillReplace: { uid: first.uid, replaceIdx: -1, choices: ['aqua_shot', 'roar'], refreshCount: 0 } });
-variant('fusion-long', 'fusion-dialog', { roster: [first, ...base.roster.filter(u => u.speciesId === first.speciesId)] });
+variant('fusion-long', 'fusion-dialog', { roster: [first, ...Array.from({ length: 3 }, (_, i) => makeUnit(first.speciesId, true, (i % 3) as 0 | 1 | 2, false))] });
 const stressRoster = ['nine_tail_sovereign', 'solar_spirit', 'furnace_beast', 'eternal_moth', 'momo'].map((id, i) => ({
   ...makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back'), hp: 123, maxHp: 123,
 }));
@@ -405,7 +405,7 @@ add('legend-original-formation', FormationScreen, { roster: originalLegends, for
 let feedbackDispatch: ((action: any) => void) | undefined;
 let feedbackEnter: (() => void) | undefined;
 const feedbackCases: Record<string, { skillId: string; targetUid: string }> = {};
-for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch']]) {
+for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch'], ['pure-debuff', 'poison_mist']]) {
   const pets = ['momo_queen', 'fifi_king', 'lulu_king', 'coal', 'light_moss'].map((id, i) => makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back'));
   const battle = createBattle(pets, [{ speciesId: 'fifi_king' }, { speciesId: 'lulu_king' }, { speciesId: 'momo_queen' }], 31);
   battle.playerUnits = battle.playerUnits.map((unit, i) => ({ ...unit, hp: i === 0 ? 19 : 20, maxHp: 20, passive: undefined, spd: 99, skills: i === 0 ? [skillId] : unit.skills }));

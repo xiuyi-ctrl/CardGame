@@ -43,7 +43,7 @@
 .region-ecology-stage { min-width: 0; padding: 8px; border: 2px solid #7d8f85; background: #fff9e9; box-shadow: 2px 2px 0 #babda9; }
 .region-ecology-stage h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: #176b61; font-size: 14px; text-align: center; }
 .region-ecology-stage h3::before, .region-ecology-stage h3::after { content: ''; flex: 1; height: 2px; background: #a4b4a4; }
-.region-ecology-stage:last-child h3 { color: #946620; }
+.region-ecology-stage:nth-child(3) h3, .region-ecology-eggs h3 { color: #946620; }
 .region-ecology-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .region-ecology-creature { display: grid; place-items: center; min-width: 0; aspect-ratio: 1; padding: 4px; border: 2px solid #648c7c; background: #e4edda; box-shadow: inset 0 0 0 2px #fff9e9, 1px 2px 0 #c3c4ac; }
 .region-ecology-portrait { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; }
@@ -59,3 +59,6 @@
 .mobile-ui .region-ecology-grid { gap: 4px; }
 .mobile-ui .region-ecology-creature { padding: 3px; }
 .mobile-ui .region-footer p { flex: 1; }
+
+.region-ecology-eggs { grid-column: 1 / -1; }
+.region-ecology-eggs .region-ecology-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 320px; margin-inline: auto; }

@@ -1540,7 +1540,7 @@ export function buildEventByType(rng: () => number, type: string, act: number, r
   }
   if (type === 'ruins') {
     const roll = rng();
-    const desc = '20%获得随机食物或道具（各半），30%全体失去30%生命，30%失去30金币，20%随机伙伴永久+4生命、随机伙伴永久+2速度（可为同一只）';
+    const desc = '未知';
     let explore: EventChoice;
     if (roll < .2) explore = rng() < .5
       ? c(1, '探索', desc, 'food', { foodId: pick(rng, ['berry', 'meat', 'gem']) })
@@ -1797,11 +1797,27 @@ export function generateMap(seed: number, act: number, difficulty?: Difficulty, 
   }
   const supportRows = Array.from({ length: lastRow - 2 }, (_, i) => i + 2);
   const section = (row: number) => Math.min(2, Math.floor((row - 2) * 3 / supportRows.length));
+  const shopRanges: Record<number, [number, number]> = { 1: [3, 5], 2: [5, 6], 3: [6, 8] };
+  const shopTarget = randInt(rng, ...shopRanges[act]);
+  const shopGap = Math.max(1, Math.floor((supportRows.length - 1) / (shopTarget - 1)));
   const shopPlans: number[][] = [];
-  for (const a of supportRows) for (const b of supportRows) for (const c of supportRows) {
-    if (section(a) === 0 && section(b) === 1 && section(c) === 2
-      && b - a >= 3 && c - b >= 3 && c >= lastRow - 2) shopPlans.push([a, b, c]);
-  }
+  let fewestAdjacent = Infinity;
+  const collectShops = (chosen: number[], index: number): void => {
+    if (chosen.length === shopTarget) {
+      if (![0, 1, 2].every(part => chosen.some(row => section(row) === part))
+        || chosen[chosen.length - 1] < lastRow - 2) return;
+      const adjacent = chosen.filter((row, i) => i > 0 && row - chosen[i - 1] === 1).length;
+      if (adjacent < fewestAdjacent) { fewestAdjacent = adjacent; shopPlans.length = 0; }
+      if (adjacent === fewestAdjacent) shopPlans.push(chosen);
+      return;
+    }
+    for (let i = index; i <= supportRows.length - (shopTarget - chosen.length); i++) {
+      const row = supportRows[i];
+      if (chosen.length && row - chosen[chosen.length - 1] < shopGap) continue;
+      collectShops([...chosen, row], i + 1);
+    }
+  };
+  collectShops([], 0);
   const placeSupport = (row: number, type: 'shop' | 'event' | 'watchtower') => {
     const candidates = layers[row].filter(n => n.type !== 'shop' && n.type !== 'event'
       && n.type !== 'watchtower' && n.type !== 'special');
@@ -2144,7 +2160,7 @@ export function evolutionLockReason(state: GameState, speciesId: string, toFinal
   return undefined;
 }
 
-/** 融合需要的同形态数量（含主宠自身），六条主要进化链均为两只。 */
+/** 融合需要的同形态数量（含主宠自身），主模式一阶升二阶三只、二阶升三阶两只。 */
 export function fusionNeedCount(speciesId: string): number {
   return fusionNeed(speciesId);
 }

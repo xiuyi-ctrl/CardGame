@@ -24,8 +24,8 @@ describe('成长与融合', () => {
     expect(nextStage('boss_vine')).toBeUndefined();
   });
 
-  it('融合需求数量：主要进化链每阶两只同形态', () => {
-    expect(fusionNeedCount('momo')).toBe(2);
+  it('融合需求数量：一阶三只、二阶两只同形态', () => {
+    expect(fusionNeedCount('momo')).toBe(3);
     expect(fusionNeedCount('momo_queen')).toBe(2);
     expect(fusionNeedCount('momo_god')).toBe(4);
   });
@@ -63,7 +63,9 @@ describe('成长与融合', () => {
     const solo = dispatch({ ...s, roster: [a], field: [a.uid] }, { type: 'FUSE', primaryUid: a.uid });
     expect(solo.roster).toHaveLength(1);
     expect(solo.roster[0].speciesId).toBe('momo');
-    // 两只融合成 momo_queen
+    expect(dispatch(s, { type: 'FUSE', primaryUid: a.uid })).toBe(s);
+    // 三只融合成 momo_queen
+    s = { ...s, roster: [...s.roster, makeUnit('momo', true, 2, false)] };
     const next = dispatch(s, { type: 'FUSE', primaryUid: a.uid });
     expect(next.roster).toHaveLength(1);
     expect(next.roster[0].speciesId).toBe('momo_queen');
@@ -139,12 +141,13 @@ describe('地图生成', () => {
       // 全战斗行（不含首/尾）不超过 3
       const allBattleRows = map.layers.slice(1, -1).filter((row) => row.every((n) => n.type === 'battle'));
       expect(allBattleRows.length).toBeLessThanOrEqual(3);
-      // 不再生成独立休整节点；事件/商人数量随层数缩放（事件 ≤6，商人 ≤5，最后两层必有商人）
+      // 不再生成独立休整节点；事件≤6，商店分幕3~5／5~6／6~8，末两层保留商店。
       const types = map.layers.flat().map((n) => n.type);
       expect(types.includes('rest')).toBe(false);
       const shopCount = types.filter((t) => t === 'shop').length;
-      expect(shopCount).toBeGreaterThanOrEqual(2);
-      expect(shopCount).toBeLessThanOrEqual(6);
+      const shopRange = ({ 1: [3, 5], 2: [5, 6], 3: [6, 8] } as Record<number, number[]>)[act];
+      expect(shopCount).toBeGreaterThanOrEqual(shopRange[0]);
+      expect(shopCount).toBeLessThanOrEqual(shopRange[1]);
       const tail = map.layers.slice(-3, -1);
       expect(tail.some((row) => row.some((n) => n.type === 'shop'))).toBe(true);
       const evCount = types.filter((t) => t === 'event').length;
@@ -1364,17 +1367,18 @@ describe('孵蛋与招募满员处理', () => {
 });
 
 describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
-  function makeFullWithOneFifi(): GameState {
+  function makeFullWithTwoFifi(): GameState {
     const s = { ...createInitialState() };
     const roster = Array.from({ length: ROSTER_MAX }, () => makeUnit('kiki', true, 0, false));
     roster[0] = makeUnit('momo', true, 0, false);
     roster[1] = makeUnit('fifi', true, 0, false);
+    roster[2] = makeUnit('fifi', true, 1, false);
     s.roster = roster;
     return s;
   }
 
-  it('队伍 1 只 fifi + 溢出 fifi → 融合为 fifi_king，溢出清空，回 map', () => {
-    const s = makeFullWithOneFifi();
+  it('队伍 2 只 fifi + 溢出 fifi → 融合为 fifi_king，溢出清空，回 map', () => {
+    const s = makeFullWithTwoFifi();
     s.screen = 'tame-overflow';
     s.tameOverflow = [makeUnit('fifi', false, 0, false)];
     s.tameOverflowReturn = 'map';
@@ -1385,11 +1389,11 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     expect(after.tameOverflow).toBeUndefined();
     expect(after.tameOverflowReturn).toBeUndefined();
     expect(after.roster.some((u) => u.speciesId === 'fifi_king')).toBe(true);
-    expect(after.roster.length).toBe(ROSTER_MAX);
+    expect(after.roster.length).toBe(ROSTER_MAX - 1);
   });
 
   it('溢出宠物物种与队伍主宠不同 → state 不变', () => {
-    const s = makeFullWithOneFifi();
+    const s = makeFullWithTwoFifi();
     s.screen = 'tame-overflow';
     s.tameOverflow = [makeUnit('lulu', false, 0, false)];
     s.tameOverflowReturn = 'map';
@@ -1402,7 +1406,7 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
   it('队伍内融合后溢出宠物仍在队列、screen 仍为 tame-overflow', () => {
     const s = { ...createInitialState() };
     s.roster = Array.from({ length: ROSTER_MAX }, (_, i) => {
-      if (i === 0 || i === 1) return makeUnit('momo', true, 0, false);
+      if (i <= 2) return makeUnit('momo', true, 0, false);
       if (i < 6) return makeUnit('kiki', true, 0, false);
       return makeUnit('lulu', true, 0, false);
     });
@@ -1415,11 +1419,11 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
     expect(after.tameOverflow).toHaveLength(1);
     expect(after.tameOverflow![0].speciesId).toBe('fifi');
     expect(after.roster.some((u) => u.speciesId === 'momo_queen')).toBe(true);
-    expect(after.roster.length).toBe(ROSTER_MAX - 1);
+    expect(after.roster.length).toBe(ROSTER_MAX - 2);
   });
 
-  it('队伍 1 只 fifi + 溢出 fifi → 融合后回 roster（tameOverflowReturn）', () => {
-    const s = makeFullWithOneFifi();
+  it('队伍 2 只 fifi + 溢出 fifi → 融合后回 roster（tameOverflowReturn）', () => {
+    const s = makeFullWithTwoFifi();
     s.screen = 'tame-overflow';
     s.tameOverflow = [makeUnit('fifi', false, 0, false)];
     s.tameOverflowReturn = 'roster';
@@ -1435,24 +1439,24 @@ describe('溢出融合（TAME_OVERFLOW_FUSE）', () => {
   it('队伍内融合腾出空位后，溢出宠物可通过 JOIN 直接入队', () => {
     const s = { ...createInitialState() };
     s.roster = Array.from({ length: ROSTER_MAX }, (_, i) => {
-      if (i === 0 || i === 1) return makeUnit('momo', true, 0, false);
+      if (i <= 2) return makeUnit('momo', true, 0, false);
       return makeUnit('kiki', true, 0, false);
     });
     s.screen = 'tame-overflow';
     s.tameOverflow = [makeUnit('fifi', false, 0, false)];
     s.tameOverflowReturn = 'map';
     const tameUid = s.tameOverflow[0].uid;
-    // 先融合两只 momo，腾出一个空位（8→7）
+    // 先融合三只 momo，腾出两个空位（8→6）
     const primaryUid = s.roster.find((u) => u.speciesId === 'momo')!.uid;
     const fused = dispatch(s, { type: 'FUSE_IN_OVERFLOW', uid: primaryUid });
-    expect(fused.roster.length).toBe(ROSTER_MAX - 1);
+    expect(fused.roster.length).toBe(ROSTER_MAX - 2);
     expect(fused.screen).toBe('tame-overflow');
     // 直接加入队伍
     const joined = dispatch(fused, { type: 'TAME_OVERFLOW_JOIN', tameUid });
     expect(joined.screen).toBe('map');
     expect(joined.tameOverflow).toBeUndefined();
     expect(joined.tameOverflowReturn).toBeUndefined();
-    expect(joined.roster.length).toBe(ROSTER_MAX);
+    expect(joined.roster.length).toBe(ROSTER_MAX - 1);
     expect(joined.roster.some((u) => u.speciesId === 'fifi')).toBe(true);
   });
 

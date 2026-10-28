@@ -592,9 +592,10 @@ export function fusionDepth(id: string): number {
   return depth;
 }
 
-/** 主模式进化链每阶均需两只同形态；其他物种沿用原有需求。 */
+/** 主模式一阶升二阶需三只，二阶升三阶需两只同形态（含主宠）。 */
 export function fusionNeed(id: string): number {
-  if (MAIN_BASE_POOL.includes(id) || MAIN_EVO1_POOL.includes(id) || id === 'torch_fox') return 2;
+  if (MAIN_BASE_POOL.includes(id)) return 3;
+  if (MAIN_EVO1_POOL.includes(id)) return 2;
   return fusionDepth(id) + 2;
 }
 

@@ -447,14 +447,16 @@ function PetCardFooter({
 export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: Unit; state: GameState; dispatch: Dispatch<GameAction>; onClose: () => void }) {
   const overflow = state.screen === 'tame-overflow' ? state.tameOverflow ?? [] : [];
   const materials = [...state.roster, ...overflow].filter(unit => unit.uid !== primary.uid && unit.speciesId === primary.speciesId);
-  const [materialUid, setMaterialUid] = useState(materials.length === 1 ? materials[0].uid : '');
-  const material = materials.find(unit => unit.uid === materialUid);
+  const materialCount = fusionNeedCount(primary.speciesId) - 1;
+  const [materialUids, setMaterialUids] = useState<string[]>(materials.length === materialCount ? materials.map(unit => unit.uid) : Array(materialCount).fill(''));
+  const selectedMaterials = materials.filter(unit => materialUids.includes(unit.uid));
+  const materialsReady = selectedMaterials.length === materialCount && new Set(materialUids).size === materialCount;
   const branches = getMonster(primary.speciesId).evolutions ?? [];
   const [targetSpeciesId, setTargetSpeciesId] = useState(branches[0]?.to);
   const lockReason = evolutionLockReason(state, primary.speciesId);
   const evolved = useMemo(() => fuseUnit(primary, targetSpeciesId), [primary, targetSpeciesId]);
   if (!evolved) return null;
-  const fromOverflow = !!material && overflow.some(unit => unit.uid === material.uid);
+  const pendingMaterial = selectedMaterials.find(material => overflow.some(unit => unit.uid === material.uid));
   const passive = getPassive(evolved.passive);
   const materialInfo = (unit: Unit) => `生命 ${unit.hp}/${unit.maxHp} · 速度 ${unit.spd} · 强化：生命 +${unit.bonusStats?.hp ?? 0}、速度 +${unit.bonusStats?.spd ?? 0} · 诅咒：${unit.curse ? CURSE_CN[unit.curse] : '无'}`;
   return <div className="confirm-overlay" onClick={onClose}>
@@ -468,17 +470,21 @@ export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: 
           <section className="fusion-detail"><h4>技能</h4><div className="fusion-result-skills">{evolved.skills.map(id => <SkillTag key={id} skill={getSkill(id)} />)}</div></section>
           <div className="fusion-modifiers"><span className="fusion-modifier-label">永久强化</span><span>生命 +{evolved.bonusStats?.hp ?? 0}</span><span>速度 +{evolved.bonusStats?.spd ?? 0}</span><span className={`fusion-curse${evolved.curse ? ' has-curse' : ''}`}>诅咒：{evolved.curse ? CURSE_CN[evolved.curse] : '无'}</span></div>
         </div>
-        {materials.length > 1 && <label>融合材料 <select aria-label="融合材料" value={materialUid} onChange={event => setMaterialUid(event.target.value)}><option value="">请选择材料</option>{materials.map((unit, index) => <option key={unit.uid} value={unit.uid}>{index + 1}. {unit.name} · {overflow.some(item => item.uid === unit.uid) ? '待处理' : '队伍内'} · {materialInfo(unit)}</option>)}</select></label>}
+
         {lockReason && <p role="status">{lockReason}</p>}
       </div>
-      <div className="panel-row fusion-actions"><button className="primary" disabled={!material || !!lockReason || state.runMode === 'proficiency'} onClick={() => {
-        if (!material || lockReason) return;
+      <div className="fusion-controls">
+        <div className="fusion-materials">{materials.length > materialCount && Array.from({ length: materialCount }, (_, slot) => <label key={slot}>融合材料{materialCount > 1 ? slot + 1 : ''} <select aria-label={`融合材料${materialCount > 1 ? slot + 1 : ''}`} value={materialUids[slot]} onChange={event => setMaterialUids(current => current.map((uid, index) => index === slot ? event.target.value : uid))}><option value="">请选择材料</option>{materials.map((unit, index) => <option key={unit.uid} value={unit.uid} disabled={materialUids.some((uid, index) => index !== slot && uid === unit.uid)}>{index + 1}. {unit.name} · {overflow.some(item => item.uid === unit.uid) ? '待处理' : '队伍内'} · {materialInfo(unit)}</option>)}</select></label>)}</div>
+      <div className="panel-row fusion-actions"><button className="primary" disabled={!materialsReady || !!lockReason || state.runMode === 'proficiency'} onClick={() => {
+        if (!materialsReady || lockReason) return;
         const branchChoice = branches.length > 1 ? { targetSpeciesId } : {};
-        if (fromOverflow) dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: material.uid, primaryUid: primary.uid, ...branchChoice });
-        else if (state.screen === 'tame-overflow') dispatch({ type: 'FUSE_IN_OVERFLOW', uid: primary.uid, materialUid: material.uid, ...branchChoice });
-        else dispatch({ type: 'FUSE', primaryUid: primary.uid, materialUid: material.uid, ...branchChoice });
+        const materialChoice = materialCount === 1 ? { materialUid: materialUids[0] } : { materialUids };
+        if (pendingMaterial) dispatch({ type: 'TAME_OVERFLOW_FUSE', tameUid: pendingMaterial.uid, primaryUid: primary.uid, ...(materialCount > 1 ? { materialUids } : {}), ...branchChoice });
+        else if (state.screen === 'tame-overflow') dispatch({ type: 'FUSE_IN_OVERFLOW', uid: primary.uid, ...materialChoice, ...branchChoice });
+        else dispatch({ type: 'FUSE', primaryUid: primary.uid, ...materialChoice, ...branchChoice });
         onClose();
       }}>确定融合</button><button onClick={onClose}>取消</button></div>
+      </div>
     </div>
   </div>;
 }
@@ -2669,7 +2675,7 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
                 }}
               >
               <img className="flow-choice-icon" src={flowChoiceArt(c.kind, c.itemId ?? c.foodId)} alt="" draggable={false} />
-              <span className="flow-choice-copy"><strong>{c.label}</strong><span>{c.desc}</span></span>
+              <span className="flow-choice-copy"><strong>{c.label}</strong><span>{ev.title === '宠物遗迹' && c.label === '探索' ? '未知' : c.desc}</span></span>
             </button>
             );
           })}
@@ -2719,10 +2725,8 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
 export function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const sp = state.map.specials[state.currentNodeId];
   if (!sp) return null;
-  const rosterFull = state.roster.length >= getMaxRoster(state.runMode);
   const disabled = (r: SpecialReward) =>
-    ((r.kind === 'evolve' || r.kind === 'superevolve') && !state.roster.some(u => nextStage(u.speciesId) && !evolutionLockReason(state, u.speciesId, r.toFinal))) ||
-    (r.kind === 'custom' && rosterFull);
+    (r.kind === 'evolve' || r.kind === 'superevolve') && !state.roster.some(u => nextStage(u.speciesId) && !evolutionLockReason(state, u.speciesId, r.toFinal));
   return (
     <div className="flow-screen flow-special-screen">
       <FlowHeader title={`第${state.act}幕 · 林间奇遇`} state={state} onHome={() => { void persistSave(state); dispatch({ type: 'TITLE' }); }} />

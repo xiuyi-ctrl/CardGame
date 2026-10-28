@@ -794,11 +794,13 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     });
     const castGroups = new Set<string>();
     const displayedHp = { ...prevHp };
+    let displayedStatuses = prevStatuses;
     events.forEach((ev, i) => {
       let windupSeq = 0;
       const skill = Object.values(SKILLS).find(s => s.name === ev.skillName);
+      const pureDebuff = skill?.kind === 'status' && !['self', 'ally', 'allyAll'].includes(skill.target) && !ev.passive;
       const addedKinds = [...(ev.addsStatus ?? []), ...Object.values(ev.impacts ?? {}).flatMap(change => Object.keys(change.addedStatuses ?? {})), ...(skill?.effects ?? []).map(effect => effect.kind)];
-      const quietDotStatus = ev.kind === 'buff' && addedKinds.length > 0
+      const quietDotStatus = !pureDebuff && ev.kind === 'buff' && addedKinds.length > 0
         && addedKinds.every(kind => kind === 'burn' || kind === 'poison')
         && ev.value === 0 && !ev.notice
         && Object.values(ev.impacts ?? {}).every(change => !change.hpLoss && !change.shieldLoss && !change.healing && !change.shieldGain);
@@ -814,7 +816,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
       if (phased && ev.actorUid) timers.current.set(() => {
         if (firstCast && !ev.passive) {
           windupSeq = ++fxSeq;
-          setFx(p => ({ ...p, [ev.actorUid!]: { cls: ev.kind === 'attack' ? (ranged ? 'fx-ranged' : ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down') : 'fx-cast', seq: windupSeq } }));
+          setFx(p => ({ ...p, [ev.actorUid!]: { cls: ev.kind === 'attack' ? (ranged ? 'fx-ranged' : ev.actorIsPlayer ? 'fx-attack-up' : 'fx-attack-down') : pureDebuff ? 'fx-status-cast' : 'fx-cast', seq: windupSeq } }));
         }
         if (ev.kind === 'attack' && ev.targetUid) {
           const strike = { id: ++fxSeq, actorUid: ev.actorUid!, targetUid: ev.targetUid, ranged };
@@ -842,11 +844,27 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             displayedHp[uid] = hp;
           }
           if (targetUid && (ev.kind === 'rewind' || ev.kind === 'enter')) transition(targetUid, ev.kind);
-          if (ev.impacts) setStatusPulses(p => {
+          let eventImpacts = ev.impacts;
+          // 纯状态日志可能只有快照；用本次实际层数增量恢复反馈，不重算技能。
+          if (pureDebuff && ev.statuses) {
+            eventImpacts = { ...ev.impacts };
+            const targets = new Set([...(ev.debuffTargets ?? []), ...(targetUid ? [targetUid] : [])]);
+            for (const uid of targets) {
+              const addedStatuses: NonNullable<NonNullable<LogEntry['impacts']>[string]['addedStatuses']> = {};
+              for (const status of ev.statuses[uid] ?? []) {
+                if (!addedKinds.includes(status.kind)) continue;
+                const previous = displayedStatuses[uid]?.find(s => s.kind === status.kind)?.value ?? 0;
+                if (status.value > previous) addedStatuses[status.kind] = status.value - previous;
+              }
+              if (Object.keys(addedStatuses).length) eventImpacts[uid] = { ...(eventImpacts[uid] ?? { hpLoss: 0, shieldLoss: 0, healing: 0, shieldGain: 0, shieldBroken: false }),
+                addedStatuses: { ...eventImpacts[uid]?.addedStatuses, ...addedStatuses } };
+            }
+          }
+          if (eventImpacts) setStatusPulses(p => {
             const next = { ...p };
-            for (const [uid, change] of Object.entries(ev.impacts!)) {
+            for (const [uid, change] of Object.entries(eventImpacts!)) {
               for (const kind of Object.keys(change.addedStatuses ?? {})) {
-                if (kind !== 'burn' && kind !== 'poison') next[uid] = { ...next[uid], [kind]: ++fxSeq };
+                if (pureDebuff || (kind !== 'burn' && kind !== 'poison')) next[uid] = { ...next[uid], [kind]: ++fxSeq };
               }
             }
             return next;
@@ -889,24 +907,24 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           let capturedActorSeq = windupSeq;
           let capturedTargetSeq = 0;
           let debuffTargetSeqs: Record<string, number> | null = null;
-          const legacyPop = (pop: PopItem) => { if (ev.impacts === undefined && !ev.notice && !(ev.passive && pop.buff)) setPops(p => [...p, pop]); };
-          const impact = targetUid ? ev.impacts?.[targetUid] : undefined;
+          const legacyPop = (pop: PopItem) => { if (eventImpacts === undefined && !ev.notice && !(ev.passive && pop.buff)) setPops(p => [...p, pop]); };
+          const impact = targetUid ? eventImpacts?.[targetUid] : undefined;
           const hitClass = impact ? (impact.hpLoss > 0 ? 'fx-hit' : impact.shieldLoss > 0 ? 'fx-block' : 'fx-noop') + (impact.shieldBroken ? ' fx-break' : '') : 'fx-hit';
           if (ev.capture && targetUid) {
             setCapture({ ...ev.capture, stage: ev.capture.success ? 'success' : 'fail', seq: ++fxSeq });
             setPops(p => [...p, { id: popId, uid: targetUid, text: ev.capture!.success ? '捕获成功' : '捕获失败', heal: false, kind: 'notice' }]);
             if (ev.capture.success) transition(targetUid, 'captured');
           } else if (ev.notice && targetUid) setPops(p => [...p, { id: popId, uid: targetUid, text: ev.notice!, heal: false, kind: 'notice' }]);
-          else if (ev.impacts) {
-            const uids = new Set([...(ev.burstTargets ?? []), ...(ev.debuffTargets ?? []), ...Object.keys(ev.impacts), ...(targetUid ? [targetUid] : [])]);
+          else if (eventImpacts) {
+            const uids = new Set([...(ev.burstTargets ?? []), ...(ev.debuffTargets ?? []), ...Object.keys(eventImpacts), ...(targetUid ? [targetUid] : [])]);
             const actualPops: PopItem[] = [];
             for (const uid of uids) {
               if (ev.noPop && uid === actorUid) continue;
-              const change = ev.impacts[uid];
+              const change = eventImpacts[uid];
               if (!change) continue;
               const healing = uid === targetUid && (ev.kind === 'heal' || (ev.kind === 'buff' && (skill?.heal ?? 0) > 0));
               const damage = uid === targetUid && ['attack', 'dot', 'thorn'].includes(ev.kind);
-              actualPops.push(...impactPops(change, healing, damage, ev.statusKind).map((pop, slot) => ({ ...pop, id: popId, uid, slot })));
+              actualPops.push(...impactPops(change, healing, damage, ev.statusKind, pureDebuff).map((pop, slot) => ({ ...pop, id: popId, uid, slot })));
             }
             setPops(p => [...p, ...actualPops]);
           }
@@ -945,11 +963,12 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               debuffTargetSeqs = {};
               const dLabel = debuffLabel(ev.addsStatus?.[0]);
               for (const uid of ev.debuffTargets) {
+                if (pureDebuff && eventImpacts && !Object.keys(eventImpacts[uid]?.addedStatuses ?? {}).length) continue;
                 ++fxSeq; debuffTargetSeqs[uid] = fxSeq;
                 setFx((p) => ({ ...p, [uid]: { cls: 'fx-debuff', seq: fxSeq } }));
                 legacyPop({ id: popId, uid, text: dLabel, heal: false, debuff: true });
               }
-            } else if (targetUid && !ev.noPop) {
+            } else if (targetUid && !ev.noPop && (!pureDebuff || !eventImpacts || Object.keys(eventImpacts[targetUid]?.addedStatuses ?? {}).length > 0)) {
               // 区分 debuff（RE_DEBUFF 解析）和普通 buff（RE_BUFF 解析）
               const isDebuffEvent = ev.addsStatus && ev.addsStatus.some((k) => ['poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k));
               if (isDebuffEvent) {
@@ -977,7 +996,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             if (targetUid) {
               ++fxSeq; capturedTargetSeq = fxSeq;
               setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-buff', seq: capturedTargetSeq } }));
-              if (!ev.impacts || !Object.keys(ev.impacts).some(uid => ev.impacts![uid].addedStatuses)) setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度 +${ev.value}`, heal: false, buff: true, kind: 'status' }]);
+              if (!eventImpacts || !Object.keys(eventImpacts).some(uid => eventImpacts![uid].addedStatuses)) setPops((p) => [...p, { id: popId, uid: targetUid, text: `速度 +${ev.value}`, heal: false, buff: true, kind: 'status' }]);
               setSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + ev.value } : p);
               if (ev.value > 0) setPassiveSpdMap((p) => p ? { ...p, [targetUid]: (p[targetUid] ?? 0) + 1 } : p);
             }
@@ -997,7 +1016,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
           }
           if (ev.hp) setHpMap(ev.hp);
           if (ev.shields) setShieldMap(ev.shields);
-          if (ev.statuses) setStatusMap(ev.statuses);
+          if (ev.statuses) { displayedStatuses = ev.statuses; setStatusMap(ev.statuses); }
           if (bossUid) setRockShellHitsMap((p) => rockShellHitsAfterEvent(p ?? {}, ev, bossUid));
           setThornRoyalHitsMap((p) => thornRoyalHitsAfterEvent(p ?? {}, ev));
 

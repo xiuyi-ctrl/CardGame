@@ -23,8 +23,9 @@ describe('第一幕后开放传奇进化', () => {
     expect(state.roster).toHaveLength(2);
   });
 
-  it.each(BASE_POOL)('%s：第一幕仍可两只一阶融合成二阶', (id) => {
-    const state = pairState(id);
+  it.each(BASE_POOL)('%s：第一幕仍可三只一阶融合成二阶', (id) => {
+    const pair = pairState(id);
+    const state = { ...pair, roster: [...pair.roster, makeUnit(id, true, 2, false)] };
     expect(evolutionLockReason(state, id)).toBeUndefined();
     const after = gameReducer(state, { type: 'FUSE', primaryUid: state.roster[0].uid });
     expect(after.roster).toHaveLength(1);
