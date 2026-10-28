@@ -119,7 +119,8 @@ describe('备用的蜡烛', () => {
   });
   it('时砂回溯优先，不消耗蜡烛；多段可在复活后再次击倒', () => {
     const b = fight('time_sand_beast'); b.playerUnits[0].passive = makeUnit('time_sand_beast', true, 0, false).passive;
-    const after = playerEndTurn(b);
+    const paused = playerEndTurn(b);
+    const after = playerSkill(paused, paused.playerUnits[0].uid, 'sand_shield');
     expect(after.playerUnits[0].timeRewindUsed).toBe(true); expect(after.spareCandleUsed).toBeUndefined();
     after.playerUnits[0].hp = 1;
     const saved = playerEndTurn(after);

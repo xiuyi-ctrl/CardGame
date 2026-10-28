@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
-import { canStepTo, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type SpecialReward } from '../game/state/game';
+import { canStepTo, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, battleVictoryGold, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type RewardChoice, type SpecialReward } from '../game/state/game';
 import type { FormationRow } from '../game/state/formation';
 import type { Unit, MonsterSpecies } from '../game/types';
 import { MONSTERS, BASE_POOL, getMonster } from '../game/data/monsters';
@@ -34,6 +34,7 @@ import { FLOW_ART, FLOW_ICON_NAMES, FlowIcon, FlowHeader, FlowPet, FlowPetStats,
 import './mainFlow.css';
 import './settlement.css';
 import './remainingMain.css';
+import './proficiencyStarter.css';
 import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalScreen } from './ProgressionScreens';
 import { CampRestScreen, CampFusionScreen, CampFusionSkillScreen, SpecialTargetScreen } from './CampScreens';
 import { ProficiencyReport } from './ProficiencyArt';
@@ -106,7 +107,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
     case 'starter':
     case 'proficiency-select':
       return [HOME_BACKGROUND, homeXunxun, homePaopao, homeZhuozhuo,
-        starterTiedun, starterMimi, starterCici, '/starter-choice-stone.png',
+        starterTiedun, starterMimi, starterCici, '/proficiency-starter-hall.png', '/starter-choice-stone.png',
         '/formation-plinth-occupied.png', '/starter-growth-icons/starter-paw.png',
         ...MAIN_REGIONS[state.region ?? 'mixed'].starters.map(id => getMonster(id).image).filter((src): src is string => !!src)];
     case 'test-pick':
@@ -1176,13 +1177,14 @@ const CODEX_RANK_LABEL: Record<number, string> = { 1: '普通', 2: '精英', 3: 
 
 const CODEX_GROUPS: { key: string; label: string; match: (m: MonsterSpecies) => boolean }[] = [
   { key: 'common', label: '普通宠物', match: (m) => m.rank === 1 },
-  { key: 'elite', label: '精英宠物', match: (m) => m.rank === 2 },
+  { key: 'elite', label: '精英宠物', match: (m) => m.rank === 2 && !m.eggBorn },
   { key: 'legend', label: '传奇宠物', match: (m) => m.rank === 3 && !m.id.startsWith('custom_') },
   { key: 'boss', label: '首领', match: (m) => m.rank === 4 },
+  { key: 'mysterious', label: '神秘生物', match: (m) => !!m.eggBorn },
   { key: 'custom', label: '造物', match: (m) => m.id.startsWith('custom_') },
 ];
 
-function CodexScreen({ onClose }: { onClose: () => void }) {
+export function CodexScreen({ onClose }: { onClose: () => void }) {
   const mobile = useMobileLayout();
   const [mobileDetail, setMobileDetail] = useState(false);
   useBackAction(mobile && mobileDetail, () => setMobileDetail(false), 1);
@@ -1221,7 +1223,7 @@ function CodexScreen({ onClose }: { onClose: () => void }) {
   const stats = computeStats(sp.id);
   const passive = getPassive(sp.passive);
   const next = nextStage(sp.id);
-  const rankLabel = sp.id.startsWith('custom_') ? '造物' : (CODEX_RANK_LABEL[sp.rank] ?? '');
+  const rankLabel = sp.eggBorn ? '神秘生物' : sp.id.startsWith('custom_') ? '造物' : (CODEX_RANK_LABEL[sp.rank] ?? '');
   const rankTone = sp.id.startsWith('custom_') ? '' : sp.rank === 2 ? ' rank-chip-elite' : sp.rank === 3 ? ' rank-chip-legend' : sp.rank === 4 ? ' rank-chip-boss' : '';
   const tameable = sp.rank !== 4;
 
@@ -1450,26 +1452,28 @@ const STARTER_ROLES: Record<string, string> = {
   kiki: '防护', mimi: '剧毒', pipi: '控制',
 };
 
-function StarterChoiceCard({ id, selected, order, compact = false, onClick }: {
-  id: string; selected: boolean; order?: number; compact?: boolean; onClick: () => void;
+function proficiencyStarterStats(id: string) {
+  const stats = computeStats(id);
+  const passive = getPassive(getMonster(id).passive);
+  return { maxHp: stats.maxHp + (passive?.kind === 'hp' ? passive.value : 0), spd: stats.spd + (passive?.kind === 'spd' ? passive.value : 0) };
+}
+
+function StarterChoiceCard({ id, selected, order, onClick, onDetails }: {
+  id: string; selected: boolean; order?: number; onClick: () => void; onDetails: () => void;
 }) {
   const species = getMonster(id);
-  const stats = computeStats(id);
+  const stats = proficiencyStarterStats(id);
   return (
-    <button type="button" className={`starter-choice ${compact ? 'compact' : 'main-choice'} ${selected ? 'selected' : ''}`}
-      aria-pressed={selected} title={`技能：${species.skills.map((skill) => getSkill(skill).name).join('、')}`} onClick={onClick}>
-      {order && <span className="starter-choice-order">{order}</span>}
-      <span className="starter-choice-art">
-        <span className="starter-choice-sprite"><BattlePixelSprite src={id === 'momo' ? '/battle-momo.png' : species.image!} name={species.name} /></span>
-        <span className="starter-choice-plinth" aria-hidden="true" />
-      </span>
-      <span className="starter-choice-info">
-        <span className="starter-choice-name">{species.name}<small>{STARTER_ROLES[id]}</small></span>
-        <span className="starter-choice-stats"><span title="速度">⚡ {!compact && <small>速度</small>} {stats.spd}</span><span title="生命">♥ {!compact && <small>生命</small>} {stats.maxHp}</span></span>
-        {!compact && <span className="starter-choice-skills">{species.skills.map((skill) => getSkill(skill).name).join(' · ')}</span>}
-      </span>
-      {!compact && selected && <span className="starter-choice-selected-note" aria-hidden="true"><UiSymbol name="marker-info" /> 已选择 <UiSymbol name="marker-info" /></span>}
-    </button>
+    <article className={`proficiency-contract${selected ? ' is-selected' : ''}`}>
+      <button type="button" className={`starter-choice compact${selected ? ' selected' : ''}`}
+        aria-label={`${species.name} · ${STARTER_ROLES[id]} · 生命${stats.maxHp} · 速度${stats.spd}`}
+        aria-pressed={selected} onClick={onClick}>
+        {order && <span className="contract-order" aria-label={`第${order}位伙伴`}>{order}</span>}
+        <span className="contract-art"><img src={formationImage(id, species.image)} alt="" draggable={false} /><span className="contract-plinth" aria-hidden="true" /></span>
+        <span className="contract-info"><strong>{species.name}</strong><span className="contract-statline"><span><img src="/battle-stat-icons/life.png" alt="生命" />{stats.maxHp}</span><span><img src="/battle-stat-icons/speed.png" alt="速度" />{stats.spd}</span></span></span>
+      </button>
+      <button type="button" className="contract-details" aria-label={`查看${species.name}详情`} onClick={onDetails}>详情<UiSymbol name="arrow-right" /></button>
+    </article>
   );
 }
 
@@ -1557,44 +1561,45 @@ export function StarterScreen({ state, dispatch }: { state?: GameState; dispatch
 
 export function ProficiencyStarterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [detailSpeciesId, setDetailSpeciesId] = useState<string | null>(null);
   const toggle = (id: string) => setSelected((prev) =>
     prev.includes(id) ? prev.filter((value) => value !== id) : prev.length < 2 ? [...prev, id] : prev
   );
 
   return (
-    <div className="starter-screen starter-observatory">
+    <div className="starter-screen starter-observatory proficiency-starter">
       <header className="starter-header">
         <div className="starter-heading"><span className="starter-mark" aria-hidden="true"><UiSymbol name="sparkle" /></span><div>
-          <h1>熟练度远征</h1><p>从六只生物中选择两只，开启 50 层远征</p>
+          <h1>熟练度远征</h1><p>选择两位伙伴，开启50层试炼</p>
         </div></div>
         <button className="starter-back" onClick={() => dispatch({ type: 'TITLE' })}><UiSymbol name="arrow-left" /> 返回首页</button>
       </header>
       <main className="starter-proficiency-main">
-        <div className="starter-choice-grid proficiency">
-          {BASE_POOL.map((id) => <StarterChoiceCard key={id} id={id} compact selected={selected.includes(id)}
-            order={selected.indexOf(id) + 1 || undefined} onClick={() => toggle(id)} />)}
+        <div className="starter-choice-grid proficiency" role="region" aria-label="选择熟练度伙伴">
+          {BASE_POOL.map((id) => <StarterChoiceCard key={id} id={id} selected={selected.includes(id)}
+            order={selected.indexOf(id) + 1 || undefined} onClick={() => toggle(id)} onDetails={() => setDetailSpeciesId(id)} />)}
         </div>
         <aside className="starter-summary">
-          <h2>已选 <span>{selected.length}/2</span></h2>
+          <h2>同行伙伴 <span>{selected.length}/2</span></h2>
           <div className="starter-selected-list">
             {[0, 1].map((index) => {
               const id = selected[index];
               return <div key={index} className={`starter-selected-slot ${id ? 'filled' : ''}`}>
                 <span className="starter-selected-number">{index + 1}</span>
-                {id ? <><img src={getMonster(id).image} alt="" /><strong>{getMonster(id).name}</strong></> : <span>选择伙伴</span>}
+                {id ? <><img src={formationImage(id, getMonster(id).image)} alt="" /><span className="proficiency-selected-copy"><strong>{getMonster(id).name}</strong><span className="contract-statline"><span><img src="/battle-stat-icons/life.png" alt="生命" />{proficiencyStarterStats(id).maxHp}</span><span><img src="/battle-stat-icons/speed.png" alt="速度" />{proficiencyStarterStats(id).spd}</span></span></span></> : <span>选择伙伴</span>}
               </div>;
             })}
           </div>
-          <p>点击卡片选择或取消</p>
           <div className="starter-milestones" aria-label="远征里程碑：15 层、30 层、50 层">
             <span>15 层</span><span>30 层</span><span>50 层</span>
           </div>
           <button className="starter-confirm" disabled={selected.length !== 2} onClick={() => {
             dispatch({ type: 'START_PROFICIENCY_PICKED', seed: state.seed ?? Date.now(), saveSlot: state.saveSlot,
               starterId: selected[0], companionId: selected[1] });
-          }}>出发远征</button>
+          }}>出发远征<UiSymbol name="arrow-right" /></button>
         </aside>
       </main>
+      {detailSpeciesId && <WatchtowerCreatureDetails speciesId={detailSpeciesId} onClose={() => setDetailSpeciesId(null)} />}
     </div>
   );
 }
@@ -1910,13 +1915,30 @@ export function MapScreen({ state, dispatch }: { state: GameState; dispatch: Dis
   );
 }
 
+function BossRewardChoice({ state, reward, dispatch }: { state: GameState; reward: RewardChoice; dispatch: Dispatch<GameAction> }) {
+  const [uid, setUid] = useState(state.roster[0]?.uid ?? '');
+  const [stat, setStat] = useState<'hp' | 'spd'>('hp');
+  const [potion, setPotion] = useState('atk_up');
+  const boost = reward.kind === 'boss_boost';
+  const amount = stat === 'hp' ? (state.act === 1 ? 4 : 6) : (state.act === 1 ? 1 : 2);
+  return <div className="flow-screen flow-special-screen boss-reward-choice-screen">
+    <header className="flow-header flow-frame"><h1>首领战利品 · {reward.label}</h1><span>第{state.act}幕 · 金币 {state.gold}</span></header>
+    <main className="flow-choice-panel flow-frame boss-reward-form">
+      <h2>{reward.desc}</h2>
+      {boost ? <><label>选择伙伴<select aria-label="强化伙伴" value={uid} onChange={event => setUid(event.target.value)}>{state.roster.filter(u => u.hp > 0).map((u, index) => <option key={u.uid} value={u.uid}>{index + 1}. {u.name} · 生命{u.maxHp} · 速度{u.spd}</option>)}</select></label><div className="panel-row"><button aria-pressed={stat === 'hp'} className={stat === 'hp' ? 'primary' : ''} onClick={() => setStat('hp')}>生命＋{state.act === 1 ? 4 : 6}</button><button aria-pressed={stat === 'spd'} className={stat === 'spd' ? 'primary' : ''} onClick={() => setStat('spd')}>速度＋{state.act === 1 ? 1 : 2}</button></div></> : <label>选择药水<select aria-label="补给药水" value={potion} onChange={event => setPotion(event.target.value)}>{['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'].map(id => <option key={id} value={id}>{ITEMS[id].name} ×{state.act === 1 ? 1 : 2}</option>)}</select></label>}
+      <button className="flow-primary" disabled={boost && !uid} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id, ...(boost ? { targetUid: uid, stat } : { potionId: potion }) })}>{boost ? `确认强化${stat === 'hp' ? '生命' : '速度'}＋${amount}` : '领取补给'}</button>
+    </main>
+  </div>;
+}
+
 export function RewardScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const pending = state.rewards.find((reward) => reward.id === state.pendingRecruitRewardId);
   const candidates = useMemo(() => (pending?.recruitCandidates ?? []).map((id) => makeUnit(id, true, 0, false)), [pending]);
   const currentNode = state.map.layers[state.currentRow]?.find((node) => node.id === state.currentNodeId);
   const skipped = state.log[0]?.startsWith('使用跳关道具');
+  if (pending && (pending.kind === 'boss_boost' || pending.kind === 'boss_supply')) return <BossRewardChoice state={state} reward={pending} dispatch={dispatch} />;
   return (
-    <div className={`reward-screen${pending ? ' recruit-screen' : ''}`}>
+    <div className={`reward-screen${pending ? ' recruit-screen' : ''}${currentNode?.type === 'boss' ? ' boss-reward-screen' : ''}`}>
       <header className="reward-header">
         <div className="reward-heading"><img className="reward-swords" src="/page-special-icons/victory-swords.png" alt="" draggable={false} /><h1>{skipped ? '跳关奖励' : '战斗胜利'}</h1></div>
         <div className="reward-header-info">
@@ -1926,7 +1948,7 @@ export function RewardScreen({ state, dispatch }: { state: GameState; dispatch: 
       </header>
       <main className="reward-content">
         <section className={`reward-choice-panel${pending ? ' recruit-choice-panel' : ''}`} aria-labelledby="reward-choice-title">
-          <div className="reward-panel-heading"><div>{pending && <img className="recruit-heading-paw" src="/starter-growth-icons/starter-paw.png" alt="" />}<h2 id="reward-choice-title">{pending ? '招募伙伴' : '选择一份战利品'}</h2>{pending && <p className="recruit-subtitle">选择一位伙伴加入队伍</p>}</div></div>
+          <div className="reward-panel-heading"><div>{pending && <img className="recruit-heading-paw" src="/starter-growth-icons/starter-paw.png" alt="" />}<h2 id="reward-choice-title">{pending ? '招募伙伴' : '选择一份战利品'}</h2>{pending && <p className="recruit-subtitle">选择一位伙伴加入队伍</p>}{!pending && currentNode?.type === 'boss' && state.runMode !== 'proficiency' && state.act < 3 && <p className="boss-guaranteed">已入账：{battleVictoryGold(state)}金币 · 秘晶×1</p>}</div></div>
           {pending ? <div className="recruit-candidate-list">
             {candidates.map((unit) => {
               const passive = getPassive(unit.passive);
@@ -1945,7 +1967,7 @@ export function RewardScreen({ state, dispatch }: { state: GameState; dispatch: 
             {state.rewards.map((reward) => {
               return <button key={reward.id} type="button" className={`reward-choice reward-choice-${reward.kind}`} aria-label={`领取：${reward.label}，${reward.desc}`} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id })}>
                 <span className={`reward-choice-icon reward-choice-icon-${reward.kind}`} aria-hidden="true">
-                  <img src={reward.kind === 'recruit' ? '/starter-growth-icons/starter-paw.png' : `/reward-icons/${reward.kind}.png`} alt="" draggable={false} />
+                  <img src={reward.kind === 'recruit' ? '/starter-growth-icons/starter-paw.png' : reward.kind === 'boss_boost' ? '/battle-stat-icons/life.png' : reward.kind === 'boss_supply' ? '/reward-icons/food.png' : `/reward-icons/${reward.kind}.png`} alt="" draggable={false} />
                 </span>
                 <span className="reward-choice-copy"><strong>{reward.label}</strong><small>{reward.desc}</small></span>
                 <span className="reward-claim">领取</span>
@@ -2936,7 +2958,7 @@ function ProficiencyResultScreen({ state, dispatch }: { state: GameState; dispat
   return <ProficiencyReport state={state} dispatch={dispatch} onRetry={() => dispatch({ type: 'RETRY', seed: newSeed() })} />;
 }
 
-function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+export function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const unlocks = state.unlocks ?? { ...DEFAULT_UNLOCKS };
   const [tab, setTab] = useState<'difficulties' | 'relics' | 'grades'>('difficulties');
   const tabs = ['difficulties', 'relics', 'grades'] as const;
@@ -2949,6 +2971,8 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
       desc: `敌方生命 ×${config.enemyHpMult} · 速度 +${config.enemySpdBonus} · 商店 ×${config.shopPriceMult} · 战后恢复 ${Math.round(config.healRatio * 100)}%` };
   });
   const allRelics = RELIC_ORDER.map((id) => ({ id, ...RELIC_DEFS[id] }));
+  const [gradeDifficulty, setGradeDifficulty] = useState<Difficulty>('normal');
+  const difficultyGrade = unlocks.bestGrades?.[gradeDifficulty];
   const grades = ['S', 'A', 'B', 'C', 'D'];
 
   return (
@@ -2956,7 +2980,7 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
       <header className="flow-header flow-frame"><h1><img src={homeAchievementIcon} alt="" />成就与解锁</h1><span>当前存档的远征记录</span><button type="button" onClick={() => dispatch({ type: 'TITLE' })}>返回首页</button></header>
       <main className="flow-frame achievements-panel">
       <div className="achievements-tabs" role="tablist" aria-label="成就分类">{tabs.map(id => <button type="button" key={id} role="tab" id={`achievement-tab-${id}`} aria-selected={tab === id} aria-controls="achievement-content" className={tab === id ? 'flow-primary' : ''} onClick={() => setTab(id)}>{tabLabels[id]}</button>)}</div>
-      <div className="achievements-heading"><h2>{tabLabels[tab]}{tab === 'grades' ? '' : '解锁'}</h2><div className="achievement-best-grade"><FlowIcon name="rating-laurel" /><span>最高评级 <b>{unlocks.bestGrade ?? '无'}</b></span></div></div>
+      <div className="achievements-heading"><h2>{tabLabels[tab]}{tab === 'grades' ? '' : '解锁'}</h2><div className="achievement-best-grade"><FlowIcon name="rating-laurel" /><span>{tab === 'grades' ? `${DIFFICULTY_CONFIG[gradeDifficulty].label}最高评级` : '历史最高评级'} <b>{(tab === 'grades' ? difficultyGrade : unlocks.bestGrade) ?? '无'}</b></span></div></div>
       <section className="achievements-content" id="achievement-content" role="tabpanel" aria-labelledby={`achievement-tab-${tab}`}>
       {tab === 'difficulties' && (
         <div className="achievement-rows">
@@ -2986,16 +3010,18 @@ function AchievementsScreen({ state, dispatch }: { state: GameState; dispatch: D
           })}
         </div>
       )}
+      {tab === 'grades' && <div className="achievement-grade-difficulties" role="group" aria-label="评级难度">{DIFFICULTY_ORDER.map(id => <button type="button" key={id} aria-pressed={gradeDifficulty === id} className={gradeDifficulty === id ? 'flow-primary' : ''} onClick={() => setGradeDifficulty(id)}>{DIFFICULTY_CONFIG[id].label}</button>)}</div>}
+      {tab === 'grades' && !unlocks.bestGrades && unlocks.bestGrade && <p>旧记录：最高评级 {unlocks.bestGrade}（未记录难度）</p>}
       {tab === 'grades' && (
         <div className="achievement-rows">
           {grades.map((g) => {
             const rank = { S: 4, A: 3, B: 2, C: 1, D: 0 }[g] ?? 0;
-            const bestRank = unlocks.bestGrade ? ({ S: 4, A: 3, B: 2, C: 1, D: 0 }[unlocks.bestGrade] ?? -1) : -1;
+            const bestRank = difficultyGrade ? ({ S: 4, A: 3, B: 2, C: 1, D: 0 }[difficultyGrade] ?? -1) : -1;
             const reached = bestRank >= rank;
             return (
               <div key={g} className={`achievement-row ${reached ? 'is-unlocked' : ''}`}>
                 <span className="achievement-grade-art">{g}</span>
-                <div className="achievement-row-copy"><h3>评级 {g}</h3><p>达成 {g} 级及以上通关评级</p></div>
+                <div className="achievement-row-copy"><h3>评级 {g}</h3><p>{DIFFICULTY_CONFIG[gradeDifficulty].label}难度达成 {g} 级及以上通关评级</p></div>
                 <span className="achievement-state">{reached ? '已达成' : '未达成'}</span>
               </div>
             );

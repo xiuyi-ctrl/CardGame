@@ -397,6 +397,8 @@ export interface BattleState {
   collapseWarningSeenRound?: number;
   /** 回合末崩解导致替补等待时，换人不重复开启下一回合。 */
   roundEndedBeforeSwap?: boolean;
+  rewindChoice?: { uid: string; acted: boolean; order?: PlayerOrder; nextRound?: number };
+  rewindResume?: { index: number; extraActions: Record<string, number> };
   playerUnits: Unit[];
   enemyUnits: Unit[];
   turnOrder: string[];

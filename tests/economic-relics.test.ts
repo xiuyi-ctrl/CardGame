@@ -17,7 +17,7 @@ function shopState(relic = 'greedy_eye', seed = 1) {
   return { before, node, state: gameReducer(before, { type: 'MOVE', nodeId: node.id }) };
 }
 
-it.each([['battle', 15], ['elite', 30], ['guardian', 30], ['boss', 45], ['corrupted', 30]] as const)('贪婪之眼%s结算%d，提示金额与实际入账共用公式', (type, amount) => {
+it.each([['battle', 15], ['elite', 30], ['guardian', 30], ['boss', 60], ['corrupted', 30]] as const)('贪婪之眼%s结算%d，提示金额与实际入账共用公式', (type, amount) => {
   const run = fresh(), node = { id: 'fight', type, label: '战斗', col: 0, corruptReward: 'gold' as const };
   const encounter = [{ speciesId: 'momo' }];
   const battle = createBattle(run.roster, encounter, 1); battle.phase = 'won';

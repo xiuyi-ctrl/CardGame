@@ -1,3 +1,4 @@
+import { CollapseWarning } from '../../src/ui/CollapseWarning';
 // 仅由独立验收服务器加载，不进入生产入口，也不读取或覆盖真实存档。
 import { createElement, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -20,11 +21,11 @@ import { preloadImages } from '../../src/ui/imageCache';
 import { FORMATION_SPRITES } from '../../src/ui/formationSprites';
 import { CreatureStylePreview, CREATURE_STYLE_IMAGES } from './CreatureStylePreview';
 import { createInitialState, gameReducer } from '../../src/game/state/reducer';
-import { createBattle, makeUnit, performGauntletSwap, playerTame } from '../../src/game/core/battle';
+import { createBattle, makeUnit, performGauntletSwap, playerTame, playerSkill, playerEndTurn } from '../../src/game/core/battle';
 import { ITEMS } from '../../src/game/data/items';
 import { FOODS } from '../../src/game/data/foods';
 import { emptyMainRating } from '../../src/game/rating';
-import { generateMap, buildEventByType, SPECIAL_REWARDS, RELIC_ORDER } from '../../src/game/state/game';
+import { generateMap, generateRewards, buildEventByType, SPECIAL_REWARDS, RELIC_ORDER } from '../../src/game/state/game';
 import { createRng } from '../../src/game/rng';
 import type { GameState } from '../../src/game/state/game';
 import type { StatusEffect } from '../../src/game/types';
@@ -228,6 +229,32 @@ variant('chest-empty', 'chest', { chestResult: [] });
 variant('event-long', 'event', { map: { ...base.map, events: { [eventNode]: { ...base.map.events[eventNode], desc: '旅途中，你遇到一群带着补给和消息的冒险者。'.repeat(20) } } } });
 variant('proficiency-lost', 'proficiency-result', { proficiencyResult: 'lost', roster: [] });
 variant('skill-replace', 'skill-pick', { skillPick: undefined, skillReplace: { uid: first.uid, replaceIdx: -1, choices: ['aqua_shot', 'roar'], refreshCount: 0 } });
+add('collapse-intro', CollapseWarning, {}, false);
+registry['collapse-intro'].extra = { round: 1, onConfirm: () => {} };
+add('collapse-start', CollapseWarning, {}, false);
+registry['collapse-start'].extra = { round: 15, onConfirm: () => {} };
+const chainFixture = createBattle([makeUnit('time_sand_beast', true, 0, false)], [{ speciesId: 'kiki' }, { speciesId: 'momo' }], 42);
+chainFixture.playerUnits[0].skills = ['chain_activate'];
+chainFixture.enemyUnits.forEach((u, i) => { u.skills = []; u.passive = undefined; u.hp = 30; u.maxHp = 30; u.statuses = [{ kind: 'chainLink', value: 50, turns: 2, sourceUid: chainFixture.enemyUnits[1 - i].uid }]; });
+add('chain-explosion', BattleScreen, { battle: { ...chainFixture, log: [], collapseWarningSeenRound: 1 }, roster: chainFixture.playerUnits }, false);
+const rewindFixture = createBattle([makeUnit('time_sand_beast', true, 0, false)], [{ speciesId: 'momo' }], 42);
+rewindFixture.playerUnits[0].hp = 1;
+rewindFixture.enemyUnits[0] = { ...rewindFixture.enemyUnits[0], skills: ['shadow_claw'], hp: 100, maxHp: 100, spd: 10 };
+const rewindPaused = playerEndTurn(playerSkill(rewindFixture, rewindFixture.playerUnits[0].uid, 'sand_time_strike', rewindFixture.enemyUnits[0].uid));
+add('rewind-choice', BattleScreen, { battle: { ...rewindPaused, log: [], collapseWarningSeenRound: 1 }, roster: rewindPaused.playerUnits }, false);
+variant('shield-many-statuses', 'battle', { battle: { ...registry.battle.state.battle!, log: [], collapseWarningSeenRound: 1, playerUnits: registry.battle.state.battle!.playerUnits.map(u => ({ ...u, shield: 123, statuses: [{kind: 'burn', value: 3, turns: 0}, {kind: 'poison', value: 2, turns: 0}, {kind: 'fear', value: 1, turns: 0}] })) } });
+variant('achievement-difficulty-grades', 'achievements', { unlocks: { ...base.unlocks!, bestGrade: 'S', bestGrades: { normal: 'S', hard: 'B' } } }, '评级里程碑');
+const bossRewardMap = generateMap(42, 1, 'normal', 'emerald_forest');
+const bossRewardRow = bossRewardMap.layers.length - 1;
+const bossRewardState = { ...base, map: bossRewardMap, act: 1, region: 'emerald_forest' as const, currentRow: bossRewardRow, currentNodeId: bossRewardMap.layers[bossRewardRow][0].id, gold: 50, inventory: { gem: 1 } };
+add('boss-reward', ui.RewardScreen, { ...bossRewardState, screen: 'reward', rewards: generateRewards(bossRewardState) }, false);
+variant('boss-reward-boost', 'boss-reward', {}, '伙伴强化');
+variant('boss-reward-supply', 'boss-reward', {}, '远征补给');
+variant('boss-reward-recruit', 'boss-reward', {}, '伙伴招募');
+variant('potion-target', 'battle', { battle: { ...registry.battle.state.battle!, log: [], collapseWarningSeenRound: 1 }, inventory: { atk_up: 1 } }, '道具|.battle-overlay-grid button');
+variant('codex-mysterious', 'codex', {}, '.codex-item[data-codex-id="time_sand_beast"]');
+variant('proficiency-selected', 'proficiency-select', {}, '.proficiency-contract:nth-child(1) .starter-choice|.proficiency-contract:nth-child(4) .starter-choice');
+variant('proficiency-pet-details', 'proficiency-select', {}, '.contract-details');
 variant('fusion-long', 'fusion-dialog', { roster: [first, ...Array.from({ length: 3 }, (_, i) => makeUnit(first.speciesId, true, (i % 3) as 0 | 1 | 2, false))] });
 const stressRoster = ['nine_tail_sovereign', 'solar_spirit', 'furnace_beast', 'eternal_moth', 'momo'].map((id, i) => ({
   ...makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back'), hp: 123, maxHp: 123,
@@ -405,6 +432,7 @@ add('legend-original-formation', FormationScreen, { roster: originalLegends, for
 let feedbackDispatch: ((action: any) => void) | undefined;
 let feedbackEnter: (() => void) | undefined;
 const feedbackCases: Record<string, { skillId: string; targetUid: string }> = {};
+feedbackCases['chain-explosion'] = { skillId: 'chain_activate', targetUid: chainFixture.enemyUnits[0].uid };
 for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch'], ['pure-debuff', 'poison_mist']]) {
   const pets = ['momo_queen', 'fifi_king', 'lulu_king', 'coal', 'light_moss'].map((id, i) => makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back'));
   const battle = createBattle(pets, [{ speciesId: 'fifi_king' }, { speciesId: 'lulu_king' }, { speciesId: 'momo_queen' }], 31);

@@ -141,9 +141,11 @@ export function computeRunRating(state: GameState): RunRating | null {
     challenges += target > 0 ? 5 * clamp(earned / target) : rating.acts[String(act)]?.bossDefeated ? 5 : 0;
   }
   const efficiency = battles.length > 0 ? 10 * battles.reduce((sum, battle) => {
-    const reference = battle.type === 'boss' ? 10 : battle.type === 'gauntlet' ? Math.max(4, battle.enemyCount * 4)
-      : ['elite', 'corrupted', 'guardian', 'arena'].includes(battle.type) ? 6 : 4;
-    return sum + Math.min(1, reference / Math.max(1, battle.rounds));
+    if (!battle.won) return sum;
+    const [excellent, limit] = battle.type === 'boss' ? [5, 15]
+      : battle.type === 'gauntlet' ? [Math.max(3, battle.enemyCount * 2), Math.max(8, battle.enemyCount * 4)]
+      : ['elite', 'corrupted', 'guardian', 'arena'].includes(battle.type) ? [3, 10] : [2, 8];
+    return sum + clamp((limit - Math.max(1, battle.rounds)) / (limit - excellent));
   }, 0) / battles.length : 0;
   const dimensions = [dimension('progress', '远征进度', 50, 50 * progress), dimension('survival', '阵亡控制', 25, survival),
     dimension('challenge', '挑战战绩', 15, challenges), dimension('efficiency', '战斗效率', 10, efficiency)];

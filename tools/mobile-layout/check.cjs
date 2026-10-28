@@ -41,6 +41,7 @@ app.whenReady().then(async () => {
   oneScreen.add('battle-crystal-selected');
   for (const name of ['chest-creature', 'chest-creature-overflow']) oneScreen.add(name);
   oneScreen.add('battle-summary-long');
+  oneScreen.add('proficiency-selected');
   oneScreen.add('watchtower-cards');
   for (const name of ['watchtower-utilities', 'watchtower-challenges', 'watchtower-training']) oneScreen.add(name);
   const results = [];
@@ -136,12 +137,12 @@ app.whenReady().then(async () => {
           const rosterActions = [...document.querySelectorAll('.ordinary-detail-actions button')].filter(visible);
           const overlappingActions = rosterActions.flatMap((a, index) => rosterActions.slice(index + 1).filter(b => { const x = a.getBoundingClientRect(), y = b.getBoundingClientRect(); return Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1; }).map(b => [a.textContent.trim(), b.textContent.trim()]));
           const oneScreenOverflow = ${mobile && height < width && oneScreen.has(name)} && !topMask ? scrolls : [];
-          const portraitOverlap = [...document.querySelectorAll('.postbattle-detail-portrait canvas, .postbattle-detail-portrait img')].filter(visible).filter(el => {
+          const portraitOverlap = [...document.querySelectorAll('.postbattle-detail-portrait canvas, .postbattle-detail-portrait img, .contract-art > img')].filter(el => el.closest('.contract-art') || visible(el)).filter(el => {
             const box = el.parentElement.getBoundingClientRect(), art = el.getBoundingClientRect();
-            const stats = document.querySelector('.postbattle-detail-stats')?.getBoundingClientRect();
+            const stats = (el.closest('.proficiency-contract')?.querySelector('.contract-info') ?? document.querySelector('.postbattle-detail-stats'))?.getBoundingClientRect();
             const outsideBox = art.top < box.top - 1 || art.bottom > box.bottom + 1;
             const hitsStats = stats && Math.min(art.right, stats.right) - Math.max(art.left, stats.left) > 1 && Math.min(art.bottom, stats.bottom) - Math.max(art.top, stats.top) > 1;
-            return outsideBox || hitsStats;
+            return outsideBox || hitsStats || art.height < 24;
           }).map(el => rect(el));
           return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,oneScreenOverflow,overlappingActions,portraitOverlap,scrollTails,smallTargets,blocked,toastBounds,toastTooLarge,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
         })()`);

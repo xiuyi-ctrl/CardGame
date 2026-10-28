@@ -56,6 +56,19 @@ describe('战场右侧状态图标', () => {
     expect(screen.getByText(/日华 2\/3；增强日华灼击/)).toBeTruthy();
   });
 
+  it('护盾始终占首位并显示动态数值，不被多个状态挤掉', () => {
+    const unit = makeUnit('momo', true, 0, false);
+    unit.shield = 18;
+    unit.statuses = [{ kind: 'burn', value: 3, turns: 0 }, { kind: 'poison', value: 2, turns: 0 }, { kind: 'fear', value: 2, turns: 0 }, { kind: 'shield', value: 18, turns: 99 }];
+    const { container, rerender } = render(createElement(BattleStatusIcons, { unit }));
+    expect(screen.getAllByRole('img').map(img => img.getAttribute('alt'))).toEqual(['护盾', '灼烧', '中毒']);
+    expect(container.querySelector('.battle-shield-value sup')?.textContent).toBe('18');
+    rerender(createElement(BattleStatusIcons, { unit: { ...unit, shield: 4 } }));
+    expect(container.querySelector('.battle-shield-value sup')?.textContent).toBe('4');
+    rerender(createElement(BattleStatusIcons, { unit: { ...unit, shield: 0 } }));
+    expect(container.querySelector('.battle-shield-value')).toBeNull();
+  });
+
   it('按状态顺序最多显示三个，所有素材路径有效', () => {
     const unit = makeUnit('momo', true, 0, false);
     unit.statuses = [

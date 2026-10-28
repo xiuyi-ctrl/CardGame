@@ -215,4 +215,17 @@ describe('战斗攻击目标准星', () => {
     setup(skillId);
     expect(document.querySelectorAll('.attack-target, .attack-target-blocked')).toHaveLength(0);
   });
+  it.each(['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'])('%s 药水高亮对应阵营的可选目标', itemId => {
+    const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 42);
+    battle.collapseWarningSeenRound = 1;
+    render(createElement(BattleScreen, { state: { ...createInitialState(), screen: 'battle', battle, inventory: { [itemId]: 1 } }, dispatch: vi.fn() }));
+    fireEvent.click(screen.getByRole('button', { name: '道具' }));
+    const item = document.querySelector('.battle-overlay-grid button') as HTMLButtonElement;
+    expect(item).toBeTruthy();
+    fireEvent.click(item);
+    const ally = ['atk_up', 'spd_up', 'hp_up'].includes(itemId);
+    const area = document.querySelector(ally ? '.player-area' : '.enemy-area')!;
+    expect(area.querySelector(ally ? '.ally-target' : '.attack-target')).toBeTruthy();
+  });
+
 });

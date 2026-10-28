@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBattle, getEffectiveSpd, makeUnit, playerEndTurn, playerSkill } from '../src/game/core/battle';
+import { createBattle, getEffectiveSpd, makeUnit, playerEndTurn, playerRest, playerSkill } from '../src/game/core/battle';
 import { MONSTERS, MAIN_BASE_POOL, MAIN_EVO1_POOL, MAIN_EVO2_POOL } from '../src/game/data/monsters';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { fuseUnit, nextStage } from '../src/game/state/game';
@@ -42,7 +42,10 @@ describe('时砂兽与时滞', () => {
   it('致死攻击先回溯再判负，保留原行动并额外行动一次，清减益保留增益', () => {
     const b = setup(), u = b.playerUnits[0]; u.hp = 1;
     u.statuses = [{ kind: 'poison', value: 20, turns: 2 }, { kind: 'atkDown', value: 1, turns: 2 }, { kind: 'windSpd', value: 2, turns: 2 }];
-    const after = playerEndTurn(playerSkill(b, u.uid, 'sand_time_strike', b.enemyUnits[0].uid));
+    const paused = playerEndTurn(playerSkill(b, u.uid, 'sand_time_strike', b.enemyUnits[0].uid));
+    expect(paused.rewindChoice?.uid).toBe(u.uid);
+    expect(attacks(paused)).toHaveLength(0);
+    const after = playerSkill(paused, u.uid, 'sand_time_strike', b.enemyUnits[0].uid);
     expect(after.phase).toBe('acting'); expect(after.playerUnits[0].hp).toBe(10);
     expect(after.playerUnits[0].timeRewindUsed).toBe(true);
     expect(after.playerUnits[0].statuses.map(s => s.kind)).toEqual(['windSpd']);
@@ -54,13 +57,19 @@ describe('时砂兽与时滞', () => {
   });
   it('已经行动后的致死命中仍获得额外行动', () => {
     const b = setup(); b.playerUnits[0].hp = 1; b.playerUnits[0].spd = 20;
-    const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'sand_time_strike', b.enemyUnits[0].uid));
+    const paused = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'sand_time_strike', b.enemyUnits[0].uid));
+    expect(paused.rewindChoice?.uid).toBe(b.playerUnits[0].uid);
+    expect(attacks(paused)).toHaveLength(1);
+    const after = playerSkill(paused, b.playerUnits[0].uid, 'sand_time_strike', b.enemyUnits[0].uid);
     expect(attacks(after)).toHaveLength(2); expect(after.playerUnits[0].hp).toBe(10);
   });
   it('持续伤害致死会清除其他减益，回合结束前执行额外行动且下回合不保留回溯加成', () => {
     const b = setup(); b.playerUnits[0].hp = 1; b.enemyUnits[0].acted = true;
     b.playerUnits[0].statuses = [{ kind: 'burn', value: 2, turns: 2 }, { kind: 'poison', value: 20, turns: 2 }];
-    const after = playerEndTurn(b);
+    const paused = playerEndTurn(b);
+    expect(paused.rewindChoice?.nextRound).toBe(2);
+    expect(attacks(paused)).toHaveLength(0);
+    const after = playerSkill(paused, b.playerUnits[0].uid, 'sand_time_strike', b.enemyUnits[0].uid);
     expect(after.playerUnits[0].hp).toBe(10); expect(after.playerUnits[0].statuses).toEqual([]);
     expect(attacks(after)).toHaveLength(1); expect(after.enemyUnits[0].hp).toBe(93);
     expect(after.playerUnits[0].timeRewindRound).toBeUndefined();
@@ -70,7 +79,9 @@ describe('时砂兽与时滞', () => {
     const counter = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'sand_time_strike', b.enemyUnits[0].uid));
     expect(counter.playerUnits[0].timeRewindUsed).toBe(true); expect(counter.phase).toBe('acting');
     const collapse = setup(); collapse.round = 15; collapse.playerUnits[0].hp = 1; collapse.enemyUnits[0].acted = true;
-    const after = playerEndTurn(collapse);
+    const paused = playerEndTurn(collapse);
+    expect(paused.round).toBe(15);
+    const after = playerSkill(paused, collapse.playerUnits[0].uid, 'sand_time_strike', collapse.enemyUnits[0].uid);
     expect(after.playerUnits[0].hp).toBe(10); expect(attacks(after)).toHaveLength(1);
     const next = createBattle(after.playerUnits, [{ speciesId: 'momo' }], 2);
     expect(next.playerUnits[0].timeRewindUsed).toBeUndefined();
@@ -172,4 +183,41 @@ describe('时砂兽与时滞', () => {
     expect(shield).toContain('获得10点护盾'); expect(shield).toContain('改为12点护盾');
     expect(skillFullDesc(getSkill('time_haste'), 3)).toContain('增加5点');
   });
+  it('砂时攻击遵守前排优先，前排存活时不能绕过攻击后排', () => {
+    const b = createBattle([makeUnit('time_sand_beast', true, 0, false)], [{ speciesId: 'kiki' }, { speciesId: 'momo' }], 5);
+    b.enemyUnits = b.enemyUnits.map((u, i) => ({ ...u, row: i === 0 ? 'front' : 'back', hp: 100, maxHp: 100, skills: [], passive: undefined }));
+    const backUid = b.enemyUnits[1].uid;
+    const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'sand_time_strike', backUid));
+    expect(after.enemyUnits.find(u => u.uid === backUid)?.hp).toBe(100);
+    expect(getSkill('sand_time_strike').reach).toBe('front');
+  });
+  it('弱化设置一回合冷却，各强化等级保持相同冷却', () => {
+    expect(getSkill('weaken').cooldown).toBe(1);
+  });
+
+  it.each([3, 20])('回溯后可改选砂盾，原基础行动按实际是否执行保留，速度%s', speed => {
+    const b = setup(); const uid = b.playerUnits[0].uid;
+    b.playerUnits[0].hp = 1; b.playerUnits[0].spd = speed;
+    const paused = playerEndTurn(playerSkill(b, uid, 'sand_time_strike', b.enemyUnits[0].uid));
+    expect(paused.round).toBe(1);
+    expect(paused.rewindChoice?.uid).toBe(uid);
+    expect(playerEndTurn(paused)).toBe(paused);
+    const loaded = JSON.parse(JSON.stringify(paused));
+    const after = playerSkill(loaded, uid, 'sand_shield');
+    expect(after.rewindChoice).toBeUndefined();
+    expect(after.round).toBe(2);
+    expect(attacks(after)).toHaveLength(1);
+    expect(after.playerUnits[0].shield).toBe(6);
+  });
+  it('回溯额外行动可以休息，不消耗原基础行动，不允许指挥其他单位', () => {
+    const b = setup(); const uid = b.playerUnits[0].uid;
+    b.playerUnits[0].hp = 1;
+    const paused = playerEndTurn(playerSkill(b, uid, 'sand_time_strike', b.enemyUnits[0].uid));
+    expect(playerSkill(paused, 'other', 'punch')).toBe(paused);
+    const after = playerRest(paused, uid);
+    expect(attacks(after)).toHaveLength(1);
+    expect(after.round).toBe(2);
+    expect(after.rewindChoice).toBeUndefined();
+  });
+
 });

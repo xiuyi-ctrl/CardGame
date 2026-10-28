@@ -101,7 +101,7 @@ export type GameAction =
   | { type: 'GAUNTLET_ORDER_CONFIRM'; units: Unit[] }
   | { type: 'PLAYER_TAME'; foodId: string; enemyUid: string }
   | { type: 'BATTLE_END_CONFIRM' }
-  | { type: 'PICK_REWARD'; rewardId: string; monsterId?: string }
+  | { type: 'PICK_REWARD'; rewardId: string; monsterId?: string; targetUid?: string; stat?: 'hp' | 'spd'; potionId?: string }
   | { type: 'SET_FIELD'; uids: string[] }
   | { type: 'DISCARD'; uid: string }
   | { type: 'SHOP_BUY'; foodId: string }
@@ -298,6 +298,7 @@ export function migrateGameState(value: unknown): GameState | null {
           difficulties: [...(value.unlocks.difficulties ?? DEFAULT_UNLOCKS.difficulties)],
           relics: [...(value.unlocks.relics ?? DEFAULT_UNLOCKS.relics)].filter((id) => RELIC_ORDER.includes(id)),
           bestGrade: value.unlocks.bestGrade,
+          bestGrades: value.unlocks.bestGrades ? { ...value.unlocks.bestGrades } : undefined,
           proficiencyUnlocked: value.unlocks.proficiencyUnlocked ?? false,
           regionEncounters: value.unlocks.regionEncounters ? Object.fromEntries(Object.entries(value.unlocks.regionEncounters)
             .filter(([region, ids]) => isMainRegionId(region) && Array.isArray(ids))
@@ -450,7 +451,9 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     inventory = { ...inventory, [keyId]: (inventory[keyId] ?? 0) + 1 };
     keyLog.push('击败守卫，获得一把专用钥匙');
   }
+  if (state.runMode !== 'proficiency' && bossNode && state.act < 3) inventory = { ...inventory, gem: (inventory.gem ?? 0) + 1 };
   // 本场战斗结束：进入奖励结算
+  const bossGem = state.runMode !== 'proficiency' && bossNode && state.act < 3;
   const prevDead = state.deadPets ?? [];
   const settled: GameState = {
     ...addGoldIncome(state, goldGain),
@@ -463,7 +466,7 @@ export function resolveBattle(state: GameState, battle: BattleState): GameState 
     battle: undefined,
     tameOverflow: overflow.length > 0 ? overflow : undefined,
     log: [
-      `战斗胜利！${goldGain > 0 ? `获得 ${goldGain} 金币` : '赢得挑战奖励'}`,
+      `战斗胜利！${goldGain > 0 ? `获得 ${goldGain} 金币${bossGem ? '、秘晶×1' : ''}` : bossNode && state.act >= 3 ? '远征通关' : '赢得挑战奖励'}`,
       ...keyLog,
       ...(corruptNode ? ['被侵蚀区域：奖励已翻倍'] : []),
       ...(battle.pendingTame.length > 0 ? [`驯服了 ${battle.pendingTame.length} 只宠物`] : []),
@@ -833,6 +836,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 }
 
 function reduceGameAction(state: GameState, action: GameAction): GameState {
+  if (state.battle?.rewindChoice && ['PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'PLAYER_CANCEL_ORDER', 'END_TURN', 'GAUNTLET_SWAP'].includes(action.type)) return state;
   if (state.battle?.mimicPreviewPending && ['PLAYER_SKILL', 'PLAYER_REST', 'PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'END_TURN'].includes(action.type)) return state;
   switch (action.type) {
     case 'START_RUN': {
@@ -1962,7 +1966,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
 
     case 'ACK_COLLAPSE_WARNING': {
       const battle = state.battle;
-      if (state.screen !== 'battle' || !battle || battle.phase !== 'acting' || ![13, 14].includes(battle.round)) return state;
+      if (state.screen !== 'battle' || !battle || battle.phase !== 'acting' || ![1, 15].includes(battle.round)) return state;
       return { ...state, battle: { ...battle, collapseWarningSeenRound: battle.round } };
     }
 
@@ -2205,13 +2209,27 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       if (state.pendingRecruitRewardId && state.pendingRecruitRewardId !== action.rewardId) return state;
       const reward = state.rewards.find((r) => r.id === action.rewardId);
       if (!reward) return state;
+      if (reward.kind === 'boss_boost' || reward.kind === 'boss_supply') {
+        if (state.pendingRecruitRewardId !== reward.id) return { ...state, rewards: [reward], pendingRecruitRewardId: reward.id };
+        if (reward.kind === 'boss_boost' && (!['hp', 'spd'].includes(action.stat ?? '') || !state.roster.some(u => u.uid === action.targetUid && u.hp > 0))) return state;
+        if (reward.kind === 'boss_supply' && !['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'].includes(action.potionId ?? '')) return state;
+      }
       if (reward.kind === 'recruit' && reward.recruitCandidates) {
         if (!action.monsterId) return { ...state, rewards: [reward], pendingRecruitRewardId: reward.id };
         if (state.pendingRecruitRewardId !== reward.id || !reward.recruitCandidates.includes(action.monsterId)) return state;
       }
       const recruitId = reward.recruitCandidates ? action.monsterId : reward.monsterId;
       let next: GameState = { ...state, screen: 'roster', rewards: [], postBattle: true, pendingRecruitRewardId: undefined };
-      if (reward.kind === 'food' && reward.foodId) {
+      if (reward.kind === 'boss_boost') {
+        const stat = action.stat!;
+        const amount = stat === 'hp' ? (state.act === 1 ? 4 : 6) : (state.act === 1 ? 1 : 2);
+        next = { ...next, roster: next.roster.map(u => u.uid !== action.targetUid ? u : recomputeStats({ ...u, bonusStats: { ...u.bonusStats, [stat]: (u.bonusStats?.[stat] ?? 0) + amount } })), toast: { msg: `伙伴永久${stat === 'hp' ? '生命' : '速度'}＋${amount}`, kind: 'success' } };
+      } else if (reward.kind === 'boss_supply') {
+        const inventory = { ...next.inventory };
+        for (const id of reward.foodBundle ?? []) inventory[id] = (inventory[id] ?? 0) + 1;
+        inventory[action.potionId!] = (inventory[action.potionId!] ?? 0) + (state.act === 1 ? 1 : 2);
+        next = { ...next, inventory, toast: { msg: `获得${(reward.foodBundle ?? []).map(id => FOODS[id].name).join('、')}，${ITEMS[action.potionId!].name}×${state.act === 1 ? 1 : 2}`, kind: 'success' } };
+      } else if (reward.kind === 'food' && reward.foodId) {
         const amt = reward.amount ?? 1;
         next = { ...next, inventory: { ...next.inventory, [reward.foodId]: (next.inventory[reward.foodId] ?? 0) + amt } };
         const fname = FOODS[reward.foodId]?.name ?? reward.foodId;

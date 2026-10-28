@@ -228,6 +228,12 @@ export function detectUnlocks(
   if (rank >= 2 && !next.relics.includes('traveler_charm')) next.relics.push('traveler_charm');
   if ((runStats?.itemsUsed ?? 0) >= 20 && !next.relics.includes('elite_badge')) next.relics.push('elite_badge');
   if ((runStats?.petsTamed ?? 0) >= 15 && !next.relics.includes('beast_master')) next.relics.push('beast_master');
+  if (difficulty === 'normal' || difficulty === 'hard' || difficulty === 'nightmare') {
+    const previous = next.bestGrades?.[difficulty];
+    if (previous === undefined || rank > (gradeRank[previous] ?? 0)) {
+      next.bestGrades = { ...next.bestGrades, [difficulty]: grade };
+    }
+  }
   if (next.bestGrade === undefined || rank > (gradeRank[next.bestGrade] ?? 0)) next.bestGrade = grade;
   return growthRelicUnlocks(economicRelicUnlocks(next, endingGold ?? 0, runStats?.shopGoldSpent), runStats, _roster.length);
 }

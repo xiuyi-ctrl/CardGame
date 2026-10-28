@@ -90,6 +90,28 @@ describe('实际战斗反馈数值', () => {
 });
 
 describe('起手、命中与清理', () => {
+  it('锁链引爆同时播放所有连接目标的伤害与受击，不波及无锁链目标', () => {
+    vi.useFakeTimers();
+    const b = fixture('chain_activate', 3);
+    b.enemyUnits.slice(0, 2).forEach((unit, index) => { unit.statuses = [{ kind: 'chainLink', value: 50, turns: 2, sourceUid: b.enemyUnits[1 - index].uid }]; });
+    const after = cast(b, 'chain_activate');
+    const logs = after.log.filter(entry => entry.text.includes('使用「锁链引爆」'));
+    expect(logs).toHaveLength(2);
+    expect(logs[0].simultaneousGroup).toBe(logs[1].simultaneousGroup);
+    expect(logs[0].hp).toEqual(logs[1].hp);
+    const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
+    act(() => rerender({ battle: after }));
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current.fx[b.playerUnits[0].uid]).toBeTruthy();
+    act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
+    const hits = result.current.pops.filter(pop => pop.kind === 'damage');
+    expect(hits).toHaveLength(2);
+    expect(new Set(hits.map(pop => pop.uid))).toEqual(new Set(b.enemyUnits.slice(0, 2).map(u => u.uid)));
+    expect(result.current.fx[b.enemyUnits[0].uid]).toBeTruthy();
+    expect(result.current.fx[b.enemyUnits[1].uid]).toBeTruthy();
+    expect(after.enemyUnits[2].hp).toBe(20);
+  });
+
   it('群攻同批只有一个施法动作，各目标弹道有独立编号并同时结束', () => {
     vi.useFakeTimers();
     const b = fixture('vine_whip', 3);

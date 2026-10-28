@@ -60,4 +60,27 @@ describe('开局生物选择界面', () => {
     fireEvent.click(screen.getByRole('button', { name: '返回首页' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'TITLE' });
   });
+  it('熟练度详情不改变选择顺序，使用现有立绘与实时属性', () => {
+    const dispatch = vi.fn();
+    const { container } = render(createElement(ProficiencyStarterScreen, { state: createInitialState(), dispatch }));
+    const choose = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name} ·`) });
+    fireEvent.click(choose('迅迅'));
+    fireEvent.click(choose('铁墩'));
+    expect(container.querySelectorAll('.proficiency-contract.is-selected')).toHaveLength(2);
+    expect(container.querySelectorAll('.contract-art > img')).toHaveLength(6);
+    expect(container.querySelectorAll('.contract-art canvas')).toHaveLength(0);
+    expect(choose('铁墩').getAttribute('aria-label')).toContain('生命12');
+    expect(choose('迅迅').getAttribute('aria-label')).toContain('速度5');
+    fireEvent.click(screen.getByRole('button', { name: '查看咪咪详情' }));
+    expect(screen.getByRole('dialog', { name: '咪咪 · 生物详情' })).toBeTruthy();
+    expect(screen.getByText('毒牙')).toBeTruthy();
+    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '关闭生物详情' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(choose('迅迅').getAttribute('aria-pressed')).toBe('true');
+    expect(choose('铁墩').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: /出发远征/ }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'START_PROFICIENCY_PICKED', starterId: 'momo', companionId: 'kiki' }));
+  });
+
 });

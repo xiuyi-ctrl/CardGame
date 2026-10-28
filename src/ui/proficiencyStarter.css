@@ -1,0 +1,53 @@
+.starter-screen.proficiency-starter {
+  --contract-ink: #101e2b;
+  --contract-gold: #cfaa60;
+  --contract-paper: #f5ecd4;
+  --contract-selected: #58dbbd;
+  background: #101e2b url('/proficiency-starter-hall.png') center / 100% 100% no-repeat;
+  padding: clamp(12px, 2vh, 24px) clamp(16px, 3vw, 48px);
+  gap: clamp(12px, 2vh, 24px);
+  color: var(--contract-paper);
+}
+.proficiency-starter .starter-header { flex: 0 0 auto; min-height: 62px; padding: 0; background: none; border: 0; box-shadow: none; }
+.proficiency-starter .starter-heading { gap: 18px; }
+.proficiency-starter .starter-heading h1 { font-size: clamp(28px, 3.5vw, 56px); text-shadow: 3px 3px #101e2b; }
+.proficiency-starter .starter-heading p { margin: 5px 0 0; font-size: clamp(14px, 1.25vw, 20px); color: #f5ecd4; }
+.proficiency-starter .starter-mark { color: #e6bf76; font-size: clamp(32px, 4vw, 60px); }
+.proficiency-starter .starter-back { min-height: 44px; padding: 8px 18px; border: 3px solid #cfaa60; background: #f5ecd4; color: #101e2b; box-shadow: inset 0 0 0 2px #fff9e9, 3px 3px #101e2b; }
+.proficiency-starter .starter-proficiency-main { grid-template-columns: minmax(0, 3fr) minmax(240px, 1.35fr); gap: clamp(12px, 2vw, 28px); padding: 0; }
+.proficiency-starter .starter-choice-grid { gap: clamp(10px, 1.5vw, 22px); }
+.proficiency-contract { position: relative; min-width: 0; min-height: 0; border: 4px solid #cfaa60; background: #f5ecd4; box-shadow: 0 0 0 3px #101e2b, inset 0 0 0 3px #fff5d5, 5px 5px #07121c; }
+.proficiency-contract.is-selected { border-color: #58dbbd; box-shadow: 0 0 0 3px #14676a, inset 0 0 0 3px #fff5d5, 0 0 12px #58dbbd88; }
+.proficiency-starter .starter-choice { display: grid; align-items: stretch; justify-items: stretch; grid-template-rows: minmax(0, 1fr) auto; width: 100%; height: 100%; min-height: 0; padding: 5px; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: #101e2b; transform: none; }
+.proficiency-starter .starter-choice:hover { background: #fff6d4; transform: none; }
+.proficiency-starter .starter-choice:focus-visible { outline: 3px solid #168d89; outline-offset: -4px; }
+.contract-order { position: absolute; z-index: 2; top: 0; left: 0; display: grid; place-items: center; width: clamp(28px, 3vw, 46px); height: clamp(28px, 3vw, 46px); background: #e9bd69; border-right: 3px solid #886331; border-bottom: 3px solid #886331; font-size: clamp(18px, 2vw, 30px); font-weight: 900; }
+.contract-art { position: relative; display: grid; place-items: center; min-height: 0; isolation: isolate; padding: 6px 8px 18px; }
+.contract-art > img { position: absolute; inset: 4px 5% 18px; z-index: 1; display: block; width: 90%; height: calc(100% - 22px); min-height: 0; object-fit: contain; image-rendering: pixelated; }
+.contract-plinth { position: absolute; z-index: 0; bottom: 0; left: 10%; width: 80%; height: 26%; background: url('./assets/starter-creature-base.png') center / contain no-repeat; image-rendering: pixelated; }
+.contract-info { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 66px; padding: 8px 68px 3px 8px; border-top: 2px solid #b8a27c; text-align: left; }
+.contract-info > strong { font-size: clamp(17px, 1.7vw, 28px); line-height: 1.15; white-space: nowrap; }
+.contract-statline { display: flex; flex-wrap: nowrap; gap: clamp(6px, 1vw, 16px); color: #101e2b; font-size: clamp(15px, 1.4vw, 23px); font-weight: 800; line-height: 1.15; }
+.contract-statline > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.contract-statline img { flex: none; width: 1.1em; height: 1.1em; object-fit: contain; image-rendering: pixelated; }
+.contract-details { position: absolute; right: 6px; bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 3px; min-width: 44px; min-height: 44px; padding: 5px 7px; border: 2px solid #75878b; background: #263b49; color: #fff5d5; font-size: 14px; box-shadow: 2px 2px #101e2b; }
+.contract-details:hover { background: #365767; }
+.contract-details .ui-symbol { width: 10px; height: 10px; }
+.proficiency-starter .starter-summary { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: clamp(12px, 2vh, 24px); padding: clamp(14px, 1.8vw, 26px); border: 5px solid #4c6467; background: #101e2bf5; box-shadow: inset 0 0 0 2px #cfaa60, 5px 5px #07121c; }
+.proficiency-starter .starter-summary h2 { padding: 4px 0 12px; border-bottom: 2px solid #6e705e; font-size: clamp(20px, 2.1vw, 34px); color: #f5ecd4; white-space: nowrap; }
+.proficiency-starter .starter-summary h2 span { color: #e9bd69; }
+.proficiency-starter .starter-selected-list { grid-template-rows: repeat(2, minmax(0, 1fr)); align-content: start; gap: 12px; }
+.proficiency-starter .starter-selected-slot { position: relative; min-height: 0; max-height: 150px; padding: 12px 10px 12px 28px; border: 2px solid #637271; box-shadow: inset 0 0 0 2px #0b1622; background: #172a38; gap: 8px; }
+.proficiency-starter .starter-selected-slot > img { width: clamp(44px, 6vw, 96px); height: 100%; min-height: 0; max-height: 96px; object-fit: contain; image-rendering: pixelated; }
+.proficiency-starter .starter-selected-number { position: absolute; top: 6px; left: 7px; color: #e9bd69; }
+.proficiency-selected-copy { min-width: 0; display: grid; gap: 10px; }
+.proficiency-selected-copy strong { font-size: clamp(17px, 1.7vw, 27px); white-space: nowrap; }
+.proficiency-selected-copy .contract-statline { color: #f5ecd4; }
+.proficiency-starter .proficiency-selected-copy .contract-statline img { width: 1.1em; height: 1.1em; }
+.proficiency-starter .starter-milestones { position: relative; padding: 16px 0 4px; border-top: 2px solid #6e705e; font-size: clamp(13px, 1.4vw, 21px); }
+.proficiency-starter .starter-milestones span { position: relative; display: grid; justify-items: center; gap: 8px; padding: 0; border: 0; }
+.proficiency-starter .starter-milestones span::before { content: '✦'; display: grid; place-items: center; width: 28px; height: 28px; border: 2px solid #cfaa60; transform: rotate(45deg); color: #e9bd69; background: #172a38; }
+.proficiency-starter .starter-confirm { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: clamp(54px, 9vh, 88px); margin: 0; padding: 8px; border: 4px solid #8b642b; background: #efbd58; box-shadow: inset 0 0 0 3px #ffe8a1, 3px 3px #07121c; color: #101e2b; font-size: clamp(23px, 2.4vw, 38px); text-shadow: none; }
+.proficiency-starter .starter-confirm:hover:not(:disabled) { background: #ffd77a; }
+.proficiency-starter .starter-confirm:disabled { background: #9f926d; color: #4b514c; opacity: 1; box-shadow: inset 0 0 0 3px #bdb18e; }
+.proficiency-starter .starter-confirm .ui-symbol { width: .8em; height: .8em; }

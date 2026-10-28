@@ -91,7 +91,7 @@ describe('双生宝箱奖励', () => {
     }
   });
 
-  it('钥匙门仍同时获得金币和食物，并保留概率圣果', () => {
+  it('钥匙门同时获得金币和普通食物，不再产出圣果', () => {
     let hasFruit = false;
     for (let seed = 1; seed <= 200; seed++) {
       const roll = rollChest(seed, 1, 'door', true);
@@ -100,7 +100,7 @@ describe('双生宝箱奖励', () => {
       expect(['berry', 'meat', 'gem']).toContain(roll.foodId);
       hasFruit ||= roll.extras.some(extra => extra.id === 'golden_fruit');
     }
-    expect(hasFruit).toBe(true);
+    expect(hasFruit).toBe(false);
   });
 
   it('生物奖励限制于所选地区一阶池，预览与实际领取相同', () => {

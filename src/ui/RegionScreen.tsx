@@ -40,8 +40,8 @@ function RegionEcology({ regionId, encountered, onClose }: { regionId: MainRegio
     <div className={`region-ecology-body${ready ? '' : ' is-loading'}`} aria-busy={!ready}>
       {!ready && <div className="region-ecology-loading" role="status">正在展开生态图鉴…</div>}
       <div className="region-ecology-collection">
-      {([['一阶', region.basePool], ['二阶', region.evo1Pool], ['传奇', region.evo2Pool], ['蛋生', SPECIAL_EGG_POOL]] as const).map(([label, pool]) =>
-      <section className={`region-ecology-stage${label === '蛋生' ? ' region-ecology-eggs' : ''}`} key={label} aria-label={label}>
+      {([['一阶', region.basePool], ['二阶', region.evo1Pool], ['传奇', region.evo2Pool], ['神秘生物', SPECIAL_EGG_POOL]] as const).map(([label, pool]) =>
+      <section className={`region-ecology-stage${label === '神秘生物' ? ' region-ecology-eggs' : ''}`} key={label} aria-label={label}>
         <h3>{label}</h3>
         <div className="region-ecology-grid">
         {pool.map(id => {

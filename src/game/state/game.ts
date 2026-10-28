@@ -281,7 +281,8 @@ export interface RewardChoice {
   id: string;
   label: string;
   desc: string;
-  kind: 'food' | 'heal' | 'recruit' | 'gold';
+  kind: 'food' | 'heal' | 'recruit' | 'gold' | 'boss_boost' | 'boss_supply';
+  foodBundle?: string[];
   foodId?: string;
   monsterId?: string;
   recruitCandidates?: string[];
@@ -564,6 +565,7 @@ export interface Unlocks {
   difficulties: string[];
   relics: string[];
   bestGrade?: string;
+  bestGrades?: Partial<Record<Difficulty, string>>;
   proficiencyUnlocked?: boolean;
 }
 
@@ -640,9 +642,6 @@ export function rollChest(seed: number, row: number, nodeId: string, keydoor: bo
       const pool = ['scout', 'twin', 'skip'];
       const extraId = pool[Math.floor(rng() * pool.length)];
       extras.push({ id: extraId, name: ITEMS[extraId].name });
-    }
-    if (rng() < 0.1) {
-      extras.push({ id: 'golden_fruit', name: getFood('golden_fruit').name });
     }
     const extraText = extras.length ? '、' + extras.map((e) => `额外获得「${e.name}」`).join('、') : '';
     return { gold: amt, foodId, extras, text: `获得 ${amt} 金币、1 个${food.name}${extraText}` };
@@ -2037,7 +2036,7 @@ function baseBattleVictoryGold(state: GameState): number {
   const node = currentNode(state);
   if (node?.type === 'arena3' && state.arena3Pending?.mode === 'challenge') return 50;
   if (node?.type === 'arena' || node?.type === 'gauntlet' || node?.type === 'arena3') return 0;
-  if (state.map.boss[state.currentNodeId] !== undefined) return 30;
+  if (state.map.boss[state.currentNodeId] !== undefined) return state.runMode === 'proficiency' ? 30 : state.act >= 3 ? 0 : state.act === 1 ? 40 : 60;
   if (state.runMode === 'proficiency') return state.map.encounter[state.currentNodeId] !== undefined ? 16 : 8;
   if (node?.type === 'elite' || node?.type === 'guardian') return 20;
   if (node?.type === 'corrupted' && node.corruptReward === 'gold') return 20;
@@ -2213,6 +2212,15 @@ export function makeCustomUnit(presetId: string, rng: () => number): Unit {
 export function generateRewards(state: GameState): RewardChoice[] {
   const region = state.runMode === 'proficiency' ? 'mixed' : state.region ?? 'mixed';
   const rng = createRng(state.seed + state.act * 7 + state.currentRow * 31 + (hashStr(state.currentNodeId) % 997));
+  if (state.runMode !== 'proficiency' && state.map.boss[state.currentNodeId]) {
+    if (state.act >= 3) return [];
+    const pool = state.act === 1 ? MAIN_REGIONS[region].evo1Pool : MAIN_REGIONS[region].evo2Pool;
+    return [
+      { id: 'boss-recruit', kind: 'recruit', label: '伙伴招募', desc: `从当前地区两位${state.act === 1 ? '二阶' : '传奇'}候选中选择一位`, recruitCandidates: shuffle(rng, [...pool]).slice(0, 2) },
+      { id: 'boss-boost', kind: 'boss_boost', label: '伙伴强化', desc: `指定伙伴永久生命＋${state.act === 1 ? 4 : 6}，或速度＋${state.act === 1 ? 1 : 2}` },
+      { id: 'boss-supply', kind: 'boss_supply', label: '远征补给', desc: state.act === 1 ? '2个随机普通食物＋1瓶指定药水' : '1个圣果＋2瓶指定药水', foodBundle: state.act === 1 ? [pick(rng, ['berry', 'meat', 'gem']), pick(rng, ['berry', 'meat', 'gem'])] : ['golden_fruit'] },
+    ];
+  }
   const options: RewardChoice[] = [
     {
       id: 'r-food',

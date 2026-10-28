@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CollapseWarning } from '../src/ui/CollapseWarning';
 
 describe('崩解预警', () => {
-  it.each([13, 14])('第%s回合紧凑弹窗，确认或Escape关闭', round => {
+  it.each([1, 15])('第%s回合紧凑弹窗，确认或Escape关闭', round => {
     Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function(this: HTMLDialogElement) { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function(this: HTMLDialogElement) { this.open = false; } });
     try {

@@ -768,7 +768,13 @@ function startRound(b: BattleState): BattleState {
   if (collapsed.phase !== 'acting') return collapsed;
   nb = { ...collapsed, round: nb.round, roundEndedBeforeSwap: collapsed.pendingSwap ? true : undefined };
   // 回合末持续伤害触发回溯时，额外行动仍在进入下一轮之前执行。
-  nb = resolveRewindActions(nb);
+  nb = resolveRewindActions({ ...nb, round: prevRound });
+  if (nb.rewindChoice) return { ...nb, rewindChoice: { ...nb.rewindChoice, nextRound: prevRound + 1 } };
+  return finishRoundStart({ ...nb, round: prevRound + 1 });
+}
+
+function finishRoundStart(b: BattleState): BattleState {
+  let nb = b;
   if (nb.phase !== 'acting') return nb;
   nb = { ...nb,
     lastAllySkill: undefined,
@@ -3283,14 +3289,15 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   } else if (skill.id === 'chain_activate') {
     const enemies = enemiesOf(nb, actor);
     const chainDmg = skill.damage ?? 5;
+    const logStart = nb.log.length;
     for (const e of enemies) {
       if (e.statuses.some((s) => s.kind === 'chainLink')) {
         let damaged = { ...e, hp: Math.max(0, e.hp - chainDmg) };
         nb = replaceUnit(nb, damaged);
-        nb = pushLog(nb, `${actor.name} 引爆锁链！${damaged.name} 受到 ${chainDmg} 点伤害`, sideOf(actor), actor.uid, damaged.uid);
+        nb = pushLog(nb, `${actor.name} 使用「锁链引爆」攻击 ${damaged.name}，造成 ${chainDmg} 伤害`, sideOf(actor), actor.uid, damaged.uid, undefined, undefined, undefined, { hpLoss: Math.min(e.hp, chainDmg) });
       }
     }
-    return markActed(nb, actor.uid);
+    return markActed(sealSkillGroup(nb, logStart), actor.uid);
   }
 
   if (skill.id === 'clean_flame_care') {
@@ -3948,7 +3955,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
 }
 
-/** 回溯额外行动沿用已下达且仍可用的指令，否则使用可用攻击；不消耗尚未执行的基础行动。 */
+/** 我方回溯暂停结算并重新选择；敌方由AI选择额外行动。 */
 function resolveRewindActions(b: BattleState): BattleState {
   let nb = b;
   while (nb.phase === 'acting') {
@@ -3956,27 +3963,47 @@ function resolveRewindActions(b: BattleState): BattleState {
     if (!unit) break;
     const acted = unit.acted;
     nb = replaceUnit(nb, { ...unit, acted: false, timeRewindExtraPending: undefined, timeRewindRound: nb.round });
-    const fresh = actorFromId(nb, unit.uid)!;
-    const order = nb.orders?.[unit.uid];
-    const skillId = order && order.skillId !== REST_SKILL_ID && canUnitUseSkill(fresh, order.skillId) ? order.skillId
-      : fresh.skills.find(id => getSkill(id).kind === 'attack' && canUnitUseSkill(fresh, id))
-        ?? fresh.skills.find(id => canUnitUseSkill(fresh, id));
-    if (skillId) nb = useSkillInner(nb, fresh, getSkill(skillId), order?.targetUid);
+    if (unit.isPlayer) {
+      const order = nb.orders?.[unit.uid];
+      const { [unit.uid]: removed, ...orders } = nb.orders ?? {};
+      return { ...nb, orders, rewindChoice: { uid: unit.uid, acted, order } };
+    }
+    nb = enemyAct(nb, actorFromId(nb, unit.uid)!);
     nb = replaceUnit(nb, { ...actorFromId(nb, unit.uid)!, acted });
     nb = checkEnd(nb);
   }
   return nb;
 }
 
+function finishRewindChoice(b: BattleState, skillId?: string, targetUid?: string): BattleState {
+  const choice = b.rewindChoice!;
+  let nb: BattleState = { ...b, rewindChoice: undefined };
+  if (skillId) nb = useSkillInner(nb, actorFromId(nb, choice.uid)!, getSkill(skillId), targetUid);
+  nb = replaceUnit(nb, { ...actorFromId(nb, choice.uid)!, acted: choice.acted });
+  const orders = { ...(nb.orders ?? {}) };
+  if (choice.order) orders[choice.uid] = choice.order;
+  else delete orders[choice.uid];
+  nb = checkEnd({ ...nb, orders });
+  if (nb.phase !== 'acting') return nb;
+  if (choice.nextRound !== undefined) {
+    nb = resolveRewindActions(nb);
+    if (nb.rewindChoice) return { ...nb, rewindChoice: { ...nb.rewindChoice, nextRound: choice.nextRound } };
+    return checkEnd(finishRoundStart({ ...nb, round: choice.nextRound }));
+  }
+  return playerEndTurn(nb);
+}
+
 /** 结束指令阶段并统一结算：敌我所有存活单位按速度依次行动，随后进入新回合 */
 export function playerEndTurn(b: BattleState): BattleState {
+  if (b.rewindChoice) return b;
+  const resume = b.rewindResume;
   if (b.phase !== 'acting') return b;
   // 车轮战：场上一方全灭待换人——先等替补动画播完（GAUNTLET_SWAP）再结算/开新回合，避免在空场上重复结算
   if (b.pendingSwap?.player || b.pendingSwap?.enemy) return b;
   let nb: BattleState = { ...b };
   // 预选敌方行动：基于回合开始时的快照状态，一次性预选所有可行动敌人的行动
   const snapshot = nb;
-  for (const eu of nb.enemyUnits) {
+  for (const eu of resume ? [] : nb.enemyUnits) {
     if (eu.hp <= 0 || eu.acted) continue;
     if (eu.statuses.some((s) => s.kind === 'stun')) continue;
     const rngVal1 = createRng((snapshot.seed + nb.rngCount * 7919) >>> 0)();
@@ -3989,15 +4016,16 @@ export function playerEndTurn(b: BattleState): BattleState {
     }
   }
   // 预选完成后重新计算回合顺序：orders 已填充所有敌方指令，computeTurnOrder 会据此排序
-  nb = { ...nb, turnOrder: computeTurnOrder(nb) };
+  nb = { ...nb, rewindResume: undefined, turnOrder: resume ? nb.turnOrder : computeTurnOrder(nb) };
   // 回合结算：所有存活单位（敌我混排）按速度统一行动——
   // 我方执行已下达的指令，敌方执行预选指令；未下指令的我方单位本回合不出手。
   // 使用索引循环以支持「暗影追猎」击杀后再行动（不标记 acted 的单位需重新处理）
-  let turnIdx = 0;
-  const extraActionCount: Record<string, number> = {};
+  let turnIdx = resume?.index ?? 0;
+  const extraActionCount: Record<string, number> = resume?.extraActions ?? {};
   const MAX_EXTRA_ACTIONS = 5;
   while (turnIdx < (nb.turnOrder ?? []).length) {
     nb = resolveRewindActions(nb);
+    if (nb.rewindChoice) return { ...nb, rewindResume: { index: turnIdx, extraActions: extraActionCount } };
     // 只移动尚未执行的队列后缀；已行动目标不会因时滞重复出手。
     const remaining = nb.turnOrder.slice(turnIdx);
     const delayed = (uid: string) => actorFromId(nb, uid)?.statuses.some(s => s.kind === 'timeLag' && s.appliedRound === nb.round) ?? false;
@@ -4083,6 +4111,7 @@ export function playerEndTurn(b: BattleState): BattleState {
     }
   }
   nb = resolveRewindActions(nb);
+  if (nb.rewindChoice) return { ...nb, rewindResume: { index: turnIdx, extraActions: extraActionCount } };
   nb = { ...nb, orders: {} };
   if (nb.phase !== 'acting') return nb;
   // 车轮战：结算中一方全灭待换人 → 不开新回合，等死亡动画播完由 GAUNTLET_SWAP 换人
@@ -4101,6 +4130,7 @@ function afterPlayerAction(b: BattleState): BattleState {
 
 /** 每只宠物保留一条基础行动指令；结算前可修改或取消，不立即执行。 */
 export function playerSkill(b: BattleState, actorUid: string, skillId: string, targetUid?: string): BattleState {
+  if (b.rewindChoice && b.rewindChoice.uid !== actorUid) return b;
   if (b.phase !== 'acting') return b;
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
   if (!actor || actor.hp <= 0) return b;
@@ -4114,6 +4144,7 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
     && !(targetUid === undefined && furnaceShellTargets(b, actor).every((unit) => unit.uid === actor.uid))) return b;
   if (requiresBurningTarget(skillId) && !stokeFireTargets(b, actor, skillId).some((unit) => unit.uid === targetUid)) return b;
   // allyAll 不需要选择目标，跳过 targetUid 校验
+  if (b.rewindChoice) return finishRewindChoice(b, skillId, targetUid);
   const curOrder = b.orders?.[actorUid];
   // 换位已实际占用行动，不能再下指令；尚未执行的技能或休息指令可以替换。
   if (actor.acted && !curOrder) return b;
@@ -4126,6 +4157,7 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
 
 /** 玩家行动：让一只宠物放弃本回合基础行动，记入休息指令（可再次点击取消）。 */
 export function playerRest(b: BattleState, actorUid: string): BattleState {
+  if (b.rewindChoice) return b.rewindChoice.uid === actorUid ? finishRewindChoice(b) : b;
   if (b.phase !== 'acting') return b;
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
   if (!actor || actor.hp <= 0) return b;

@@ -170,3 +170,6 @@
   .wheel-pool .flow-pet-stats { justify-content: center; font-size: 11px; }
   .wheel-pool .starter-stat-icon { width: 16px; height: 16px; }
 }
+
+.achievement-grade-difficulties { display: flex; gap: 6px; margin-bottom: 8px; }
+.achievement-grade-difficulties button { flex: 1; min-height: 44px; min-width: 0; }

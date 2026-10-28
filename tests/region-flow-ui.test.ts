@@ -72,7 +72,7 @@ describe('地区开局流程', () => {
       const detail = within(screen.getByRole('dialog'));
       expect(detail.getByRole('img', { name: '迅迅' }).closest('.undiscovered')).toBeNull();
       expect(detail.getAllByRole('img', { name: '未遇见生物' })).toHaveLength(25);
-      expect(detail.getByRole('region', { name: '蛋生' }).querySelectorAll('.undiscovered')).toHaveLength(3);
+      expect(detail.getByRole('region', { name: '神秘生物' }).querySelectorAll('.undiscovered')).toHaveLength(3);
       expect(detail.getByRole('img', { name: '时砂兽' }).closest('.undiscovered')).toBeNull();
       expect(detail.queryByRole('img', { name: '泡泡' })).toBeNull();
     } finally {

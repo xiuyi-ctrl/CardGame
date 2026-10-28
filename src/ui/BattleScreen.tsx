@@ -176,16 +176,16 @@ export function BattleScreen({ state, dispatch }: Props) {
     else if (mobileLogOpen) setMobileLogOpen(false);
     else cancelTarget();
   });
-  const choosingEnemyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'single';
-  const choosingAllyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'ally';
+  const choosingEnemyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'single' || !!pendingBattleItem && ['atk_down', 'spd_down', 'hp_down'].includes(pendingBattleItem);
+  const choosingAllyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'ally' || !!pendingBattleItem && ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
   // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）；车轮战待换人时也禁止，等替补自动上场
-  const collapseWarning = battle.phase === 'acting' && [13, 14].includes(battle.round) && battle.collapseWarningSeenRound !== battle.round;
+  const collapseWarning = battle.phase === 'acting' && [1, 15].includes(battle.round) && battle.collapseWarningSeenRound !== battle.round;
   const acknowledgeCollapse = () => dispatch({ type: 'ACK_COLLAPSE_WARNING' });
-  useBackAction(collapseWarning && !animating && !logPending, acknowledgeCollapse, 20);
-  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !logPending && !battle.pendingSwap && !collapseWarning && !battle.mimicPreviewPending;
+  useBackAction(collapseWarning && !animating && !logPending && !inspectEnemy && !inspectAlly, acknowledgeCollapse, 20);
+  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !logPending && !battle.pendingSwap && !(collapseWarning && battle.round === 15) && !battle.mimicPreviewPending;
   const previousOrders = useRef({ orders: battle.orders, round: battle.round });
   const [orderPulse, setOrderPulse] = useState<{ actorUid: string; targetUid: string; skillId: string; seq: number } | null>(null);
   useEffect(() => {
@@ -303,6 +303,13 @@ export function BattleScreen({ state, dispatch }: Props) {
     }
   }, [isSimulation, battle.phase, animating, logPending]);
 
+  useEffect(() => {
+    if (battle.rewindChoice) {
+      setSelectedUid(battle.rewindChoice.uid);
+      setPendingSkill(null); setPendingTame(null); setPendingBattleItem(null); setSwapFrom(null);
+    }
+  }, [battle.rewindChoice?.uid]);
+
   const selected = battle.playerUnits.find((u) => u.uid === selectedUid);
   const inspectedEnemy = inspectEnemy ? battle.enemyUnits.find((u) => u.uid === inspectEnemy && u.hp > 0) : undefined;
   const inspectedAlly = inspectAlly ? battle.playerUnits.find((u) => u.uid === inspectAlly) : undefined;
@@ -413,6 +420,7 @@ export function BattleScreen({ state, dispatch }: Props) {
       }
       return;
     }
+    if (battle?.rewindChoice) return;
     const u = b.playerUnits.find((x) => x.uid === uid);
     if (u && u.hp > 0) setSelectedUid(selectedUid === uid ? null : uid);
   }
@@ -649,7 +657,8 @@ export function BattleScreen({ state, dispatch }: Props) {
       <div className="hud">
         <span className="act">{state.runMode === 'proficiency' ? '熟练度远征' : `第${state.act}幕`} · 第{state.currentRow + 1}层</span>
         <span className="battle-hud-round">回合 {battle.round}</span>
-        {battleCollapseDamage(battle.round) > 0 && <span className="chip" title="本回合末双方全体直接扣生命，无视护盾、减伤与伤害上限">{mobile ? '末全体－' : '崩解：回合末全体－'}{battleCollapseDamage(battle.round)}{mobile ? '' : '生命'}</span>}
+        {battle.rewindChoice && <span className="chip battle-rewind-choice" title="回溯额外行动：请选择技能与目标，或休息">回溯额外行动</span>}
+        {battleCollapseDamage(battle.round) > 0 && <span className="chip" title="本回合末双方全体直接扣生命，无视护盾、减伤与伤害上限">{mobile ? '回合末扣血 ' : '崩解：回合结束全体扣除 '}{battleCollapseDamage(battle.round)}{mobile ? '' : '生命'}</span>}
         <button type="button" className="touch-only mobile-log-toggle" onClick={() => setMobileLogOpen(v => !v)}>战斗记录</button>
         {battle.gauntlet && (
           <span className="chip" title="敌方轮换上阵，一只倒下另一只顶替">
@@ -745,7 +754,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const isCurrent = selectedOrder?.skillId === s.id;
                     const isTargeting = (choosingEnemyTarget || choosingAllyTarget) && pendingSkill?.actorUid === selected.uid && pendingSkill.skillId === s.id;
                     const isActive = isCurrent || isTargeting;
-                    const cannotOrder = selected.acted && !selectedOrder;
+                    const cannotOrder = (selected.acted && !selectedOrder) || (!!battle.rewindChoice && battle.rewindChoice.uid !== selected.uid);
                     const slotIdx = selected.skills.indexOf(s.id);
                     const enhanced = getSkillEnhanceLevel(selected, slotIdx);
                     const enhanceLabel = enhanced >= 3 ? '+++' : enhanced === 2 ? '++' : enhanced === 1 ? '+' : '';
@@ -805,8 +814,8 @@ export function BattleScreen({ state, dispatch }: Props) {
             )}
             <div className="skill-drawer-bottom">
               <div className="battle-utility-row">
-                <button data-capture-origin className={`hud-action-btn ${foodOverlayOpen ? 'active' : ''}`} onClick={() => { setFoodOverlayOpen((v) => !v); setItemOverlayOpen(false); }} disabled={!canAct}><BattleActionIcon kind="capture" />捕获</button>
-                <button className={`hud-action-btn ${itemOverlayOpen ? 'active' : ''}`} onClick={() => { setItemOverlayOpen((v) => !v); setFoodOverlayOpen(false); }} disabled={!canAct}><BattleActionIcon kind="item" />道具</button>
+                <button data-capture-origin className={`hud-action-btn ${foodOverlayOpen ? 'active' : ''}`} onClick={() => { setFoodOverlayOpen((v) => !v); setItemOverlayOpen(false); }} disabled={!canAct || !!battle.rewindChoice}><BattleActionIcon kind="capture" />捕获</button>
+                <button className={`hud-action-btn ${itemOverlayOpen ? 'active' : ''}`} onClick={() => { setItemOverlayOpen((v) => !v); setFoodOverlayOpen(false); }} disabled={!canAct || !!battle.rewindChoice}><BattleActionIcon kind="item" />道具</button>
                 <button
                   className="hud-action-btn"
                   onClick={() => {
@@ -817,7 +826,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     setInspectEnemy(null);
                     setSwapFrom(selected.uid);
                   }}
-                  disabled={!selected || alivePlayers.length < 2 || selected.acted || animating}
+                  disabled={!selected || alivePlayers.length < 2 || selected.acted || animating || !!battle.rewindChoice}
                   title="与另一只己方宠物交换位置（占用发起者本回合行动）"
                 ><BattleActionIcon kind="swap" />换位</button>
               </div>
@@ -833,7 +842,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     <UiSymbol name="play" /> {animSpeed}x
                   </button>
                 </div>
-                <button className="end-turn-btn" onClick={() => dispatch({ type: 'END_TURN' })} disabled={!canAct}>
+                <button className="end-turn-btn" onClick={() => dispatch({ type: 'END_TURN' })} disabled={!canAct || !!battle.rewindChoice}>
                   结束回合
                 </button>
               </div>

@@ -7216,3 +7216,8 @@ img.unified-creature-art { image-rendering: pixelated; object-fit: contain; bord
   .relic-grid .relic-lock { position: absolute; top: 4px; right: 2px; font-size: 14px; }
   .relic-grid .relic-none { font-size: clamp(14px, 1.1vw, 20px); }
 }
+
+.battle-shield-value { position: relative; display: block; width: 100%; }
+.battle-shield-value sup { position: absolute; left: calc(100% - 1px); top: 50%; transform: translateY(-50%); color: #fff9e9; font-size: 12px; font-weight: 900; line-height: 1; text-shadow: -1px -1px #101c2c, 1px -1px #101c2c, -1px 1px #101c2c, 1px 1px #101c2c; }
+
+.battle-screen .hud .battle-rewind-choice { color: #fff5d5; background: #13695f; }

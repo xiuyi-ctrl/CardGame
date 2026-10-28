@@ -52,12 +52,18 @@ describe('战场崩解与治疗限制', () => {
     expect(swapped.log.filter(e => e.text.startsWith('战场崩解'))).toHaveLength(1);
   });
   it('两次预警确认保存，读档不重弹，其他回合不能确认', () => {
-    const b = quiet(13);
+    const b = quiet(1);
     let state = { ...createInitialState(), screen: 'battle' as const, battle: b };
     state = gameReducer(state, { type: 'ACK_COLLAPSE_WARNING' }) as typeof state;
-    expect(state.battle.collapseWarningSeenRound).toBe(13);
+    expect(state.battle.collapseWarningSeenRound).toBe(1);
     const loaded = gameReducer(createInitialState(), { type: 'LOAD_GAME', state: JSON.parse(JSON.stringify(state)) });
-    expect(loaded.battle?.collapseWarningSeenRound).toBe(13);
+    expect(loaded.battle?.collapseWarningSeenRound).toBe(1);
+    for (const round of [2, 13, 14, 16]) {
+      const other = { ...state, battle: { ...state.battle, round } };
+      expect(gameReducer(other, { type: 'ACK_COLLAPSE_WARNING' })).toBe(other);
+    }
+    const started = { ...state, battle: { ...state.battle, round: 15 } };
+    expect(gameReducer(started, { type: 'ACK_COLLAPSE_WARNING' }).battle?.collapseWarningSeenRound).toBe(15);
   });
   it('基础回复不限次，强力技能冷却1，保留群体等有限次', () => {
     const legacy = { ...makeUnit('lulu_king', true, 0, false), skillUses: { heal_light: 0, water_bath: 0, shield_skill: 0 } };

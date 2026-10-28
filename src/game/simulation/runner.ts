@@ -42,7 +42,7 @@ function battleStep(state: GameState): GameState {
   if (battle.mimicPreviewPending) return dispatch(state, { type: 'ACK_MIMIC_PREVIEW' });
   if (battle.pendingSwap?.player || battle.pendingSwap?.enemy) return dispatch(state, { type: 'GAUNTLET_SWAP' });
   if (!playerHasMove(battle)) return dispatch(state, { type: 'END_TURN' });
-  const actor = getActablePlayerUnits(battle)[0];
+  const actor = battle.rewindChoice ? battle.playerUnits.find(u => u.uid === battle.rewindChoice!.uid) : getActablePlayerUnits(battle)[0];
   if (!actor) return dispatch(state, { type: 'END_TURN' });
   if (actor.passive === 'mirror_reflection' && canUnitUseSkill(actor, 'mirror_copy')
     && battle.playerUnits.some(u => u.uid !== actor.uid && u.hp > 0 && getEffectiveSpd(u) > getEffectiveSpd(actor))) {
@@ -53,7 +53,7 @@ function battleStep(state: GameState): GameState {
     .filter((unit) => unit.hp > 0 && canTameEnemy(unit) && isTameable(unit) && unit.hp / unit.maxHp <= 0.25)
     .sort((a, b) => a.hp - b.hp)[0];
   const food = Object.keys(state.inventory).find((id) => (state.inventory[id] ?? 0) > 0 && FOODS[id]);
-  if (state.runMode !== 'proficiency' && tameTarget && food) {
+  if (!battle.rewindChoice && state.runMode !== 'proficiency' && tameTarget && food) {
     return dispatch(state, { type: 'PLAYER_TAME', foodId: food, enemyUid: tameTarget.uid });
   }
 
@@ -244,6 +244,8 @@ export function simulationStep(state: GameState, seed: number): GameState {
     case 'gauntlet-order': return dispatch(state, { type: 'GAUNTLET_ORDER_CONFIRM', units: state.gauntletOrder ?? [] });
     case 'reward': {
       const pending = state.rewards.find((item) => item.id === state.pendingRecruitRewardId);
+      if (pending?.kind === 'boss_boost') return dispatch(state, { type: 'PICK_REWARD', rewardId: pending.id, targetUid: state.roster[0]?.uid, stat: 'hp' });
+      if (pending?.kind === 'boss_supply') return dispatch(state, { type: 'PICK_REWARD', rewardId: pending.id, potionId: 'atk_up' });
       if (pending?.recruitCandidates?.[0]) return dispatch(state, { type: 'PICK_REWARD', rewardId: pending.id, monsterId: pending.recruitCandidates[0] });
       const wounded = state.roster.some((unit) => unit.hp / unit.maxHp < 0.7);
       const reward = (wounded && state.rewards.find((item) => item.kind === 'heal')) || state.rewards.find((item) => item.kind === 'recruit') || state.rewards.find((item) => item.kind === 'food') || state.rewards[0];

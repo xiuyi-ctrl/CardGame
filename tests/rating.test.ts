@@ -13,7 +13,7 @@ function finishedRating(challenges = true): MainRatingStats {
   for (const act of [1, 2, 3]) {
     rating.acts[act] = { totalRows: 10, completedRows: Array.from({ length: 10 }, (_, i) => i), bossDefeated: true, challengeTarget: 5 };
     for (let i = 0; i < 3; i++) rating.battles[`${act}:${i}`] = {
-      act, type: challenges ? 'elite' : 'battle', won: true, rounds: 4, participants: 5, deaths: 0, enemyCount: 2,
+      act, type: challenges ? 'elite' : 'battle', won: true, rounds: 2, participants: 5, deaths: 0, enemyCount: 2,
     };
   }
   return rating;
@@ -51,10 +51,10 @@ describe('主模式四维评分', () => {
 
   it('阵亡按参战人次计，效率逐场封顶，挑战每幕最多5分', () => {
     const ledger = finishedRating();
-    ledger.battles = { one: { act: 1, type: 'gauntlet', won: true, rounds: 12, enemyCount: 3, participants: 50, deaths: 2 } };
+    ledger.battles = { one: { act: 1, type: 'gauntlet', won: true, rounds: 6, enemyCount: 3, participants: 50, deaths: 2 } };
     const score = computeRunRating(rated(ledger))!;
     expect(score.dimensions.map(d => d.points)).toEqual([50, 20, 3, 10]);
-    ledger.battles.one.rounds = 24;
+    ledger.battles.one.rounds = 9;
     expect(computeRunRating(rated(ledger))!.dimensions[3].points).toBe(5);
     for (let i = 0; i < 10; i++) ledger.battles[`extra-${i}`] = { ...ledger.battles.one, rounds: 1, deaths: 0 };
     const extra = computeRunRating(rated(ledger))!;
@@ -176,5 +176,43 @@ describe('挑战分机会检查', () => {
     expect(computeRunRating(rated(ledger))!.dimensions[2].points).toBe(10);
     ledger.acts['2'].bossDefeated = false;
     expect(computeRunRating(rated(ledger))!.dimensions[2].points).toBe(5);
+  });
+});
+
+describe('战斗效率线性评分', () => {
+  function efficiency(type: string, rounds: number, enemyCount = 3, won = true) {
+    const ledger = finishedRating();
+    ledger.battles = { one: { act: 1, type, won, rounds, enemyCount, participants: 3, deaths: 0 } };
+    return computeRunRating(rated(ledger))!.dimensions.find(d => d.key === 'efficiency')!.points;
+  }
+  it.each([[1, 10], [2, 10], [3, 8.3], [4, 6.7], [5, 5], [6, 3.3], [8, 0], [20, 0]])('普通战%s回合得%s分', (rounds, points) => {
+    expect(efficiency('battle', rounds)).toBe(points);
+    expect(efficiency('event', rounds)).toBe(points);
+  });
+  it.each(['elite', 'corrupted', 'guardian', 'arena'])('%s三回合满分、十回合归零', type => {
+    expect(efficiency(type, 3)).toBe(10);
+    expect(efficiency(type, 6)).toBe(5.7);
+    expect(efficiency(type, 10)).toBe(0);
+  });
+  it('首领五回合满分、十回合半分、十五回合归零', () => {
+    expect(efficiency('boss', 5)).toBe(10);
+    expect(efficiency('boss', 10)).toBe(5);
+    expect(efficiency('boss', 15)).toBe(0);
+  });
+  it.each([1, 3, 5])('车轮战按%s名敌人计算阈值', count => {
+    const excellent = Math.max(3, 2 * count), limit = Math.max(8, 4 * count);
+    expect(efficiency('gauntlet', excellent, count)).toBe(10);
+    expect(efficiency('gauntlet', limit, count)).toBe(0);
+  });
+  it.each(['battle', 'elite', 'boss', 'gauntlet'])('%s快速失败也没有效率分', type => {
+    expect(efficiency(type, 1, 3, false)).toBe(0);
+  });
+  it('逐场等权平均，失败战斗纳入分母', () => {
+    const ledger = finishedRating();
+    const common = { act: 1, type: 'battle', won: true, rounds: 2, enemyCount: 1, participants: 1, deaths: 0 };
+    ledger.battles = { fast: common, failed: { ...common, won: false }, slow: { ...common, rounds: 8 } };
+    const result = computeRunRating(rated(ledger))!;
+    expect(result.dimensions.find(d => d.key === 'efficiency')!.points).toBe(3.3);
+    expect(result.dimensions.map(d => d.weight)).toEqual([50, 25, 15, 10]);
   });
 });

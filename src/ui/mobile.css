@@ -252,19 +252,38 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .starter-select-numbers .starter-stat-icon { width: 18px; height: 18px; }
 .mobile-ui .starter-select-confirm { min-height: 44px; margin: 0; padding: 3px; font-size: 18px; border-width: 2px; box-shadow: inset 0 0 0 2px #ffc434; }
 .mobile-ui .starter-select-note { font-size: 12px; }
-.mobile-ui .starter-proficiency-main { padding: 6px; grid-template-columns: minmax(0, 1fr) 210px; gap: 6px; }
-.mobile-ui .starter-observatory { min-height: 0; height: 100%; overflow: hidden; }
-.mobile-ui .starter-observatory .starter-header { flex: 0 0 56px; min-height: 0; padding: 3px; }
-.mobile-ui .starter-summary { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto 44px; padding: 4px; gap: 3px; overflow: hidden; }
-.mobile-ui .starter-summary h2 { font-size: 16px; }
-.mobile-ui .starter-selected-list { min-height: 0; overflow-y: auto; gap: 3px; }
-.mobile-ui .starter-selected-slot { min-height: 44px; padding: 2px; gap: 3px; }
-.mobile-ui .starter-selected-slot img { width: 32px; height: 32px; }
-.mobile-ui .starter-summary .starter-confirm { min-height: 44px; height: 44px; font-size: 16px; padding: 2px; }
-.mobile-ui .starter-choice.compact { min-height: 44px; }
-.mobile-ui .starter-choice.compact .starter-choice-info { min-height: 32px; padding: 2px; }
-.mobile-ui .starter-choice.compact .starter-choice-name { font-size: 15px; }
-.mobile-ui .starter-choice.compact .starter-choice-stats { font-size: 12px; gap: 4px; }
+.mobile-ui .proficiency-starter { height: 100%; min-height: 0; padding: 4px 8px 6px; gap: 5px; }
+.mobile-ui .proficiency-starter .starter-header { flex: 0 0 44px; min-height: 44px; padding: 0; }
+.mobile-ui .proficiency-starter .starter-heading { gap: 6px; }
+.mobile-ui .proficiency-starter .starter-heading h1 { font-size: clamp(20px, 5.5dvh, 30px); }
+.mobile-ui .proficiency-starter .starter-heading p { font-size: 12px; margin: 1px 0 0; }
+.mobile-ui .proficiency-starter .starter-mark { font-size: 26px; }
+.mobile-ui .proficiency-starter .starter-back { min-height: 44px; padding: 4px 8px; font-size: 14px; }
+.mobile-ui .proficiency-starter .starter-proficiency-main { grid-template-columns: minmax(0, 1fr) clamp(172px, 27vw, 260px); padding: 0; gap: 8px; }
+.mobile-ui .proficiency-starter .starter-choice-grid { gap: 7px; }
+.mobile-ui .proficiency-starter .proficiency-contract { border-width: 3px; }
+.mobile-ui .proficiency-starter .starter-choice { min-height: 0; padding: 2px; }
+.mobile-ui .proficiency-starter .contract-order { width: 23px; height: 23px; font-size: 15px; border-width: 2px; }
+.mobile-ui .proficiency-starter .contract-art { padding: 2px 5px 8px; }
+.mobile-ui .proficiency-starter .contract-art > img { inset: 2px 5% 8px; height: calc(100% - 10px); }
+.mobile-ui .proficiency-starter .contract-info { min-height: 48px; padding: 4px 43px 1px 3px; gap: 4px; }
+.mobile-ui .proficiency-starter .contract-info > strong { font-size: 14px; }
+.mobile-ui .proficiency-starter .contract-statline { font-size: 12px; gap: 5px; }
+.mobile-ui .proficiency-starter .contract-statline > span { gap: 2px; }
+.mobile-ui .proficiency-starter .contract-details { right: 2px; bottom: 2px; width: 44px; min-height: 44px; padding: 1px; font-size: 12px; gap: 0; }
+.mobile-ui .proficiency-starter .contract-details .ui-symbol { display: none; }
+.mobile-ui .proficiency-starter .starter-summary { grid-template-rows: auto minmax(0, 1fr) auto 44px; border-width: 3px; padding: 6px; gap: 5px; }
+.mobile-ui .proficiency-starter .starter-summary h2 { font-size: 16px; padding: 2px 0 5px; }
+.mobile-ui .proficiency-starter .starter-selected-list { gap: 5px; overflow: visible; }
+.mobile-ui .proficiency-starter .starter-selected-slot { min-height: 44px; max-height: none; padding: 5px 3px 5px 17px; gap: 4px; }
+.mobile-ui .proficiency-starter .starter-selected-slot > img { width: clamp(30px, 7vw, 56px); max-height: 64px; }
+.mobile-ui .proficiency-starter .starter-selected-number { top: 3px; left: 4px; font-size: 12px; }
+.mobile-ui .proficiency-starter .proficiency-selected-copy { gap: 5px; }
+.mobile-ui .proficiency-starter .proficiency-selected-copy strong { font-size: 14px; }
+.mobile-ui .proficiency-starter .starter-milestones { padding: 8px 4px 0; font-size: 12px; }
+.mobile-ui .proficiency-starter .starter-milestones span { gap: 5px; }
+.mobile-ui .proficiency-starter .starter-milestones span::before { width: 14px; height: 14px; font-size: 12px; }
+.mobile-ui .proficiency-starter .starter-summary .starter-confirm { height: 44px; min-height: 44px; padding: 2px; border-width: 3px; font-size: 18px; }
 
 /* 奖励、招募、商店、背包与成长页面。允许内容滑动，不裁掉操作。 */
 .mobile-ui .reward-content { min-height: 0; padding: 0; display: grid; overflow: hidden; }
