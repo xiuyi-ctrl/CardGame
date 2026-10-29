@@ -171,7 +171,7 @@ export function BlacksmithScreen({ state, dispatch }: Props) {
               <h3>重置：{getSkill(selectedUnit.skills[resetSlotIndex])?.name}</h3>
               <div className="growth-modal-content">
                 <p>当前等级：+{getSkillEnhanceLevel(selectedUnit, resetSlotIndex)}</p>
-                <p>返还成长点：{Math.ceil(getSkillEnhanceTotalCost(getSkillEnhanceLevel(selectedUnit, resetSlotIndex)) * 0.5)} 点</p>
+                <p>返还成长点：{Math.ceil((selectedUnit.skillEnhancePaid?.[resetSlotIndex] ?? 0) * 0.5)} 点</p>
                 <p>消耗：1 个还原石（剩余 {(state.inventory['reset_stone'] ?? 0) - 1} 个）</p>
               </div>
               <div className="growth-modal-actions">
@@ -238,13 +238,4 @@ function renderSkillEffect(skillId: string, level: number): string {
   if (bonus.hitsBonus > 0) parts.push(`段数+${bonus.hitsBonus}`);
   if (bonus.effectBonus > 0) parts.push(`效果+${bonus.effectBonus}`);
   return parts.length > 0 ? `${sk.desc}（${parts.join('，')}）` : sk.desc;
-}
-
-function getSkillEnhanceTotalCost(level: number): number {
-  const ENHANCE_COST_TABLE = [8, 10, 12];
-  let total = 0;
-  for (let i = 0; i < level && i < ENHANCE_COST_TABLE.length; i++) {
-    total += ENHANCE_COST_TABLE[i];
-  }
-  return total;
 }

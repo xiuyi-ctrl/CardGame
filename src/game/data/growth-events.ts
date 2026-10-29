@@ -3,7 +3,8 @@
  * 围绕成长点成长设计
  */
 import { pick, shuffle } from '../rng';
-import type { EventNode } from '../state/game';
+import type { EventChoice, EventNode } from '../state/game';
+import type { GrowthEncounterKind } from '../state/growth-encounters';
 
 export type GrowthEventType =
   | 'ancient_arena'
@@ -31,22 +32,22 @@ export const GROWTH_EVENT_TYPES: GrowthEventType[] = [
 ];
 
 export const GROWTH_EVENT_NAMES: Record<GrowthEventType, string> = {
-  ancient_arena: '远古训练场',
+  ancient_arena: '分岔训练场',
   battle_master: '战斗大师',
-  soul_resonance: '灵魂共鸣',
-  skill_mentor: '技能导师',
+  soul_resonance: '共鸣水晶',
+  skill_mentor: '遗忘书屋',
   mysterious_altar: '神秘祭坛',
   expedition_supply: '远征补给',
   pet_recruit: '生物招募',
   arena_challenge: '训练场挑战',
-  stone_of_forget: '遗忘之石',
+  stone_of_forget: '拆解工坊',
   revive_dead: '灵魂墓园',
 };
 
-export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType, deadPetCount: number = 0): EventNode {
+export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType, deadPetCount: number = 0, layer = 16, previousTitle?: string): EventNode {
   let type = eventType;
   if (!type) {
-    let pool = [...GROWTH_EVENT_TYPES];
+    let pool = GROWTH_EVENT_TYPES.filter(id => (layer >= 16 || id !== 'stone_of_forget') && GROWTH_EVENT_NAMES[id] !== previousTitle);
     if (deadPetCount <= 0) {
       pool = pool.filter((id) => id !== 'revive_dead');
     }
@@ -55,18 +56,18 @@ export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType,
   return buildGrowthEventByType(type);
 }
 
+function growthChoice(kind: GrowthEncounterKind, label: string, desc: string): EventChoice {
+  return { id: kind, kind: 'growthEncounter', growthEncounter: kind, label, desc };
+}
+
 function buildGrowthEventByType(type: GrowthEventType): EventNode {
   switch (type) {
     case 'ancient_arena':
-      return {
-        title: '远古训练场',
-        desc: '你发现了一座古老的训练场，空气中弥漫着战斗的气息。',
-        choices: [
-          { id: 'ga-train-core', label: '训练核心', desc: '选择 1 只宠物，获得 2 成长点', kind: 'growthPoint', amount: 2 },
-          { id: 'ga-train-all', label: '训练全队', desc: '全队各获得 1 成长点', kind: 'growthPoint', amount: 1, targetAll: true },
-          { id: 'ga-leave', label: '离开', desc: '无事发生', kind: 'none' },
-        ],
-      };
+      return { title: '分岔训练场', desc: '独行试炼与双人协作，你选择哪种训练？', choices: [
+        growthChoice('train_core', '集中训练', '指定一只伙伴获得3成长点'),
+        growthChoice('train_pair', '双人训练', '指定两只不同伙伴，各获得2成长点'),
+        { id: 'leave', label: '离开', desc: '无事发生', kind: 'none' },
+      ] };
     case 'battle_master':
       return {
         title: '战斗大师',
@@ -78,25 +79,17 @@ function buildGrowthEventByType(type: GrowthEventType): EventNode {
         ],
       };
     case 'soul_resonance':
-      return {
-        title: '灵魂共鸣',
-        desc: '一股神秘的力量在涌动，似乎可以强化你的宠物。',
-        choices: [
-          { id: 'sr-hp', label: '强化生命', desc: '选择 1 只宠物，永久 +2 生命（不计入属性提升上限）', kind: 'permanentBoost', boostStat: 'hp', amount: 2, noCap: true },
-          { id: 'sr-spd', label: '强化速度', desc: '选择 1 只宠物，永久 +1 速度（不计入属性提升上限）', kind: 'permanentBoost', boostStat: 'spd', amount: 1, noCap: true },
-          { id: 'sr-leave', label: '离开', desc: '无事发生', kind: 'none' },
-        ],
-      };
+      return { title: '共鸣水晶', desc: '短暂连接两位伙伴的成长记忆。', choices: [
+        growthChoice('transfer', '连接伙伴', '指定两只伙伴，免手续费转移1～6成长点'),
+        growthChoice('absorb', '吸收水晶', '指定一只伙伴获得2成长点'),
+        { id: 'leave', label: '离开', desc: '无事发生', kind: 'none' },
+      ] };
     case 'skill_mentor':
-      return {
-        title: '技能导师',
-        desc: '一位精通技能的导师愿意传授知识。',
-        choices: [
-          { id: 'sm-learn', label: '学习新技能', desc: '选择 1 只宠物，替换 1 个技能（免费）', kind: 'skillReplace' },
-          { id: 'sm-item', label: '请教', desc: '获得 1 个治疗圣水', kind: 'food', foodId: 'heal_potion' },
-          { id: 'sm-leave', label: '离开', desc: '无事发生', kind: 'none' },
-        ],
-      };
+      return { title: '遗忘书屋', desc: '用一段旧记忆交换新的战斗知识。', choices: [
+        growthChoice('relearn', '重新学习', '20金币，指定伙伴替换一个技能；新技能三选一，原强化清除'),
+        growthChoice('insight', '整理心得', '指定一只伙伴获得1成长点'),
+        { id: 'leave', label: '离开', desc: '无事发生', kind: 'none' },
+      ] };
     case 'mysterious_altar':
       return {
         title: '神秘祭坛',
@@ -137,14 +130,11 @@ function buildGrowthEventByType(type: GrowthEventType): EventNode {
         ],
       };
     case 'stone_of_forget':
-      return {
-        title: '遗忘之石',
-        desc: '一块古老的石头散发着神秘的光芒。',
-        choices: [
-          { id: 'sf-reset', label: '重置', desc: '选择 1 只宠物，重置其成长点（重新分配）', kind: 'resetGrowthPoints' },
-          { id: 'sf-leave', label: '离开', desc: '无事发生', kind: 'none' },
-        ],
-      };
+      return { title: '拆解工坊', desc: '回收真实训练投入，或购买一颗强化石。', choices: [
+        growthChoice('recycle', '回收强化', '清除一个技能全部强化，返还实际支付费用100%；免费强化不退款'),
+        growthChoice('buy_stone', '购买强化石', '30金币，获得一颗普通技能强化石'),
+        { id: 'leave', label: '离开', desc: '无事发生', kind: 'none' },
+      ] };
     case 'revive_dead':
       return {
         title: '灵魂墓园',

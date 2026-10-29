@@ -4,6 +4,7 @@
 .test-setup header > button, .test-setup footer > button { margin-left: auto; flex-shrink: 0; }
 .test-setup-body { display: grid; grid-template-columns: minmax(220px, 32%) minmax(0, 1fr); gap: 12px; min-height: 0; }
 .test-setup-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; min-height: 0; overflow-y: auto; }
+.test-mode-entries { grid-column: 1 / -1; display: grid; gap: 6px; padding-bottom: 8px; border-bottom: 2px solid #83958d; }
 .test-setup button { min-height: 44px; border: 2px solid #617d7b; border-radius: 0; padding: 5px 10px; color: #172635; background: #fff9e9; font: inherit; font-weight: 700; }
 .test-setup button[aria-pressed="true"] { border-color: #087c70; background: #cfebe0; box-shadow: inset 0 0 0 2px #087c70; }
 .test-setup button.primary { background: #ffb51c; border-color: #172635; }

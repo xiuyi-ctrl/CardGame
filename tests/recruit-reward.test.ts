@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateChallengeRewards, generateRewards, type GameState } from '../src/game/state/game';
+import { generateChallengeRewards, generateRewards, getMaxRoster, FIELD_MAX, PROF_FIELD_MAX, type GameState } from '../src/game/state/game';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { MAIN_BASE_POOL as BASE_POOL, MAIN_EVO1_POOL as EVO1_POOL } from '../src/game/data/monsters';
 import { makeUnit } from '../src/game/core/battle';
@@ -10,6 +10,22 @@ function rewardState(seed = 42, act = 1): GameState {
 }
 
 describe('主模式战后招募二选一', () => {
+  it('仅主模式队伍扩容，熟练度与双方出战上限保持原值', () => {
+    expect(getMaxRoster()).toBe(10);
+    expect(getMaxRoster('main')).toBe(10);
+    expect(getMaxRoster('proficiency')).toBe(5);
+    expect(FIELD_MAX).toBe(5);
+    expect(PROF_FIELD_MAX).toBe(3);
+  });
+  it.each([8, 9, 10])('已有%d只伙伴时按10只上限处理招募', size => {
+    const state = rewardState();
+    state.roster = Array.from({ length: size }, () => makeUnit('momo', true, 0, false));
+    const reward = state.rewards.find(item => item.kind === 'recruit')!;
+    const opened = gameReducer(state, { type: 'PICK_REWARD', rewardId: reward.id });
+    const after = gameReducer(opened, { type: 'PICK_REWARD', rewardId: reward.id, monsterId: reward.recruitCandidates![0] });
+    expect(after.roster).toHaveLength(Math.min(10, size + 1));
+    expect(after.screen).toBe(size === 10 ? 'tame-overflow' : 'roster');
+  });
   it('预生成两个不同候选，第一幕只有一阶，文案不泄露物种', () => {
     for (let seed = 0; seed < 100; seed++) {
       const state = rewardState(seed);
@@ -31,7 +47,7 @@ describe('主模式战后招募二选一', () => {
         const candidates = state.rewards.find((item) => item.kind === 'recruit')!.recruitCandidates!;
         expect(candidates.every((id) => [...BASE_POOL, ...EVO1_POOL].includes(id))).toBe(true);
         advanced += candidates.filter((id) => EVO1_POOL.includes(id)).length;
-        const full = { ...state, roster: Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)) };
+        const full = { ...state, roster: Array.from({ length: 10 }, () => makeUnit('momo', true, 0, false)) };
         expect(generateRewards(full)).toEqual(state.rewards);
       }
       const expected = act === 2 ? 0.3 : 0.6;
@@ -73,12 +89,12 @@ describe('主模式战后招募二选一', () => {
 
   it('满员确认后可放生并返回休整，不返还奖励', () => {
     const state = rewardState();
-    state.roster = Array.from({ length: 8 }, () => makeUnit('kiki', true, 0, false));
+    state.roster = Array.from({ length: 10 }, () => makeUnit('kiki', true, 0, false));
     const reward = state.rewards.find((item) => item.kind === 'recruit')!;
     const opened = gameReducer(state, { type: 'PICK_REWARD', rewardId: reward.id });
     const after = gameReducer(opened, { type: 'PICK_REWARD', rewardId: reward.id, monsterId: reward.recruitCandidates![0] });
     expect(after.screen).toBe('tame-overflow');
-    expect(after.roster).toHaveLength(8);
+    expect(after.roster).toHaveLength(10);
     expect(after.tameOverflow).toHaveLength(1);
     const discarded = gameReducer(after, { type: 'TAME_OVERFLOW_DISCARD', tameUid: after.tameOverflow![0].uid });
     expect(discarded.screen).toBe('roster');
@@ -98,7 +114,7 @@ describe('主模式战后招募二选一', () => {
       let count = 0;
       for (let seed = 0; seed < 20; seed++) {
         const state = rewardState(seed, 2);
-        state.roster = Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false));
+        state.roster = Array.from({ length: 10 }, () => makeUnit('momo', true, 0, false));
         const reward = generateChallengeRewards(state, type).find((item) => item.kind === 'recruit');
         if (!reward) continue;
         count++;

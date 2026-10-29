@@ -6,6 +6,7 @@ import type { GameAction } from '../game/state/reducer';
 import { battleVictoryGold, currentFoodList } from '../game/state/game';
 import {
   REST_SKILL_ID,
+  BATTLE_COLLAPSE_WARNING_ROUND,
   battleCollapseDamage,
   canUnitUseSkill,
   stokeFireTargets,
@@ -182,10 +183,10 @@ export function BattleScreen({ state, dispatch }: Props) {
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
   // 结算动画播放中禁止操作（结束回合/技能/换位/驯服/道具）；车轮战待换人时也禁止，等替补自动上场
-  const collapseWarning = battle.phase === 'acting' && [1, 15].includes(battle.round) && battle.collapseWarningSeenRound !== battle.round;
+  const collapseWarning = battle.phase === 'acting' && battle.round === BATTLE_COLLAPSE_WARNING_ROUND && battle.collapseWarningSeenRound !== battle.round;
   const acknowledgeCollapse = () => dispatch({ type: 'ACK_COLLAPSE_WARNING' });
   useBackAction(collapseWarning && !animating && !logPending && !inspectEnemy && !inspectAlly, acknowledgeCollapse, 20);
-  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !logPending && !battle.pendingSwap && !(collapseWarning && battle.round === 15) && !battle.mimicPreviewPending;
+  const canAct = battle.phase === 'acting' && alivePlayers.length > 0 && !animating && !logPending && !battle.pendingSwap && !collapseWarning && !battle.mimicPreviewPending;
   const previousOrders = useRef({ orders: battle.orders, round: battle.round });
   const [orderPulse, setOrderPulse] = useState<{ actorUid: string; targetUid: string; skillId: string; seq: number } | null>(null);
   useEffect(() => {

@@ -91,8 +91,8 @@ describe('战前布阵界面', () => {
     fireEvent.mouseLeave(deployedSlot);
     expect(deployedSlot.classList.contains('selected')).toBe(false);
     expect(screen.getByText('队伍伙伴')).toBeTruthy();
-    expect(document.querySelectorAll('.formation-pet-empty')).toHaveLength(5);
-    expect(document.querySelectorAll('.formation-pet-tile, .formation-pet-empty')).toHaveLength(8);
+    expect(document.querySelectorAll('.formation-pet-empty')).toHaveLength(7);
+    expect(document.querySelectorAll('.formation-pet-tile, .formation-pet-empty')).toHaveLength(10);
     expect(document.querySelectorAll('.formation-pet-tile .formation-pet-info')).toHaveLength(0);
     expect(document.querySelector('.formation-tip')).toBeNull();
     expect(document.querySelectorAll('.formation-detail-ability').length).toBeGreaterThan(0);

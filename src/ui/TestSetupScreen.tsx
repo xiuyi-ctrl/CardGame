@@ -18,6 +18,8 @@ export function TestSetupScreen({ state, dispatch }: { state: GameState; dispatc
   const [config, setConfig] = useState<TestScenario>(() => state.testScenario ?? { mode: 'main', region: 'mixed', difficulty: 'normal',
     act: 1, layer: 5, seed: 1, gold: 500, itemCount: 2, hpPercent: 60, deadCount: 1, customParty: false, nodeType: 'battle' });
   const set = (patch: Partial<TestScenario>) => setConfig(old => ({ ...old, ...patch }));
+  const selectMode = (mode: TestScenario['mode']) => set({ mode, partySize: mode === 'main' ? 6 : 3,
+    nodeType: 'battle', eventType: undefined, specialId: undefined, bossId: undefined });
   useBackAction(true, () => dispatch({ type: 'TITLE' }));
   const prof = config.mode === 'proficiency';
   const types = prof ? PROF_TYPES : MAIN_TYPES;
@@ -29,13 +31,16 @@ export function TestSetupScreen({ state, dispatch }: { state: GameState; dispatc
     <header><h1>关卡测试</h1><span>独立测试局 · 不写入存档</span><button onClick={() => dispatch({ type: 'TITLE' })}>返回首页</button></header>
     <div className="test-setup-body">
       <section className="test-setup-types" aria-label="关卡类型">
+        <div className="test-mode-entries" role="group" aria-label="测试模式">
+          <button aria-pressed={!prof} onClick={() => selectMode('main')}>主模式测试</button>
+          <button aria-pressed={prof} onClick={() => selectMode('proficiency')}>熟练度远征测试</button>
+        </div>
         {types.map(([id, label]) => <button key={id} aria-pressed={config.nodeType === id} onClick={() => set({ nodeType: id })}>{label}</button>)}
       </section>
       <section className="test-setup-config" aria-label="测试配置">
         <div className="test-setup-fields">
           <label>模式<select value={config.mode} onChange={event => {
-            const mode = event.target.value as TestScenario['mode'];
-            set({ mode, partySize: mode === 'main' ? 6 : 3, nodeType: 'battle', eventType: undefined, specialId: undefined, bossId: undefined });
+            selectMode(event.target.value as TestScenario['mode']);
           }}><option value="main">主模式</option><option value="proficiency">熟练度远征</option></select></label>
           {!prof && <label>地区<select value={config.region} onChange={event => set({ region: event.target.value as TestScenario['region'] })}>
             {Object.values(MAIN_REGIONS).map(region => <option key={region.id} value={region.id}>{region.name}</option>)}
@@ -62,7 +67,9 @@ export function TestSetupScreen({ state, dispatch }: { state: GameState; dispatc
             <label>侵蚀奖励<select value={config.corruptReward ?? 'gold'} onChange={event => set({ corruptReward: event.target.value as TestScenario['corruptReward'] })}><option value="gold">金币翻倍</option><option value="food">食物翻倍</option></select></label></>}
           {numberField('金币', 'gold', 0, 99999)}{numberField('每种食物／道具数量', 'itemCount', 0, 99)}
           {numberField('伙伴当前生命%', 'hpPercent', 1, 100)}{numberField('墓地伙伴数量', 'deadCount', 0, 3)}
-          <label>队伍人数<input type="number" min={1} max={prof ? 5 : 8} value={config.partySize ?? (prof ? 3 : 6)} onChange={event => set({ partySize: Number(event.target.value) })} /></label>
+          <label>队伍人数<input type="number" min={1} max={prof ? 5 : 10} value={config.partySize ?? (prof ? 3 : 6)} onChange={event => set({ partySize: Number(event.target.value) })} /></label>
+          {prof && <><label>初始技能强化（0～4）<input type="number" min={0} max={4} value={config.growthSkillLevel ?? 0} onChange={event => set({ growthSkillLevel: Number(event.target.value) })} /></label>
+            <label>每个技能实际投入<input type="number" min={0} max={9999} value={config.growthSkillPaid ?? 0} onChange={event => set({ growthSkillPaid: Number(event.target.value) })} /></label></>}
         </div>
         <label className="test-setup-party"><input type="checkbox" checked={config.customParty} onChange={event => set({ customParty: event.target.checked })} />自选伙伴／敌人（战斗类可配置双方）</label>
         <p>同种子可复现随机结果；非战斗关也能自选伙伴。熟练度伙伴预置100成长点，可测试学习、强化与转移。</p>

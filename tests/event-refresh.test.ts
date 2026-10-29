@@ -22,7 +22,7 @@ function carried(special = false, full = false): GameState {
   const state = eventState('egg');
   const choice = state.map.events.origin.choices[1];
   choice.carriedEgg = { ambush: false, special, monsterId: 'momo' };
-  if (full) state.roster = Array.from({ length: 8 }, (_, i) => makeUnit('kiki', true, (i % 3) as 0 | 1 | 2, false));
+  if (full) state.roster = Array.from({ length: 10 }, (_, i) => makeUnit('kiki', true, (i % 3) as 0 | 1 | 2, false));
   return choose(state, 'e2');
 }
 
@@ -90,7 +90,7 @@ describe('四类事件改版', () => {
   });
   it('即时孵化为一阶，满队伍进入处理界面', () => {
     const state = eventState('egg');
-    state.roster = Array.from({ length: 8 }, () => makeUnit('kiki', true, 0, false));
+    state.roster = Array.from({ length: 10 }, () => makeUnit('kiki', true, 0, false));
     const choice = state.map.events.origin.choices[0];
     const preview = gameReducer(state, { type: 'EVENT_HATCH_PREVIEW', choiceId: choice.id, monsterId: choice.monsterId! });
     const after = gameReducer(preview, { type: 'EVENT_HATCH_CONFIRM' });

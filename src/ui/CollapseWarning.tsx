@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { BATTLE_FATIGUE_START_ROUND } from '../game/core/battle';
 import './collapse-warning.css';
 
 export function CollapseWarning({ round, onConfirm }: { round: number; onConfirm: () => void }) {
@@ -9,8 +10,8 @@ export function CollapseWarning({ round, onConfirm }: { round: number; onConfirm
     return () => element.close?.();
   }, []);
   return <dialog ref={dialog} className="collapse-warning" aria-labelledby="collapse-warning-title" onCancel={event => { event.preventDefault(); onConfirm(); }}>
-    <h2 id="collapse-warning-title">{round === 1 ? '战场崩解规则' : '战场开始崩解'}</h2>
-    <p>从第15回合结束起，双方所有场上生物将受到递增真实伤害。{round === 15 ? '本回合结束首次触发。' : '请合理规划战斗回合。'}</p>
+    <h2 id="collapse-warning-title">战场崩解预警</h2>
+    <p>从第{BATTLE_FATIGUE_START_ROUND}回合结束起，双方所有场上生物将受到递增真实伤害。还有 {BATTLE_FATIGUE_START_ROUND - round} 回合，请合理规划战斗。</p>
     <p>首次5点，此后每回合增加1点。无视护盾、减伤与伤害上限，直接扣生命。</p>
     <button type="button" autoFocus onClick={onConfirm}>继续战斗</button>
   </dialog>;

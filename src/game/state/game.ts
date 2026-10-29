@@ -1,5 +1,6 @@
 import type { BattleState, FoodDef, Unit } from '../types';
 import type { MainRatingStats } from '../rating';
+import type { GrowthEncounterKind, GrowthEncounterPending } from './growth-encounters';
 import type { FormationPosition } from './formation';
 import type { MainRegionId } from '../data/regions';
 import { MAIN_REGIONS, MIXED_ACT_BOSS_POOLS as ACT_BOSS_POOLS } from '../data/regions';
@@ -90,7 +91,8 @@ export interface EventChoice {
   desc: string;
   kind: 'heal' | 'gold' | 'food' | 'recruit' | 'damage' | 'item' | 'none'
       | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status' | 'revive' | 'growthPoint'
-      | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace' | 'carryEgg' | 'coin' | 'purifyChoice' | 'feedRecruit';
+      | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace' | 'carryEgg' | 'coin' | 'purifyChoice' | 'feedRecruit' | 'growthEncounter';
+  growthEncounter?: GrowthEncounterKind;
   foodCost?: number;
   recruitBonus?: { stat: 'hp' | 'spd'; amount: number };
   coinResult?: 'heads' | 'tails';
@@ -147,9 +149,10 @@ export interface EventNode {
 }
 
 /** 奇遇关高级奖励类型 */
-export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item' | 'growthPoint' | 'slotUnlock' | 'recruit' | 'revive' | 'reviveHalf' | 'egg';
+export type SpecialRewardKind = 'evolve' | 'superevolve' | 'gold' | 'boost' | 'custom' | 'item' | 'growthPoint' | 'slotUnlock' | 'recruit' | 'revive' | 'reviveHalf' | 'egg' | 'growthEncounter';
 
 export interface SpecialReward {
+  growthEncounter?: GrowthEncounterKind;
   id: string;
   label: string;
   desc: string;
@@ -301,6 +304,8 @@ export interface TestScenario {
   hpPercent: number;
   deadCount: number;
   partySize?: number;
+  growthSkillLevel?: number;
+  growthSkillPaid?: number;
   customParty: boolean;
   nodeType: NodeType;
   eventType?: string;
@@ -410,6 +415,11 @@ export interface GameState {
   /** 独立测试进行中，禁止保存至正式存档。 */
   testRun?: boolean;
   testScenario?: TestScenario;
+  growthEncounterPending?: GrowthEncounterPending;
+  growthEncounterCandidates?: Record<string, string[]>;
+  growthEncounterCompleted?: string[];
+  masterTransmissions?: number;
+  lastGrowthEvent?: string;
   /** 测试局内存快照，不保存至正式存档；重置时还原选择与随机结果。 */
   testSnapshot?: Omit<GameState, 'testSnapshot'>;
   /** 自定义测试流程暂存：当前阶段（选我方/选敌方）、关卡类型、我方已选宠物 */
@@ -532,7 +542,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   greedy_eye: { name: '贪婪之眼', emoji: '👁️', desc: '战斗胜利直接结算金币+50%；商店刷新价格翻倍', unlockCondition: '单局结束时金币结余≥200' },
   metal_cauldron: { name: '金属坩埚', emoji: '⚗️', desc: '每个商人节点免费获得1个随机食物或道具（各50%）', unlockCondition: '单局商店累计消费≥300金币（含刷新）' },
   horn_of_plenty: { name: '丰收之角', emoji: '🌽', desc: '食物基础驯服效果×1.1，仍受原品阶概率上限限制', unlockCondition: '单局累计5只驯服所得生物达到最终进化形态（含直接捕获）' },
-  spare_candle: { name: '备用的蜡烛', emoji: '🕯️', desc: '每场首次我方阵亡时，自动以1血复活，全队限1次', unlockCondition: '以8只满编队伍、全局无宠物阵亡通关' },
+  spare_candle: { name: '备用的蜡烛', emoji: '🕯️', desc: '每场首次我方阵亡时，自动以1血复活，全队限1次', unlockCondition: '以至少8只伙伴、全局无宠物阵亡通关' },
   explorer_compass: { name: '探险家罗盘', emoji: '🧭', desc: '无需经过节点，即可随时查看本幕所有瞭望塔后三层的情报', unlockCondition: '单局实际访问5个不同瞭望塔节点' },
 };
 
@@ -541,7 +551,7 @@ export const RELIC_ORDER = ['traveler_charm', 'elite_badge', 'beast_master', 'gr
 export function growthRelicUnlocks(unlocks: Unlocks, stats?: Partial<Pick<RunStats, 'finalTamedUids' | 'petsLost' | 'watchtowerVisits'>>, victoryRosterSize?: number): Unlocks {
   const relics = [...unlocks.relics];
   if (new Set(stats?.finalTamedUids ?? []).size >= 5 && !relics.includes('horn_of_plenty')) relics.push('horn_of_plenty');
-  if (victoryRosterSize === 8 && stats?.petsLost === 0 && !relics.includes('spare_candle')) relics.push('spare_candle');
+  if ((victoryRosterSize ?? 0) >= 8 && stats?.petsLost === 0 && !relics.includes('spare_candle')) relics.push('spare_candle');
   if ((stats?.watchtowerVisits ?? 0) >= 5 && !relics.includes('explorer_compass')) relics.push('explorer_compass');
   return { ...unlocks, relics };
 }
@@ -571,14 +581,14 @@ export interface Unlocks {
 
 export const DEFAULT_UNLOCKS: Unlocks = { difficulties: ['normal'], relics: [], bestGrade: undefined, proficiencyUnlocked: false };
 
-export const ROSTER_MAX = 8;
+export const ROSTER_MAX = 10;
 /** 出战宠物上限（最大 5 只，实际受敌方数量限制：敌方 n 只时玩家最多 n+1 只） */
 export const FIELD_MAX = 5;
 /** 根据敌方数量计算我方出战上限（n+1，不超过 FIELD_MAX） */
 export const PROF_ROSTER_MAX = 5;
 export const PROF_FIELD_MAX = 3;
 
-/** 根据游戏模式返回队伍上限：远征5只，主模式8只 */
+/** 根据游戏模式返回队伍上限：熟练度5只，主模式10只 */
 export function getMaxRoster(runMode?: string): number {
   return runMode === 'proficiency' ? PROF_ROSTER_MAX : ROSTER_MAX;
 }
@@ -2217,7 +2227,7 @@ export function generateRewards(state: GameState): RewardChoice[] {
     const pool = state.act === 1 ? MAIN_REGIONS[region].evo1Pool : MAIN_REGIONS[region].evo2Pool;
     return [
       { id: 'boss-recruit', kind: 'recruit', label: '伙伴招募', desc: `从当前地区两位${state.act === 1 ? '二阶' : '传奇'}候选中选择一位`, recruitCandidates: shuffle(rng, [...pool]).slice(0, 2) },
-      { id: 'boss-boost', kind: 'boss_boost', label: '伙伴强化', desc: `指定伙伴永久生命＋${state.act === 1 ? 4 : 6}，或速度＋${state.act === 1 ? 1 : 2}` },
+      { id: 'boss-boost', kind: 'boss_boost', label: '伙伴强化', desc: `指定伙伴永久生命＋${state.act === 1 ? 4 : 6}，或速度＋2` },
       { id: 'boss-supply', kind: 'boss_supply', label: '远征补给', desc: state.act === 1 ? '2个随机普通食物＋1瓶指定药水' : '1个圣果＋2瓶指定药水', foodBundle: state.act === 1 ? [pick(rng, ['berry', 'meat', 'gem']), pick(rng, ['berry', 'meat', 'gem'])] : ['golden_fruit'] },
     ];
   }

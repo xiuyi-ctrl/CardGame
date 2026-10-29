@@ -80,12 +80,12 @@ it('喂食60%强化，生命与速度各半，效果永久；挑战与喂食满�
   expect(boosted).toBeGreaterThan(260); expect(boosted).toBeLessThan(340);
   expect(hp).toBeGreaterThan(100); expect(spd).toBeGreaterThan(100);
   const state = { ...event('精灵'), inventory: { berry: 2 } };
-  state.roster = Array.from({ length: 8 }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
+  state.roster = Array.from({ length: 10 }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
   state.lastFormation = undefined;
   state.field = state.roster.slice(0, 2).map(unit => unit.uid);
   for (const after of [choose(state, 'e2'), battleResult(state, true)]) {
     expect(after.screen).toBe('tame-overflow'); expect(after.tameOverflow).toHaveLength(1);
-    expect(after.tameOverflowReturn).toBe('map'); expect(after.roster).toHaveLength(8);
+    expect(after.tameOverflowReturn).toBe('map'); expect(after.roster).toHaveLength(10);
   }
 });
 

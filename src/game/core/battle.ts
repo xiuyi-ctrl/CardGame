@@ -38,6 +38,8 @@ const SOFTMAX_TEMP = 12;
 
 /** 第15回合末起，战场崩解直接扣生命，替代旧攻击疲劳增伤。 */
 export const BATTLE_FATIGUE_START_ROUND = 15;
+/** 崩解触发前两回合首次预警。 */
+export const BATTLE_COLLAPSE_WARNING_ROUND = BATTLE_FATIGUE_START_ROUND - 2;
 export function battleCollapseDamage(round: number): number {
   return round >= BATTLE_FATIGUE_START_ROUND ? Math.max(0, round - 10) : 0;
 }
@@ -178,7 +180,8 @@ export function updateUnitSkills(unit: Unit, newSkills: string[]): Unit {
       if (def.uses !== undefined) newSkillUses[id] = def.uses;
     }
   }
-  return { ...unit, skills: newSkills, skillUses: newSkillUses };
+  const paid = unit.skillEnhancePaid && Object.fromEntries(Object.entries(unit.skillEnhancePaid).filter(([slot]) => unit.skills[Number(slot)] === newSkills[Number(slot)]));
+  return { ...unit, skills: newSkills, skillUses: newSkillUses, ...(paid ? { skillEnhancePaid: paid } : {}) };
 }
 
 /** 获取单位的被动技能定义。当 chainMaster 被链接时，返回链接单位的被动 */
@@ -556,12 +559,11 @@ function drawMimicSkills(b: BattleState): BattleState {
     if (unit.hp <= 0 || getPassive(unit.passive)?.kind !== 'mimic') return unit;
     const remaining = [...candidates];
     const skills: string[] = [];
-    for (let i = 0; i < 4; i++) {
-      const choices = remaining.length ? remaining : candidates;
+    for (let i = 0; i < Math.min(4, candidates.length); i++) {
       b = useRng(b, (value, next) => {
-        const index = Math.floor(value * choices.length);
-        skills.push(choices[index]);
-        if (remaining.length) remaining.splice(index, 1);
+        const index = Math.floor(value * remaining.length);
+        skills.push(remaining[index]);
+        remaining.splice(index, 1);
         return next;
       });
     }
@@ -3285,6 +3287,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
       moved = pushLog(moved, `${actor.name} 使用「余烬迁移」，${destination.name} 灼烧 ${amount} 层`, sideOf(actor), actor.uid, destination.uid, ['burn']);
       return notifyBurnRemoved(moved, source, amount);
     });
+    return markActed(consumeSkillUse(applySkillCooldown(nb, actor, skill), actor, skill.id), actor.uid);
   // 锁链引爆：对所有被锁链连接的敌方单位造成伤害（独立于 kind 判断，避免 attack kind 走入通用攻击分支打自身）
   } else if (skill.id === 'chain_activate') {
     const enemies = enemiesOf(nb, actor);

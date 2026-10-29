@@ -59,7 +59,7 @@ describe('蛋生生态轮廓解锁', () => {
     for (const monsterId of SPECIAL_EGG_POOL) {
       it.each([false, true])(`${region} ${monsterId} 真正孵化时解锁，满员=%s`, full => {
         const initial = formation();
-        const roster = full ? Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)) : initial.roster;
+        const roster = full ? Array.from({ length: 10 }, () => makeUnit('momo', true, 0, false)) : initial.roster;
         const state: GameState = { ...initial, region, screen: 'event', currentNodeId: 'hatch', roster,
           carriedEggs: [{ id: 'special-egg', monsterId, special: true, remaining: 1, passedNodeIds: [] }],
           map: { ...initial.map, events: { hatch: { title: '过关', desc: '', choices: [{ id: 'done', label: '完成', desc: '', kind: 'none' }] } } } };

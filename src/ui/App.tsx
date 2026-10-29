@@ -19,6 +19,8 @@ import { getPassive } from '../game/data/passives';
 import { computeStats, makeUnit } from '../game/core/battle';
 import { UnitCard, SkillTag, PetIcon, PixelCreature, BattlePixelSprite, skillBrief } from './components';
 import { GrowthScreen } from './GrowthScreen';
+import { GrowthEncounterScreen } from './GrowthEncounterScreen';
+import { growthEncounterEligible, growthEncounterUnavailableReason } from '../game/state/growth-encounters';
 import { BlacksmithScreen } from './BlacksmithScreen';
 import { EnhanceStoneScreen } from './EnhanceStoneScreen';
 import { EnhanceResetScreen } from './EnhanceResetScreen';
@@ -91,6 +93,15 @@ function formationImage(speciesId: string, image?: string): string | undefined {
   return FORMATION_SPRITES[speciesId] ?? (speciesId === 'momo' ? '/battle-momo.png' : image);
 }
 
+const CODEX_IMAGES = ['/formation-camp.png', homeCodexIcon,
+  new URL('./assets/popup-terminal-frame.svg', import.meta.url).href,
+  new URL('./assets/starter-stat-life.png', import.meta.url).href,
+  new URL('./assets/starter-stat-speed.png', import.meta.url).href, ...UI_SYMBOL_IMAGES,
+  ...Object.values(MONSTERS).flatMap(species => {
+    const image = formationImage(species.id, species.image);
+    return image ? [image] : [];
+  })];
+
 function screenImages(screen: GameState['screen'], state: GameState): string[] {
   switch (screen) {
     case 'title':
@@ -136,6 +147,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         ...creatureImages(state.battle?.playerUnits ?? []), ...creatureImages(state.battle?.enemyUnits ?? [])];
     case 'reward':
       return ['/roster-camp-background.png', '/reward-icons/gold.png', '/reward-icons/food.png', '/reward-icons/heal.png', '/starter-growth-icons/starter-paw.png', '/battle-stat-icons/life.png', '/battle-stat-icons/speed.png', '/page-special-icons/victory-swords.png',
+        ...state.roster.flatMap(unit => { const image = formationImage(unit.speciesId, unit.image); return image ? [image] : []; }),
         ...state.rewards.flatMap((reward) => {
           return (reward.recruitCandidates ?? []).flatMap((id) => {
             const species = getMonster(id);
@@ -175,6 +187,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
       const backgrounds = { event: 'event-forest', special: 'encounter-shrine', 'tame-overflow': 'partner-camp',
         inter_act: 'interact-sunset', victory: 'victory-dawn', gameover: 'defeat-dusk' };
       return [`${FLOW_ART}/${backgrounds[screen]}.png`, '/reward-icons/gold.png', '/reward-icons/heal.png', '/reward-icons/food.png',
+        ...(screen === 'event' && state.runMode === 'proficiency' ? [`${FLOW_ART}/encounter-shrine.png`] : []),
         ...FLOW_ICON_NAMES.map(name => `${FLOW_ART}/icons/${name}.png`), ...Object.values(BACKPACK_ITEM_ART),
         ...[...state.roster, ...(state.tameOverflow ?? [])].flatMap(unit => {
           const image = formationImage(unit.speciesId, unit.image);
@@ -1054,7 +1067,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
             </button>
             <div className="home-menu-divider" aria-hidden="true"><span><img src={homePawIcon} alt="" /></span></div>
             <div className="home-menu-secondary">
-              <button onClick={() => setShowCodex(true)}><img src={homeCodexIcon} alt="" aria-hidden="true" /><span>生物图鉴</span></button>
+              <button onPointerEnter={() => { void preloadImages(CODEX_IMAGES); }} onFocus={() => { void preloadImages(CODEX_IMAGES); }} onClick={() => setShowCodex(true)}><img src={homeCodexIcon} alt="" aria-hidden="true" /><span>生物图鉴</span></button>
               <button onClick={openSaveMgmt}><img src={homeSaveIcon} alt="" aria-hidden="true" /><span>存档管理</span></button>
               <button onClick={() => {
                 const slotState = slots.find((s) => s.slot === selectedSlot);
@@ -1186,14 +1199,14 @@ const CODEX_GROUPS: { key: string; label: string; match: (m: MonsterSpecies) => 
 
 export function CodexScreen({ onClose }: { onClose: () => void }) {
   const mobile = useMobileLayout();
+  const [ready, setReady] = useState(() => CODEX_IMAGES.every(src => !!getDecodedImage(src)));
   const [mobileDetail, setMobileDetail] = useState(false);
   useBackAction(mobile && mobileDetail, () => setMobileDetail(false), 1);
   useEffect(() => {
-    void preloadImages(['/formation-camp.png', homeCodexIcon, ...(mobile ? [] : Object.values(MONSTERS)).flatMap(species => {
-      const image = formationImage(species.id, species.image);
-      return image ? [image] : [];
-    })]);
-  }, [mobile]);
+    let active = true;
+    void preloadImages(CODEX_IMAGES).then(() => { if (active) setReady(true); });
+    return () => { active = false; };
+  }, []);
   const groups = useMemo(
     () =>
       CODEX_GROUPS.map((g) => ({
@@ -1213,19 +1226,19 @@ export function CodexScreen({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(`[data-codex-id="${selectedId}"]`);
     el?.scrollIntoView?.({ block: 'nearest' });
-  }, [selectedId]);
+  }, [selectedId, ready]);
   const sp = getMonster(selectedId);
-  useEffect(() => {
-    if (!mobile) return;
-    const image = formationImage(sp.id, sp.image);
-    if (image) void preloadImages([image]);
-  }, [mobile, sp.id]);
   const stats = computeStats(sp.id);
   const passive = getPassive(sp.passive);
   const next = nextStage(sp.id);
   const rankLabel = sp.eggBorn ? '神秘生物' : sp.id.startsWith('custom_') ? '造物' : (CODEX_RANK_LABEL[sp.rank] ?? '');
   const rankTone = sp.id.startsWith('custom_') ? '' : sp.rank === 2 ? ' rank-chip-elite' : sp.rank === 3 ? ' rank-chip-legend' : sp.rank === 4 ? ' rank-chip-boss' : '';
   const tameable = sp.rank !== 4;
+
+  if (!ready) return <div className="screen-assets-loading codex-assets-loading" aria-busy="true">
+    <p role="status" aria-live="polite">正在准备生物图鉴…</p>
+    <button type="button" onClick={onClose}>返回</button>
+  </div>;
 
   return (
     <div className={`codex-root flow-screen codex-terminal${mobileDetail ? ' codex-mobile-detail' : ''}`}>
@@ -1920,12 +1933,12 @@ function BossRewardChoice({ state, reward, dispatch }: { state: GameState; rewar
   const [stat, setStat] = useState<'hp' | 'spd'>('hp');
   const [potion, setPotion] = useState('atk_up');
   const boost = reward.kind === 'boss_boost';
-  const amount = stat === 'hp' ? (state.act === 1 ? 4 : 6) : (state.act === 1 ? 1 : 2);
+  const amount = stat === 'hp' ? (state.act === 1 ? 4 : 6) : 2;
   return <div className="flow-screen flow-special-screen boss-reward-choice-screen">
     <header className="flow-header flow-frame"><h1>首领战利品 · {reward.label}</h1><span>第{state.act}幕 · 金币 {state.gold}</span></header>
     <main className="flow-choice-panel flow-frame boss-reward-form">
-      <h2>{reward.desc}</h2>
-      {boost ? <><label>选择伙伴<select aria-label="强化伙伴" value={uid} onChange={event => setUid(event.target.value)}>{state.roster.filter(u => u.hp > 0).map((u, index) => <option key={u.uid} value={u.uid}>{index + 1}. {u.name} · 生命{u.maxHp} · 速度{u.spd}</option>)}</select></label><div className="panel-row"><button aria-pressed={stat === 'hp'} className={stat === 'hp' ? 'primary' : ''} onClick={() => setStat('hp')}>生命＋{state.act === 1 ? 4 : 6}</button><button aria-pressed={stat === 'spd'} className={stat === 'spd' ? 'primary' : ''} onClick={() => setStat('spd')}>速度＋{state.act === 1 ? 1 : 2}</button></div></> : <label>选择药水<select aria-label="补给药水" value={potion} onChange={event => setPotion(event.target.value)}>{['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'].map(id => <option key={id} value={id}>{ITEMS[id].name} ×{state.act === 1 ? 1 : 2}</option>)}</select></label>}
+      <h2>{boost ? `指定伙伴永久生命＋${state.act === 1 ? 4 : 6}，或速度＋2` : reward.desc}</h2>
+      {boost ? <><div className="boss-boost-partners" role="group" aria-label="选择强化伙伴">{state.roster.filter(u => u.hp > 0).map(u => <button type="button" key={u.uid} aria-pressed={uid === u.uid} onClick={() => setUid(u.uid)}><PetIcon image={formationImage(u.speciesId, u.image)} emoji={u.emoji} name={u.name} /><span><strong>{u.name}</strong><small>生命 {u.maxHp} · 速度 {u.spd}</small></span></button>)}</div><div className="panel-row"><button aria-pressed={stat === 'hp'} className={stat === 'hp' ? 'primary' : ''} onClick={() => setStat('hp')}>生命＋{state.act === 1 ? 4 : 6}</button><button aria-pressed={stat === 'spd'} className={stat === 'spd' ? 'primary' : ''} onClick={() => setStat('spd')}>速度＋2</button></div></> : <label>选择药水<select aria-label="补给药水" value={potion} onChange={event => setPotion(event.target.value)}>{['atk_up', 'spd_up', 'hp_up', 'atk_down', 'spd_down', 'hp_down'].map(id => <option key={id} value={id}>{ITEMS[id].name} ×{state.act === 1 ? 1 : 2}</option>)}</select></label>}
       <button className="flow-primary" disabled={boost && !uid} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id, ...(boost ? { targetUid: uid, stat } : { potionId: potion }) })}>{boost ? `确认强化${stat === 'hp' ? '生命' : '速度'}＋${amount}` : '领取补给'}</button>
     </main>
   </div>;
@@ -1965,11 +1978,12 @@ export function RewardScreen({ state, dispatch }: { state: GameState; dispatch: 
           </div> :
           <div className="reward-choice-list" style={{ gridTemplateColumns: `repeat(${Math.max(1, state.rewards.length)}, minmax(0, 1fr))` }}>
             {state.rewards.map((reward) => {
-              return <button key={reward.id} type="button" className={`reward-choice reward-choice-${reward.kind}`} aria-label={`领取：${reward.label}，${reward.desc}`} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id })}>
+              const desc = reward.kind === 'boss_boost' ? `指定伙伴永久生命＋${state.act === 1 ? 4 : 6}，或速度＋2` : reward.desc;
+              return <button key={reward.id} type="button" className={`reward-choice reward-choice-${reward.kind}`} aria-label={`领取：${reward.label}，${desc}`} onClick={() => dispatch({ type: 'PICK_REWARD', rewardId: reward.id })}>
                 <span className={`reward-choice-icon reward-choice-icon-${reward.kind}`} aria-hidden="true">
                   <img src={reward.kind === 'recruit' ? '/starter-growth-icons/starter-paw.png' : reward.kind === 'boss_boost' ? '/battle-stat-icons/life.png' : reward.kind === 'boss_supply' ? '/reward-icons/food.png' : `/reward-icons/${reward.kind}.png`} alt="" draggable={false} />
                 </span>
-                <span className="reward-choice-copy"><strong>{reward.label}</strong><small>{reward.desc}</small></span>
+                <span className="reward-choice-copy"><strong>{reward.label}</strong><small>{desc}</small></span>
                 <span className="reward-claim">领取</span>
               </button>;
             })}
@@ -2653,6 +2667,7 @@ function TameOverflowScreen({ state, dispatch }: { state: GameState; dispatch: D
 
 export function EventScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
   const [coinChoice, setCoinChoice] = useState<string>();
+  if (state.growthEncounterPending) return <GrowthEncounterScreen state={state} dispatch={dispatch} />;
   const ev = state.map.events[state.currentNodeId];
   if (!ev) return null;
   const hatch = state.pendingEventHatch;
@@ -2669,7 +2684,13 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
         <div className="flow-choices">
           {ev.choices.map((c) => {
             const cost = c.goldDelta ?? 0;
+            const desc = ev.title === '流浪精灵' && c.kind === 'battle'
+              ? '战斗（1只生物）；胜利获得该生物和20金币，失败全队损失20%生命'
+              : ev.title === '流浪精灵' && c.kind === 'feedRecruit'
+                ? '消耗2个随机持有的捕捉食物，获得该生物；60%概率永久+1速度或+2生命（强化内各半）'
+                : c.desc;
             const cantAfford = state.gold + cost < 0 || (c.consumeFood && c.foodId && (state.inventory[c.foodId] ?? 0) <= 0)
+              || (c.kind === 'growthEncounter' && !!c.growthEncounter && !growthEncounterEligible(state, c.growthEncounter))
               || (c.consumeRandomFood && Object.keys(FOODS).filter(isCaptureFood).reduce((sum, id) => sum + (state.inventory[id] ?? 0), 0) < (c.foodCost ?? 1))
               || ((c.kind === 'coin' || c.kind === 'purifyChoice' || c.kind === 'boost') && !state.roster.some(unit => unit.hp > 0))
               || (c.kind === 'sacrifice' && state.roster.length <= 1);
@@ -2697,7 +2718,7 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
                 }}
               >
               <img className="flow-choice-icon" src={flowChoiceArt(c.kind, c.itemId ?? c.foodId)} alt="" draggable={false} />
-              <span className="flow-choice-copy"><strong>{c.label}</strong><span>{ev.title === '宠物遗迹' && c.label === '探索' ? '未知' : c.desc}</span></span>
+              <span className="flow-choice-copy"><strong>{c.label}</strong><span>{ev.title === '宠物遗迹' && c.label === '探索' ? '未知' : desc}</span>{c.growthEncounter && <span>{growthEncounterUnavailableReason(state, c.growthEncounter)}</span>}</span>
             </button>
             );
           })}
@@ -2745,9 +2766,11 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
 }
 
 export function SpecialScreen({ state, dispatch }: { state: GameState; dispatch: Dispatch<GameAction> }) {
+  if (state.growthEncounterPending) return <GrowthEncounterScreen state={state} dispatch={dispatch} />;
   const sp = state.map.specials[state.currentNodeId];
   if (!sp) return null;
   const disabled = (r: SpecialReward) =>
+    (r.kind === 'growthEncounter' && !!r.growthEncounter && !growthEncounterEligible(state, r.growthEncounter)) ||
     (r.kind === 'evolve' || r.kind === 'superevolve') && !state.roster.some(u => nextStage(u.speciesId) && !evolutionLockReason(state, u.speciesId, r.toFinal));
   return (
     <div className="flow-screen flow-special-screen">
@@ -2766,7 +2789,7 @@ export function SpecialScreen({ state, dispatch }: { state: GameState; dispatch:
               onClick={disabled(r) ? undefined : () => dispatch({ type: 'SPECIAL_CHOICE', rewardId: r.id })}
             >
               <img className="flow-choice-icon" src={flowChoiceArt(r.kind, r.itemId)} alt="" draggable={false} />
-              <span className="flow-choice-copy"><strong>{r.label}</strong><span>{r.desc}</span></span>
+              <span className="flow-choice-copy"><strong>{r.label}</strong><span>{r.desc}</span>{r.growthEncounter && <span>{growthEncounterUnavailableReason(state, r.growthEncounter)}</span>}</span>
             </button>
           ))}
         </div>

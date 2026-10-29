@@ -36,13 +36,13 @@ describe('百变兽万变抽技', () => {
     expect(new Set(b.playerUnits[0].skills).size).toBe(4);
     b.playerUnits[0].skills.forEach(id => expect(pool).toContain(id));
   });
-  it('足够时无放回；不足先抽齐不同技能，再重复补足四格', () => {
+  it('最多抽四个不同技能，不足时保留实际数量，不重复补齐', () => {
     for (let seed = 1; seed <= 100; seed++) {
       const unique = battle(['punch', 'aqua_shot', 'bite', 'tail', 'growth_bind'], seed);
       expect(unique.playerUnits[0].skills).toHaveLength(4);
       expect(new Set(unique.playerUnits[0].skills).size).toBe(4);
       const short = battle(['punch', 'punch', 'aqua_shot'], seed).playerUnits[0].skills;
-      expect(short).toHaveLength(4); expect(new Set(short.slice(0, 2)).size).toBe(2);
+      expect(short).toHaveLength(2); expect(new Set(short).size).toBe(2);
       expect(short.every(id => id === 'punch' || id === 'aqua_shot')).toBe(true);
     }
   });
@@ -55,8 +55,8 @@ describe('百变兽万变抽技', () => {
   it('零候选时采用3伤爪击保底，双方百变兽不会复制彼此上一场技能', () => {
     const old = { ...beast(), skills: ['growth_impact'], skillEnhancements: { 0: 3 } };
     const b = createBattle([old], [{ speciesId: 'mimic_beast' }], 1);
-    for (const unit of [...b.playerUnits, ...b.enemyUnits]) expect(unit.skills).toEqual(Array(4).fill('claw_attack'));
-    expect(b.rngCount).toBe(8); expect(b.playerUnits[0].skillEnhancements).toBeUndefined();
+    for (const unit of [...b.playerUnits, ...b.enemyUnits]) expect(unit.skills).toEqual(['claw_attack']);
+    expect(b.rngCount).toBe(2); expect(b.playerUnits[0].skillEnhancements).toBeUndefined();
   });
   it('不继承来源强化、冷却、剩余次数、生命速度或层数', () => {
     const foe = { ...source(['nine_tail_wildfire']), skillEnhancements: { 0: 3 }, skillUses: { nine_tail_wildfire: 0 }, skillCooldowns: { nine_tail_wildfire: 10 },
@@ -74,12 +74,20 @@ describe('百变兽万变抽技', () => {
     b = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'growth_bind', b.enemyUnits[0].uid));
     expect(b.enemyUnits[0].hp).toBe(100 - SKILLS.growth_bind.damage!);
   });
-  it('重复技能同名冷却与次数共享，不能凭四格获得四倍次数', () => {
+  it('单一候选只抽取一个技能，正常消耗次数和冷却', () => {
     let b = battle(['nine_tail_wildfire']); b.enemyUnits[0].acted = true;
     b = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'nine_tail_wildfire'));
     expect(b.playerUnits[0].skillUses?.nine_tail_wildfire).toBe(SKILLS.nine_tail_wildfire.uses! - 1);
     expect(b.playerUnits[0].skillCooldowns?.nine_tail_wildfire).toBe(1);
     expect(playerSkill(b, b.playerUnits[0].uid, 'nine_tail_wildfire')).toBe(b);
+  });
+  it.each([1, 2, 3])('只有%d种可复制技能时，每种恰好保留一个', count => {
+    const skills = ['punch', 'aqua_shot', 'bite'].slice(0, count);
+    for (let seed = 1; seed <= 25; seed++) {
+      const drawn = battle([...skills, ...skills], seed).playerUnits[0].skills;
+      expect(drawn).toHaveLength(count);
+      expect([...drawn].sort()).toEqual([...skills].sort());
+    }
   });
   it('战斗读档保留四技能和随机游标，确认预览不会重抽', () => {
     const b = battle(['punch', 'aqua_shot', 'bite', 'tail', 'growth_bind']);
@@ -102,7 +110,7 @@ describe('百变兽万变抽技', () => {
   it('每场重抽，旧技能不流入新池，相同种子和输入可复现', () => {
     const first = battle(['punch']);
     const next = createBattle(first.playerUnits, [], 2, { mirrorUnits: [source(['aqua_shot'])] });
-    expect(next.playerUnits[0].skills).toEqual(Array(4).fill('aqua_shot'));
+    expect(next.playerUnits[0].skills).toEqual(['aqua_shot']);
     expect(battle(['punch', 'aqua_shot', 'bite', 'tail', 'growth_bind'], 31).playerUnits[0].skills)
       .toEqual(battle(['punch', 'aqua_shot', 'bite', 'tail', 'growth_bind'], 31).playerUnits[0].skills);
   });

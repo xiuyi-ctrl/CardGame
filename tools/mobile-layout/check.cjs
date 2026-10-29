@@ -42,8 +42,10 @@ app.whenReady().then(async () => {
   for (const name of ['chest-creature', 'chest-creature-overflow']) oneScreen.add(name);
   oneScreen.add('battle-summary-long');
   oneScreen.add('proficiency-selected');
+  for (const name of ['roster-ten', 'postbattle-ten', 'overflow-ten', 'formation-ten', 'boss-boost-ten']) oneScreen.add(name);
   oneScreen.add('watchtower-cards');
   for (const name of ['watchtower-utilities', 'watchtower-challenges', 'watchtower-training']) oneScreen.add(name);
+  for (const name of names.filter(name => name.startsWith('growth-encounter-') || name.startsWith('growth-event-') || name.startsWith('growth-special-'))) oneScreen.add(name);
   const results = [];
   for (const [width, height] of sizes) {
     win.setContentSize(width, height);
@@ -54,6 +56,8 @@ app.whenReady().then(async () => {
       errors.length = 0;
       try {
         const setup = await js(`window.preview.render(${JSON.stringify(name)},${mobile})`);
+        for (let i = 0; i < 100 && await js("!!document.querySelector('.screen-assets-loading')"); i++) await new Promise(r => setTimeout(r, 50));
+        if (await js("!!document.querySelector('.screen-assets-loading')")) throw Error('Screen assets did not become ready');
         await new Promise(r => setTimeout(r, 150));
         if (name.startsWith('battle-order-')) {
           await js('Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))])');
@@ -82,6 +86,27 @@ app.whenReady().then(async () => {
           await fs.writeFile(path.join(output, `${name}-${width}x${height}-confirm.png`), (await win.webContents.capturePage()).toPNG());
         }
         if (height > width) await js(`document.querySelector('.mobile-rotate-hint button')?.click()`);
+        if (name.startsWith('gauntlet-')) {
+          const poolCheck = await js(`(() => { const pool = document.querySelector('.wheel-pool'); const cards = [...pool.children].filter(el => el.tagName === 'BUTTON'); if (!cards.length) return true; const tops = cards.map(el => el.getBoundingClientRect().top); if (Math.max(...tops)-Math.min(...tops)>1) return false; pool.scrollLeft = pool.scrollWidth; const last = cards.at(-1).getBoundingClientRect(); const bounds = pool.getBoundingClientRect(); const reached = last.right <= bounds.right+2 && last.left >= bounds.left-2 && last.height >= 44; pool.scrollLeft = 0; return reached; })()`);
+          if (!poolCheck) throw Error('Waiting partners must stay in one row and scroll to the last card');
+        }
+        if (['proficiency-select', 'proficiency-selected'].includes(name)) {
+          const selectedBefore = await js(`JSON.stringify([...document.querySelectorAll('.starter-choice')].map(el => el.getAttribute('aria-pressed')))`);
+          for (let card = 0; card < 6; card++) {
+            const points = await js(`(() => { const card = document.querySelectorAll('.proficiency-contract')[${card}]; const a = card.querySelector('.starter-choice').getBoundingClientRect(); const b = card.querySelector('.contract-details').getBoundingClientRect(); return { card: {x:a.x+a.width/2,y:a.y+a.height/2}, button: {x:b.x+b.width/2,y:b.y+b.height/2} }; })()`);
+            await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...points.card });
+            await new Promise(r => setTimeout(r, 100));
+            const reachable = await js(`(() => { const el = document.querySelectorAll('.contract-details')[${card}]; const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)); })()`);
+            if (!reachable) throw Error(`Hovered card hides details button ${card}`);
+            await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...points.button });
+            await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', ...points.button, button: 'left', clickCount: 1 });
+            await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', ...points.button, button: 'left', clickCount: 1 });
+            await new Promise(r => setTimeout(r, 80));
+            if (!await js(`!!document.querySelector('.watchtower-detail-overlay [role="dialog"]')`)) throw Error(`Details click failed ${card}`);
+            await js(`document.querySelector('[aria-label="关闭生物详情"]').click()`);
+          }
+          if (selectedBefore !== await js(`JSON.stringify([...document.querySelectorAll('.starter-choice')].map(el => el.getAttribute('aria-pressed')))`)) throw Error('Details changed creature selection');
+        }
         await js('Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))])');
         const toastFrames = await js(`(async () => {
           const toast = document.querySelector('.toast');
@@ -120,7 +145,7 @@ app.whenReady().then(async () => {
           const rect = el => { const r = el.getBoundingClientRect(); return { x:r.x, y:r.y, w:r.width, h:r.height }; };
           const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
           const outside = el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth+1 || r.top < -1 || r.bottom > innerHeight+1; };
-          const scrollParent = el => { for(let p=el.parentElement; p && p!==document.body; p=p.parentElement) if(/auto|scroll/.test(getComputedStyle(p).overflowY) && p.scrollHeight>p.clientHeight+1) return p; return null; };
+          const scrollParent = el => { for(let p=el.parentElement; p && p!==document.body; p=p.parentElement) if((/auto|scroll/.test(getComputedStyle(p).overflowY) && p.scrollHeight>p.clientHeight+1) || (/auto|scroll/.test(getComputedStyle(p).overflowX) && p.scrollWidth>p.clientWidth+1)) return p; return null; };
           const masks = [...document.querySelectorAll('.confirm-overlay,.save-mgmt-overlay,.battle-overlay-mask,.growth-modal-overlay,.overlay,.mobile-system-overlay,.mobile-log-open,.watchtower-detail-overlay')].filter(visible).sort((a,b)=>Number(getComputedStyle(a).zIndex||0)-Number(getComputedStyle(b).zIndex||0));
           const topMask = document.querySelector('dialog:modal') ?? masks.at(-1);
           const buttons = [...(topMask??document).querySelectorAll('button')].filter(visible);
@@ -147,6 +172,11 @@ app.whenReady().then(async () => {
           return {viewport:[innerWidth,innerHeight],mobile:document.documentElement.classList.contains('mobile-ui'),clipped,concealed,horizontal,scrolls,oneScreenOverflow,overlappingActions,portraitOverlap,scrollTails,smallTargets,blocked,toastBounds,toastTooLarge,buttons:buttons.length, text:document.getElementById('root').textContent.slice(0,160)};
         })()`);
         const file = `${name}-${width}x${height}${mobile ? '' : '-desktop'}.png`;
+        if (name.startsWith('test-')) {
+          await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+          await win.webContents.capturePage();
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
         await fs.writeFile(path.join(output, file), (await win.webContents.capturePage()).toPNG());
         results.push({ name, width, height, file, ...metrics, toastFrames, resizeChecks, errors: [...errors] });
         console.log(`${name} ${width}x${height}: clipped=${metrics.clipped.length} concealed=${metrics.concealed.length} horizontal=${metrics.horizontal.length} errors=${errors.length}`);

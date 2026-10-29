@@ -75,10 +75,10 @@ describe('捕获表现与原规则', () => {
   });
   it('满队伍捕获仍按原规则进入预备队，食物仅扣一次，动画不改变随机计数', () => {
     const b = fixture();
-    const roster = Array.from({ length: 8 }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
+    const roster = Array.from({ length: 10 }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
     const state = { ...createInitialState(), screen: 'battle' as const, battle: b, roster, inventory: { berry: 2 } };
     const after = gameReducer(state, { type: 'PLAYER_TAME', foodId: 'berry', enemyUid: b.enemyUnits[0].uid });
-    expect(after.roster).toHaveLength(8);
+    expect(after.roster).toHaveLength(10);
     expect(after.battle?.pendingTame).toHaveLength(1);
     expect(after.inventory.berry).toBe(1);
     expect(after.battle?.rngCount).toBe(b.rngCount + 1);

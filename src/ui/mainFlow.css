@@ -178,6 +178,17 @@
 .boss-reward-form label { display: grid; gap: 6px; }
 .boss-reward-form select { min-height: 44px; width: 100%; font: inherit; padding: 6px; }
 .boss-reward-form button { min-height: 44px; }
+.boss-boost-partners { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.boss-boost-partners button { display: flex; align-items: center; gap: 6px; padding: 6px; min-width: 0; border: 2px solid #8a979b; background: #fff9e9; color: #101c2c; text-align: left; }
+.boss-boost-partners button[aria-pressed="true"] { border-color: #087c70; background: #def1df; box-shadow: inset 0 0 0 1px #087c70; }
+.boss-boost-partners .pet-icon-inline { width: 42px; height: 42px; flex: none; object-fit: contain; image-rendering: pixelated; }
+.boss-boost-partners button > span { display: grid; gap: 3px; min-width: 0; }
+.boss-boost-partners strong { font-size: 16px; overflow-wrap: anywhere; }
+.boss-boost-partners small { font-size: 12px; }
+.mobile-ui .boss-boost-partners { gap: 4px; }
+.mobile-ui .boss-boost-partners button { padding: 3px; gap: 3px; }
+.mobile-ui .boss-boost-partners .pet-icon-inline { width: 28px; height: 28px; }
+.mobile-ui .boss-boost-partners strong { font-size: 12px; }
 .mobile-ui .boss-reward-form { gap: 6px; padding: 8px; min-height: 0; overflow-y: auto; }
 
 .boss-guaranteed { color: #536574; margin: 4px 0 0; font-size: 14px; }

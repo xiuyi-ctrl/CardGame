@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { createBattle, makeUnit, playerEndTurn, playerSkill } from '../src/game/core/battle';
 import { getSkill } from '../src/game/data/skills';
 import { impactPops } from '../src/ui/battleFeedback';
-import { HIT_DELAY_MS, useBattleFx } from '../src/ui/battleFx';
+import { HIT_DELAY_MS, parseEvent, useBattleFx } from '../src/ui/battleFx';
 import { PausableTimers } from '../src/ui/pausableTimers';
 
 function fixture(skill: string, count = 1) {
@@ -22,6 +22,14 @@ function skillLog(battle: ReturnType<typeof fixture>, skill: string) {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('实际战斗反馈数值', () => {
+  it('状态施加飘字只含图标和数字，不含状态名称', () => {
+    const pops = impactPops({ hpLoss: 0, shieldLoss: 0, healing: 0, shieldGain: 0, shieldBroken: false, addedStatuses: { burn: 2, poison: 3, atkDown: 1 } }, false, false, undefined, true);
+    expect(pops).toEqual([
+      { text: '+2', heal: false, kind: 'status', statusIcon: 'burn' },
+      { text: '+3', heal: false, kind: 'status', statusIcon: 'poison' },
+      { text: '+1', heal: false, kind: 'status', statusIcon: 'atkDown' },
+    ]);
+  });
   it('扣盾与扣血分开记录，飘字合并为同一次伤害', () => {
     const b = fixture('punch');
     b.enemyUnits[0].shield = 2;
@@ -232,7 +240,7 @@ describe('起手、命中与清理', () => {
     expect(result.current.pops.some(pop => pop.uid === b.enemyUnits[0].uid && pop.kind === 'status')).toBe(false);
     expect(result.current.fx[b.enemyUnits[0].uid]?.cls).not.toBe('fx-debuff');
   });
-  it('纯附加灼烧不播放施法或受击动画，状态仍随快照揭示', () => {
+  it('纯附加灼烧对友方也播放施法与状态附加动画', () => {
     vi.useFakeTimers();
     const b = fixture('pass_flame');
     const uid = b.playerUnits[0].uid;
@@ -240,12 +248,34 @@ describe('起手、命中与清理', () => {
     const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
     act(() => rerender({ battle: after }));
     act(() => vi.advanceTimersByTime(0));
-    expect(result.current.fx).toEqual({});
+    expect(result.current.fx[uid]?.cls).toBe('fx-status-cast');
     expect(result.current.pops).toHaveLength(0);
-    expect(result.current.statusMap?.[uid]?.some(status => status.kind === 'burn')).toBe(true);
     act(() => vi.advanceTimersByTime(HIT_DELAY_MS));
-    expect(result.current.fx).toEqual({});
-    expect(result.current.pops).toHaveLength(0);
+    expect(result.current.fx[uid]?.cls).toBe('fx-debuff');
+    expect(result.current.statusPulses[uid]?.burn).toBeGreaterThan(0);
+    expect(result.current.pops).toEqual(expect.arrayContaining([expect.objectContaining({ uid, kind: 'status', statusIcon: 'burn' })]));
+  });
+  it.each(['illusory_flame', 'pass_flame', 'relay_wildfire', 'molten_self_burn', 'burn_brand', 'blazing_fuel', 'ember_transfer', 'weaken', 'time_lag', 'despair_gaze'])('状态技能%s的所有施加日志都能识别，不依赖固定效果文本', skillId => {
+    const b = fixture(skillId, 2);
+    b.enemyUnits[0].statuses = [{ kind: 'burn', value: 3, turns: 2 }, { kind: 'fear', value: 3, turns: 99 }];
+    const self = ['self', 'ally', 'allyAll'].includes(getSkill(skillId).target);
+    const after = cast(b, skillId, self ? b.playerUnits[0].uid : b.enemyUnits[0].uid);
+    const logs = after.log.filter(entry => entry.text.includes(`使用「${getSkill(skillId).name}」`));
+    expect(logs.length).toBeGreaterThan(0);
+    for (const log of logs) expect(parseEvent(after, log), JSON.stringify(log)).toMatchObject({ kind: 'buff', skillName: getSkill(skillId).name });
+  });
+  it('虚火幻身给自身和敌人施加灼烧均出现动画', () => {
+    vi.useFakeTimers();
+    const b = fixture('illusory_flame');
+    const after = cast(b, 'illusory_flame', b.playerUnits[0].uid);
+    const { result, rerender } = renderHook(({ battle }) => useBattleFx(battle), { initialProps: { battle: b } });
+    act(() => rerender({ battle: after }));
+    const seen = new Set<string>();
+    for (let time = 0; time < 1600; time += 80) {
+      act(() => vi.advanceTimersByTime(80));
+      for (const pop of result.current.pops) if (pop.kind === 'status' && pop.statusIcon === 'burn') seen.add(pop.uid);
+    }
+    expect([...seen].sort()).toEqual([b.playerUnits[0].uid, b.enemyUnits[0].uid].sort());
   });
   it('起手和弹道先出现，命中时才显示扣血，格挡不显示生命受伤动作', () => {
     vi.useFakeTimers();

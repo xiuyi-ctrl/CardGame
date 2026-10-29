@@ -164,7 +164,7 @@ describe('满员领取造物', () => {
   function fullCreation() {
     const run = gameReducer(createInitialState(), { type: 'START_RUN', starterId: 'momo', companionId: 'kiki', seed: 42 });
     return { ...run, act: 2, screen: 'special' as const, currentNodeId: 'creation',
-      roster: Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)),
+      roster: Array.from({ length: 10 }, () => makeUnit('momo', true, 0, false)),
       map: { ...run.map, specials: { creation: { title: '奇遇', desc: '', rewards: [
         { id: 'custom', kind: 'custom' as const, label: '造物·自创生物', desc: '' },
       ] } } } };
@@ -187,7 +187,7 @@ describe('满员领取造物', () => {
     expect(retry.tameOverflow).toEqual(saved.tameOverflow);
     const joined = gameReducer(saved, { type: 'TAME_OVERFLOW_REPLACE', tameUid: creature.uid, discardUid: initial.roster[0].uid });
     expect(joined.screen).toBe('map');
-    expect(joined.roster).toHaveLength(8);
+    expect(joined.roster).toHaveLength(10);
     expect(joined.roster.some(u => u.uid === initial.roster[0].uid)).toBe(false);
     expect(joined.roster.find(u => u.uid === creature.uid)).toEqual(creature);
     expect(joined.tameOverflow).toBeUndefined();

@@ -57,9 +57,9 @@ describe('主模式融合材料与继承', () => {
   it('满员使用待处理二阶材料进化，不消耗其他伙伴，计入融合统计', () => {
     const primary = makeUnit('momo_queen', true, 1, false);
     const material = makeUnit('momo_queen', false, 0, false);
-    const state: GameState = { ...createInitialState(), act: 2, screen: 'tame-overflow', roster: [primary, ...Array.from({ length: 7 }, () => makeUnit('kiki', true, 0, false))], field: [primary.uid], tameOverflow: [material], tameOverflowReturn: 'roster', postBattle: true };
+    const state: GameState = { ...createInitialState(), act: 2, screen: 'tame-overflow', roster: [primary, ...Array.from({ length: 9 }, () => makeUnit('kiki', true, 0, false))], field: [primary.uid], tameOverflow: [material], tameOverflowReturn: 'roster', postBattle: true };
     const next = gameReducer(state, { type: 'TAME_OVERFLOW_FUSE', primaryUid: primary.uid, tameUid: material.uid });
-    expect(next.roster).toHaveLength(8);
+    expect(next.roster).toHaveLength(10);
     expect(next.roster[0].speciesId).toBe('momo_god');
     expect(next.tameOverflow).toBeUndefined();
     expect(next.screen).toBe('roster');
@@ -111,11 +111,11 @@ describe('主模式融合材料与继承', () => {
     const primary = makeUnit('momo', true, 0, false);
     const a = makeUnit('momo', true, 1, false), b = makeUnit('momo', false, 2, false);
     const roster = [primary, ...(multiplePending ? [] : [a])];
-    while (roster.length < 8) roster.push(makeUnit('kiki', true, 0, false));
+    while (roster.length < 10) roster.push(makeUnit('kiki', true, 0, false));
     const state: GameState = { ...createInitialState(), screen: 'tame-overflow', roster, tameOverflow: multiplePending ? [a, b] : [b], tameOverflowReturn: 'map' };
     expect(gameReducer(state, { type: 'TAME_OVERFLOW_FUSE', primaryUid: primary.uid, tameUid: b.uid, materialUids: [b.uid, b.uid] })).toBe(state);
     const next = gameReducer(state, { type: 'TAME_OVERFLOW_FUSE', primaryUid: primary.uid, tameUid: b.uid, materialUids: [a.uid, b.uid] });
-    expect(next.roster).toHaveLength(multiplePending ? 8 : 7);
+    expect(next.roster).toHaveLength(multiplePending ? 10 : 9);
     expect(next.roster[0].speciesId).toBe('momo_queen');
     expect(next.tameOverflow).toBeUndefined();
     expect(next.screen).toBe('map');

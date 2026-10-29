@@ -102,6 +102,12 @@ button.primary {
   font-weight: 700;
 }
 
+:is(.ordinary-roster-grid, .postbattle-roster-grid, .flow-roster-grid, .boss-boost-partners):has(> :nth-child(9)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.codex-assets-loading { align-content: center; justify-items: center; gap: 20px; }
+.codex-assets-loading p { margin: 0; }
+.codex-assets-loading button { min-width: 100px; min-height: 44px; padding: 8px 20px; }
+
 .screen-title {
   padding: 0;
   overflow: hidden;

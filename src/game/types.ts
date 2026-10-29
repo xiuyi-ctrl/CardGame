@@ -295,6 +295,8 @@ export interface Unit {
   ultimateUsesLeft?: number;
   /** 技能强化等级（技能槽位索引 -> 强化等级 0-3，连击/速度类上限2） */
   skillEnhancements?: Record<number, number>;
+  /** 每个技能槽实际支付的强化成长点；免费强化不增加。旧档缺失时不推算退款。 */
+  skillEnhancePaid?: Record<number, number>;
 }
 
 /** 日志高亮片段类型 */

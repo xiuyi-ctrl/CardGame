@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { canStepTo, generateMap, type GameState } from '../src/game/state/game';
 import { generateGrowthMap } from '../src/game/core/growth-map';
-import { createInitialState, gameReducer } from '../src/game/state/reducer';
+import { createInitialState, gameReducer, migrateGameState } from '../src/game/state/reducer';
 import { MapScreen } from '../src/ui/App';
 import { getMapRouteEdges } from '../src/ui/mapRoutes';
 
@@ -18,6 +18,40 @@ describe('像素地图界面', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('熟练度真实开局可点击第一关，不能跳到第二关', () => {
+    const state = gameReducer(createInitialState(), { type: 'START_PROFICIENCY_PICKED', seed: 23, starterId: 'momo', companionId: 'lulu' });
+    const first = state.map.layers[0][0];
+    const second = state.map.layers[1][0];
+    expect(state.currentNodeId).toBe('');
+    expect(state.visitedNodeIds).toEqual([]);
+    const dispatch = vi.fn();
+    const { container } = render(createElement(MapScreen, { state, dispatch }));
+    const button = container.querySelector<HTMLButtonElement>(`[data-node-id="${first.id}"]`)!;
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'MOVE', nodeId: first.id });
+    expect(gameReducer(state, { type: 'MOVE', nodeId: second.id })).toBe(state);
+    const entered = gameReducer(state, { type: 'MOVE', nodeId: first.id });
+    expect(entered.screen).toBe('formation');
+    expect(entered.currentNodeId).toBe(first.id);
+    expect(entered.visitedNodeIds).toEqual([first.id]);
+    expect(entered.currentLayer).toBe(1);
+  });
+
+  it('恢复旧版尚未进入第一关的远征存档，不回退已完成的进度', () => {
+    const state = gameReducer(createInitialState(), { type: 'START_PROFICIENCY_PICKED', seed: 23, starterId: 'momo', companionId: 'lulu' });
+    const id = state.map.layers[0][0].id;
+    const old = { ...state, currentNodeId: id, visitedNodeIds: [id] };
+    const restored = migrateGameState(JSON.parse(JSON.stringify(old)))!;
+    expect(restored.currentNodeId).toBe('');
+    expect(restored.visitedNodeIds).toEqual([]);
+    expect(restored.map).toEqual(old.map);
+    expect(restored.roster).toEqual(old.roster);
+    const completed = migrateGameState({ ...old, currentLayer: 2, proficiencyStats: { ...old.proficiencyStats!, battlesWon: 1 } })!;
+    expect(completed.currentNodeId).toBe(id);
+    expect(completed.visitedNodeIds).toEqual([id]);
   });
 
   it('路线只连接实际可达的相邻层，不连接同层节点', () => {

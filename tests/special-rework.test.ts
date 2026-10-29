@@ -104,7 +104,7 @@ it('最终形态、蛋生和造物不可选择；第一幕不能借完美进化�
 
 it.each([false, true])('奇遇神秘蛋3次过关必得特殊，允许重复关卡，存读档固定，满员=%s', full => {
   let state = special('sr-egg');
-  if (full) state.roster = Array.from({ length: 8 }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
+  if (full) state.roster = Array.from({ length: 10 }, (_, i) => makeUnit('momo', true, (i % 3) as 0 | 1 | 2, false));
   state = choose(state, 'sr-egg');
   expect(state.carriedEggs?.[0].remaining).toBe(3); expect(state.carriedEggs?.[0].special).toBe(true);
   const species = state.carriedEggs![0].monsterId;

@@ -281,7 +281,7 @@ export function SkillTag({
   desc?: boolean;
   /** 有次数限制的技能追加「每场限 N 次」标注（图鉴用） */
   usesNote?: boolean;
-  /** 强化等级 0-3，>=1 时技能名右侧显示金色加号 */
+  /** 强化等级 0-4，传承突破至4时显示+4 */
   enhanced?: number;
 }) {
   const full = skillFullDesc(skill, enhanced);
@@ -290,7 +290,7 @@ export function SkillTag({
   const usesChip = usesNote && skill.uses !== undefined ? (
     <span className="skill-uses-note">每场限 {skill.uses} 次</span>
   ) : null;
-  const enhanceLabel = enhanced >= 3 ? '+++' : enhanced === 2 ? '++' : enhanced === 1 ? '+' : '';
+  const enhanceLabel = enhanced >= 4 ? '+4' : enhanced === 3 ? '+++' : enhanced === 2 ? '++' : enhanced === 1 ? '+' : '';
   const head = (
     <span className="skill-head">
       <span className="skill-name">{skill.name}{enhanceLabel && <span style={{ color: '#e8c26a', marginLeft: 2 }}>{enhanceLabel}</span>}</span>

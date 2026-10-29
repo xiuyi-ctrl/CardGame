@@ -480,7 +480,18 @@ function parseLegacyEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   return null;
 }
 
+const DEBUFF_KINDS = ['burn', 'poison', 'fear', 'atkDown', 'spdDown', 'stun', 'timeLag', 'skillSeal', 'burnBrand', 'chainLink'];
+
 export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
+  const statusSkillName = entry.text.match(/^.+? 使用「(.+?)」/)?.[1];
+  const statusSkill = statusSkillName && Object.values(SKILLS).find(skill => skill.name === statusSkillName);
+  if (statusSkill && statusSkill.kind === 'status'
+    && [...(entry.addsStatus ?? []), ...(statusSkill.effects ?? []).map(effect => effect.kind)].some(kind => DEBUFF_KINDS.includes(kind))) {
+    return { kind: 'buff', actorUid: entry.actorUid, targetUid: entry.targetUid, skillName: statusSkill.name, value: 0,
+      addsStatus: entry.addsStatus ?? statusSkill.effects?.map(effect => effect.kind),
+      debuffTargets: entry.burstTargets, revealUids: entry.burstTargets,
+      hp: entry.hp, statuses: entry.statuses, shields: entry.shields, impacts: entry.impacts };
+  }
   if (entry.capture) return { kind: 'capture', targetUid: entry.capture.targetUid, capture: entry.capture, value: 0, hp: entry.hp, statuses: entry.statuses, shields: entry.shields };
   const special = entry.text.includes('的「时砂回溯」恢复') ? 'rewind' : /^(?:敌方|我方)派出下一只：/.test(entry.text) ? 'enter' : undefined;
   if (special) {
@@ -798,8 +809,8 @@ export function useBattleFx(battle: BattleState | null | undefined) {
     events.forEach((ev, i) => {
       let windupSeq = 0;
       const skill = Object.values(SKILLS).find(s => s.name === ev.skillName);
-      const pureDebuff = skill?.kind === 'status' && !['self', 'ally', 'allyAll'].includes(skill.target) && !ev.passive;
       const addedKinds = [...(ev.addsStatus ?? []), ...Object.values(ev.impacts ?? {}).flatMap(change => Object.keys(change.addedStatuses ?? {})), ...(skill?.effects ?? []).map(effect => effect.kind)];
+      const pureDebuff = skill?.kind === 'status' && addedKinds.some(kind => DEBUFF_KINDS.includes(kind)) && !ev.passive;
       const quietDotStatus = !pureDebuff && ev.kind === 'buff' && addedKinds.length > 0
         && addedKinds.every(kind => kind === 'burn' || kind === 'poison')
         && ev.value === 0 && !ev.notice
@@ -951,30 +962,30 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             }
           } else if (ev.kind === 'buff' && !quietDotStatus) {
             // 区分 debuff 和普通 buff：debuff 用抖动动画，buff 用发光动画
-            const isDebuffEvt = (ev.debuffTargets && ev.debuffTargets.length > 0) || (ev.addsStatus && ev.addsStatus.some((k) => ['timeLag', 'poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k)));
+            const isDebuffEvt = (ev.debuffTargets && ev.debuffTargets.length > 0) || (ev.addsStatus && ev.addsStatus.some((k) => DEBUFF_KINDS.includes(k)));
             if (actorUid && !phased && !ev.passive && firstCast) { ++fxSeq; capturedActorSeq = fxSeq; setFx((p) => ({ ...p, [actorUid]: { cls: isDebuffEvt ? 'fx-status-cast' : 'fx-cast', seq: capturedActorSeq } })); }
             const sk = ev.skillName ? Object.values(SKILLS).find((s) => s.name === ev.skillName) : undefined;
             const isShield = (impact?.shieldGain ?? 0) > 0 || sk?.effects?.[0]?.kind === 'shield';
             const statusIcon = isShield ? 'shield' : sk?.id === 'chain_link' ? 'chainLink' : undefined;
             const buffCls = impact?.shieldBroken ? 'fx-break' : isShield ? 'fx-shield' : 'fx-buff';
-            const debuffLabel = (kind?: string) => kind === 'poison' ? '中毒↓' : kind === 'burn' ? '灼烧↓' : kind === 'atkDown' ? '弱化↓' : kind === 'spdDown' ? '迟缓↓' : kind === 'stun' ? '眩晕↓' : kind === 'timeLag' ? '时滞↓' : '▼ debuff';
+            const debuffIcon = ev.addsStatus?.find(kind => DEBUFF_KINDS.includes(kind)) as StatusEffect['kind'] | undefined;
+            const debuffLabel = `+${skill?.effects?.find(effect => effect.kind === debuffIcon)?.value ?? 1}`;
             if (ev.debuffTargets && ev.debuffTargets.length > 0) {
               // 全体 debuff：所有目标同时显示 debuff 图标 + debuff 飘字；每个目标独立 seq 以便 clear 精确匹配
               debuffTargetSeqs = {};
-              const dLabel = debuffLabel(ev.addsStatus?.[0]);
               for (const uid of ev.debuffTargets) {
                 if (pureDebuff && eventImpacts && !Object.keys(eventImpacts[uid]?.addedStatuses ?? {}).length) continue;
                 ++fxSeq; debuffTargetSeqs[uid] = fxSeq;
                 setFx((p) => ({ ...p, [uid]: { cls: 'fx-debuff', seq: fxSeq } }));
-                legacyPop({ id: popId, uid, text: dLabel, heal: false, debuff: true });
+                legacyPop({ id: popId, uid, text: debuffLabel, heal: false, debuff: true, statusIcon: debuffIcon });
               }
             } else if (targetUid && !ev.noPop && (!pureDebuff || !eventImpacts || Object.keys(eventImpacts[targetUid]?.addedStatuses ?? {}).length > 0)) {
               // 区分 debuff（RE_DEBUFF 解析）和普通 buff（RE_BUFF 解析）
-              const isDebuffEvent = ev.addsStatus && ev.addsStatus.some((k) => ['poison', 'burn', 'atkDown', 'spdDown', 'stun'].includes(k));
+              const isDebuffEvent = !!debuffIcon;
               if (isDebuffEvent) {
                 ++fxSeq; capturedTargetSeq = fxSeq;
                 setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-debuff', seq: capturedTargetSeq } }));
-                legacyPop({ id: popId, uid: targetUid, text: debuffLabel(ev.addsStatus?.[0]), heal: false, debuff: true });
+                legacyPop({ id: popId, uid: targetUid, text: debuffLabel, heal: false, debuff: true, statusIcon: debuffIcon });
               } else {
                 ++fxSeq; capturedTargetSeq = fxSeq;
                 setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));

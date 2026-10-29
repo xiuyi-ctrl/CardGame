@@ -28,7 +28,7 @@ describe('战后休整界面', () => {
     expect(screen.queryByText('奖励已领取')).toBeNull();
     expect(screen.queryByText('状态良好')).toBeNull();
     expect(container.querySelectorAll('.postbattle-pet')).toHaveLength(4);
-    expect(container.querySelectorAll('.postbattle-empty')).toHaveLength(4);
+    expect(container.querySelectorAll('.postbattle-empty')).toHaveLength(6);
     expect(screen.queryByText('出战阵容')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '查看泡泡，生命14/14，速度3' }));
     expect(screen.getByRole('heading', { name: '泡泡' })).toBeTruthy();

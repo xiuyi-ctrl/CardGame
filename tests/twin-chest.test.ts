@@ -120,14 +120,14 @@ describe('双生宝箱奖励', () => {
     expect(count).toBeGreaterThan(30);
   });
 
-  it.each([7, 8])('双开可同时获得两只生物，队伍原有%d只时不丢奖励，满员处理后返回结果且不重复领取', size => {
+  it.each([9, 10])('双开可同时获得两只生物，队伍原有%d只时不丢奖励，满员处理后返回结果且不重复领取', size => {
     const seed = Array.from({ length: 2000 }, (_, i) => i + 1).find(seed => rollChest(seed, 1, 'left', false).monsterId && rollChest(seed, 1, 'right', false).monsterId)!;
     expect(seed).toBeTruthy();
     const base = setup(seed, 1);
     const state = { ...base, roster: Array.from({ length: size }, () => makeUnit('momo', true, 0, false)) };
     const opened = gameReducer(state, { type: 'MOVE', nodeId: 'left' });
-    expect(opened.screen).toBe('chest'); expect(opened.roster).toHaveLength(8);
-    expect(opened.chestResult).toHaveLength(2); expect(opened.tameOverflow).toHaveLength(size - 6);
+    expect(opened.screen).toBe('chest'); expect(opened.roster).toHaveLength(10);
+    expect(opened.chestResult).toHaveLength(2); expect(opened.tameOverflow).toHaveLength(size - 8);
     expect(opened.inventory.twin).toBe(0);
     let processing = gameReducer(parseDualSave(JSON.stringify(opened))!.main!, { type: 'NEXT_NODE' });
     expect(processing.screen).toBe('tame-overflow'); expect(processing.tameOverflowReturn).toBe('chest');
@@ -142,18 +142,18 @@ describe('双生宝箱奖励', () => {
 
   it('宝箱新伙伴能用现有替换流程加入，原队伍与结果保留', () => {
     const seed = Array.from({ length: 500 }, (_, i) => i + 1).find(seed => rollChest(seed, 1, 'left', false).monsterId)!;
-    const base = setup(seed); base.roster = Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false));
+    const base = setup(seed); base.roster = Array.from({ length: 10 }, () => makeUnit('momo', true, 0, false));
     const opened = gameReducer(base, { type: 'MOVE', nodeId: 'left' });
     const processing = gameReducer(opened, { type: 'NEXT_NODE' });
     const tame = processing.tameOverflow![0];
     const joined = gameReducer(processing, { type: 'TAME_OVERFLOW_REPLACE', tameUid: tame.uid, discardUid: processing.roster[0].uid });
-    expect(joined.screen).toBe('chest'); expect(joined.roster).toHaveLength(8);
+    expect(joined.screen).toBe('chest'); expect(joined.roster).toHaveLength(10);
     expect(joined.roster.some(unit => unit.uid === tame.uid)).toBe(true);
     expect(joined.chestResult).toEqual(opened.chestResult);
   });
   it('处理满员伙伴不会重复推进携带蛋，离开宝箱后只计一个关卡', () => {
     const seed = Array.from({ length: 500 }, (_, i) => i + 1).find(seed => rollChest(seed, 1, 'left', false).monsterId)!;
-    const base = setup(seed); base.roster = Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false));
+    const base = setup(seed); base.roster = Array.from({ length: 10 }, () => makeUnit('momo', true, 0, false));
     base.map.layers.push([{ id: 'next', type: 'rest', label: '休息', col: 0 }]);
     base.carriedEggs = [{ id: 'egg', remaining: 3, monsterId: 'momo', special: false, passedNodeIds: [] }];
     const chest = gameReducer(base, { type: 'MOVE', nodeId: 'left' });

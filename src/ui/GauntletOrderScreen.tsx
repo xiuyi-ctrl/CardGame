@@ -155,7 +155,7 @@ export function GauntletOrderScreen({ state, dispatch }: { state: GameState; dis
         <section className="flow-frame wheel-pool-panel">
           <div className="wheel-section-heading"><h2>待命伙伴</h2><span>{encounterLabel} · 点击加入空槽，点击上方伙伴移回</span>
           </div>
-          <div className="wheel-pool" style={{ gridTemplateColumns: `repeat(${Math.min(5, Math.max(1, pool.length))}, minmax(0, 1fr))` }} onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
+          <div className="wheel-pool" role="group" aria-label="待命伙伴，可左右滑动" onDragOver={(e) => e.preventDefault()} onDrop={onPoolDrop}>
             {pool.map((u) => (
               <button type="button"
                 key={u.uid}

@@ -1,0 +1,33 @@
+.growth-encounter-screen { grid-template-rows: auto minmax(0, 1fr) auto; background-image: url('/main-flow-art/encounter-shrine.png'); }
+.growth-encounter-body { min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.growth-encounter-body h2 { font-size: 18px; margin: 0; }
+.growth-encounter-partners { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.growth-encounter-partners button { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 44px; padding: 5px; }
+.growth-encounter-partners .flow-pet { width: 42px; height: 42px; flex: none; }
+.growth-encounter-partners button > span { min-width: 0; display: grid; }
+.growth-encounter-partners strong { overflow-wrap: anywhere; }
+.growth-encounter-skills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.growth-encounter-skills button { min-height: 44px; min-width: 0; padding: 6px; display: grid; gap: 4px; text-align: left; }
+.growth-encounter-screen button[aria-pressed="true"] { border-color: #087c70; background: #d8eee0; box-shadow: inset 0 0 0 2px #087c70; }
+.growth-encounter-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.growth-encounter-footer button, .growth-encounter-body > button { min-height: 44px; }
+.growth-encounter-amount { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.growth-encounter-amount input { width: 90px; min-height: 44px; font: inherit; }
+.growth-encounter-preview-actions { display: flex; gap: 4px; }
+.growth-encounter-preview-actions > * { flex: 1; min-width: 0; }
+.growth-encounter-preview-actions button { width: 100%; min-height: 44px; }
+.mobile-ui .growth-encounter-screen { grid-template-rows: auto minmax(0, 1fr) auto; }
+.mobile-ui .growth-encounter-screen .flow-header { min-height: 48px; padding: 0 4px; border-width: 2px; border-image-width: 2px; }
+.mobile-ui .growth-encounter-screen .flow-header h1 { font-size: 18px; }
+.mobile-ui .growth-encounter-screen .flow-header button { min-height: 44px; padding: 2px 6px; }
+.mobile-ui .growth-encounter-screen .growth-encounter-footer { min-height: 48px; padding: 0 4px; border-width: 2px; border-image-width: 2px; }
+.mobile-ui .growth-encounter-screen .growth-encounter-footer button { min-height: 44px; padding: 2px 8px; }
+.mobile-ui .growth-encounter-body { padding: 4px; gap: 4px; }
+.mobile-ui .growth-encounter-partners { gap: 3px; }
+.mobile-ui .growth-encounter-partners button { padding: 2px; gap: 2px; font-size: 12px; }
+.mobile-ui .growth-encounter-partners .flow-pet { width: 24px; height: 24px; }
+.mobile-ui .growth-encounter-skills { gap: 3px; }
+.mobile-ui .growth-encounter-skills[aria-label="选择技能"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mobile-ui .growth-encounter-skills button, .mobile-ui .growth-encounter-body p, .mobile-ui .growth-encounter-footer { font-size: 12px; }
+.mobile-ui .growth-encounter-body h2 { font-size: 13px; }
+.mobile-ui .growth-encounter-body > p { line-height: 1.2; }

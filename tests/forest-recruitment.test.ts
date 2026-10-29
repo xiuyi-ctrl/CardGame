@@ -17,7 +17,7 @@ function rewardState(seed: number, act = 1): GameState {
 }
 function eggState(act = 1, full = false): GameState {
   const state = rewardState(42, act);
-  return { ...state, screen: 'event', currentNodeId: 'egg', roster: Array.from({ length: full ? 8 : 1 }, () => makeUnit('momo', true, 0, false)),
+  return { ...state, screen: 'event', currentNodeId: 'egg', roster: Array.from({ length: full ? 10 : 1 }, () => makeUnit('momo', true, 0, false)),
     map: { ...state.map, events: { egg: buildEventByType(createRng(42), 'egg', act, 'emerald_forest') } },
   };
 }
@@ -38,7 +38,7 @@ describe('林地战后招募', () => {
       advanced += candidates.filter(id => getMonster(id).rank === 2).length;
       const mixed = generateRewards({ ...state, region: 'mixed' }).find(reward => reward.kind === 'recruit')!;
       expect(candidates.map(id => getMonster(id).rank)).toEqual(mixed.recruitCandidates!.map(id => getMonster(id).rank));
-      const full = { ...state, roster: Array.from({ length: 8 }, () => makeUnit('fire_fox', true, 0, false)) };
+      const full = { ...state, roster: Array.from({ length: 10 }, () => makeUnit('fire_fox', true, 0, false)) };
       expect(generateRewards(full)).toEqual(state.rewards);
     }
     expect(advanced / 800).toBeCloseTo(act === 1 ? 0 : act === 2 ? 0.3 : 0.6, 1);
@@ -63,7 +63,7 @@ describe('林地战后招募', () => {
 
   it.each([false, true])('锁定、读档及到账保留同一候选，满员处理不重抽 full=%s', full => {
     const state = rewardState(42, 3);
-    state.roster = Array.from({ length: full ? 8 : 1 }, () => makeUnit('momo', true, 0, false));
+    state.roster = Array.from({ length: full ? 10 : 1 }, () => makeUnit('momo', true, 0, false));
     const reward = state.rewards.find(reward => reward.kind === 'recruit')!;
     const opened = gameReducer(state, { type: 'PICK_REWARD', rewardId: reward.id });
     const loaded = parseDualSave(JSON.stringify(opened))!.main!;

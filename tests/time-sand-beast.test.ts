@@ -151,7 +151,7 @@ describe('时砂兽与时滞', () => {
   });
   it('未成熟特殊蛋读档不减关数，多只成熟特殊蛋全部保留到队伍或满员处理', () => {
     const state = { ...createInitialState(), screen: 'map' as const,
-      roster: Array.from({ length: 7 }, () => makeUnit('momo', true, 0, false)),
+      roster: Array.from({ length: 9 }, () => makeUnit('momo', true, 0, false)),
       carriedEggs: [2, 0, 0].map((remaining, i) => ({ id: `egg${i}`, remaining, special: true, monsterId: 'momo', passedNodeIds: [] })) };
     const next = gameReducer(createInitialState(), { type: 'LOAD_GAME', state });
     expect(next.carriedEggs).toHaveLength(1); expect(next.carriedEggs?.[0].remaining).toBe(2);
@@ -160,7 +160,7 @@ describe('时砂兽与时滞', () => {
   });
   it.each([false, true])('旧成熟特殊蛋读档即可孵化一次，满员=%s', full => {
     const state = { ...createInitialState(), screen: 'map' as const,
-      roster: Array.from({ length: full ? 8 : 1 }, () => makeUnit('momo', true, 0, false)),
+      roster: Array.from({ length: full ? 10 : 1 }, () => makeUnit('momo', true, 0, false)),
       carriedEggs: [{ id: 'old', remaining: 0, special: true, monsterId: 'momo', passedNodeIds: ['a', 'b', 'c'] }] };
     const saved = parseDualSave(JSON.stringify(state))!.main!;
     const next = gameReducer(createInitialState(), { type: 'LOAD_GAME', state: saved });

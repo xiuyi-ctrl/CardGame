@@ -52,7 +52,7 @@ it.each([false, true])('满队伍仍可点击造物奖励 mobile=%s', mobile => 
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   const initial = base();
   const state: GameState = { ...initial, screen: 'special', currentNodeId: 's',
-    roster: Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)),
+    roster: Array.from({ length: 10 }, () => makeUnit('momo', true, 0, false)),
     map: { ...initial.map, specials: { s: { title: '奇遇', desc: '', rewards: SPECIAL_REWARDS.filter(reward => reward.kind === 'custom') } } } };
   const dispatch = vi.fn();
   render(createElement(SpecialScreen, { state, dispatch }));

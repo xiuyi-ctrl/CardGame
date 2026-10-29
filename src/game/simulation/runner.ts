@@ -1,5 +1,6 @@
 import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furnaceShellTargets, getActablePlayerUnits, getEffectiveSpd, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
-import { applyGrowthChoice, applySkillEnhance, getSkillEnhanceCost } from '../core/growth';
+import { applyGrowthChoice, applySkillEnhance, canMasterEnhance, getSkillEnhanceCost } from '../core/growth';
+import { growthEncounterCacheKey, growthEncounterEligible } from '../state/growth-encounters';
 import { FOODS, isCaptureFood } from '../data/foods';
 import { MAIN_REGIONS } from '../data/regions';
 import { getMainShopOffer } from '../data/main-shop';
@@ -133,6 +134,7 @@ function deterministicEventChoice(state: GameState): GameState {
   const event = state.map.events[state.currentNodeId];
   if (!event) return dispatch(state, { type: 'NEXT_NODE' });
   const valid = event.choices.filter((choice) => {
+    if (choice.growthEncounter && !growthEncounterEligible(state, choice.growthEncounter)) return false;
     if ((choice.goldDelta ?? 0) < 0 && state.gold + (choice.goldDelta ?? 0) < 0) return false;
     if (choice.consumeFood && choice.foodId && (state.inventory[choice.foodId] ?? 0) <= 0) return false;
     if (choice.consumeRandomFood && Object.keys(state.inventory).filter(isCaptureFood).reduce((sum, id) => sum + state.inventory[id], 0) < (choice.foodCost ?? 1)) return false;
@@ -141,7 +143,7 @@ function deterministicEventChoice(state: GameState): GameState {
   const safe = valid.filter((choice) => !['sacrifice', 'curse'].includes(choice.kind));
   const pool = safe.length ? safe : valid.length ? valid : event.choices;
   const priorities = state.runMode === 'proficiency'
-    ? ['heal', 'growthPoint', 'permanentBoost', 'food', 'item', 'gold', 'none', 'battle']
+    ? ['heal', 'growthEncounter', 'growthPoint', 'permanentBoost', 'food', 'item', 'gold', 'none', 'battle']
     : ['recruit', 'heal', 'food', 'item', 'none', 'gold', 'battle'];
   const choice = priorities.map((kind) => pool.find((item) => item.kind === kind)).find(Boolean) ?? pool[0];
   return choice ? dispatch(state, { type: 'EVENT_CHOICE', choiceId: choice.id, ...(choice.kind === 'coin' ? { coinSide: 'heads' as const } : {}) }) : dispatch(state, { type: 'NEXT_NODE' });
@@ -183,10 +185,10 @@ function specialStep(state: GameState): GameState {
   const special = state.map.specials[state.currentNodeId];
   if (!special) return dispatch(state, { type: 'NEXT_NODE' });
   const priorities = state.runMode === 'proficiency'
-    ? ['growthPoint', 'boost', 'slotUnlock', 'gold', 'item', 'recruit', 'revive']
+    ? ['growthEncounter', 'growthPoint', 'boost', 'slotUnlock', 'gold', 'item', 'recruit', 'revive']
     : ['gold', 'item', 'evolve', 'boost', 'custom', 'superevolve'];
-  const available = special.rewards.filter((item) => !['evolve', 'superevolve'].includes(item.kind)
-    || state.roster.some((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId, item.toFinal)));
+  const available = special.rewards.filter((item) => (!item.growthEncounter || growthEncounterEligible(state, item.growthEncounter)) && (!['evolve', 'superevolve'].includes(item.kind)
+    || state.roster.some((unit) => nextStage(unit.speciesId) && !evolutionLockReason(state, unit.speciesId, item.toFinal))));
   const reward = priorities.map((kind) => available.find((item) => item.kind === kind)).find(Boolean) ?? available[0];
   return reward ? dispatch(state, { type: 'SPECIAL_CHOICE', rewardId: reward.id }) : dispatch(state, { type: 'NEXT_NODE' });
 }
@@ -236,6 +238,21 @@ function rosterStep(state: GameState): GameState {
 }
 
 export function simulationStep(state: GameState, seed: number): GameState {
+  if (state.growthEncounterPending) {
+    const pending = state.growthEncounterPending;
+    const kind = pending.kind;
+    const unit = state.roster.find(unit => unit.hp > 0 && (['master', 'recycle', 'contract', 'relearn'].includes(kind)
+      ? growthEncounterEligible({ ...state, roster: [unit] }, kind) : kind !== 'transfer' || (unit.growthPoints ?? 0) > 0));
+    if (!unit && kind !== 'buy_stone') return dispatch(state, { type: 'GROWTH_ENCOUNTER_CANCEL' });
+    const slot = unit?.skills.findIndex((_, slot) => kind === 'master' ? canMasterEnhance(unit, slot) : kind === 'recycle' ? (unit.skillEnhancePaid?.[slot] ?? 0) > 0 : true) ?? 0;
+    if (unit && ['contract', 'relearn'].includes(kind)) {
+      const selectedSlot = kind === 'contract' ? unit.skills.length : slot;
+      const choices = state.growthEncounterCandidates?.[growthEncounterCacheKey(state, unit.uid, selectedSlot)];
+      if (pending.uid !== unit.uid || pending.slot !== selectedSlot || !choices) return dispatch(state, { type: 'GROWTH_ENCOUNTER_PREVIEW', uid: unit.uid, slot });
+      return dispatch(state, { type: 'GROWTH_ENCOUNTER_CONFIRM', uid: unit.uid, slot, skillId: choices[0] });
+    }
+    return dispatch(state, { type: 'GROWTH_ENCOUNTER_CONFIRM', uid: unit?.uid, slot, otherUid: state.roster.find(pet => pet.hp > 0 && pet.uid !== unit?.uid)?.uid, amount: 1 });
+  }
   switch (state.screen) {
     case 'inter_act': return dispatch(state, { type: 'INTER_ACT_CONTINUE' });
     case 'map': return mapStep(state);
@@ -354,7 +371,7 @@ export function simulateRun(input: Partial<SimulationConfig> & Pick<SimulationCo
     ? dispatch({ ...createInitialState(), region: config.region ?? 'mixed' }, { type: 'START_RUN', starterId: starter, companionId: companion, seed: config.seed, difficulty: config.difficulty })
     : dispatch(createInitialState(), { type: 'START_PROFICIENCY_PICKED', seed: config.seed, starterId: starter, companionId: companion });
   if (config.mode === 'proficiency') {
-    state = { ...state, difficulty: config.difficulty, currentNodeId: '', visitedNodeIds: [] };
+    state = { ...state, difficulty: config.difficulty };
   }
   let steps = 0;
   let unchanged = 0;

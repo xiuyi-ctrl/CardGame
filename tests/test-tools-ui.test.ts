@@ -10,6 +10,20 @@ import { persistSave, clearDeletedSlot } from '../src/ui/persistence';
 beforeEach(() => { localStorage.clear(); clearDeletedSlot(1); });
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals(); });
 
+it.each([false, true])('熟练度测试独立入口展示全部九类关卡并传递层数 mobile=%s', mobile => {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  const dispatch = vi.fn();
+  render(createElement(TestTypeScreen, { state: createInitialState(), dispatch }));
+  fireEvent.click(screen.getByRole('button', { name: '熟练度远征测试' }));
+  expect(screen.getByRole('button', { name: '熟练度远征测试' }).getAttribute('aria-pressed')).toBe('true');
+  for (const name of ['普通战斗', '精英战斗', '首领', '商店', '营火', '事件', '奇遇', '铁匠铺', '竞技场三模式']) expect(screen.getByRole('button', { name })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: '侵蚀' })).toBeNull();
+  fireEvent.change(screen.getByLabelText('层数（1～50）'), { target: { value: '50' } });
+  fireEvent.click(screen.getByRole('button', { name: '首领' }));
+  fireEvent.click(screen.getByRole('button', { name: '进入测试' }));
+  expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'TEST_TYPE_PICK', nodeType: 'boss', scenario: expect.objectContaining({ mode: 'proficiency', layer: 50 }) }));
+});
+
 it('测试入口可选第四种侵蚀并传递免疫配置', () => {
   const dispatch = vi.fn();
   render(createElement(TestTypeScreen, { state: { ...createInitialState(), testScenario: { mode: 'main', region: 'mixed', difficulty: 'normal', act: 1,

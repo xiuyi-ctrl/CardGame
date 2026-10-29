@@ -38,7 +38,7 @@ describe('主模式首领战利品', () => {
   expect(gameReducer(locked, { type: 'PICK_REWARD', rewardId: 'boss-recruit' })).toBe(locked);
   const loaded = gameReducer(createInitialState(), { type: 'LOAD_GAME', state: JSON.parse(JSON.stringify(locked)) });
   const next = gameReducer(loaded, { type: 'PICK_REWARD', rewardId: 'boss-boost', targetUid: loaded.roster[0].uid, stat: 'spd' });
-  expect(next.roster[0].bonusStats?.spd).toBe(act === 1 ? 1 : 2);
+  expect(next.roster[0].bonusStats?.spd).toBe(2);
   expect(next.screen).toBe('roster'); expect(next.postBattle).toBe(true);
   expect(gameReducer(next, { type: 'PICK_REWARD', rewardId: 'boss-boost' })).toBe(next);
   expect(gameReducer(next, { type: 'NEXT_NODE' }).screen).toBe('inter_act');
@@ -56,7 +56,7 @@ describe('主模式首领战利品', () => {
   for (const id of new Set(bundle)) expect(next.inventory[id]).toBe((settled.inventory[id] ?? 0) + bundle.filter(x => x === id).length);
  });
  it('满员招募进入处理界面，候选固定且只能领一次', () => {
-  const { settled } = fixture(); settled.roster = Array.from({length: 8}, () => makeUnit('momo', true, 0, false));
+  const { settled } = fixture(); settled.roster = Array.from({length: 10}, () => makeUnit('momo', true, 0, false));
   const locked = gameReducer(settled, { type: 'PICK_REWARD', rewardId: 'boss-recruit' });
   const chosen = locked.rewards[0].recruitCandidates![0];
   const next = gameReducer(locked, { type: 'PICK_REWARD', rewardId: 'boss-recruit', monsterId: chosen });

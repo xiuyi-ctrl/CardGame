@@ -8,6 +8,10 @@ import { BattleScreen } from '../../src/ui/BattleScreen';
 import { FormationScreen } from '../../src/ui/FormationScreen';
 import { GauntletOrderScreen } from '../../src/ui/GauntletOrderScreen';
 import { GrowthScreen } from '../../src/ui/GrowthScreen';
+import { GrowthEncounterScreen } from '../../src/ui/GrowthEncounterScreen';
+import { beginGrowthEncounter, type GrowthEncounterKind } from '../../src/game/state/growth-encounters';
+import { buildGrowthEvent } from '../../src/game/data/growth-events';
+import { GROWTH_SPECIAL_REWARDS } from '../../src/game/data/growth-special';
 import { BlacksmithScreen } from '../../src/ui/BlacksmithScreen';
 import { EnhanceStoneScreen } from '../../src/ui/EnhanceStoneScreen';
 import { EnhanceResetScreen } from '../../src/ui/EnhanceResetScreen';
@@ -172,6 +176,9 @@ const variant = (name: string, original: string, extra = {}, setup?: string) => 
   registry[name] = { ...registry[original], state: { ...structuredClone(registry[original].state), ...extra }, setup };
 };
 variant('creature-style-battle', 'creature-style-compare', {}, '战场卡片');
+variant('test-proficiency', 'test-type', {}, '熟练度远征测试');
+variant('test-proficiency-event', 'test-type', {}, '熟练度远征测试|事件');
+variant('test-proficiency-boss', 'test-type', {}, '熟练度远征测试|首领');
 variant('creature-style-formation', 'creature-style-compare', {}, '布阵卡片');
 variant('battle-mirror-selected', 'battle-mirror', {}, '.player-area .formation-slot');
 variant('battle-crystal-selected', 'battle-crystal', {}, '.player-area .formation-slot');
@@ -433,7 +440,7 @@ let feedbackDispatch: ((action: any) => void) | undefined;
 let feedbackEnter: (() => void) | undefined;
 const feedbackCases: Record<string, { skillId: string; targetUid: string }> = {};
 feedbackCases['chain-explosion'] = { skillId: 'chain_activate', targetUid: chainFixture.enemyUnits[0].uid };
-for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch'], ['pure-debuff', 'poison_mist']]) {
+for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch'], ['pure-debuff', 'poison_mist'], ['pure-self', 'illusory_flame'], ['pure-ally', 'pass_flame'], ['pure-allies', 'relay_wildfire']]) {
   const pets = ['momo_queen', 'fifi_king', 'lulu_king', 'coal', 'light_moss'].map((id, i) => makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back'));
   const battle = createBattle(pets, [{ speciesId: 'fifi_king' }, { speciesId: 'lulu_king' }, { speciesId: 'momo_queen' }], 31);
   battle.playerUnits = battle.playerUnits.map((unit, i) => ({ ...unit, hp: i === 0 ? 19 : 20, maxHp: 20, passive: undefined, spd: 99, skills: i === 0 ? [skillId] : unit.skills }));
@@ -450,11 +457,32 @@ for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block
     battle.enemyBench = [makeUnit('fifi_king', false, 1, false, 'front')];
     battle.gauntlet = { total: 2, current: 1 };
   }
-  const targetUid = ['heal', 'shield'].includes(label) ? battle.playerUnits[0].uid : (battle.enemyUnits.find(unit => unit.row === 'front') ?? battle.enemyUnits[0]).uid;
+  const targetUid = ['heal', 'shield', 'pure-self', 'pure-ally', 'pure-allies'].includes(label) ? battle.playerUnits[0].uid : (battle.enemyUnits.find(unit => unit.row === 'front') ?? battle.enemyUnits[0]).uid;
   const name = `battle-feedback-${label}`;
   add(name, BattleScreen, { battle, roster: battle.playerUnits, field: battle.playerUnits.map(unit => unit.uid) }, false);
   feedbackCases[name] = { skillId, targetUid };
 }
+const tenPartners = [...base.roster, makeUnit('coal', true, 0, false), makeUnit('candle', true, 1, false)];
+for (const kind of ['master', 'train_pair', 'transfer', 'recycle', 'relearn', 'contract', 'spring', 'buy_stone'] as GrowthEncounterKind[]) {
+  let fixture = beginGrowthEncounter(state('event', { runMode: 'proficiency', currentNodeId: 'growth-preview', currentLayer: 20,
+    roster: base.roster.slice(0, 5).map(unit => ({ ...unit, skills: ['swift_needle', 'flame_combo', 'fire_feather', 'burn_reversal', 'roar'].slice(0, kind === 'contract' ? 2 : 5), skillEnhancements: { 0: 3, 1: 2, 2: 3 }, skillEnhancePaid: { 0: 18, 1: 18, 2: 30 } })) }), kind);
+  if (kind === 'relearn' || kind === 'contract') fixture = gameReducer(fixture, { type: 'GROWTH_ENCOUNTER_PREVIEW', uid: fixture.roster[0].uid, slot: 0 });
+  registry[`growth-encounter-${kind}`] = { component: GrowthEncounterScreen, state: fixture, flow: true };
+}
+for (const type of ['ancient_arena', 'skill_mentor', 'soul_resonance', 'stone_of_forget'] as const) {
+  add(`growth-event-${type}`, ui.EventScreen, { runMode: 'proficiency', roster: base.roster.slice(0, 5), currentNodeId: 'batch-event',
+    map: { ...base.map, events: { 'batch-event': buildGrowthEvent(createRng(1), type) } } });
+}
+for (const type of ['stat_blessing', 'growth_blessing', 'skill_blessing'] as const) {
+  add(`growth-special-${type}`, ui.SpecialScreen, { runMode: 'proficiency', roster: base.roster.slice(0, 5), currentNodeId: 'batch-special',
+    map: { ...base.map, specials: { 'batch-special': { title: '奇遇', desc: '选择本次成长奖励', rewards: [{ ...GROWTH_SPECIAL_REWARDS[type], kind: 'growthEncounter' }] } } } });
+}
+registry['growth-candidate-details'] = { ...registry['growth-encounter-relearn'], setup: '候选技能完整说明' };
+variant('roster-ten', 'roster', { roster: tenPartners });
+variant('postbattle-ten', 'postbattle', { roster: tenPartners });
+variant('overflow-ten', 'tame-overflow', { roster: tenPartners });
+variant('formation-ten', 'formation', { roster: tenPartners, formation: { ...formation, units: tenPartners } });
+variant('boss-boost-ten', 'boss-reward-boost', { roster: tenPartners }, '伙伴强化');
 let generation = 0;
 const captureCases: Record<string, string> = {};
 for (const label of ['preview', 'feed', 'success', 'fail']) {
@@ -504,11 +532,11 @@ function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
   names: Object.keys(registry),
   desktopNames: Object.keys(registry).filter(name => !name.endsWith('-details') && !['save-import-confirm', 'battle-menu'].includes(name)),
   backupJson: JSON.stringify({ saveVersion: 1, main: base }),
-  async render(name: string, mobile = true) {
+  async render(name: string, mobile = true, preload = true) {
     if (!registry[name]?.component) throw Error(`Missing fixture: ${name}`);
     if (name.startsWith('creature-style-')) await preloadImages(CREATURE_STYLE_IMAGES);
     const battle = registry[name].state.battle;
-    await preloadImages([...Object.values(FORMATION_SPRITES), ...[...registry[name].state.roster, ...(battle ? [...battle.playerUnits, ...battle.enemyUnits] : [])]
+    if (preload) await preloadImages([...Object.values(FORMATION_SPRITES), ...[...registry[name].state.roster, ...(battle ? [...battle.playerUnits, ...battle.enemyUnits] : [])]
       .map(unit => unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image)
       .filter((src): src is string => !!src)]);
     mobileEmulation = mobile;

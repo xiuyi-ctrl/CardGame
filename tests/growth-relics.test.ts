@@ -162,7 +162,7 @@ describe('备用的蜡烛', () => {
     const lost = gameReducer({ ...run, screen: 'battle', roster: Array.from({ length: 8 }, () => makeUnit('momo', true, 0, false)), battle: b }, { type: 'BATTLE_END_CONFIRM' });
     expect(lost.screen).toBe('gameover'); expect(lost.unlocks!.relics).not.toContain('spare_candle');
   });
-  it.each([[8, 0, true], [7, 0, false], [8, 1, false]] as const)('通关队伍%d只、阵亡%d只，解锁=%s', (size, lost, unlocked) => {
+  it.each([[8, 0, true], [9, 0, true], [10, 0, true], [7, 0, false], [8, 1, false]] as const)('通关队伍%d只、阵亡%d只，解锁=%s', (size, lost, unlocked) => {
     const run = fresh();
     const end: GameState = { ...run, screen: 'roster', act: 3, currentNodeId: 'boss', roster: Array.from({ length: size }, () => makeUnit('momo', true, 0, false)),
       runStats: { ...run.runStats!, rating: undefined, petsLost: lost }, map: { ...run.map, boss: { boss: [{ speciesId: 'boss_vine' }] } } };

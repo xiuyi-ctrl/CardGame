@@ -903,6 +903,16 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .creation-panel > header p { font-size: 12px; margin: 0; }
 .mobile-ui .creation-role { font-size: 12px; padding: 1px 3px; }
 .mobile-ui .creation-passive { line-height: 1.25; margin: 0; }
+.mobile-ui .creation-screen { grid-template-rows: auto minmax(0, 1fr); }
+.mobile-ui .creation-screen > .progression-instruction { display: none; }
+.mobile-ui .creation-options { grid-auto-rows: minmax(0, 1fr); align-items: stretch; }
+.mobile-ui .flow-screen .creation-option { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto minmax(0, 1fr); align-content: start; align-items: start; min-height: 0; gap: 3px; }
+.mobile-ui .creation-option h3 { align-self: center; text-align: left; }
+.mobile-ui .creation-option .creation-role { align-self: center; }
+.mobile-ui .creation-option .creation-template-symbol { display: none; }
+.mobile-ui .creation-option > :is(.flow-pet-stats, .flow-skill-chips, .creation-passive) { grid-column: 1 / -1; }
+.mobile-ui .creation-option .flow-pet-stats { justify-content: center; }
+.mobile-ui .creation-option .creation-passive { margin: 0 !important; text-align: left; }
 .mobile-ui .progression-preview-body { display: flex; flex-direction: column; gap: 3px; }
 .mobile-ui .evolution-portraits { gap: 4px; }
 .mobile-ui .evolution-portraits .flow-pet { height: 36px; }
@@ -948,12 +958,18 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .postbattle-detail:has(.postbattle-curse) { gap: 1px; padding: 2px; }
 .mobile-ui .postbattle-detail:has(.postbattle-curse) .postbattle-detail-body { gap: 1px; }
 .mobile-ui .postbattle-detail-actions:has(.postbattle-purify) button { font-size: 12px; padding: 0; }
-.mobile-ui .wheel-pool { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 3px; }
-.mobile-ui .flow-screen .wheel-pool > button { padding: 0; gap: 0; }
-.mobile-ui .wheel-pool > button > .flow-pet { display: none; }
+.mobile-ui .wheel-pool-panel { overflow: visible; }
+.mobile-ui .wheel-pool { display: flex; align-self: start; overflow-x: auto; overflow-y: hidden; gap: 4px; }
+.mobile-ui .flow-screen .wheel-pool > button { display: grid; grid-template-columns: 32px minmax(0, 1fr); flex: 0 0 144px; min-height: 52px; padding: 3px; gap: 4px; }
+.mobile-ui .wheel-pool > button > .flow-pet { display: block; width: 32px; height: 32px; }
 .mobile-ui .wheel-pool .flow-pet-stats { line-height: 1; gap: 2px; font-size: 12px; }
 .mobile-ui .wheel-pool .starter-stat-icon { width: 12px; height: 12px; }
 .mobile-ui .wheel-slot-body > button { align-items: center; }
+.mobile-ui :is(.ordinary-roster-grid, .postbattle-roster-grid, .flow-roster-grid, .boss-boost-partners):has(> :nth-child(9)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mobile-ui .formation-main:has(.formation-pets > :nth-child(9)) { grid-template-columns: minmax(0, 1fr) minmax(260px, 40%); }
+.mobile-ui .formation-pets:has(> :nth-child(9)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mobile-ui .formation-main:has(.formation-pets > :nth-child(9)) .formation-detail-summary { display: flex; flex-wrap: wrap; }
+.mobile-ui .postbattle-roster-grid:has(> :nth-child(9)) .postbattle-pet-portrait img { position: absolute; inset: 0; width: 100%; height: 100%; max-height: 100%; object-fit: contain; }
 
 @media (orientation: landscape) and (max-height: 420px) {
   .mobile-ui .creation-template-symbol { display: none; }

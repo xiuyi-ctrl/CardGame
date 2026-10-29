@@ -7,6 +7,7 @@ import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { buildEventByType, type GameState } from '../src/game/state/game';
 import { makeUnit } from '../src/game/core/battle';
 import { createRng } from '../src/game/rng';
+import { getMonster } from '../src/game/data/monsters';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function state(type: string): GameState {
@@ -49,6 +50,11 @@ it('流浪精灵喂食按食物总份数启用，挑战将同一物种与20金�
   const initial = { ...state('精灵'), inventory: { berry: 1, heal_potion: 4 } };
   const dispatch = vi.fn();
   const { rerender } = render(createElement(EventScreen, { state: initial, dispatch }));
+  const monsterName = getMonster(initial.map.events.event.choices[1].monsterId!).name;
+  expect(screen.getByRole('button', { name: /^挑战/ }).textContent).not.toContain(monsterName);
+  expect(screen.getByRole('button', { name: /喂食/ }).textContent).not.toContain(monsterName);
+  expect(screen.getByText(/战斗（1只生物）；胜利获得该生物和20金币/)).toBeTruthy();
+  expect(screen.getByText(/消耗2个随机持有的捕捉食物，获得该生物；60%概率/)).toBeTruthy();
   expect(screen.getByRole('button', { name: /喂食/ }).hasAttribute('disabled')).toBe(true);
   const ready = { ...initial, inventory: { ...initial.inventory, berry: 2 } };
   rerender(createElement(EventScreen, { state: ready, dispatch }));

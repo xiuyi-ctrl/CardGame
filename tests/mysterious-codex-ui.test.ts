@@ -4,6 +4,8 @@ import { createElement } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { CodexScreen } from '../src/ui/App';
 import { SPECIAL_EGG_POOL, getMonster } from '../src/game/data/monsters';
+
+vi.mock('../src/ui/imageCache', () => ({ getDecodedImage: () => ({}), preloadImages: () => Promise.resolve() }));
 afterEach(cleanup);
 it('四种蛋生生物只归入神秘生物目录', () => {
   const { container } = render(createElement(CodexScreen, { onClose: vi.fn() }));

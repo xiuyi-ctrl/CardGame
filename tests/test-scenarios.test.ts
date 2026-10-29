@@ -4,6 +4,7 @@ import { EVENT_TYPE_LABELS, SPECIAL_REWARDS, type NodeType, type TestScenario } 
 import { GROWTH_EVENT_NAMES, GROWTH_EVENT_TYPES } from '../src/game/data/growth-events';
 import { GROWTH_SPECIAL_REWARDS } from '../src/game/data/growth-special';
 import { makeUnit } from '../src/game/core/battle';
+import { generateGrowthMap } from '../src/game/core/growth-map';
 
 export function testScenario(patch: Partial<TestScenario> = {}): TestScenario {
   return { mode: 'main', region: 'mixed', difficulty: 'normal', act: 2, layer: 5, seed: 42,
@@ -15,6 +16,34 @@ function start(patch: Partial<TestScenario> = {}) {
 }
 
 describe('自主测试场景', () => {
+  it('自选熟练度伙伴也应用配置的强化等级和实际投入', () => {
+    const state = start({ mode: 'proficiency', eventType: 'stone_of_forget', customParty: true, growthSkillLevel: 4, growthSkillPaid: 18 });
+    const selected = gameReducer(state, { type: 'TEST_PICK_PLAYER_CONFIRM', units: [makeUnit('momo', true, 0, false)] });
+    expect(selected.screen).toBe('event');
+    expect(selected.roster[0].skillEnhancements?.[0]).toBe(4);
+    expect(selected.roster[0].skillEnhancePaid?.[0]).toBe(18);
+  });
+  it.each([1, 15, 16, 30, 31, 50])('熟练度第%d层默认首领沿用对应阶段的真实首领和随从', layer => {
+    const state = start({ mode: 'proficiency', nodeType: 'boss', layer });
+    const map = generateGrowthMap(42);
+    const bossLayer = layer <= 15 ? 15 : layer <= 30 ? 30 : 50;
+    expect(state.screen).toBe('formation');
+    expect(state.formation?.encounter).toEqual(map.boss[`pf_${bossLayer}`]);
+    expect(state.formation?.options).toMatchObject({ layer });
+    const confirmed = gameReducer(state, { type: 'FORMATION_CONFIRM', units: state.formation!.initialField });
+    expect(confirmed.screen).toBe('battle');
+    expect(confirmed.currentLayer).toBe(layer);
+  });
+  it('熟练度1至50层普通战和精英均可独立测试', () => {
+    for (let layer = 1; layer <= 50; layer++) for (const nodeType of ['battle', 'elite'] as const) {
+      const state = start({ mode: 'proficiency', nodeType, layer });
+      expect(state.screen).toBe('formation');
+      expect(state.currentLayer).toBe(layer);
+      expect(state.formation?.encounter.length).toBeGreaterThan(0);
+      expect(state.roster.every(unit => unit.growthPoints === 100)).toBe(true);
+      expect(state.testRun).toBe(true);
+    }
+  });
   it.each(Object.entries(EVENT_TYPE_LABELS))('主模式可指定%s，不被入口随机覆盖', (eventType, title) => {
     const state = start({ eventType });
     expect(state.screen).toBe('event');
@@ -26,7 +55,7 @@ describe('自主测试场景', () => {
     }
   });
   it.each(GROWTH_EVENT_TYPES)('熟练度可指定事件%s，墓地和成长点满足测试前提', eventType => {
-    const state = start({ mode: 'proficiency', eventType });
+    const state = start({ mode: 'proficiency', eventType, growthSkillLevel: 3, growthSkillPaid: 18 });
     expect(state.screen).toBe('event');
     expect(state.map.events.custom_test.title).toBe(GROWTH_EVENT_NAMES[eventType]);
     expect(state.deadPets).toHaveLength(1);

@@ -77,6 +77,17 @@ export function getSkillEnhanceLevel(unit: Unit, slotIndex: number): number {
   return unit.skillEnhancements?.[slotIndex] ?? 0;
 }
 
+export const MASTER_EXCLUDED_SKILLS = new Set(['core_crystal_cleanse', 'mirror_speed_up', 'mirror_speed_down', 'mirror_copy', 'gather_shields', 'burn_tail', 'clean_flame_care', 'time_lag', 'ember_transfer', 'toxic_burst', 'revenge_thorn', 'despair_gaze']);
+export function canMasterEnhance(unit: Unit, slot: number): boolean {
+  const id = unit.skills[slot];
+  return !!id && !!SKILLS[id] && !MASTER_EXCLUDED_SKILLS.has(id) && getSkillEnhanceLevel(unit, slot) < 4;
+}
+export function applyMasterEnhance(unit: Unit, slot: number): Unit | null {
+  if (!canMasterEnhance(unit, slot)) return null;
+  return { ...unit, skillEnhancements: { ...unit.skillEnhancements, [slot]: getSkillEnhanceLevel(unit, slot) + 1 },
+    skillEnhancePaid: { ...unit.skillEnhancePaid, [slot]: unit.skillEnhancePaid?.[slot] ?? 0 } };
+}
+
 /** 获取技能强化下一级消耗（含传奇倍率，已取整） */
 export function getSkillEnhanceCost(unit: Unit, slotIndex: number): number {
   const level = getSkillEnhanceLevel(unit, slotIndex);
@@ -183,6 +194,7 @@ export function applySkillEnhance(unit: Unit, slotIndex: number): Unit | null {
     ...unit,
     growthPoints: gp - cost,
     skillEnhancements: newEnhancements,
+    skillEnhancePaid: { ...unit.skillEnhancePaid, [slotIndex]: (unit.skillEnhancePaid?.[slotIndex] ?? 0) + cost },
   };
 }
 
@@ -196,6 +208,7 @@ export function applySkillEnhanceStone(unit: Unit, slotIndex: number): Unit | nu
   return {
     ...unit,
     skillEnhancements: newEnhancements,
+    skillEnhancePaid: { ...unit.skillEnhancePaid, [slotIndex]: unit.skillEnhancePaid?.[slotIndex] ?? 0 },
   };
 }
 
@@ -204,18 +217,20 @@ export function applySkillEnhanceReset(unit: Unit, slotIndex: number): { newUnit
   const level = getSkillEnhanceLevel(unit, slotIndex);
   if (level <= 0) return null;
 
-  const skillId = unit.skills[slotIndex];
-  const totalCost = getSkillEnhanceTotalCost(skillId, level);
+  const totalCost = unit.skillEnhancePaid?.[slotIndex] ?? 0;
   const refundPoints = Math.ceil(totalCost * ENHANCE_RESET_REFUND_RATIO);
 
   const newEnhancements = { ...unit.skillEnhancements };
   delete newEnhancements[slotIndex];
+  const paid = { ...unit.skillEnhancePaid };
+  delete paid[slotIndex];
 
   return {
     newUnit: {
       ...unit,
       growthPoints: (unit.growthPoints ?? 0) + refundPoints,
       skillEnhancements: newEnhancements,
+      skillEnhancePaid: paid,
     },
     refundPoints,
   };

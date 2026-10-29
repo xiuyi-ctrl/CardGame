@@ -11,7 +11,10 @@ export type GrowthSpecialKind =
   | 'gold_treasure'
   | 'revive';
 
+import type { GrowthEncounterKind } from '../state/growth-encounters';
+
 export interface GrowthSpecialReward {
+  growthEncounter?: GrowthEncounterKind;
   id: GrowthSpecialKind;
   label: string;
   desc: string;
@@ -21,20 +24,23 @@ export interface GrowthSpecialReward {
 export const GROWTH_SPECIAL_REWARDS: Record<GrowthSpecialKind, GrowthSpecialReward> = {
   growth_blessing: {
     id: 'growth_blessing',
-    label: '成长之赐',
-    desc: '全队各获得 5 成长点',
+    label: '成长之泉',
+    desc: '指定一只伙伴获得8成长点，或两只不同伙伴各获得5成长点',
+    growthEncounter: 'spring',
     emoji: '🌟',
   },
   stat_blessing: {
     id: 'stat_blessing',
-    label: '属性之赐',
-    desc: '选择 1 只宠物，永久 +5 生命 或 +2 速度（不计入属性提升上限）',
+    label: '大师传承',
+    desc: '指定伙伴的一个技能免费强化一级，可突破常规上限，最高＋4',
+    growthEncounter: 'master',
     emoji: '💪',
   },
   skill_blessing: {
     id: 'skill_blessing',
-    label: '技能之赐',
-    desc: '选择 1 只宠物，解锁所有技能槽（免费）',
+    label: '空白契约',
+    desc: '指定伙伴免费解锁下一个技能槽，并为该槽学习一个技能',
+    growthEncounter: 'contract',
     emoji: '🎯',
   },
   legend_recruit: {
@@ -60,8 +66,8 @@ export const GROWTH_SPECIAL_REWARDS: Record<GrowthSpecialKind, GrowthSpecialRewa
 export const GROWTH_SPECIAL_IDS = Object.keys(GROWTH_SPECIAL_REWARDS) as GrowthSpecialKind[];
 
 /** 获取奇遇关奖励（随机3种展示，若无死亡宠物则排除复活） */
-export function getGrowthSpecialRewards(rng: () => number, deadPetCount: number = 0): GrowthSpecialKind[] {
-  let pool = [...GROWTH_SPECIAL_IDS];
+export function getGrowthSpecialRewards(rng: () => number, deadPetCount: number = 0, layer = 16, eligible: (id: GrowthSpecialKind) => boolean = () => true): GrowthSpecialKind[] {
+  let pool = GROWTH_SPECIAL_IDS.filter(id => (layer >= 16 || id !== 'stat_blessing') && eligible(id));
   if (deadPetCount <= 0) {
     pool = pool.filter((id) => id !== 'revive');
   }

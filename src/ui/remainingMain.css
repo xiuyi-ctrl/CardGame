@@ -83,7 +83,7 @@
 .ordinary-detail-actions .unit-card-actions { display: flex; flex: 2; gap: 8px; }
 .ordinary-detail-actions > button, .ordinary-detail-actions .unit-card-actions > button { flex: 1; min-width: 0; min-height: 42px; padding: 4px; font-size: 17px; font-weight: 800; }
 .flow-screen .ordinary-detail-actions .unit-card-actions > button:first-child:not(:last-child) { background: #ff8a08; border-color: #101c2c; box-shadow: inset 0 0 0 2px #ffd15c; }
-.wheel-main { min-height: 0; width: min(1280px, 95%); justify-self: center; display: grid; grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+.wheel-main { min-height: 0; width: min(1280px, 95%); justify-self: center; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 16px; }
 .wheel-order-panel, .wheel-pool-panel { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; padding: 10px; }
 .wheel-section-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
 .wheel-section-heading span { font-size: 14px; color: #52636c; }
@@ -173,3 +173,9 @@
 
 .achievement-grade-difficulties { display: flex; gap: 6px; margin-bottom: 8px; }
 .achievement-grade-difficulties button { flex: 1; min-height: 44px; min-width: 0; }
+
+.wheel-pool { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; padding: 3px; touch-action: pan-x; }
+.flow-screen .wheel-pool > button { display: grid; grid-template-columns: 48px minmax(0, 1fr); flex: 0 0 180px; min-height: 76px; padding: 6px; overflow: visible; }
+.wheel-pool > button > .flow-pet { display: block; width: 48px; height: 48px; flex: none; }
+.wheel-pool > button > span:last-child { text-align: left; }
+.wheel-pool .flow-pet-stats { justify-content: flex-start; }

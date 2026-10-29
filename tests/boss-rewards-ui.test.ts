@@ -15,6 +15,7 @@ function state(): GameState {
 }
 it('首领奖励卡不提前展示候选；强化锁定后选择属性确认', () => {
  const s = state(), dispatch = vi.fn();
+ s.roster.push(makeUnit('lulu', true, 1, false));
  const view = render(createElement(RewardScreen, { state: s, dispatch }));
  expect(screen.queryByText('深渊蛇王')).toBeNull();
  fireEvent.click(screen.getByRole('button', {name: /领取：伙伴强化/}));
@@ -22,9 +23,13 @@ it('首领奖励卡不提前展示候选；强化锁定后选择属性确认', (
  const locked = gameReducer(s, { type:'PICK_REWARD', rewardId:'boss-boost' });
  view.rerender(createElement(RewardScreen, { state: locked, dispatch }));
  expect(screen.queryByText('伙伴招募')).toBeNull();
+ expect(screen.queryByRole('combobox')).toBeNull();
+ const partner = screen.getByRole('button', {name:/泡泡.*生命/});
+ fireEvent.click(partner);
+ expect(partner.getAttribute('aria-pressed')).toBe('true');
  fireEvent.click(screen.getByRole('button', {name:'速度＋2'}));
  fireEvent.click(screen.getByRole('button', {name:'确认强化速度＋2'}));
- expect(dispatch).toHaveBeenCalledWith({type:'PICK_REWARD', rewardId:'boss-boost', targetUid:s.roster[0].uid, stat:'spd'});
+ expect(dispatch).toHaveBeenCalledWith({type:'PICK_REWARD', rewardId:'boss-boost', targetUid:s.roster[1].uid, stat:'spd'});
 });
 it('补给只允许选择药水后领取，不返回三选一', () => {
  const s = gameReducer(state(), {type:'PICK_REWARD', rewardId:'boss-supply'}), dispatch = vi.fn();

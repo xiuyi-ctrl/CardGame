@@ -1,5 +1,7 @@
 import { createRng, pick } from '../rng';
 import { makeUnit } from '../core/battle';
+import { canMasterEnhance } from '../core/growth';
+import type { Unit } from '../types';
 import { generateGrowthMap } from '../core/growth-map';
 import { GROWTH_EVENT_TYPES, buildGrowthEvent } from '../data/growth-events';
 import { GROWTH_SPECIAL_REWARDS, type GrowthSpecialKind } from '../data/growth-special';
@@ -27,10 +29,10 @@ export function prepareTestScenario(initial: GameState, input: TestScenario): { 
   map.layers[row] = node.type === 'sync'
     ? [node, { ...node, id: node.pairedId!, pairedId: nodeId, col: 1 }] : [node];
   const ids = prof ? ['momo', 'lulu', 'fifi'] : ['momo_god', 'lulu_god', 'fifi_god', 'momo', 'lulu', 'fifi'];
-  const roster = Array.from({ length: Math.max(1, Math.min(prof ? 5 : 8, Math.floor(scenario.partySize ?? ids.length))) }, (_, i) => {
+  const roster = Array.from({ length: Math.max(1, Math.min(prof ? 5 : 10, Math.floor(scenario.partySize ?? ids.length))) }, (_, i) => {
     const id = ids[i % ids.length];
     const unit = makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back');
-    return { ...unit, hp: Math.max(1, Math.round(unit.maxHp * scenario.hpPercent / 100)), growthPoints: prof ? 100 : undefined };
+    return configureTestGrowth({ ...unit, hp: Math.max(1, Math.round(unit.maxHp * scenario.hpPercent / 100)), growthPoints: prof ? 100 : undefined }, scenario);
   });
   const inventory = Object.fromEntries([...Object.keys(FOODS), ...Object.keys(ITEMS)].map(id => [id, scenario.itemCount]));
   if (node.type === 'keydoor') inventory[`key_${nodeId}`] = 1;
@@ -38,7 +40,10 @@ export function prepareTestScenario(initial: GameState, input: TestScenario): { 
   const encounterType = node.type === 'corrupted' ? 'battle' : node.type;
   if (['battle', 'elite', 'boss', 'arena', 'gauntlet', 'corrupted', 'guardian'].includes(node.type)) {
     const bossId = scenario.bossId || (prof ? pick(rng, Object.values(map.boss).map(team => team[0].speciesId)) : pick(rng, MAIN_REGIONS[scenario.region].bossPools[scenario.act]));
-    const encounter = buildEncounter(rng, encounterType, scenario.act, Math.min(1, Math.max(0, (row - 1) / (map.layers.length - 3))), bossId, node.gauntletSize, scenario.region);
+    const growthBossLayer = scenario.layer <= 15 ? 15 : scenario.layer <= 30 ? 30 : 50;
+    const encounter = prof && node.type === 'boss' && !scenario.bossId
+      ? map.boss[`pf_${growthBossLayer}`]
+      : buildEncounter(rng, encounterType, scenario.act, Math.min(1, Math.max(0, (row - 1) / (map.layers.length - 3))), bossId, node.gauntletSize, scenario.region);
     if (node.type === 'boss') map.boss[nodeId] = encounter;
     else map.encounter[nodeId] = encounter;
   }
@@ -53,6 +58,13 @@ export function prepareTestScenario(initial: GameState, input: TestScenario): { 
     log: [`[测试] ${scenario.mode === 'main' ? '主模式' : '熟练度'} · ${labelOf(node.type, row)} · 种子${scenario.seed}`],
   };
   return { state: applyTestContent(state), node };
+}
+
+export function configureTestGrowth(unit: Unit, scenario?: TestScenario): Unit {
+  if (scenario?.mode !== 'proficiency' || !(scenario.growthSkillLevel! > 0)) return unit;
+  const slots = unit.skills.map((_, slot) => slot).filter(slot => canMasterEnhance(unit, slot));
+  return { ...unit, skillEnhancements: Object.fromEntries(slots.map(slot => [slot, Math.max(0, Math.min(4, Math.floor(scenario.growthSkillLevel!)))])),
+    skillEnhancePaid: Object.fromEntries(slots.map(slot => [slot, Math.max(0, Math.floor(scenario.growthSkillPaid ?? 0))])) };
 }
 
 /** 进入节点后覆盖指定内容，防止熟练度事件/奇遇入口重新随机。 */
@@ -78,7 +90,7 @@ export function applyTestContent(state: GameState): GameState {
       const kinds: Record<GrowthSpecialKind, SpecialRewardKind> = { growth_blessing: 'growthPoint', stat_blessing: 'boost',
         skill_blessing: 'slotUnlock', legend_recruit: 'recruit', gold_treasure: 'gold', revive: 'revive' };
       return { ...state, map: { ...state.map, specials: { ...state.map.specials,
-        [id]: { title: '奇遇', desc: '选择奖励', rewards: [{ ...chosen, kind: kinds[chosen.id] }] } } } };
+        [id]: { title: '奇遇', desc: '选择奖励', rewards: [{ ...chosen, kind: chosen.growthEncounter ? 'growthEncounter' : kinds[chosen.id] }] } } } };
     }
   }
   return state;
