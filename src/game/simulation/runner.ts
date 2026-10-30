@@ -1,13 +1,13 @@
-import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furnaceShellTargets, getActablePlayerUnits, getEffectiveSpd, isTameable, playerHasMove, resetUidSequenceForSimulation } from '../core/battle';
-import { applyGrowthChoice, applySkillEnhance, canMasterEnhance, getSkillEnhanceCost } from '../core/growth';
-import { growthEncounterCacheKey, growthEncounterEligible } from '../state/growth-encounters';
+import { BATTLE_FATIGUE_START_ROUND, canUnitUseSkill, flameTracingTargets, furnaceShellTargets, getActablePlayerUnits, getEffectiveSpd, isTameable, playerHasMove, requiresBurningTarget, resetUidSequenceForSimulation, stokeFireTargets } from '../core/battle';
+import { applyGrowthChoice, canMasterEnhance, getMaxSkillSlots, getSkillEnhanceCost } from '../core/growth';
+import { growthEncounterCacheKey, growthEncounterChoice, growthEncounterEligible } from '../state/growth-encounters';
 import { FOODS, isCaptureFood } from '../data/foods';
 import { MAIN_REGIONS } from '../data/regions';
 import { getMainShopOffer } from '../data/main-shop';
 import { getSkill } from '../data/skills';
 import type { BattleState, Unit } from '../types';
 import { createInitialState, gameReducer, type GameAction } from '../state/reducer';
-import { canStepTo, canTameEnemy, DIFFICULTY_CONFIG, fusionNeedCount, evolutionLockReason, nextStage, type GameState, type MapNode } from '../state/game';
+import { canStepTo, canTameEnemy, DIFFICULTY_CONFIG, fusionNeedCount, evolutionLockReason, getMaxRoster, maxFieldForEnemy, nextStage, type GameState, type MapNode } from '../state/game';
 import type { BattleSimulationSummary, SimulationConfig, SimulationResult } from './types';
 
 export const DEFAULT_SIMULATION_STEPS = { main: 2500, proficiency: 6000 } as const;
@@ -59,7 +59,8 @@ function battleStep(state: GameState): GameState {
   }
 
   const usable = actor.skills.filter((id) => canUnitUseSkill(actor, id)
-    && (id !== 'flame_tracing_feather' || flameTracingTargets(battle, actor).length > 0)).map(getSkill);
+    && (id !== 'flame_tracing_feather' || flameTracingTargets(battle, actor).length > 0)
+    && (!requiresBurningTarget(id) || stokeFireTargets(battle, actor, id).length > 0)).map(getSkill);
   if (usable.length === 0) return dispatch(state, { type: 'PLAYER_REST', actorUid: actor.uid });
   const heal = usable.find((skill) => skill.kind === 'heal');
   const ally = [...battle.playerUnits].filter((unit) => unit.hp > 0).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
@@ -84,6 +85,7 @@ function battleStep(state: GameState): GameState {
   const back = enemies.filter((unit) => unit.row === 'back');
   const reach = chosen.reach ?? 'front';
   const pool = chosen.id === 'flame_tracing_feather' ? flameTracingTargets(battle, actor)
+    : requiresBurningTarget(chosen.id) ? stokeFireTargets(battle, actor, chosen.id)
     : reach === 'direct' ? enemies : reach === 'back' ? (back.length ? back : front) : (front.length ? front : back);
   const target = [...pool].sort((a, b) => a.hp - b.hp)[0];
   return dispatch(state, { type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: chosen.id, targetUid: target?.uid });
@@ -150,15 +152,6 @@ function deterministicEventChoice(state: GameState): GameState {
 }
 
 function improveUnit(unit: Unit): Unit | undefined {
-  const damageSlots = unit.skills
-    .map((id, index) => ({ index, damage: getSkill(id).damage ?? 0 }))
-    .sort((a, b) => b.damage - a.damage);
-  for (const slot of damageSlots) {
-    if (getSkillEnhanceCost(unit, slot.index) <= (unit.growthPoints ?? 0)) {
-      const enhanced = applySkillEnhance(unit, slot.index);
-      if (enhanced) return enhanced;
-    }
-  }
   const hp = applyGrowthChoice(unit, { kind: 'hp', amount: 2 });
   if (hp) return hp;
   return applyGrowthChoice(unit, { kind: 'spd', amount: 1 }) ?? undefined;
@@ -173,6 +166,14 @@ function growthStep(state: GameState): GameState {
         ? dispatch(state, { type: 'PROF_SHOP_EFFECT', uid: target.uid })
         : dispatch(state, { type: 'SPECIAL_TARGET', uid: target.uid });
     }
+  }
+  if (state.screen === 'blacksmith') {
+    for (const unit of state.roster) {
+      const slots = unit.skills.map((id, slot) => ({ slot, damage: getSkill(id).damage ?? 0 })).sort((a, b) => b.damage - a.damage);
+      const choice = slots.find(({ slot }) => getSkillEnhanceCost(unit, slot) <= (unit.growthPoints ?? 0));
+      if (choice) return dispatch(state, { type: 'PROF_SKILL_ENHANCE', uid: unit.uid, slotIndex: choice.slot });
+    }
+    return dispatch(state, { type: 'NEXT_NODE' });
   }
   for (const unit of [...state.roster].sort((a, b) => (b.growthPoints ?? 0) - (a.growthPoints ?? 0))) {
     const improved = improveUnit(unit);
@@ -208,13 +209,14 @@ function shopStep(state: GameState): GameState {
   const stock = state.shopStock ?? [];
   const wounded = state.roster.some((unit) => unit.hp / unit.maxHp < 0.7);
   if (wounded && (state.inventory.heal_potion ?? 0) > 0) return dispatch(state, { type: 'USE_GROWTH_ITEM', itemId: 'heal_potion' });
+  if (wounded && (state.inventory.heal_potion_g ?? 0) > 0) return dispatch(state, { type: 'USE_GROWTH_ITEM', itemId: 'heal_potion_g' });
   const ownedGrowthItem = ['book_large', 'book_medium', 'book_small'].find((id) => (state.inventory[id] ?? 0) > 0);
   if (ownedGrowthItem) return dispatch(state, { type: 'USE_GROWTH_ITEM', itemId: ownedGrowthItem });
   const price: Record<string, number> = { heal_potion: 30, book_large: 30, book_medium: 22, book_small: 12, pet_recruit: 20 };
   const priorities = state.roster.some((unit) => unit.hp / unit.maxHp < 0.55)
     ? ['heal_potion', 'book_large', 'book_medium', 'book_small', 'pet_recruit']
     : ['book_large', 'book_medium', 'book_small', 'pet_recruit', 'heal_potion'];
-  const item = priorities.find((id) => stock.includes(id) && !(state.shopBoughtItems ?? []).includes(id) && state.gold >= (price[id] ?? Infinity));
+  const item = priorities.find((id) => (id !== 'pet_recruit' || state.roster.length < getMaxRoster(state.runMode)) && stock.includes(id) && !(state.shopBoughtItems ?? []).includes(id) && state.gold >= (price[id] ?? Infinity));
   return item ? dispatch(state, { type: 'PROF_SHOP_BUY', itemId: item }) : dispatch(state, { type: 'NEXT_NODE' });
 }
 
@@ -241,23 +243,33 @@ export function simulationStep(state: GameState, seed: number): GameState {
   if (state.growthEncounterPending) {
     const pending = state.growthEncounterPending;
     const kind = pending.kind;
-    const unit = state.roster.find(unit => unit.hp > 0 && (['master', 'recycle', 'contract', 'relearn'].includes(kind)
+    const unit = kind === 'grave' || kind === 'revival_spring' ? state.deadPets?.[0] : state.roster.find(unit => unit.hp > 0 && (['master', 'recycle', 'contract', 'relearn', 'legend', 'altar_hp', 'altar_spd'].includes(kind)
       ? growthEncounterEligible({ ...state, roster: [unit] }, kind) : kind !== 'transfer' || (unit.growthPoints ?? 0) > 0));
     if (!unit && kind !== 'buy_stone') return dispatch(state, { type: 'GROWTH_ENCOUNTER_CANCEL' });
     const slot = unit?.skills.findIndex((_, slot) => kind === 'master' ? canMasterEnhance(unit, slot) : kind === 'recycle' ? (unit.skillEnhancePaid?.[slot] ?? 0) > 0 : true) ?? 0;
-    if (unit && ['contract', 'relearn'].includes(kind)) {
-      const selectedSlot = kind === 'contract' ? unit.skills.length : slot;
+    if (unit && ['contract', 'relearn', 'legend'].includes(kind)) {
+      const selectedSlot = kind === 'contract' || kind === 'legend' && unit.skills.length < getMaxSkillSlots(unit) ? unit.skills.length : slot;
       const choices = state.growthEncounterCandidates?.[growthEncounterCacheKey(state, unit.uid, selectedSlot)];
       if (pending.uid !== unit.uid || pending.slot !== selectedSlot || !choices) return dispatch(state, { type: 'GROWTH_ENCOUNTER_PREVIEW', uid: unit.uid, slot });
       return dispatch(state, { type: 'GROWTH_ENCOUNTER_CONFIRM', uid: unit.uid, slot, skillId: choices[0] });
     }
-    return dispatch(state, { type: 'GROWTH_ENCOUNTER_CONFIRM', uid: unit?.uid, slot, otherUid: state.roster.find(pet => pet.hp > 0 && pet.uid !== unit?.uid)?.uid, amount: 1 });
+    return dispatch(state, { type: 'GROWTH_ENCOUNTER_CONFIRM', uid: unit?.uid, slot, speciesId: growthEncounterChoice(state, kind)?.recruitCandidates?.[0], otherUid: state.roster.find(pet => pet.hp > 0 && pet.uid !== unit?.uid)?.uid, amount: 1 });
   }
   switch (state.screen) {
     case 'inter_act': return dispatch(state, { type: 'INTER_ACT_CONTINUE' });
     case 'map': return mapStep(state);
     case 'battle': return state.battle?.phase === 'acting' ? battleStep(state) : dispatch(state, { type: 'BATTLE_END_CONFIRM' });
-    case 'formation': return dispatch(state, { type: 'FORMATION_CONFIRM', units: state.formation?.units ?? [] });
+    case 'formation': {
+      const formation = state.formation;
+      if (!formation) return state;
+      if (state.eventBattle?.growthTrial) return dispatch(state, { type: 'FORMATION_CONFIRM', units: formation.initialField.length ? formation.initialField : formation.units.filter(unit => unit.hp > 0).slice(0, 3) });
+      if (state.runMode !== 'proficiency' || formation.forceAllUnits) return dispatch(state, { type: 'FORMATION_CONFIRM', units: formation.units });
+      const limit = maxFieldForEnemy(formation.encounter.length, 'proficiency');
+      const units = formation.units.filter(unit => unit.hp > 0).slice(0, limit).map((unit, index) => ({
+        ...unit, row: (index < 3 ? 'front' : 'back') as 'front' | 'back', column: (index % 3) as 0 | 1 | 2,
+      }));
+      return dispatch(state, { type: 'FORMATION_CONFIRM', units });
+    }
     case 'gauntlet-order': return dispatch(state, { type: 'GAUNTLET_ORDER_CONFIRM', units: state.gauntletOrder ?? [] });
     case 'reward': {
       const pending = state.rewards.find((item) => item.id === state.pendingRecruitRewardId);

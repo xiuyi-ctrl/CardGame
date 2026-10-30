@@ -58,13 +58,13 @@ describe('战斗攻击目标准星', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'PLAYER_SKILL', actorUid: actor.uid, skillId: 'burn_brand', targetUid: back.uid });
   });
 
-  it('裂壳冲撞没有护盾时按钮禁用', () => {
+  it('裂壳冲撞没有护盾时仍可选择', () => {
     const battle = createBattle([makeUnit('molten_beetle', true, 0, false)], [{ speciesId: 'momo' }], 7);
     const dispatch = vi.fn();
     render(createElement(BattleScreen, { state: { ...createInitialState(), screen: 'battle', battle }, dispatch }));
     fireEvent.click(screen.getByRole('button', { name: /熔甲虫，右键或按菜单键查看我方生物 Buff/ }));
     const skill = screen.getByRole('button', { name: /^裂壳冲撞/ });
-    expect(skill.hasAttribute('disabled')).toBe(true);
+    expect(skill.hasAttribute('disabled')).toBe(false);
     fireEvent.click(skill);
     expect(dispatch).not.toHaveBeenCalled();
   });

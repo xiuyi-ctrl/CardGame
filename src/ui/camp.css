@@ -21,12 +21,12 @@
 .camp-rest-choices { display: flex; flex-direction: column; gap: 20px; justify-content: center; padding: 18px; overflow-y: auto; scrollbar-width: none; }
 .camp-rest-choices::-webkit-scrollbar { display: none; }
 .flow-screen .camp-rest-choice { min-width: 0; min-height: 150px; display: flex; align-items: center; gap: 22px; padding: 20px; background: #fff9e9; flex: 1; }
-.camp-rest-choice > .map-node-icon, .camp-rest-choice > .flow-icon { width: clamp(70px, 10vw, 150px); height: clamp(70px, 10vw, 150px); flex-shrink: 0; }
+.flow-screen .camp-rest-choice > :is(.map-node-icon, .flow-icon) { width: clamp(70px, 10vw, 150px); height: clamp(70px, 10vw, 150px); flex-shrink: 0; object-fit: contain; }
 .camp-rest-choice > span { display: flex; flex-direction: column; gap: 16px; text-align: left; }
 .camp-rest-choice strong { font-size: clamp(28px, 3.5vw, 52px); }
 .camp-rest-choice > span > span { color: #52636c; font-size: clamp(16px, 1.8vw, 26px); line-height: 1.5; }
 .camp-rest-choices > p { text-align: center; color: #52636c; font-weight: 700; }
-.camp-fusion-screen { grid-template-rows: auto minmax(0, 1.6fr) minmax(180px, 1fr); }
+.flow-screen.camp-fusion-screen { grid-template-rows: auto minmax(0, 1fr) clamp(140px, 24vh, 190px); }
 .camp-fusion-panel { min-height: 0; padding: 8px; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 12px; }
 .camp-fusion-body { display: flex; flex-direction: column; gap: 10px; }
 .camp-fusion-body > * { flex-shrink: 0; }
@@ -52,15 +52,21 @@
 .camp-fusion-confirm button { font-size: 24px; }
 .camp-fusion-confirm small { color: #52636c; }
 .camp-fusion-roster { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 6px; }
-.camp-fusion-roster h2 { font-size: 22px; }
-.camp-fusion-roster-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: minmax(150px, 1fr); gap: 8px; padding: 4px; }
+.flow-screen .camp-fusion-roster h2 { font-size: 18px; }
+.camp-fusion-roster-grid { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); grid-template-rows: minmax(0, 1fr); gap: 8px; padding: 4px; }
+.camp-screen .camp-fusion-roster-grid { overflow-x: auto; overflow-y: hidden; }
 .flow-screen .camp-roster-card { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; justify-items: center; gap: 4px; padding: 14px 6px 6px; background: #fff9e9; }
 .camp-roster-card > .flow-pet { width: 100%; height: 100%; padding: 4px; }
 .camp-roster-card strong { font-size: 18px; }
 .camp-roster-card .flow-pet-stats { font-size: 13px; gap: 4px 8px; }
 .camp-roster-card .starter-stat-icon { width: 22px; height: 22px; }
 .camp-roster-card small { color: #52636c; font-size: 11px; }
-.camp-fusion-roster .camp-roster-card { grid-template-rows: minmax(0, 1fr) auto auto auto; }
+.camp-fusion-roster .camp-roster-card { grid-template-columns: 48px minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 2px 6px; padding: 16px 4px 4px; text-align: left; justify-items: start; align-content: center; }
+.camp-fusion-roster .camp-roster-card > .flow-pet { grid-row: 1 / 3; width: 48px; height: 48px; padding: 0; }
+.camp-fusion-roster .camp-roster-card .flow-pet-stats { flex-wrap: nowrap; gap: 4px; font-size: 12px; }
+.camp-fusion-roster .camp-roster-card .starter-stat-icon { width: 16px; height: 16px; }
+.camp-fusion-roster .camp-roster-card strong { font-size: 16px; overflow-wrap: anywhere; }
+.camp-fusion-roster .camp-roster-card small { grid-column: 1 / -1; }
 .camp-screen .camp-roster-card.is-main { border-color: #168d89; }
 .camp-screen .camp-roster-card.is-sub { border-color: #b14e52; }
 .camp-roster-badge { position: absolute; top: 0; left: 0; padding: 2px 8px; color: #fff9e9; background: #168d89; font-size: 12px; font-weight: 800; }
@@ -122,16 +128,38 @@
 .camp-learning-actions > p { font-size: 14px; color: #52636c; }
 .camp-learning-actions > div { display: flex; gap: 10px; flex-wrap: wrap; }
 .camp-missing { padding: 20px; }
+@media (max-height: 560px) {
+  .flow-screen.camp-fusion-screen { grid-template-rows: auto minmax(0, 1fr) 140px; padding: 6px; gap: 6px; }
+  .camp-fusion-screen > .flow-frame { border-width: 8px; border-image-width: 8px; }
+  .camp-fusion-screen .camp-header { padding: 2px 6px; }
+  .camp-fusion-screen .camp-header h1 { font-size: 22px; }
+  .camp-fusion-screen .camp-header > p { font-size: 14px; }
+  .camp-fusion-screen .camp-header > button { min-height: 44px; padding: 4px 12px; font-size: 16px; }
+  .camp-fusion-screen .camp-fusion-panel { padding: 3px; gap: 4px; }
+  .camp-fusion-screen .camp-fusion-body { gap: 4px; }
+  .camp-fusion-screen .camp-fusion-slot { padding: 3px; }
+  .camp-fusion-screen .camp-fusion-slot h2 { font-size: 16px; padding: 2px; }
+  .camp-fusion-screen .camp-fusion-slot > button { padding: 2px; }
+  .camp-fusion-screen .camp-fusion-slot .flow-pet { height: 52px; padding: 0; }
+  .camp-fusion-screen .camp-fusion-slot strong { font-size: 18px; margin: 0; }
+  .camp-fusion-screen .camp-fusion-preview { padding: 3px 6px; gap: 4px 12px; }
+  .camp-fusion-screen .camp-fusion-preview h2 { font-size: 16px; }
+  .camp-fusion-screen .camp-fusion-preview p { font-size: 12px; }
+  .camp-fusion-screen .camp-fusion-preview b { font-size: 16px; }
+  .camp-fusion-screen .camp-fusion-confirm > p { padding: 4px; font-size: 12px; }
+  .camp-fusion-screen .camp-fusion-confirm button { min-height: 44px; padding: 4px; font-size: 18px; }
+  .camp-fusion-screen .camp-fusion-confirm small { font-size: 12px; }
+  .camp-fusion-screen .camp-fusion-roster { padding: 3px; gap: 3px; }
+  .camp-fusion-screen .camp-fusion-roster h2 { font-size: 16px; }
+}
 @media (max-width: 1100px), (max-height: 740px) {
   .camp-screen { padding: 10px; gap: 10px; }
   .camp-header h1 { font-size: 26px; }
   .camp-rest-choices { padding: 6px; gap: 12px; }
   .flow-screen .camp-rest-choice { padding: 12px; gap: 10px; min-height: 120px; }
-  .camp-fusion-screen { grid-template-rows: auto minmax(0, 1.6fr) minmax(160px, 1fr); }
   .camp-fusion-panel { padding: 2px; gap: 6px; }
   .camp-fusion-slot .flow-pet { height: 82px; }
   .camp-fusion-slot strong { font-size: 21px; }
-  .camp-fusion-roster-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .camp-fusion-confirm > p { font-size: 14px; padding: 8px; }
   .camp-skill-name { font-size: 21px; }
   .camp-screen .camp-skill-card { padding: 10px; gap: 8px; }
@@ -145,7 +173,7 @@
   .camp-header > p { font-size: 13px; }
   .camp-rest-layout { gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
   .camp-rest-party { grid-template-columns: minmax(0, 1fr); }
-  .camp-rest-choice > .map-node-icon, .camp-rest-choice > .flow-icon { width: 48px; height: 48px; }
+  .flow-screen .camp-rest-choice > :is(.map-node-icon, .flow-icon) { width: 48px; height: 48px; }
   .camp-rest-choice strong { font-size: 24px; }
   .camp-rest-choice > span > span { font-size: 14px; }
   .camp-fusion-slots { gap: 8%; }
@@ -153,7 +181,6 @@
   .camp-fusion-slot .flow-pet { width: 100%; }
   .camp-fusion-slot h2 { font-size: 16px; }
   .camp-fusion-confirm { flex-direction: column; align-items: stretch; }
-  .camp-fusion-roster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .camp-inherit-columns, .camp-special-layout, .camp-learning-layout { gap: 8px; }
   .camp-skill-column h2, .camp-special-roster h2, .camp-special-preview h2 { font-size: 19px; }
   .camp-inherit-footer > div { flex-wrap: wrap; }

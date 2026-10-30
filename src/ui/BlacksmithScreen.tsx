@@ -14,6 +14,7 @@ import {
   getSkillEnhanceLevel,
   getSkillEnhanceMaxLevel,
   getSkillEnhanceBonus,
+  getSkillEffectEnhanceBonus,
 } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
 
@@ -85,7 +86,7 @@ export function BlacksmithScreen({ state, dispatch }: Props) {
                       )}
                     </>
                   ) : (
-                    <span className="growth-skill-max">已满级</span>
+                    <span className="growth-skill-max">{maxLevel === 0 ? '不可强化' : '已满级'}</span>
                   )}
                   {level > 0 && (
                     <button
@@ -210,7 +211,7 @@ function renderSkillDesc(skillId: string, level: number): string {
   if (hits > 1) parts.push(`${hits} 段`);
   if (sk.effects && sk.effects.length > 0) {
     for (const e of sk.effects) {
-      const val = e.value + bonus.effectBonus;
+      const val = e.value + getSkillEffectEnhanceBonus(skillId, level, e.kind);
       if (e.kind === 'shield') parts.push(`${val} 护盾`);
       else if (e.kind === 'burn') parts.push(`灼烧${val}层`);
       else if (e.kind === 'poison') parts.push(`中毒${val}层`);
@@ -220,7 +221,8 @@ function renderSkillDesc(skillId: string, level: number): string {
       else if (e.kind === 'atkDown') parts.push(`降攻${val}`);
       else if (e.kind === 'thorns') parts.push(`荆棘反伤${val}`);
       else if (e.kind === 'skillSeal') parts.push(`封印${e.value}技能`);
-      else if (e.kind === 'shadowMark') parts.push(`暗印${val}层`);
+      else if (e.kind === 'shadowMark') parts.push(`印记受伤+${val}`);
+      else if (e.kind === 'waterCurtain') parts.push(`水幕减伤${val}`);
       else if (e.kind === 'fear') parts.push(`恐惧${e.value}层`);
     }
   }

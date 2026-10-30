@@ -379,7 +379,7 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui :is(.flow-screen main, .flow-screen > section) { min-height: 0; }
 .mobile-ui .flow-screen > footer { flex: none; overflow: visible; }
 .mobile-ui :is(.ordinary-roster-screen, .wheel-order-screen, .flow-partner-screen, .progression-choice-screen, .attribute-boost-screen, .creation-screen, .camp-special-screen, .training-growth-screen) { grid-template-rows: auto minmax(0, 1fr) auto; }
-.mobile-ui .camp-fusion-screen { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.mobile-ui .flow-screen.camp-fusion-screen { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
 .mobile-ui .camp-fusion-screen > header { grid-column: 1 / -1; }
 .mobile-ui .camp-fusion-skill-screen { grid-template-rows: auto auto minmax(0, 1fr) auto; }
 .mobile-ui .flow-choice-panel { min-height: 0; margin-left: 0; padding: 4px; gap: 4px; overflow-y: auto; }
@@ -449,7 +449,7 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .camp-rest-choice strong { font-size: 20px; }
 .mobile-ui .camp-rest-choice > span { gap: 4px; }
 .mobile-ui .camp-rest-choice > span > span { font-size: 13px; }
-.mobile-ui .camp-rest-choice > :is(.map-node-icon, .flow-icon) { width: clamp(28px, 12dvh, 64px); height: clamp(28px, 12dvh, 64px); }
+.mobile-ui .flow-screen .camp-rest-choice > :is(.map-node-icon, .flow-icon) { width: clamp(28px, 12dvh, 64px); height: clamp(28px, 12dvh, 64px); }
 .mobile-ui .camp-scene-pets { padding: 2px; }
 .mobile-ui .camp-scene-pets > .flow-pet { height: clamp(44px, 20dvh, 100px); }
 .mobile-ui .camp-scene-pets > .map-node-icon { height: clamp(32px, 16dvh, 80px); }
@@ -469,7 +469,7 @@ html.mobile-ui { --mobile-paper: #fff9e9; --mobile-ink: #101c2c; --mobile-line: 
 .mobile-ui .camp-fusion-confirm button { font-size: 16px; }
 .mobile-ui .camp-fusion-confirm small { font-size: 10px; }
 .mobile-ui .camp-fusion-roster { padding: 3px; gap: 3px; }
-.mobile-ui .camp-fusion-roster h2 { font-size: 16px; }
+.mobile-ui .flow-screen .camp-fusion-roster h2 { font-size: 16px; }
 .mobile-ui .camp-fusion-roster-grid { grid-template-columns: repeat(auto-fit, minmax(min(100px, 100%), 1fr)); grid-auto-rows: 130px; gap: 4px; padding: 3px; }
 .mobile-ui .camp-roster-card strong { font-size: 14px; }
 .mobile-ui .camp-screen .camp-roster-card { padding: 14px 3px 3px; }
@@ -934,7 +934,10 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .recruit-passive { padding: 0; }
 .mobile-ui .recruit-passive p { margin: 0; line-height: 1.2; }
 .mobile-ui .camp-fusion-roster .camp-roster-card > small { display: none; }
-.mobile-ui .camp-fusion-roster-grid { grid-template-rows: repeat(2, minmax(44px, 1fr)); grid-auto-rows: minmax(44px, 1fr); }
+.mobile-ui .camp-fusion-roster-grid { grid-auto-flow: row; grid-auto-columns: auto; grid-template-rows: repeat(2, minmax(44px, 1fr)); grid-auto-rows: minmax(44px, 1fr); }
+.mobile-ui .camp-fusion-roster .camp-roster-card { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; justify-items: center; padding: 14px 3px 3px; text-align: center; }
+.mobile-ui .camp-fusion-roster .camp-roster-card > .flow-pet { grid-row: auto; width: 100%; height: 100%; }
+.mobile-ui .camp-fusion-roster .camp-roster-card .flow-pet-stats { flex-wrap: wrap; gap: 3px 6px; }
 .mobile-ui .battle-overlay-grid { grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 3px; }
 .mobile-ui .battle-overlay-grid button { min-height: 44px; padding: 3px; font-size: 14px; gap: 3px; }
 .mobile-ui .battle-overlay-item-name :is(.battle-item-icon, .capture-food-icon) { width: 24px; height: 24px; }
@@ -958,9 +961,9 @@ html.mobile-ui .battle-screen > .hud { padding-right: 52px; }
 .mobile-ui .postbattle-detail:has(.postbattle-curse) { gap: 1px; padding: 2px; }
 .mobile-ui .postbattle-detail:has(.postbattle-curse) .postbattle-detail-body { gap: 1px; }
 .mobile-ui .postbattle-detail-actions:has(.postbattle-purify) button { font-size: 12px; padding: 0; }
-.mobile-ui .wheel-pool-panel { overflow: visible; }
-.mobile-ui .wheel-pool { display: flex; align-self: start; overflow-x: auto; overflow-y: hidden; gap: 4px; }
-.mobile-ui .flow-screen .wheel-pool > button { display: grid; grid-template-columns: 32px minmax(0, 1fr); flex: 0 0 144px; min-height: 52px; padding: 3px; gap: 4px; }
+.mobile-ui .wheel-pool-panel { overflow: hidden; }
+.mobile-ui .wheel-pool { display: flex; flex-direction: column; align-self: stretch; overflow-x: hidden; overflow-y: auto; gap: 4px; }
+.mobile-ui .flow-screen .wheel-pool > button { display: grid; grid-template-columns: 32px minmax(0, 1fr); flex: 0 0 auto; min-height: 52px; padding: 3px; gap: 4px; }
 .mobile-ui .wheel-pool > button > .flow-pet { display: block; width: 32px; height: 32px; }
 .mobile-ui .wheel-pool .flow-pet-stats { line-height: 1; gap: 2px; font-size: 12px; }
 .mobile-ui .wheel-pool .starter-stat-icon { width: 12px; height: 12px; }

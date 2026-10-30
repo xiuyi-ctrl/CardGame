@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canUnitUseSkill, createBattle, makeUnit, planEnemyLayout, playerEndTurn, playerSkill, skillCooldownLeft } from '../src/game/core/battle';
 import { getGrowthArenaEncounter } from '../src/game/data/growth-arena';
-import { getGrowthEliteEncounter, TIER2 } from '../src/game/core/growth-map';
+import { TIER2 } from '../src/game/core/growth-map';
 import { getNormalSkillPool } from '../src/game/core/growth';
 import { fusionNeedCount, generateMap, nextStage } from '../src/game/state/game';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
@@ -67,7 +67,7 @@ describe('熔甲虫与焚风鹰', () => {
     expect(planEnemyLayout([{ speciesId: 'molten_beetle' }, { speciesId: 'searing_hawk' }]).map(u => u.row)).toEqual(['front', 'back']);
   });
 
-  it.each([1, 2, 4, 5, 10])('裂壳冲撞按执行时盾量%s扣费，最多消耗5，无冷却', (shield) => {
+  it.each([0, 1, 2, 4, 5, 10])('裂壳冲撞按执行时盾量%s扣费，最多消耗5，无冷却', (shield) => {
     const b = quiet(['molten_beetle']);
     b.playerUnits[0].shield = shield;
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'shell_charge', b.enemyUnits[0].uid));
@@ -76,15 +76,15 @@ describe('熔甲虫与焚风鹰', () => {
     expect(skillCooldownLeft(after.playerUnits[0], 'shell_charge')).toBe(0);
   });
 
-  it('无盾不能选冲撞，执行前失盾不改招；强化只加基础伤害', () => {
+  it('无盾可选冲撞，执行前失盾仍攻击；强化只加基础伤害', () => {
     const b = quiet(['molten_beetle']);
-    expect(canUnitUseSkill(b.playerUnits[0], 'shell_charge')).toBe(false);
-    expect(playerSkill(b, b.playerUnits[0].uid, 'shell_charge', b.enemyUnits[0].uid)).toBe(b);
+    expect(canUnitUseSkill(b.playerUnits[0], 'shell_charge')).toBe(true);
+    expect(playerSkill(b, b.playerUnits[0].uid, 'shell_charge', b.enemyUnits[0].uid).orders?.[b.playerUnits[0].uid]).toBeDefined();
     b.playerUnits[0].shield = 9;
     b.playerUnits[0].skillEnhancements = { 2: 2 };
     const ordered = playerSkill(b, b.playerUnits[0].uid, 'shell_charge', b.enemyUnits[0].uid);
     const stopped = playerEndTurn({ ...ordered, playerUnits: ordered.playerUnits.map(u => ({ ...u, shield: 0 })) });
-    expect(stopped.log.some(e => e.text.includes('使用「裂壳冲撞」攻击'))).toBe(false);
+    expect(stopped.enemyUnits[0].hp).toBe(493);
     const boosted = playerEndTurn(ordered);
     expect(boosted.enemyUnits[0].hp).toBe(488);
     expect(boosted.playerUnits[0].shield).toBe(4);
@@ -231,9 +231,5 @@ describe('熔甲虫与焚风鹰', () => {
       expect(new Set(early.map(e => e.speciesId)).size).toBe(early.length);
     }
     for (const id of ['molten_beetle', 'searing_hawk']) expect(found.has(id)).toBe(true);
-    expect(getGrowthEliteEncounter(20, () => 0.799).every(e => TIER2.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEliteEncounter(20, () => 0.8).every(e => !TIER2.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEliteEncounter(35, () => 0.199).every(e => TIER2.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEliteEncounter(35, () => 0.2).every(e => !TIER2.includes(e.speciesId))).toBe(true);
   });
 });

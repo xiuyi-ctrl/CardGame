@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canUnitUseSkill, createBattle, flameTracingTargets, makeUnit, planEnemyLayout, playerEndTurn, playerSkill, skillCooldownLeft } from '../src/game/core/battle';
 import { getSkillEnhanceBonus, getNormalSkillPool } from '../src/game/core/growth';
-import { getGrowthEncounter, TIER1 } from '../src/game/core/growth-map';
+import { TIER1 } from '../src/game/core/growth-map';
 import { getSkill } from '../src/game/data/skills';
 import { MAIN_BASE_POOL, MONSTERS, STARTER_GROUP_1, STARTER_GROUP_2 } from '../src/game/data/monsters';
 import { generateMap, generateRewards, nextStage } from '../src/game/state/game';
@@ -233,9 +233,5 @@ describe('熔壳虫与焚风雏鹰', () => {
       expect(recruited.has(id)).toBe(true);
       expect(shop.has(id)).toBe(true);
     }
-    expect(getGrowthEncounter(20, () => 0.599).every(e => TIER1.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEncounter(20, () => 0.6).every(e => !TIER1.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEncounter(35, () => 0.199).every(e => TIER1.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEncounter(35, () => 0.2).every(e => !TIER1.includes(e.speciesId))).toBe(true);
   });
 });

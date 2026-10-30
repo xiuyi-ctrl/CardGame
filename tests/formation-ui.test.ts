@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { makeUnit } from '../src/game/core/battle';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { FormationScreen } from '../src/ui/FormationScreen';
-import { FORMATION_SPRITES } from '../src/ui/formationSprites';
+import { formationSprite } from '../src/ui/formationSprites';
 
 afterEach(cleanup);
 
@@ -64,7 +64,7 @@ describe('战前布阵界面', () => {
 
     const portraits = document.querySelectorAll<HTMLImageElement>('.formation-pet-portrait img');
     expect(portraits).toHaveLength(6);
-    portraits.forEach((portrait, index) => expect(portrait.getAttribute('src')).toBe(FORMATION_SPRITES[species[index]]));
+    portraits.forEach((portrait, index) => expect(portrait.getAttribute('src')).toBe(formationSprite(species[index])));
     expect(document.querySelectorAll('.formation-board .battle-sprite img')).toHaveLength(2);
     expect(document.querySelectorAll('.formation-enemy-portrait img')).toHaveLength(6);
     expect(document.querySelector('.formation-detail-portrait img')).toBeTruthy();

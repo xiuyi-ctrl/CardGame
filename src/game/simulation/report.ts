@@ -7,7 +7,7 @@ import type {
   SimulationResult,
 } from './types';
 
-export const BALANCE_BOT_VERSION = '2.0.0';
+export const BALANCE_BOT_VERSION = '2.0.1';
 
 export function percentile(values: number[], ratio: number): number {
   if (values.length === 0) return 0;

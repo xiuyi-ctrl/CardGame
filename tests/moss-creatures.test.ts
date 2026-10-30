@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { createBattle, makeUnit, planEnemyLayout, playerEndTurn, playerSkill, skillCooldownLeft } from '../src/game/core/battle';
-import { TIER1, TIER2, getGrowthEncounter, getGrowthEliteEncounter } from '../src/game/core/growth-map';
 import { getNormalSkillPool, LEGENDARY_SKILLS } from '../src/game/core/growth';
 import { getSkill } from '../src/game/data/skills';
 import { STARTER_GROUP_1, STARTER_GROUP_2, MAIN_BASE_POOL, MAIN_EVO1_POOL } from '../src/game/data/monsters';
@@ -179,8 +178,5 @@ describe('光苔球与光苔兽', () => {
     for (let seed = 0; seed < 120; seed++) for (const act of [1, 2, 3]) Object.values(generateMap(seed, act).encounter).flat().forEach(e => found.add(e.speciesId));
     expect(found.has('light_moss')).toBe(true);
     expect(found.has('moss_beast')).toBe(true);
-    expect(getGrowthEncounter(20, () => 0.599).every(e => TIER1.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEncounter(20, () => 0.6).every(e => TIER2.includes(e.speciesId))).toBe(true);
-    expect(getGrowthEliteEncounter(20, () => 0.799).every(e => TIER2.includes(e.speciesId))).toBe(true);
   });
 });

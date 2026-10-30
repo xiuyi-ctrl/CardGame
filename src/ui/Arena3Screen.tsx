@@ -13,7 +13,7 @@ export function Arena3Screen({ state, dispatch }: { state: GameState; dispatch: 
       </button>
       <button type="button" className="arena-mode is-challenge" onClick={() => dispatch({ type: 'ARENA3_MODE', mode: 'challenge' })}>
         <h2>挑战赛</h2><div className="arena-mode-art" aria-hidden="true"><img src="/page-special-icons/arena-challenge.png" alt="" draggable={false} /></div>
-        <p>对战3只精英级敌人</p><p className="arena-danger">正常战斗规则，可死亡</p><div className="arena-reward">胜利：<br /><b>50金币</b> + 全体<b>3成长点</b></div><p className="arena-danger">失败：远征直接结束</p><span className="arena-mode-action">选择挑战赛</span>
+        <p>挑战当前层段精英阵容</p><p className="arena-danger">正常战斗规则，可死亡</p><div className="arena-reward">胜利：<br /><b>50金币</b> + 全体<b>3成长点</b></div><p className="arena-danger">失败：远征直接结束</p><span className="arena-mode-action">选择挑战赛</span>
       </button>
       <button type="button" className="arena-mode is-exhibition" disabled={state.gold < 20} onClick={() => dispatch({ type: 'ARENA3_MODE', mode: 'exhibition' })}>
         <h2>表演赛</h2><div className="arena-mode-art" aria-hidden="true"><img src="/page-special-icons/arena-exhibition.png" alt="" draggable={false} /></div>

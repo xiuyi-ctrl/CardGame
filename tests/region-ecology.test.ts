@@ -6,6 +6,7 @@ import type { GameState } from '../src/game/state/game';
 import { readFileSync } from 'node:fs';
 import { SPECIAL_EGG_POOL } from '../src/game/data/monsters';
 import { MAIN_REGIONS } from '../src/game/data/regions';
+import { getCreatureImage } from '../src/game/data/creature-art';
 
 function formation(): GameState {
   const state = createInitialState();
@@ -15,12 +16,13 @@ function formation(): GameState {
 }
 
 describe('地区生态发现', () => {
-  it('所有地区候选都具有不超过128像素的小图，避免弹窗加载原始大立绘', () => {
+  it('所有地区候选使用统一立绘来源，不再依赖可能过期的独立生态缩略图', () => {
     const ids = new Set(Object.values(MAIN_REGIONS).flatMap(region => [...region.basePool, ...region.evo1Pool, ...region.evo2Pool, ...SPECIAL_EGG_POOL]));
     for (const id of ids) {
-      const png = readFileSync(`public/ecology/${id}.png`);
-      expect(png.readUInt32BE(16)).toBeLessThanOrEqual(128);
-      expect(png.readUInt32BE(20)).toBeLessThanOrEqual(128);
+      const image = getCreatureImage(id);
+      expect(image).toBeTruthy();
+      const png = readFileSync(`public${image}`);
+      expect(png.subarray(1, 4).toString()).toBe('PNG');
     }
   });
   it('布阵预览不解锁，实际开战记录双方形态；按地区隔离并持久化到同槽新局', () => {

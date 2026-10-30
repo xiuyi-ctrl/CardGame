@@ -1,12 +1,12 @@
 /**
  * 熟练度远征：敌人技能强化与替换（全确定性，无随机）
  *
- * 每 10 层一档（ENEMY_SKILL_TIERS），三个维度联动：
+ * 按层段错开提升（ENEMY_SKILL_TIERS），每次只提高一个维度：
  * - enhanceCount: 强化技能数（从 slot 0 起前 N 个槽位写入 skillEnhancements）
  * - enhanceLevel: 技能强化等级（受 getSkillEnhanceMaxLevel 封顶）
  * - replaceCount: 替换技能数（从列表头部起，对前 R 个存在映射的技能替换为高阶版）
  *
- * 精英节点（nodeType==='elite'）额外 强化技能数+1、强化等级+1（均封顶）。
+ * 精英通过整队预算领先，不额外叠加技能强化。
  * 仅 rank < 4 的普通敌人参与（Boss 本体与小怪完全不参与，与层数 HP 缩放同门槛）。
  */
 import type { Unit } from '../types';
@@ -20,13 +20,15 @@ export interface EnemySkillTier {
   replaceCount: number;
 }
 
-/** 分档表：每 10 层调整一次（第 1 档为 1~10 层） */
+/** 强化数量、替换、等级分开解锁；首领后的16／31层不跳档。 */
 export const ENEMY_SKILL_TIERS: EnemySkillTier[] = [
   { minLayer: 1, enhanceCount: 0, enhanceLevel: 0, replaceCount: 0 },
-  { minLayer: 11, enhanceCount: 1, enhanceLevel: 1, replaceCount: 0 },
-  { minLayer: 21, enhanceCount: 1, enhanceLevel: 2, replaceCount: 1 },
-  { minLayer: 31, enhanceCount: 2, enhanceLevel: 2, replaceCount: 1 },
-  { minLayer: 41, enhanceCount: 2, enhanceLevel: 3, replaceCount: 2 },
+  { minLayer: 8, enhanceCount: 1, enhanceLevel: 1, replaceCount: 0 },
+  { minLayer: 18, enhanceCount: 2, enhanceLevel: 1, replaceCount: 0 },
+  { minLayer: 23, enhanceCount: 2, enhanceLevel: 1, replaceCount: 1 },
+  { minLayer: 28, enhanceCount: 2, enhanceLevel: 2, replaceCount: 1 },
+  { minLayer: 43, enhanceCount: 2, enhanceLevel: 2, replaceCount: 2 },
+  { minLayer: 47, enhanceCount: 2, enhanceLevel: 3, replaceCount: 2 },
 ];
 
 /** 技能替换映射：同主题低阶 → 高阶（无映射的技能跳过） */
@@ -63,10 +65,10 @@ export function getEnemySkillTier(layer: number): EnemySkillTier {
  * 按层数档位应用敌人技能强化与替换。
  * 替换先于强化执行：被替换的技能同时享受强化。
  */
-export function applyEnemySkillProgression(unit: Unit, layer: number, elite = false): Unit {
+export function applyEnemySkillProgression(unit: Unit, layer: number): Unit {
   const tier = getEnemySkillTier(layer);
-  const enhanceCount = tier.enhanceCount + (elite ? 1 : 0);
-  const enhanceLevel = tier.enhanceLevel + (elite ? 1 : 0);
+  const enhanceCount = tier.enhanceCount;
+  const enhanceLevel = tier.enhanceLevel;
   if (enhanceCount <= 0 && tier.replaceCount <= 0) return unit;
 
   // 1. 技能替换：从列表头部起，对前 replaceCount 个存在映射的技能替换

@@ -10,4 +10,15 @@
   <symbol id="gold" viewBox="0 0 50 50"><path fill="#5b332d" d="M15 10h20v7H15zm-6 9h32v24H9z"/><path fill="#c28a45" d="M13 21h24v18H13z"/><path fill="#f3cb67" d="M21 26h8v8h-8zm-7 9h5v5h-5zm17 0h5v5h-5z"/></symbol>
   <symbol id="paw" viewBox="0 0 50 50"><path fill="#70d8bd" d="M11 9h7v10h-7zm12-5h7v11h-7zm13 6h7v10h-7zM8 27h8v8H8zm10-6h18v8h5v12H13V29h5z"/><path fill="#2a877f" d="M17 35h20v6H17z"/></symbol>
   <symbol id="key" viewBox="0 0 50 50"><path fill="#e8c26a" d="M9 12h20v6H9zm-5 6h7v13H4zm5 13h20v6H9zm20-13h8v8h-8zm7 8h6v7h-6zm6 4h5v6h-5z"/><path fill="#101d2d" d="M12 19h9v10h-9z"/></symbol>
+  <symbol id="recruit" viewBox="0 0 50 50">
+    <path fill="#172738" d="M8 3h29v4h4v37H8z"/>
+    <path fill="#bd8649" d="M11 6h23v4h4v31H11z"/>
+    <path fill="#fff0be" d="M14 9h17v4h4v25H14z"/>
+    <path fill="#ddbe7c" d="M31 6v7h7v-3h-4V6zM17 33h12v2H17z"/>
+    <path fill="#194a50" d="M16 17h5v6h-5zm7-3h5v7h-5zm7 3h5v6h-5zM21 24h9v3h3v5H18v-5h3z"/>
+    <path fill="#5dc5aa" d="M17 18h3v3h-3zm7-3h3v4h-3zm7 3h3v3h-3zM22 25h7v3h2v2H20v-2h2z"/>
+    <path fill="#172738" d="M33 29h10v4h4v10h-4v4H33v-4h-4V33h4z"/>
+    <path fill="#e8ad3c" d="M34 32h8v3h3v7h-3v3h-8v-3h-3v-7h3z"/>
+    <path fill="#fff4ca" d="M36 34h4v3h3v3h-3v3h-4v-3h-3v-3h3z"/>
+  </symbol>
 </svg>

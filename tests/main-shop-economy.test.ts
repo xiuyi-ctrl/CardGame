@@ -77,11 +77,11 @@ it('初始货架与侦查一致，三次刷新始终保底，旧库存购买不�
   }
 });
 
-it('食物侵蚀金币10，金币侵蚀20；熟练度原有16金币不变', () => {
+it('主模式食物侵蚀金币10，熟练度按第一层段普通战12金币发放', () => {
   const { state } = shop();
   const base: GameState = { ...state, currentRow: 0, currentNodeId: 'fight', map: { ...state.map,
     layers: [[{ id: 'fight', type: 'corrupted', col: 0, label: '侵蚀', corruptReward: 'food' }]],
     encounter: { fight: [{ speciesId: 'momo' }] }, boss: {} } };
   expect(battleVictoryGold(base)).toBe(10);
-  expect(battleVictoryGold({ ...base, runMode: 'proficiency' })).toBe(16);
+  expect(battleVictoryGold({ ...base, runMode: 'proficiency' })).toBe(12);
 });

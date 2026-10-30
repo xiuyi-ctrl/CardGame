@@ -15,7 +15,7 @@ it.each(['battle', 'elite'] as const)('熟练度跳过%s发成长点并进入成
   expect(skipped.screen).toBe('growth-menu');
   expect(skipped.rewards).toEqual([]);
   expect(skipped.inventory.skip).toBe(0);
-  expect(skipped.gold - state.gold).toBe(type === 'elite' ? 16 : 8);
+  expect(skipped.gold - state.gold).toBe(type === 'elite' ? 20 : 12);
   for (const unit of skipped.roster) expect(unit.growthPoints).toBe(1 + (participants.includes(unit.uid) ? 1 + killGp : 0));
   expect(skipped.roster.map(unit => unit.hp)).toEqual(state.roster.map(unit => unit.hp));
   expect(gameReducer(skipped, { type: 'USE_SKIP', nodeId: node.id })).toBe(skipped);

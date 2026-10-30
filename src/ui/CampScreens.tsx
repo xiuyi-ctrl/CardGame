@@ -1,3 +1,4 @@
+import { getCreatureImage } from '../game/data/creature-art';
 import { useState } from 'react';
 import type { Dispatch, DragEvent, ReactNode } from 'react';
 import type { GameState } from '../game/state/game';
@@ -10,7 +11,6 @@ import { getSkill } from '../game/data/skills';
 import { getMaxSkillSlots, getSkillEnhanceLevel } from '../game/core/growth';
 import { skillBrief, skillFullDesc, BattlePixelSprite, PixelCreature } from './components';
 import { BuffIcon, CURSE_ART } from './BuffIcon';
-import { FORMATION_SPRITES } from './formationSprites';
 import { FlowIcon, FlowPet, FlowPetStats } from './MainFlowArt';
 import { MapNodeIcon } from './MapNodeIcon';
 import { UiSymbol } from './UiSymbol';
@@ -116,7 +116,7 @@ export function SpecialTargetScreen({ state, dispatch }: Props) {
   const passive = unit ? getPassive(unit.passive) : undefined;
   const isArena = pending?.kind === 'arena';
   const arenaSprite = unit
-    ? FORMATION_SPRITES[unit.speciesId] ?? (unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image)
+    ? getCreatureImage(unit.speciesId, unit.image)
     : undefined;
   const amount = pending && 'amount' in pending ? pending.amount ?? 1 : 1;
   let title = '选择伙伴'; let instruction = ''; let preview: ReactNode;

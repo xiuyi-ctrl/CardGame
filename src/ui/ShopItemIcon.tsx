@@ -2,7 +2,7 @@ const ICON_KIND: Record<string, string> = {
   berry: 'berry', meat: 'meat', gem: 'gem', golden_fruit: 'berry', scout: 'scout',
   book_small: 'book', book_medium: 'book', book_large: 'book',
   heal_potion: 'potion', skill_enhance_stone: 'hammer', revival_stone: 'revival',
-  gold_bag: 'gold', pet_recruit: 'paw', slot_unlock: 'key',
+  gold_bag: 'gold', pet_recruit: 'recruit', slot_unlock: 'key',
   growth_stone: 'gem', reset_stone: 'gem', forget_stone: 'gem',
   stat_boost: 'hammer', skill_replace: 'scout',
   purify: 'potion', atk_up: 'potion', spd_up: 'potion', hp_up: 'potion',

@@ -87,8 +87,8 @@ app.whenReady().then(async () => {
         }
         if (height > width) await js(`document.querySelector('.mobile-rotate-hint button')?.click()`);
         if (name.startsWith('gauntlet-')) {
-          const poolCheck = await js(`(() => { const pool = document.querySelector('.wheel-pool'); const cards = [...pool.children].filter(el => el.tagName === 'BUTTON'); if (!cards.length) return true; const tops = cards.map(el => el.getBoundingClientRect().top); if (Math.max(...tops)-Math.min(...tops)>1) return false; pool.scrollLeft = pool.scrollWidth; const last = cards.at(-1).getBoundingClientRect(); const bounds = pool.getBoundingClientRect(); const reached = last.right <= bounds.right+2 && last.left >= bounds.left-2 && last.height >= 44; pool.scrollLeft = 0; return reached; })()`);
-          if (!poolCheck) throw Error('Waiting partners must stay in one row and scroll to the last card');
+          const poolCheck = await js(`(() => { const pool = document.querySelector('.wheel-pool'); const cards = [...pool.children].filter(el => el.tagName === 'BUTTON'); if (!cards.length) return true; const positions = cards.map(el => el.getBoundingClientRect()); const axis = ${mobile} ? 'left' : 'top'; if (Math.max(...positions.map(r=>r[axis]))-Math.min(...positions.map(r=>r[axis]))>1) return false; if (${mobile}) pool.scrollTop = pool.scrollHeight; else pool.scrollLeft = pool.scrollWidth; const last = cards.at(-1).getBoundingClientRect(); const bounds = pool.getBoundingClientRect(); const reached = last.right <= bounds.right+2 && last.left >= bounds.left-2 && last.height >= 44 && (!${mobile} || last.top >= bounds.top-2 && last.bottom <= bounds.bottom+2); pool.scrollLeft = 0; pool.scrollTop = 0; return reached; })()`);
+          if (!poolCheck) throw Error('Waiting partners must follow the screen layout and scroll to the last card');
         }
         if (['proficiency-select', 'proficiency-selected'].includes(name)) {
           const selectedBefore = await js(`JSON.stringify([...document.querySelectorAll('.starter-choice')].map(el => el.getAttribute('aria-pressed')))`);
@@ -161,7 +161,7 @@ app.whenReady().then(async () => {
           const toastTooLarge = toast && (outside(toast) || toast.getBoundingClientRect().height > innerHeight * .4);
           const rosterActions = [...document.querySelectorAll('.ordinary-detail-actions button')].filter(visible);
           const overlappingActions = rosterActions.flatMap((a, index) => rosterActions.slice(index + 1).filter(b => { const x = a.getBoundingClientRect(), y = b.getBoundingClientRect(); return Math.min(x.right, y.right) - Math.max(x.left, y.left) > 1 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 1; }).map(b => [a.textContent.trim(), b.textContent.trim()]));
-          const oneScreenOverflow = ${mobile && height < width && oneScreen.has(name)} && !topMask ? scrolls : [];
+          const oneScreenOverflow = ${mobile && height < width && oneScreen.has(name)} && !topMask ? scrolls.filter(item => !(${name.startsWith('gauntlet-')} && item.cls === 'wheel-pool')) : [];
           const portraitOverlap = [...document.querySelectorAll('.postbattle-detail-portrait canvas, .postbattle-detail-portrait img, .contract-art > img')].filter(el => el.closest('.contract-art') || visible(el)).filter(el => {
             const box = el.parentElement.getBoundingClientRect(), art = el.getBoundingClientRect();
             const stats = (el.closest('.proficiency-contract')?.querySelector('.contract-info') ?? document.querySelector('.postbattle-detail-stats'))?.getBoundingClientRect();

@@ -99,11 +99,13 @@ export const GROWTH_SHOP_ITEMS: Record<GrowthShopItemType, GrowthShopItem> = {
 export const GROWTH_SHOP_ITEM_IDS = Object.keys(GROWTH_SHOP_ITEMS) as GrowthShopItemType[];
 
 /** 获取商店库存（随机4种） */
-export function getGrowthShopStock(rng: () => number): GrowthShopItemType[] {
+export function getGrowthShopStock(rng: () => number, guaranteeEnhanceStone = false): GrowthShopItemType[] {
   const shuffled = [...GROWTH_SHOP_ITEM_IDS];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return shuffled.slice(0, 4);
+  const stock = shuffled.slice(0, 4);
+  if (guaranteeEnhanceStone && !stock.includes('skill_enhance_stone')) stock[3] = 'skill_enhance_stone';
+  return stock;
 }

@@ -1,3 +1,4 @@
+import { getCreatureImage } from '../game/data/creature-art';
 import { useRef, useState } from 'react';
 import { UiSymbol } from './UiSymbol';
 import { MobileDetails, MobileUnitAbilities } from './MobileDetails';
@@ -11,7 +12,7 @@ import { getPassive } from '../game/data/passives';
 import { firstEmptyFormationSlot, placeUnit } from '../game/state/formation';
 import type { FormationPosition, FormationRow } from '../game/state/formation';
 import { BattlePixelSprite, PixelCreature, UnitCard } from './components';
-import { FORMATION_SPRITES } from './formationSprites';
+import { formationSprite } from './formationSprites';
 import { useBackAction } from './mobile';
 import type { Unit } from '../game/types';
 
@@ -206,10 +207,10 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
           <span className="formation-enemy-portraits">
             {fb.encounter.map((enemy, index) => {
               const monster = getMonster(enemy.speciesId);
-              const image = enemy.speciesId === 'momo' ? '/battle-momo.png' : monster.image;
+              const image = getCreatureImage(enemy.speciesId, monster.image);
               return <span className="formation-enemy-portrait" key={`${enemy.speciesId}-${index}`} title={monster.name}>
-                {FORMATION_SPRITES[enemy.speciesId]
-                  ? <img src={FORMATION_SPRITES[enemy.speciesId]} alt={monster.name} />
+                {formationSprite(enemy.speciesId)
+                  ? <img src={formationSprite(enemy.speciesId)} alt={monster.name} />
                   : image ? <BattlePixelSprite src={image} name={monster.name} /> : monster.emoji}
               </span>;
             })}
@@ -263,7 +264,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                           onPointerCancel={onTouchDragCancel}
                           className={touchDraggingUid === u.uid ? 'formation-touch-dragging' : undefined}
                         >
-                          <UnitCard unit={u} battleDisplay imageOverride={FORMATION_SPRITES[u.speciesId]} />
+                          <UnitCard unit={u} battleDisplay imageOverride={formationSprite(u.speciesId)} />
                         </div>
                       ) : null}
                     </div>
@@ -308,7 +309,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
                     onPointerUp={onTouchDragEnd}
                     onPointerCancel={onTouchDragCancel}
                   >
-                    {FORMATION_SPRITES[u.speciesId] ? <img src={FORMATION_SPRITES[u.speciesId]} alt={u.name} draggable={false} /> : <PixelCreature unit={u} />}
+                    {formationSprite(u.speciesId) ? <img src={formationSprite(u.speciesId)} alt={u.name} draggable={false} /> : <PixelCreature unit={u} />}
                   </span>
                   {positions[u.uid] && !forceAll && <span className="formation-pet-status">已上场</span>}
                 </div>
@@ -325,7 +326,7 @@ export function FormationScreen({ state, dispatch }: { state: GameState; dispatc
               <>
                 <div className="formation-detail-summary">
                   <span className="formation-detail-portrait">
-                    {FORMATION_SPRITES[focusedUnit.speciesId] ? <img src={FORMATION_SPRITES[focusedUnit.speciesId]} alt={focusedUnit.name} /> : <PixelCreature unit={focusedUnit} />}
+                    {formationSprite(focusedUnit.speciesId) ? <img src={formationSprite(focusedUnit.speciesId)} alt={focusedUnit.name} /> : <PixelCreature unit={focusedUnit} />}
                   </span>
                   <div className="formation-detail-main">
                     <div className="formation-detail-head"><strong>{focusedUnit.name}</strong><span>{positions[focusedUnit.uid] ? '出战' : '待命'}</span></div>

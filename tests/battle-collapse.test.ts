@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BATTLE_COLLAPSE_WARNING_ROUND, battleCollapseDamage, createBattle, makeUnit, playerEndTurn, performGauntletSwap, skillUsesLeft } from '../src/game/core/battle';
+import { BATTLE_COLLAPSE_WARNING_ROUND, battleCollapseDamage, createBattle, makeUnit, playerEndTurn, playerSkill, performGauntletSwap, skillUsesLeft, skillCooldownLeft, canUnitUseSkill } from '../src/game/core/battle';
 import { createInitialState, gameReducer } from '../src/game/state/reducer';
 import { getSkill } from '../src/game/data/skills';
 import { parseEvent } from '../src/ui/battleFx';
@@ -66,14 +66,29 @@ describe('战场崩解与治疗限制', () => {
   it('基础回复不限次，强力技能冷却1，保留群体等有限次', () => {
     const legacy = { ...makeUnit('lulu_king', true, 0, false), skillUses: { heal_light: 0, water_bath: 0, shield_skill: 0 } };
     for (const id of ['heal_light', 'water_bath', 'shield_skill']) expect(skillUsesLeft(legacy, id)).toBe(Infinity);
-    for (const id of ['water_bath', 'shield_skill', 'light_bath', 'lamp_guard', 'solar_heal', 'ember_transfer']) {
+    for (const id of ['heal_light', 'water_bath', 'shield_skill', 'light_bath', 'lamp_guard', 'solar_heal', 'ember_transfer']) {
       expect(getSkill(id).uses).toBeUndefined();
       expect(getSkill(id).cooldown ?? 0).toBe(0);
     }
-    for (const id of ['heal_light', 'ash_shelter', 'furnace_shell', 'furnace_bastion', 'burn_reversal', 'iron_double', 'tidal_slam', 'spore_shield']) expect(getSkill(id).cooldown).toBe(1);
+    for (const id of ['ash_shelter', 'furnace_shell', 'furnace_bastion', 'burn_reversal', 'iron_double', 'tidal_slam', 'spore_shield']) expect(getSkill(id).cooldown).toBe(1);
     expect(getSkill('flame_tail_shield')).toMatchObject({ cooldown: 1, uses: 2 });
     expect(getSkill('heal_light').uses).toBeUndefined();
     expect(getSkill('iron_domain')).toMatchObject({ cooldown: 1, uses: 2 });
     expect(getSkill('seal_furnace')).toMatchObject({ cooldown: 1, uses: 3 });
+  });
+  it('愈光没有冷却，旧存档残留冷却与耗尽次数不妨碍连续回合使用', () => {
+    let battle = createBattle([{ ...makeUnit('lulu_king', true, 0, false), skills: ['heal_light'], passive: undefined, maxHp: 100, hp: 1 }], [{ speciesId: 'kiki' }], 1);
+    battle.playerUnits[0].skillCooldowns = { heal_light: 5 };
+    battle.playerUnits[0].skillUses = { heal_light: 0 };
+    battle.enemyUnits[0].skills = [];
+    const uid = battle.playerUnits[0].uid;
+    for (let i = 0; i < 2; i++) {
+      expect(skillCooldownLeft(battle.playerUnits[0], 'heal_light')).toBe(0);
+      expect(canUnitUseSkill(battle.playerUnits[0], 'heal_light')).toBe(true);
+      const ordered = playerSkill(battle, uid, 'heal_light', uid);
+      expect(ordered.orders?.[uid]).toBeDefined();
+      battle = playerEndTurn(ordered);
+    }
+    expect(battle.playerUnits[0].hp).toBe(17);
   });
 });

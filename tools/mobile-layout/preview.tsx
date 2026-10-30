@@ -1,3 +1,4 @@
+import { generateGrowthMap } from '../../src/game/core/growth-map';
 import { CollapseWarning } from '../../src/ui/CollapseWarning';
 // 仅由独立验收服务器加载，不进入生产入口，也不读取或覆盖真实存档。
 import { createElement, useState } from 'react';
@@ -22,7 +23,7 @@ import { ProgressionChoiceScreen, AttributeBoostScreen, CreationScreen, RevivalS
 import { MobileShell } from '../../src/ui/mobile';
 import { TestSessionFrame } from '../../src/ui/TestSetupScreen';
 import { preloadImages } from '../../src/ui/imageCache';
-import { FORMATION_SPRITES } from '../../src/ui/formationSprites';
+import { CREATURE_IMAGES } from '../../src/game/data/creature-art';
 import { CreatureStylePreview, CREATURE_STYLE_IMAGES } from './CreatureStylePreview';
 import { createInitialState, gameReducer } from '../../src/game/state/reducer';
 import { createBattle, makeUnit, performGauntletSwap, playerTame, playerSkill, playerEndTurn } from '../../src/game/core/battle';
@@ -79,11 +80,13 @@ add('starter', ui.StarterScreen, {}, false);
 add('creature-style-compare', CreatureStylePreview, {}, false);
 add('proficiency-select', ui.ProficiencyStarterScreen, {}, false);
 add('map', ui.MapScreen, {}, false);
+add('map-prof-rhythm', ui.MapScreen, { runMode: 'proficiency', map: generateGrowthMap(2578), currentRow: 0, currentNodeId: '', currentLayer: 1 }, false);
 add('map-act2-wide', ui.MapScreen, { act: 2, map: generateMap(1, 2), currentRow: 1, currentNodeId: 'n2_1_2' }, false);
 add('map-act3-wide', ui.MapScreen, { act: 3, region: 'emerald_forest', map: generateMap(1, 3, 'normal', 'emerald_forest'), currentRow: 1, currentNodeId: 'n3_1_2' }, false);
 add('forest-map', ui.MapScreen, { region: 'emerald_forest' }, false);
 add('formation', FormationScreen, { formation }, false);
 add('gauntlet-order', GauntletOrderScreen, { gauntletOrder: base.roster.slice(0, 4) });
+add('battle-test-editor', BattleScreen, { testRun: true, battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false, '调整数值');
 add('battle', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false);
 add('battle-corrupt-immune', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123, { corruptDebuff: 'immune' }) }, false);
 add('battle-mimic', BattleScreen, { battle: createBattle([makeUnit('mimic_beast', true, 0, false)], [{ speciesId: 'boss_vine' }], 123) }, false);
@@ -100,6 +103,7 @@ add('shop-bundle-berry', ui.ShopScreen, { shopStock: ['bundle_berry', 'meat', 'a
 add('shop-bundle-meat', ui.ShopScreen, { shopStock: ['bundle_meat', 'berry', 'spd_up', 'twin'], shopBoughtItems: ['bundle_meat'], gold: 10 }, false);
 add('shop-bundle-gem', ui.ShopScreen, { shopStock: ['bundle_gem', 'berry', 'hp_up', 'scout'], difficulty: 'nightmare', gold: 20 }, false);
 add('shop-prof', ui.ShopScreen, { runMode: 'proficiency', shopStock: ['book_large', 'skill_enhance_stone', 'revival_stone', 'reset_stone'] }, false);
+add('shop-prof-recruit', ui.ShopScreen, { runMode: 'proficiency', shopStock: ['pet_recruit', 'book_medium', 'heal_potion_g', 'reset_stone'] }, false);
 add('rest', CampRestScreen, { runMode: 'proficiency' });
 add('rest-fusion', CampFusionScreen, { runMode: 'proficiency', fusionMainUid: first.uid, fusionSubUid: base.roster[1].uid });
 add('rest-fusion-skill', CampFusionSkillScreen, { runMode: 'proficiency', fusionMainUid: first.uid, fusionSubSkills: ['aqua_shot', 'heal_light'] });
@@ -222,6 +226,10 @@ variant('codex-zhuotian-original', 'codex', {}, '灼天');
 variant('battle-food', 'battle', {}, '捕获');
 variant('battle-items', 'battle', {}, '道具');
 variant('battle-enemy', 'battle', {}, 'hold:.enemy-area .formation-slot:not(.empty)');
+const enhancedInspectBattle = structuredClone(registry.battle.state.battle!);
+enhancedInspectBattle.enemyUnits[0].skills = ['punch', 'heal_light'];
+enhancedInspectBattle.enemyUnits[0].skillEnhancements = { 0: 2, 1: 3 };
+variant('battle-enemy-enhanced', 'battle', { battle: enhancedInspectBattle }, 'hold:.enemy-area .formation-slot:not(.empty)');
 variant('battle-ally', 'battle', {}, 'hold:.player-area .formation-slot:not(.empty)');
 variant('battle-skills', 'battle', {}, 'hold:.player-area .formation-slot:not(.empty)');
 variant('battle-log', 'battle', {}, '战斗记录');
@@ -477,7 +485,37 @@ for (const type of ['stat_blessing', 'growth_blessing', 'skill_blessing'] as con
   add(`growth-special-${type}`, ui.SpecialScreen, { runMode: 'proficiency', roster: base.roster.slice(0, 5), currentNodeId: 'batch-special',
     map: { ...base.map, specials: { 'batch-special': { title: '奇遇', desc: '选择本次成长奖励', rewards: [{ ...GROWTH_SPECIAL_REWARDS[type], kind: 'growthEncounter' }] } } } });
 }
-registry['growth-candidate-details'] = { ...registry['growth-encounter-relearn'], setup: '候选技能完整说明' };
+registry['growth-candidate-details'] = { ...registry['growth-encounter-relearn'], setup: '.camp-learning-cards .mobile-details-trigger' };
+const secondEventTypes = ['battle_master', 'mysterious_altar', 'expedition_supply', 'pet_recruit', 'arena_challenge', 'revive_dead'] as const;
+for (const type of secondEventTypes) {
+  add(`growth-event-${type}`, ui.EventScreen, { screen: 'event', runMode: 'proficiency', roster: base.roster.slice(0, 5), deadPets: base.roster.slice(0, 3).map(pet => ({ ...pet, uid: `dead-${pet.uid}`, hp: 0 })), currentNodeId: 'batch2', currentLayer: 31,
+    map: { ...base.map, events: { batch2: buildGrowthEvent(createRng(17), type, 3, 31) } } });
+}
+for (const type of ['legend_recruit', 'gold_treasure', 'revive'] as const) {
+  add(`growth-special-${type}`, ui.SpecialScreen, { screen: 'special', runMode: 'proficiency', roster: base.roster.slice(0, 5), deadPets: base.roster.slice(0, 3).map(pet => ({ ...pet, uid: `dead-${pet.uid}`, hp: 0 })), currentNodeId: 'batch2', currentLayer: 31,
+    map: { ...base.map, specials: { batch2: { title: '奇遇', desc: '选择本次成长奖励', rewards: [{ ...GROWTH_SPECIAL_REWARDS[type], kind: 'growthEncounter' }] } } } });
+}
+for (const [kind, source] of [['duel', 'battle_master'], ['trial', 'arena_challenge'], ['altar_hp', 'mysterious_altar'], ['altar_spd', 'mysterious_altar'], ['supply_heal', 'expedition_supply'], ['supply_book', 'expedition_supply'], ['companions', 'pet_recruit'], ['grave', 'revive_dead'], ['revival_spring', 'revive'], ['legend', 'legend_recruit'], ['tools', 'gold_treasure']] as const) {
+  let fixture = beginGrowthEncounter(structuredClone(registry[`${['revival_spring', 'legend', 'tools'].includes(kind) ? 'growth-special' : 'growth-event'}-${source}`].state), kind);
+  if (kind === 'legend') fixture = gameReducer(fixture, { type: 'GROWTH_ENCOUNTER_PREVIEW', uid: fixture.roster[0].uid, slot: 0 });
+  registry[`growth-encounter-${kind}`] = { component: GrowthEncounterScreen, state: fixture, flow: true };
+}
+registry['growth-companion-details'] = { ...registry['growth-encounter-companions'], setup: '.growth-encounter-recruits article button:last-child' };
+registry['growth-duel-details'] = { ...registry['growth-encounter-duel'], setup: '查看对手详情' };
+registry['growth-legend-details'] = { ...registry['growth-encounter-legend'], setup: '.camp-learning-cards .mobile-details-trigger' };
+registry['growth-master-selected'] = { ...registry['growth-encounter-master'], setup: '.training-pet' };
+registry['growth-master-confirm'] = { ...registry['growth-encounter-master'], setup: '.training-pet|免费强化' };
+registry['growth-relearn-old'] = { ...registry['growth-event-skill_mentor'], component: GrowthEncounterScreen,
+  state: beginGrowthEncounter(state('event', { runMode: 'proficiency', roster: base.roster.slice(0, 5) }), 'relearn'), setup: '.training-pet' };
+registry['growth-relearn-new'] = { ...registry['growth-relearn-old'], setup: '.training-pet|.camp-learning-cards .camp-skill-card' };
+registry['growth-trial-formation'] = { component: FormationScreen, state: gameReducer(registry['growth-encounter-trial'].state, { type: 'GROWTH_ENCOUNTER_CONFIRM' }), flow: false };
+registry['growth-companion-overflow'] = { component: registry['tame-overflow'].component, state: gameReducer(registry['growth-encounter-companions'].state, { type: 'GROWTH_ENCOUNTER_CONFIRM', speciesId: registry['growth-encounter-companions'].state.map.events.batch2.choices[0].recruitCandidates![0] }), flow: true };
+registry['growth-revive-overflow'] = { component: registry['tame-overflow'].component, state: gameReducer(registry['growth-encounter-revival_spring'].state, { type: 'GROWTH_ENCOUNTER_CONFIRM', uid: registry['growth-encounter-revival_spring'].state.deadPets![0].uid }), flow: true };
+const fixedEffectPet = { ...base.roster[0], skills: ['shadow_rift', 'tidal_domain', 'quake', 'provoke', 'growth_bind'], skillEnhancements: { 0: 2, 1: 2, 2: 2, 3: 2, 4: 2 }, skillEnhancePaid: { 0: 27, 1: 27 } };
+for (const [name, component] of [['blacksmith', BlacksmithScreen], ['enhance-stone', EnhanceStoneScreen], ['enhance-reset', EnhanceResetScreen]] as const) {
+  add(`fixed-effects-${name}`, component, { screen: name, runMode: 'proficiency', roster: [fixedEffectPet] }, true, '.training-pet');
+}
+registry['fixed-effects-compare'] = { ...registry['fixed-effects-blacksmith'], setup: '.training-pet|暗影裂隙强化对比' };
 variant('roster-ten', 'roster', { roster: tenPartners });
 variant('postbattle-ten', 'postbattle', { roster: tenPartners });
 variant('overflow-ten', 'tame-overflow', { roster: tenPartners });
@@ -536,7 +574,7 @@ function Preview({ scene, mobile }: { scene: Scene; mobile: boolean }) {
     if (!registry[name]?.component) throw Error(`Missing fixture: ${name}`);
     if (name.startsWith('creature-style-')) await preloadImages(CREATURE_STYLE_IMAGES);
     const battle = registry[name].state.battle;
-    if (preload) await preloadImages([...Object.values(FORMATION_SPRITES), ...[...registry[name].state.roster, ...(battle ? [...battle.playerUnits, ...battle.enemyUnits] : [])]
+    if (preload) await preloadImages([...Object.values(CREATURE_IMAGES).filter((src): src is string => !!src), ...[...registry[name].state.roster, ...(battle ? [...battle.playerUnits, ...battle.enemyUnits] : [])]
       .map(unit => unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image)
       .filter((src): src is string => !!src)]);
     mobileEmulation = mobile;

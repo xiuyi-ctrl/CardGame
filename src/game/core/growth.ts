@@ -2,7 +2,7 @@
  * 成长远征模式 - 成长点系统
  * 管理成长点获取、上限、分配
  */
-import type { Unit } from '../types';
+import type { StatusEffect, Unit } from '../types';
 import { SKILLS } from '../data/skills';
 
 /** 属性提升上限 */
@@ -48,6 +48,15 @@ export const LEGENDARY_ENHANCE_MULTIPLIER = 1.5;
 /** 强化重置返还比例 */
 export const ENHANCE_RESET_REFUND_RATIO = 0.5;
 
+/** 强化不增加控制时长、印记伤害、封印数量及水幕减伤。 */
+export const FIXED_ENHANCE_EFFECTS = new Set<StatusEffect['kind']>(['stun', 'taunt', 'shadowMark', 'skillSeal', 'skillSealPending', 'waterCurtain', 'timeLag']);
+export function getSkillEffectEnhanceBonus(skillId: string, level: number, kind: StatusEffect['kind']): number {
+  if (FIXED_ENHANCE_EFFECTS.has(kind)) return 0;
+  const skill = SKILLS[skillId];
+  if (skill?.kind === 'buff' && kind !== 'shield' && skill.effects?.some(effect => effect.kind === 'shield')) return Math.max(0, level);
+  return getSkillEnhanceBonus(skillId, level).effectBonus;
+}
+
 /** 判断技能是否为连击类（hits ≥ 2） */
 function isMultiHitSkill(skillId: string): boolean {
   const sk = SKILLS[skillId];
@@ -66,6 +75,8 @@ function isSpeedBuffSkill(skillId: string): boolean {
 
 /** 获取技能最大强化等级（连击/速度类最多2次，其他最多3次） */
 export function getSkillEnhanceMaxLevel(skillId: string): number {
+  const skill = SKILLS[skillId];
+  if (skill && skill.kind !== 'attack' && !skill.heal && skill.effects?.length && skill.effects.every(effect => FIXED_ENHANCE_EFFECTS.has(effect.kind))) return 0;
   if (skillId.startsWith('mirror_') || skillId === 'core_crystal_cleanse') return 0;
   if (skillId === 'gather_shields' || skillId === 'burn_tail' || skillId === 'clean_flame_care') return 0;
   if (isMultiHitSkill(skillId) || isSpeedBuffSkill(skillId)) return 2;
@@ -80,7 +91,7 @@ export function getSkillEnhanceLevel(unit: Unit, slotIndex: number): number {
 export const MASTER_EXCLUDED_SKILLS = new Set(['core_crystal_cleanse', 'mirror_speed_up', 'mirror_speed_down', 'mirror_copy', 'gather_shields', 'burn_tail', 'clean_flame_care', 'time_lag', 'ember_transfer', 'toxic_burst', 'revenge_thorn', 'despair_gaze']);
 export function canMasterEnhance(unit: Unit, slot: number): boolean {
   const id = unit.skills[slot];
-  return !!id && !!SKILLS[id] && !MASTER_EXCLUDED_SKILLS.has(id) && getSkillEnhanceLevel(unit, slot) < 4;
+  return !!id && !!SKILLS[id] && getSkillEnhanceMaxLevel(id) > 0 && !MASTER_EXCLUDED_SKILLS.has(id) && getSkillEnhanceLevel(unit, slot) < 4;
 }
 export function applyMasterEnhance(unit: Unit, slot: number): Unit | null {
   if (!canMasterEnhance(unit, slot)) return null;
@@ -126,6 +137,7 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
   if (skillId === 'clean_flame_care') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
   const sk = SKILLS[skillId];
   if (!sk) return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
+  const hasScalingEffects = !sk.effects?.length || sk.effects.some(effect => !FIXED_ENHANCE_EFFECTS.has(effect.kind));
   if (skillId === 'heated_shell_bump') return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: level };
   if (skillId === 'molten_self_burn') return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level * 2 };
   if (skillId === 'flame_tracing_feather') return { damageBonus: level * 2, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
@@ -133,7 +145,7 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
   // 连击类有 effects（铁壁双击/火焰连击/炼狱烈焰/龙息）：段数+1，效果值也加
   if (isMultiHitSkill(skillId) && sk.effects && sk.effects.length > 0) {
     const isShield = sk.effects.some(e => e.kind === 'shield');
-    const effectBonus = isShield ? level * 2 : level;
+    const effectBonus = hasScalingEffects ? isShield ? level * 2 : level : 0;
     return { damageBonus: 0, healBonus: 0, hitsBonus: level, effectBonus };
   }
 
@@ -144,7 +156,7 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
 
   // 攻击+状态混合：伤害+1 且 效果值+1/级（火花/铁刺/毒刺等，必须在纯攻击之前）
   if (sk.kind === 'attack' && sk.effects && sk.effects.length > 0) {
-    return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: level };
+    return { damageBonus: level, healBonus: 0, hitsBonus: 0, effectBonus: hasScalingEffects ? level : 0 };
   }
 
   // 攻击+治疗混合：伤害+1 且 治疗+1/级
@@ -159,7 +171,7 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
 
   // 纯治疗：治疗+2/级；有附带效果时效果值+1/级（如潮汐领域的水幕）
   if (sk.kind === 'heal') {
-    const effectBonus = (sk.effects && sk.effects.length > 0) ? level : 0;
+    const effectBonus = hasScalingEffects ? level : 0;
     return { damageBonus: 0, healBonus: level * 2, hitsBonus: 0, effectBonus };
   }
 
@@ -168,12 +180,12 @@ export function getSkillEnhanceBonus(skillId: string, level: number): {
     const isShield = sk.effects?.some(e => e.kind === 'shield');
     const effectBonusPerLevel = isShield ? 2 : 1;
     const healBonus = sk.heal ? level : 0;
-    return { damageBonus: 0, healBonus, hitsBonus: 0, effectBonus: level * effectBonusPerLevel };
+    return { damageBonus: 0, healBonus, hitsBonus: 0, effectBonus: hasScalingEffects ? level * effectBonusPerLevel : 0 };
   }
 
   // 状态技能：效果值+1/级
   if (sk.kind === 'status') {
-    return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: level };
+    return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: hasScalingEffects ? level : 0 };
   }
 
   return { damageBonus: 0, healBonus: 0, hitsBonus: 0, effectBonus: 0 };
@@ -417,6 +429,7 @@ export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): Unit | null
       return {
         ...unit,
         growthPoints: gp - cost,
+        statGrowthPaid: (unit.statGrowthPaid ?? 0) + cost,
         bonusStats: { ...unit.bonusStats, hp: hpBonus + 2 },
         maxHp: unit.maxHp + 2,
         hp: unit.hp + 2,
@@ -428,6 +441,7 @@ export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): Unit | null
       return {
         ...unit,
         growthPoints: gp - cost,
+        statGrowthPaid: (unit.statGrowthPaid ?? 0) + cost,
         bonusStats: { ...unit.bonusStats, spd: spdBonus + 1 },
         spd: unit.spd + 1,
       };
@@ -462,6 +476,14 @@ export function applyGrowthChoice(unit: Unit, choice: GrowthChoice): Unit | null
 /** 获取单位最大技能槽数（基础2 + 额外解锁，最多5） */
 export function getMaxSkillSlots(unit: Unit): number {
   return 2 + Math.min(unit.extraSkillSlots ?? 0, 3);
+}
+
+/** 清除属性加成，只返还可确认的真实成长点投入。 */
+export function resetAttributeGrowth(unit: Unit): Unit {
+  const hp = unit.bonusStats?.hp ?? 0, spd = unit.bonusStats?.spd ?? 0;
+  const maxHp = Math.max(1, unit.maxHp - hp);
+  return { ...unit, maxHp, hp: Math.min(unit.hp, maxHp), spd: Math.max(1, unit.spd - spd),
+    bonusStats: { hp: 0, spd: 0 }, statGrowthPaid: 0, growthPoints: (unit.growthPoints ?? 0) + (unit.statGrowthPaid ?? 0) };
 }
 
 /** 从普通技能库随机选取 n 个不重复技能（排除已学、Boss专属、传奇技能） */

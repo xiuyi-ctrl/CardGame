@@ -1,10 +1,11 @@
+import { getCreatureImage, isUnifiedCreatureArt } from '../game/data/creature-art';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { SkillDef, StatusEffect, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
 import { getDecodedImage, loadImage } from './imageCache';
 import { getPassive } from '../game/data/passives';
-import { getSkillEnhanceBonus } from '../game/core/growth';
+import { getSkillEnhanceBonus, getSkillEffectEnhanceBonus } from '../game/core/growth';
 import { CURSE_CN } from '../game/state/game';
 import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
 
@@ -43,7 +44,7 @@ function effectText(e: StatusEffect): string {
   const turns = e.turns > 0 ? `，持续 ${e.turns} 回合` : '';
   switch (e.kind) {
     case 'bloodDrain':
-      return `攻击每次造成伤害时回复 ${e.value} 点生命${turns}`;
+      return `攻击每次造成伤害时最多回复 ${e.value} 点生命，不超过生命与护盾实际损失合计，溢出伤害不计${turns}`;
     case 'emberSeed':
       return '火种1层；下一次攻击首次命中额外附加2层灼烧，触发后消失；战斗内不衰减';
     case 'foxFire':
@@ -116,10 +117,8 @@ function effectText(e: StatusEffect): string {
 }
 
 /** 计算效果值的正确加成：buff+shield 技能中非 shield 效果只加 level×1 */
-function getDescEffectBonus(s: SkillDef, effectBonus: number, enhanced: number, kind: string): number {
-  const isBuffShield = s.kind === 'buff' && s.effects?.some(e => e.kind === 'shield');
-  if (isBuffShield && kind !== 'shield') return enhanced; // level×1
-  return effectBonus;
+function getDescEffectBonus(s: SkillDef, enhanced: number, kind: StatusEffect['kind']): number {
+  return getSkillEffectEnhanceBonus(s.id, enhanced, kind);
 }
 
 /** 技能完整描述：定位标注 + 基础描述 + 具体 buff 效果数值，如 "【前排攻击】攻击单个敌人（灼烧 2/回合，持续 2 回合）" */
@@ -179,7 +178,7 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   }
 
   // 效果值替换
-  const eff = (kind: string) => getDescEffectBonus(s, bonus.effectBonus, enhanced, kind);
+  const eff = (kind: StatusEffect['kind']) => getDescEffectBonus(s, enhanced, kind);
   // 护盾（含"N护盾"无前缀模式，如铸甲）
   const shieldEffect = s.effects?.find(e => e.kind === 'shield');
   if (shieldEffect) {
@@ -316,12 +315,9 @@ export function SkillTag({
   );
 }
 
-function isUnifiedCreatureArt(src?: string): boolean {
-  return !!src && (/(?:^|\/)(?:01|06(?:-1)?|battle-momo|coal)\.png$/.test(src) || /(?:home-xunxun|starter-mimi)(?:[.-])/.test(src));
-}
-
 /** 内联宠物图标：有 image 时显示小图，否则显示 emoji */
-export function PetIcon({ image, emoji, name, className = '' }: { image?: string; emoji: string; name: string; className?: string }) {
+export function PetIcon({ speciesId, image: fallback, emoji, name, className = '' }: { speciesId?: string; image?: string; emoji: string; name: string; className?: string }) {
+  const image = speciesId ? getCreatureImage(speciesId, fallback) : fallback;
   return image
     ? <img src={image} className={`pet-icon-inline ${isUnifiedCreatureArt(image) ? 'unified-creature-art ' : ''}${className}`} alt={name} />
     : <>{emoji}</>;
@@ -493,7 +489,7 @@ export function BattlePixelSprite({ src, name }: { src: string; name: string }) 
 }
 
 export function PixelCreature({ unit }: { unit: Unit }) {
-  const image = unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image;
+  const image = getCreatureImage(unit.speciesId, unit.image);
   if (image && isUnifiedCreatureArt(image)) return <BattlePixelSprite src={image} name={unit.name} />;
   if (image && ['momo_god', 'lulu_god', 'fifi_god', 'coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast', 'mimi_king', 'mimi_god', 'pipi', 'sisi', 'sisi_god'].includes(unit.speciesId)) return <img className="native-creature-art" src={image} alt={unit.name} draggable={false} />;
   return image ? <BattlePixelSprite src={image} name={unit.name} /> : <span className="battle-sprite-emoji">{unit.emoji}</span>;
@@ -506,6 +502,7 @@ export function BattleHpText({ hp, maxHp }: { hp: number; maxHp: number }) {
 }
 
 export function UnitCard({ unit, className = '', onClick, small = false, battleDisplay = false, imageOverride, battleScene = false, showSkills = true, showSkillDesc = false, topStats = false, footer, speedOverride, stacksOverride, rockShellHitsOverride, thornsHitCountOverride, skillEnhancements }: UnitCardProps) {
+  const image = getCreatureImage(unit.speciesId, unit.image);
   const dead = unit.hp <= 0;
   // 计算有效速度（含临时 buff/debuff/被动）
   // 使用 unit.spd 作为基础（已包含被动/永久修改），再叠加临时 buff/debuff
@@ -548,7 +545,7 @@ export function UnitCard({ unit, className = '', onClick, small = false, battleD
       onClick={onClick}
     >
       <div className={`card-top ${topStats ? 'card-top-stats' : ''}`}>
-        <span className="emoji">{unit.image ? <img src={unit.image} className={`pet-image${isUnifiedCreatureArt(unit.image) ? ' unified-creature-art' : ''}`} alt={unit.name} /> : unit.emoji}</span>
+        <span className="emoji">{image ? <img src={image} className={`pet-image${isUnifiedCreatureArt(image) ? ' unified-creature-art' : ''}`} alt={unit.name} /> : unit.emoji}</span>
         {topStats && (
           <div className="card-stats">
             <div className="card-stat" style={spdColor ? { color: spdColor } : undefined}>
@@ -666,7 +663,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   timeLag: () => '本回合尚未执行的行动延后至最后，不改变速度、不增加行动',
   burn: (v) => `每回合受到 ${Math.ceil(v / 2)} 点灼烧伤害（${v} 层，向上进位）`,
   poison: (v) => `每回合受到 ${Math.ceil(v / 2)} 点中毒伤害（${v} 层，向上进位）`,
-  bloodDrain: (v) => `攻击每次造成伤害时回复 ${v} 点生命`,
+  bloodDrain: (v) => `攻击每次造成伤害时最多回复 ${v} 点生命，不超过生命与护盾实际损失合计，溢出伤害不计`,
   atkUp: (v) => `技能伤害 +${v}`,
   atkDown: (v) => `技能伤害 -${v}`,
   stun: () => '跳过下次行动',
@@ -747,7 +744,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
 
   return (
     <div className="buff-detail-panel">
-      {!hideTitle && <div className="buff-detail-title"><PetIcon image={unit.image} emoji={unit.emoji} name={unit.name} /> {unit.name}</div>}
+      {!hideTitle && <div className="buff-detail-title"><PetIcon speciesId={unit.speciesId} image={unit.image} emoji={unit.emoji} name={unit.name} /> {unit.name}</div>}
       {hasPassive && (
         <div className="buff-section">
           <div className="buff-section-label">被动</div>

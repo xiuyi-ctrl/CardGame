@@ -60,20 +60,20 @@ describe('灼烧新生物与技能完整投放', () => {
     expect(TIER1).toEqual(expect.arrayContaining(base));
     expect(TIER2).toEqual(expect.arrayContaining(tier2));
     expect(LEGENDARY).toEqual(expect.arrayContaining(legends));
-    for (const [layer, wanted] of [[5, base], [20, [...base, ...tier2]], [35, [...base, ...tier2]], [45, [...tier2, ...legends]]] as const) {
+    for (const [layer, wanted] of [[10, base], [20, [...base, ...tier2]], [35, [...base, ...tier2, ...legends]], [45, [...tier2, ...legends]]] as const) {
       const found = new Set<string>();
       for (let seed = 0; seed < 200; seed++) {
         getGrowthEncounter(layer, createRng(seed)).forEach(e => found.add(e.speciesId));
       }
       for (const id of wanted) expect(found.has(id)).toBe(true);
-      if (layer <= 40) expect(legends.some(id => found.has(id))).toBe(false);
+      if (layer <= 20) expect(legends.some(id => found.has(id))).toBe(false);
     }
     for (const getEncounter of [getGrowthEliteEncounter, getGrowthArenaEncounter]) {
-      for (const [layer, wanted] of [[5, tier2], [45, legends]] as const) {
+      for (const [layer, wanted] of [[14, tier2], [45, legends]] as const) {
         const found = new Set<string>();
         for (let seed = 0; seed < 200; seed++) getEncounter(layer, createRng(seed)).forEach(e => found.add(e.speciesId));
         for (const id of wanted) expect(found.has(id)).toBe(true);
-        if (layer === 5) expect(legends.some(id => found.has(id))).toBe(false);
+        if (layer === 14) expect(legends.some(id => found.has(id))).toBe(false);
       }
     }
   });
@@ -109,7 +109,7 @@ describe('灼烧新生物与技能完整投放', () => {
 
   it('高层新敌人沿用技能替换和强化规则', () => {
     expect(applyEnemySkillProgression(makeUnit('coal', false, 0, false), 45).skills).toEqual(['molten_claw', 'furnace_shell']);
-    const moth = applyEnemySkillProgression(makeUnit('candle', false, 0, false), 45);
+    const moth = applyEnemySkillProgression(makeUnit('candle', false, 0, false), 48);
     expect(moth.skills).toEqual(['eternal_flame', 'blazing_fuel']);
     expect(moth.skillEnhancements).toEqual({ 0: 3, 1: 3 });
   });

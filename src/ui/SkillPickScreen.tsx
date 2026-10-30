@@ -15,7 +15,8 @@ export function SkillPickScreen({ state, dispatch }: { state: GameState; dispatc
   const unit = state.roster.find(candidate => candidate.uid === uid);
   if (!unit || (!skillPick && !skillReplace)) return null;
   const choosingOld = skillReplace?.replaceIdx === -1;
-  const isLegend = state.specialPending?.kind === 'legendSkill';
+  const encounter = state.growthEncounterPending;
+  const isLegend = state.specialPending?.kind === 'legendSkill' || !!encounter;
   const refreshCount = skillReplace?.refreshCount ?? 0;
   const canRefresh = !isLegend && refreshCount < MAX_REFRESH_COUNT && (unit.growthPoints ?? 0) >= REFRESH_COST;
   const choices = choosingOld ? unit.skills : skillReplace?.choices ?? skillPick?.choices ?? [];
@@ -29,6 +30,7 @@ export function SkillPickScreen({ state, dispatch }: { state: GameState; dispatc
       <aside className="flow-frame camp-learning-target camp-scroll"><h2>{unit.name}</h2><FlowPet unit={unit} /><FlowPetStats unit={unit} />
         <h3>当前技能</h3><div className="flow-skill-chips">{unit.skills.map((id, index) => <span className={skillReplace && skillReplace.replaceIdx === index ? 'training-replace-pending' : ''} key={`${id}-${index}`}>{getSkill(id).name}{getSkillEnhanceLevel(unit, index) > 0 && ` +${getSkillEnhanceLevel(unit, index)}`}{skillReplace && skillReplace.replaceIdx === index && <small>待替换</small>}</span>)}</div>
         <p>{skillReplace ? '替换后不可撤销' : `第${skillPick!.slot}技能槽`}</p>
+        {encounter && <p>{encounter.kind === 'relearn' ? '替换消耗20金币；新技能＋0，原强化清除且不退款' : encounter.kind === 'legend' ? '传奇候选固定；新技能＋0，替换时清除原强化' : '免费解锁技能槽并学习，新技能＋0'}</p>}
         {!!skillReplace && !isLegend && <p>成长点：{unit.growthPoints ?? 0}</p>}
       </aside>
       <section className="flow-frame camp-learning-panel"><h2>{choosingOld ? '选择要替换的槽位' : '从以下技能中选择一项'}</h2>
@@ -40,7 +42,7 @@ export function SkillPickScreen({ state, dispatch }: { state: GameState; dispatc
         </div>
         <footer className="camp-learning-actions"><p>{choosingOld ? '选择旧技能后，再选择新技能' : skillReplace ? '点击技能直接替换' : '点击技能直接学习'}</p><div>
           {!!skillReplace && !choosingOld && !isLegend && <button type="button" disabled={!canRefresh} onClick={() => dispatch({ type: 'PROF_SKILL_REFRESH' })}>刷新（{REFRESH_COST}成长点，剩{MAX_REFRESH_COUNT - refreshCount}次）</button>}
-          <button type="button" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>{skillReplace ? '取消' : '取消（不解锁）'}</button>
+          {skillReplace && <button type="button" onClick={() => dispatch({ type: 'PROF_SLOT_CANCEL' })}>取消</button>}
         </div></footer>
       </section>
     </main>

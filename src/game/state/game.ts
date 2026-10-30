@@ -93,6 +93,7 @@ export interface EventChoice {
       | 'battle' | 'sacrifice' | 'boost' | 'purify' | 'curse' | 'status' | 'revive' | 'growthPoint'
       | 'permanentBoost' | 'resetGrowthPoints' | 'skillReplace' | 'carryEgg' | 'coin' | 'purifyChoice' | 'feedRecruit' | 'growthEncounter';
   growthEncounter?: GrowthEncounterKind;
+  recruitCandidates?: string[];
   foodCost?: number;
   recruitBonus?: { stat: 'hp' | 'spd'; amount: number };
   coinResult?: 'heads' | 'tails';
@@ -378,7 +379,7 @@ export interface GameState {
   /** 队伍已满（ROSTER_MAX）时捕捉溢出、等待玩家处理的宠物（替换/融合/放弃） */
   tameOverflow?: Unit[];
   /** 溢出处理后返回：战斗驯服→reward；孵化→map；招募→roster；宝箱伙伴→chest。 */
-  tameOverflowReturn?: 'reward' | 'map' | 'roster' | 'chest';
+  tameOverflowReturn?: 'reward' | 'map' | 'roster' | 'chest' | 'growth-menu';
   /** 上次普通布阵的站位，按生物 uid 记忆；缺席位置留空，不自动补位。 */
   lastFormation?: Record<string, FormationPosition>;
   /** 布阵：进入普通/精英/被侵蚀/守卫战斗前选择站位（FORMATION_CONFIRM 确认后创建战斗） */
@@ -420,6 +421,8 @@ export interface GameState {
   growthEncounterCompleted?: string[];
   masterTransmissions?: number;
   lastGrowthEvent?: string;
+  /** 仅统计不同商店的首次货架，刷新不消耗也不重置保底。 */
+  growthShopGuarantee?: { nodeId: string; missedEnhanceStone: boolean };
   /** 测试局内存快照，不保存至正式存档；重置时还原选择与随机结果。 */
   testSnapshot?: Omit<GameState, 'testSnapshot'>;
   /** 自定义测试流程暂存：当前阶段（选我方/选敌方）、关卡类型、我方已选宠物 */
@@ -449,6 +452,7 @@ export interface GameState {
   carriedEggs?: { id: string; remaining: number; special: boolean; monsterId: string; passedNodeIds: string[] }[];
   /** 事件战斗：记录战斗数据（敌人、奖励、惩罚），战斗结束后处理结果 */
   eventBattle?: {
+    growthTrial?: 'duel' | 'trial';
     enemies: { speciesId: string }[];
     reward: EventBattleReward;
     penalty: { percent?: number; goldLoss?: number; curseTarget?: boolean };
@@ -2039,6 +2043,12 @@ export function currentNode(state: GameState): MapNode | undefined {
   return state.map.layers[state.currentRow]?.find((n) => n.id === state.currentNodeId);
 }
 
+/** 熟练度战斗金币按层段递增，实战与跳关共用。 */
+export function proficiencyBattleGold(layer: number, type: 'battle' | 'elite' | 'boss'): number {
+  const tier = layer <= 15 ? 0 : layer <= 30 ? 1 : 2;
+  return { battle: [12, 16, 20], elite: [20, 30, 40], boss: [50, 80, 100] }[type][tier];
+}
+
 /** 胜利提示与实际结算共用，不包含随后手动领取的金币奖励卡。 */
 function baseBattleVictoryGold(state: GameState): number {
   if (state.testRun && !state.testScenario) return 0;
@@ -2046,8 +2056,10 @@ function baseBattleVictoryGold(state: GameState): number {
   const node = currentNode(state);
   if (node?.type === 'arena3' && state.arena3Pending?.mode === 'challenge') return 50;
   if (node?.type === 'arena' || node?.type === 'gauntlet' || node?.type === 'arena3') return 0;
-  if (state.map.boss[state.currentNodeId] !== undefined) return state.runMode === 'proficiency' ? 30 : state.act >= 3 ? 0 : state.act === 1 ? 40 : 60;
-  if (state.runMode === 'proficiency') return state.map.encounter[state.currentNodeId] !== undefined ? 16 : 8;
+  const boss = state.map.boss[state.currentNodeId] !== undefined || node?.type === 'boss';
+  if (state.runMode === 'proficiency') return proficiencyBattleGold(state.currentLayer ?? state.currentRow + 1,
+    boss ? 'boss' : node?.type === 'elite' || node?.type === 'corrupted' && node.corruptReward === 'gold' ? 'elite' : 'battle');
+  if (state.map.boss[state.currentNodeId] !== undefined) return state.act >= 3 ? 0 : state.act === 1 ? 40 : 60;
   if (node?.type === 'elite' || node?.type === 'guardian') return 20;
   if (node?.type === 'corrupted' && node.corruptReward === 'gold') return 20;
   return 10;
@@ -2207,7 +2219,7 @@ export function fuseUnit(primary: Unit, targetSpeciesId?: string): Unit | null {
   };
 }
 
-/** 造物·自创生物：按属性模板生成生物，技能从模板技能池随机组合 3 个 */
+/** 造物·自创生物：按属性模板生成生物，技能从模板技能池随机组合4个 */
 export function makeCustomUnit(presetId: string, rng: () => number): Unit {
   const s = getMonster(presetId);
   const u = makeUnit(presetId, true, 0, false);

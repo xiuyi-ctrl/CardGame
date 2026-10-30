@@ -75,7 +75,7 @@ export function applyTestContent(state: GameState): GameState {
   const id = state.currentNodeId;
   if (scenario.nodeType === 'event') {
     const event = scenario.mode === 'proficiency'
-      ? buildGrowthEvent(rng, GROWTH_EVENT_TYPES.find(type => type === scenario.eventType), state.deadPets?.length)
+      ? buildGrowthEvent(rng, GROWTH_EVENT_TYPES.find(type => type === scenario.eventType), state.deadPets?.length, scenario.layer)
       : buildEventByType(rng, scenario.eventType && EVENT_TYPE_LABELS[scenario.eventType] ? scenario.eventType : 'spring', scenario.act, scenario.region);
     return { ...state, map: { ...state.map, events: { ...state.map.events, [id]: event } } };
   }

@@ -5,6 +5,7 @@
 import { pick, shuffle } from '../rng';
 import type { EventChoice, EventNode } from '../state/game';
 import type { GrowthEncounterKind } from '../state/growth-encounters';
+import { growthCompanions, growthDuelEnemy, growthTrialEnemies } from './growth-encounters';
 
 export type GrowthEventType =
   | 'ancient_arena'
@@ -33,27 +34,41 @@ export const GROWTH_EVENT_TYPES: GrowthEventType[] = [
 
 export const GROWTH_EVENT_NAMES: Record<GrowthEventType, string> = {
   ancient_arena: '分岔训练场',
-  battle_master: '战斗大师',
+  battle_master: '实战教官',
   soul_resonance: '共鸣水晶',
   skill_mentor: '遗忘书屋',
-  mysterious_altar: '神秘祭坛',
-  expedition_supply: '远征补给',
-  pet_recruit: '生物招募',
-  arena_challenge: '训练场挑战',
+  mysterious_altar: '潜能祭坛',
+  expedition_supply: '行脚补给站',
+  pet_recruit: '同行契约',
+  arena_challenge: '协同试炼',
   stone_of_forget: '拆解工坊',
-  revive_dead: '灵魂墓园',
+  revive_dead: '回响墓园',
 };
 
-export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType, deadPetCount: number = 0, layer = 16, previousTitle?: string): EventNode {
+export const GROWTH_EVENT_GROUPS: GrowthEventType[][] = [
+  ['ancient_arena', 'soul_resonance', 'mysterious_altar'],
+  ['skill_mentor', 'stone_of_forget'],
+  ['expedition_supply', 'pet_recruit'],
+  ['battle_master', 'arena_challenge', 'revive_dead'],
+];
+
+export function buildGrowthEvent(rng: () => number, eventType?: GrowthEventType, deadPetCount: number = 0, layer = 16, previousTitle?: string, seenTitles: readonly string[] = []): EventNode {
   let type = eventType;
   if (!type) {
     let pool = GROWTH_EVENT_TYPES.filter(id => (layer >= 16 || id !== 'stone_of_forget') && GROWTH_EVENT_NAMES[id] !== previousTitle);
     if (deadPetCount <= 0) {
       pool = pool.filter((id) => id !== 'revive_dead');
     }
-    type = pick(rng, pool);
+    const groups = GROWTH_EVENT_GROUPS.map(group => ({ pool: group.filter(id => pool.includes(id)),
+      count: seenTitles.filter(title => group.some(id => GROWTH_EVENT_NAMES[id] === title)).length })).filter(group => group.pool.length > 0);
+    const minCount = Math.min(...groups.map(group => group.count));
+    type = pick(rng, pick(rng, groups.filter(group => group.count === minCount)).pool);
   }
-  return buildGrowthEventByType(type);
+  const event = buildGrowthEventByType(type);
+  if (type === 'pet_recruit') event.choices[0].recruitCandidates = growthCompanions(layer, rng);
+  if (type === 'battle_master') event.choices[0].battleEnemies = growthDuelEnemy(layer, rng);
+  if (type === 'arena_challenge') event.choices[0].battleEnemies = growthTrialEnemies(layer, rng);
+  return event;
 }
 
 function growthChoice(kind: GrowthEncounterKind, label: string, desc: string): EventChoice {
@@ -69,15 +84,10 @@ function buildGrowthEventByType(type: GrowthEventType): EventNode {
         { id: 'leave', label: '离开', desc: '无事发生', kind: 'none' },
       ] };
     case 'battle_master':
-      return {
-        title: '战斗大师',
-        desc: '一位隐居的战斗大师愿意指导你。',
-        choices: [
-          { id: 'gm-learn', label: '拜师学艺', desc: '选择 1 只宠物，获得 2 成长点', kind: 'growthPoint', amount: 2 },
-          { id: 'gm-duel', label: '切磋', desc: '战斗（1 只精英），胜利后获得 30 金币', kind: 'battle', battleEnemies: [{ speciesId: 'momo_queen' }], battleReward: { kind: 'gold', amount: 30 }, battlePenalty: { percent: 20 } },
-          { id: 'gm-leave', label: '离开', desc: '无事发生', kind: 'none' },
-        ],
-      };
+      return { title: '实战教官', desc: '选择一位伙伴，独立完成实战考核。', choices: [
+        growthChoice('duel', '单人考核', '指定1只伙伴单独战斗，胜利获得6成长点'),
+        { id: 'gm-leave', label: '离开', desc: '无事发生', kind: 'none' },
+      ] };
     case 'soul_resonance':
       return { title: '共鸣水晶', desc: '短暂连接两位伙伴的成长记忆。', choices: [
         growthChoice('transfer', '连接伙伴', '指定两只伙伴，免手续费转移1～6成长点'),
@@ -91,41 +101,37 @@ function buildGrowthEventByType(type: GrowthEventType): EventNode {
         { id: 'leave', label: '离开', desc: '无事发生', kind: 'none' },
       ] };
     case 'mysterious_altar':
-      return {
-        title: '神秘祭坛',
-        desc: '一座古老的祭坛散发着神秘的光芒。',
-        choices: [
-          { id: 'ma-pray', label: '祈祷', desc: '消耗 20 金币，选择 1 只宠物获得 3 成长点', kind: 'growthPoint', amount: 3, goldDelta: -20 },
-          { id: 'ma-bless', label: '祈福', desc: '选择 1 只宠物，50% 获得 3 成长点', kind: 'growthPoint', amount: 3, chance: 0.5 },
-          { id: 'ma-leave', label: '离开', desc: '无事发生', kind: 'none' },
-        ],
-      };
+      return { title: '潜能祭坛', desc: '以旅费磨炼潜能，不消耗成长点。', choices: [
+        growthChoice('altar_hp', '淬炼体魄', '30金币，指定伙伴最大生命＋2，计入成长上限'),
+        growthChoice('altar_spd', '磨炼身法', '30金币，指定伙伴速度＋1，计入成长上限'),
+        { id: 'ma-leave', label: '离开', desc: '无事发生', kind: 'none' },
+      ] };
     case 'expedition_supply':
       return {
-        title: '远征补给',
+        title: '行脚补给站',
         desc: '你发现了一个补给箱。',
         choices: [
-          { id: 'es-gold', label: '领取金币', desc: '获得 30 金币', kind: 'gold', goldDelta: 30 },
-          { id: 'es-item', label: '领取道具', desc: '获得 1 个治疗圣水', kind: 'food', foodId: 'heal_potion' },
+          growthChoice('supply_heal', '领取疗伤补给', '治疗圣水×1，存入背包'),
+          growthChoice('supply_book', '领取训练补给', '成长之书（中）×1，存入背包'),
           { id: 'es-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
     case 'pet_recruit':
       return {
-        title: '生物招募',
+        title: '同行契约',
         desc: '一只野生生物似乎愿意加入你的队伍。',
         choices: [
-          { id: 'pr-recruit', label: '招募', desc: '获得 1 只随机生物（品阶 1~2）', kind: 'recruit', monsterId: 'momo' },
-          { id: 'pr-refuse', label: '拒绝', desc: '获得 15 金币', kind: 'gold', goldDelta: 15 },
+          growthChoice('companions', '查看同行伙伴', '两位候选选1位，按层段携带4／8／12成长点；满队可领取'),
+          { id: 'pr-refuse', label: '换取旅费', desc: '获得15金币', kind: 'gold', goldDelta: 15 },
           { id: 'pr-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
     case 'arena_challenge':
       return {
-        title: '训练场挑战',
+        title: '协同试炼',
         desc: '训练场守卫向你发起挑战。',
         choices: [
-          { id: 'ac-accept', label: '接受挑战', desc: '战斗（2 只敌人），胜利后获得 30 金币', kind: 'battle', battleEnemies: [{ speciesId: 'momo' }, { speciesId: 'lulu' }], battleReward: { kind: 'gold', amount: 30 }, battlePenalty: { percent: 15 } },
+          growthChoice('trial', '接受试炼', '挑战协作敌队；胜利出战存活伙伴各＋3成长点及20金币；失败结束远征'),
           { id: 'ac-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };
@@ -137,10 +143,10 @@ function buildGrowthEventByType(type: GrowthEventType): EventNode {
       ] };
     case 'revive_dead':
       return {
-        title: '灵魂墓园',
+        title: '回响墓园',
         desc: '你发现了一处古老的墓园，亡灵的低语回荡在空气中。或许可以尝试唤醒逝去的伙伴……',
         choices: [
-          { id: 'rd-revive', label: '尝试复活', desc: '选择 1 只死亡宠物复活（保留 50% 基础属性）', kind: 'revive', reviveRatio: 0.5 },
+          growthChoice('grave', '唤回伙伴', '指定死亡伙伴，保留完整养成，以50%生命复活'),
           { id: 'rd-leave', label: '离开', desc: '无事发生', kind: 'none' },
         ],
       };

@@ -12,14 +12,14 @@ function enemyUnit(speciesId = 'momo') {
 }
 
 describe('敌人技能强化与替换分档表', () => {
-  it('每 10 层一档，层数取档正确', () => {
-    expect(ENEMY_SKILL_TIERS.map((t) => t.minLayer)).toEqual([1, 11, 21, 31, 41]);
+  it('技能成长分开解锁，层数取档正确', () => {
+    expect(ENEMY_SKILL_TIERS.map((t) => t.minLayer)).toEqual([1, 8, 18, 23, 28, 43, 47]);
     expect(getEnemySkillTier(5)).toMatchObject({ enhanceCount: 0, enhanceLevel: 0, replaceCount: 0 });
     expect(getEnemySkillTier(15)).toMatchObject({ enhanceCount: 1, enhanceLevel: 1, replaceCount: 0 });
-    expect(getEnemySkillTier(25)).toMatchObject({ enhanceCount: 1, enhanceLevel: 2, replaceCount: 1 });
+    expect(getEnemySkillTier(25)).toMatchObject({ enhanceCount: 2, enhanceLevel: 1, replaceCount: 1 });
     expect(getEnemySkillTier(35)).toMatchObject({ enhanceCount: 2, enhanceLevel: 2, replaceCount: 1 });
-    expect(getEnemySkillTier(45)).toMatchObject({ enhanceCount: 2, enhanceLevel: 3, replaceCount: 2 });
-    expect(getEnemySkillTier(999)).toMatchObject({ minLayer: 41 });
+    expect(getEnemySkillTier(45)).toMatchObject({ enhanceCount: 2, enhanceLevel: 2, replaceCount: 2 });
+    expect(getEnemySkillTier(999)).toMatchObject({ minLayer: 47 });
   });
 
   it('映射表源/目标技能均存在', async () => {
@@ -32,7 +32,7 @@ describe('敌人技能强化与替换分档表', () => {
 });
 
 describe('applyEnemySkillProgression', () => {
-  it('1~10 层：普通敌人完全不变', () => {
+  it('1~7 层：普通敌人完全不变', () => {
     const u = enemyUnit();
     const next = applyEnemySkillProgression(u, 5);
     expect(next).toBe(u);
@@ -40,50 +40,46 @@ describe('applyEnemySkillProgression', () => {
     expect(next.skills).toEqual(u.skills);
   });
 
-  it('11~20 层：1 技能 +1，不替换', () => {
+  it('8~17 层：1 技能 +1，不替换', () => {
     const u = enemyUnit('momo');
     const next = applyEnemySkillProgression(u, 15);
     expect(next.skillEnhancements).toEqual({ 0: 1 });
     expect(next.skills).toEqual(['punch', 'leaf_needle']);
   });
 
-  it('21~30 层：slot0 替换为高阶技能并强化 +2', () => {
+  it('23~27 层：slot0 替换，不同时提高强化等级', () => {
     const u = enemyUnit('momo');
     const next = applyEnemySkillProgression(u, 25);
     expect(next.skills[0]).toBe('claw_smash');
-    expect(next.skillEnhancements).toEqual({ 0: 2 });
+    expect(next.skillEnhancements).toEqual({ 0: 1, 1: 1 });
   });
 
-  it('41~50 层：2 技能强化 +3（连击类封顶 2）、2 技能替换', () => {
+  it('47~50 层：2 技能强化 +3（连击类封顶 2）、2 技能替换', () => {
     // 迅迅：punch→claw_smash 有映射；leaf_needle 无映射则跳过继续找（仅 2 个技能，实际替换 1 个）
     const u = enemyUnit('momo');
-    const next = applyEnemySkillProgression(u, 45);
+    const next = applyEnemySkillProgression(u, 48);
     expect(next.skills).toEqual(['claw_smash', 'leaf_needle']);
     expect(next.skillEnhancements).toEqual({ 0: 3, 1: 2 }); // leaf_needle 为连击，封顶 2
   });
 
-  it('41~50 层：前 2 个存在映射的技能都被替换', () => {
+  it('47~50 层：前 2 个存在映射的技能都被替换', () => {
     // 灼灼：ember→burn_burst、double_hit→shadow_flurry，两个映射都命中
     const u = enemyUnit('fifi');
-    const next = applyEnemySkillProgression(u, 45);
+    const next = applyEnemySkillProgression(u, 48);
     expect(next.skills[0]).toBe('burn_burst'); // ember→burn_burst（slot0 有映射先替换）
     expect(next.skills[1]).toBe('shadow_flurry'); // double_hit→shadow_flurry
     expect(next.skillEnhancements).toEqual({ 0: 3, 1: 2 }); // shadow_flurry 连击封顶 2
   });
 
-  it('精英：强化技能数 +1、强化等级 +1', () => {
-    const normal = applyEnemySkillProgression(enemyUnit('momo'), 15);
-    const elite = applyEnemySkillProgression(enemyUnit('momo'), 15, true);
-    expect(normal.skillEnhancements).toEqual({ 0: 1 });
-    expect(elite.skillEnhancements).toEqual({ 0: 2, 1: 2 });
-    // 教学期精英（档1）：0+1 技能、0+1 等级
-    const earlyElite = applyEnemySkillProgression(enemyUnit('momo'), 8, true);
-    expect(earlyElite.skillEnhancements).toEqual({ 0: 1 });
+  it('18层先增加强化技能数，23层再替换，28层才提高等级', () => {
+    expect(applyEnemySkillProgression(enemyUnit(), 18).skillEnhancements).toEqual({ 0: 1, 1: 1 });
+    expect(applyEnemySkillProgression(enemyUnit(), 23).skills[0]).toBe('claw_smash');
+    expect(applyEnemySkillProgression(enemyUnit(), 28).skillEnhancements).toEqual({ 0: 2, 1: 2 });
   });
 
   it('重复调用结果一致（确定性）', () => {
-    const a = applyEnemySkillProgression(enemyUnit('gora'), 45, true);
-    const b = applyEnemySkillProgression(enemyUnit('gora'), 45, true);
+    const a = applyEnemySkillProgression(enemyUnit('gora'), 45);
+    const b = applyEnemySkillProgression(enemyUnit('gora'), 45);
     expect(a.skills).toEqual(b.skills);
     expect(a.skillEnhancements).toEqual(b.skillEnhancements);
   });
@@ -103,11 +99,12 @@ describe('createBattle 集成', () => {
     expect(b.enemyUnits[0].skills[0]).toBe('claw_smash');
   });
 
-  it('精英节点：15层前不追加加成，16层起额外 +1/+1', () => {
-    const early = createBattle(player(), [{ speciesId: 'momo' }], 42, { layer: 15, nodeType: 'elite' });
-    expect(early.enemyUnits[0].skillEnhancements).toEqual({ 0: 1 });
-    const later = createBattle(player(), [{ speciesId: 'momo' }], 42, { layer: 16, nodeType: 'elite' });
-    expect(later.enemyUnits[0].skillEnhancements).toEqual({ 0: 2, 1: 2 });
+  it('精英节点不额外叠加强化', () => {
+    for (const layer of [8, 15, 16, 18, 25, 35, 48]) {
+      const normal = createBattle(player(), [{ speciesId: 'momo' }], 42, { layer });
+      const elite = createBattle(player(), [{ speciesId: 'momo' }], 42, { layer, nodeType: 'elite' });
+      expect(elite.enemyUnits[0].skillEnhancements).toEqual(normal.enemyUnits[0].skillEnhancements);
+    }
   });
 
   it('Boss 本体与小怪（rank 4）完全不参与', () => {

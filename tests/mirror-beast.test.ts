@@ -92,11 +92,11 @@ describe('镜影兽与镜影复制', () => {
     b = playerEndTurn(b);
     expect(b.enemyUnits.map(u => u.hp)).toEqual([0, 195]);
   });
-  it('裂壳冲撞检查镜影兽自己的护盾，不借用队友护盾', () => {
+  it('裂壳冲撞消耗施法者自己的护盾，镜影兽无盾也能复制基础攻击', () => {
     let b = setup('shell_charge'); b.playerUnits[0].shield = 5;
     b = playerSkill(b, b.playerUnits[0].uid, 'shell_charge', b.enemyUnits[0].uid);
     b = playerEndTurn(b);
-    expect(b.playerUnits[1].skillUses?.mirror_copy).toBeUndefined(); expect(b.enemyUnits[0].hp).toBe(192);
+    expect(b.playerUnits[1].skillUses?.mirror_copy).toBeUndefined(); expect(b.enemyUnits[0].hp).toBe(189);
   });
   it('火种引燃已消耗全部火种后，复制失败本回合跳过', () => {
     let b = setup('ignite_embers');

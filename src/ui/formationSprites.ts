@@ -1,15 +1,6 @@
-import homeXunxun from './assets/home-xunxun.png';
-import homePaopao from './assets/home-paopao.png';
-import homeZhuozhuo from './assets/home-zhuozhuo.png';
-import starterTiedun from './assets/starter-tiedun.png';
-import starterMimi from './assets/starter-mimi.png';
-import starterCici from './assets/starter-cici.png';
+import { getCreatureImage } from '../game/data/creature-art';
 
-export const FORMATION_SPRITES: Record<string, string> = {
-  momo: homeXunxun,
-  lulu: homePaopao,
-  fifi: homeZhuozhuo,
-  kiki: starterTiedun,
-  mimi: starterMimi,
-  pipi: starterCici,
-};
+/** 仅保留初始伙伴的布阵直接显示规则，图片路径实时读取统一配置。 */
+export function formationSprite(speciesId: string): string | undefined {
+  return ['momo', 'lulu', 'fifi', 'kiki', 'mimi', 'pipi'].includes(speciesId) ? getCreatureImage(speciesId) : undefined;
+}

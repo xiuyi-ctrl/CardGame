@@ -1,3 +1,4 @@
+import { getCreatureImage } from '../game/data/creature-art';
 import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { MAIN_REGIONS, type MainRegionId } from '../game/data/regions';
 import { getMonster, SPECIAL_EGG_POOL } from '../game/data/monsters';
@@ -17,7 +18,7 @@ export const FOREST_ACT_NAMES = ['', '林缘营地', '幽暗密林', '古树遗�
 
 function ecologyImages(regionId: MainRegionId): string[] {
   const region = MAIN_REGIONS[regionId];
-  return [...region.basePool, ...region.evo1Pool, ...region.evo2Pool, ...SPECIAL_EGG_POOL].map(id => `/ecology/${id}.png`);
+  return [...region.basePool, ...region.evo1Pool, ...region.evo2Pool, ...SPECIAL_EGG_POOL].map(id => getCreatureImage(id)).filter((src): src is string => !!src);
 }
 
 function RegionEcology({ regionId, encountered, onClose }: { regionId: MainRegionId; encountered: readonly string[]; onClose: () => void }) {
@@ -48,7 +49,7 @@ function RegionEcology({ regionId, encountered, onClose }: { regionId: MainRegio
           const species = getMonster(id);
           const known = encountered.includes(id);
           return <div key={id} className={`region-ecology-creature${known ? '' : ' undiscovered'}`}>
-            <span className="region-ecology-portrait"><PetIcon image={`/ecology/${id}.png`} emoji={species.emoji} name={known ? species.name : '未遇见生物'} /></span>
+            <span className="region-ecology-portrait"><PetIcon speciesId={id} image={getCreatureImage(id)} emoji={species.emoji} name={known ? species.name : '未遇见生物'} /></span>
           </div>;
         })}
         </div>

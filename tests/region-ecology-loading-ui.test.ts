@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest';
 import { RegionScreen } from '../src/ui/RegionScreen';
 import { createInitialState } from '../src/game/state/reducer';
+import { getCreatureImage } from '../src/game/data/creature-art';
 
 const images = vi.hoisted(() => ({ pending: [] as (() => void)[], sources: [] as string[][] }));
 vi.mock('../src/ui/imageCache', () => ({
@@ -21,8 +22,9 @@ it('进入地区页提前准备小图；打开后整组解码完成才统一展�
   Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function(this: HTMLDialogElement) { this.removeAttribute('open'); } });
   render(createElement(RegionScreen, { state: { ...createInitialState(), region: 'emerald_forest' }, dispatch: vi.fn() }));
   expect(images.sources[0]).toHaveLength(27);
-  expect(images.sources[0].every(src => src.startsWith('/ecology/'))).toBe(true);
-  expect(images.sources[0]).toEqual(expect.arrayContaining(['/ecology/time_sand_beast.png', '/ecology/mimic_beast.png', '/ecology/mirror_beast.png', '/ecology/crystal_core_beast.png']));
+  expect(images.sources[0]).toContain(getCreatureImage('momo'));
+  expect(images.sources[0]).toEqual(expect.arrayContaining(['time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast'].map(id => getCreatureImage(id))));
+  expect(images.sources[0].some(src => src.startsWith('/ecology/'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: '查看生态详情' }));
   const body = screen.getByRole('dialog').querySelector('.region-ecology-body')!;
   expect(body.classList.contains('is-loading')).toBe(true);

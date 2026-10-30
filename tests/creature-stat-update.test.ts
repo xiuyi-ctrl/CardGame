@@ -24,7 +24,7 @@ describe('基础伙伴属性与挑衅调整', () => {
     expect(getSkill('provoke')).toMatchObject({ cooldown: 1, damage: 3 });
     expect(getSkill('provoke').uses).toBeUndefined();
     for (const level of [0, 1, 2, 3]) {
-      expect(getSkillEnhanceBonus('provoke', level)).toMatchObject({ damageBonus: level, effectBonus: level });
+      expect(getSkillEnhanceBonus('provoke', level)).toMatchObject({ damageBonus: level, effectBonus: 0 });
     }
     let b = createBattle([makeUnit('pipi', true, 0, false)], [{ speciesId: 'lulu' }], 1);
     b.enemyUnits[0] = { ...b.enemyUnits[0], hp: 100, maxHp: 100, skills: [], acted: true };

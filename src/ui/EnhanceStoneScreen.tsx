@@ -13,6 +13,8 @@ import {
   getSkillEnhanceLevel,
   getSkillEnhanceMaxLevel,
   getSkillEnhanceBonus,
+  getSkillEffectEnhanceBonus,
+  canMasterEnhance,
 } from '../game/core/growth';
 import { getSkill } from '../game/data/skills';
 
@@ -26,21 +28,26 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
   const [enhanceStoneSlotIndex, setEnhanceStoneSlotIndex] = useState<number | null>(null);
   const [resetSlotIndex, setResetSlotIndex] = useState<number | null>(null);
 
-  const roster = state.roster;
+  const master = state.growthEncounterPending?.kind === 'master';
+  const roster = master ? state.roster.filter(unit => unit.hp > 0) : state.roster;
   const selectedUnit = roster.find((u) => u.uid === selectedUid);
   const stoneCount = state.inventory['skill_enhance_stone'] ?? 0;
+  const workbenchState = master ? { ...state, roster } : state;
+  const title = master ? '大师传承' : '技能强化石';
+  const subtitle = master ? '免费强化一级，可突破常规上限，最高＋4' : '使用强化石提升技能，不消耗成长点';
+  const workbenchDispatch: Dispatch<GameAction> = action => dispatch(master && action.type === 'BACK_TO_MAP' ? { type: 'GROWTH_ENCOUNTER_CANCEL' } : action);
 
   if (selectedUnit) {
     return (
-      <TrainingWorkbench state={state} dispatch={dispatch} title="技能强化石" subtitle="使用强化石提升技能，不消耗成长点" unit={selectedUnit} onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)}>
+      <TrainingWorkbench state={workbenchState} dispatch={workbenchDispatch} title={title} subtitle={subtitle} unit={selectedUnit} onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)}>
 
         <div className="growth-skill-enhance-list">
           {selectedUnit.skills.map((skillId, idx) => {
             const sk = getSkill(skillId);
             if (!sk) return null;
             const level = getSkillEnhanceLevel(selectedUnit, idx);
-            const maxLevel = getSkillEnhanceMaxLevel(skillId);
-            const canEnhance = level < maxLevel && stoneCount > 0;
+            const maxLevel = master ? canMasterEnhance(selectedUnit, idx) || level >= 4 ? 4 : 0 : getSkillEnhanceMaxLevel(skillId);
+            const canEnhance = master ? canMasterEnhance(selectedUnit, idx) && (state.masterTransmissions ?? 0) < 2 : level < maxLevel && stoneCount > 0;
 
             return (
               <div key={idx} className="growth-skill-enhance-item">
@@ -67,15 +74,15 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
                     <button
                       className={`growth-enhance-stone-btn ${!canEnhance ? 'disabled' : ''}`}
                       disabled={!canEnhance}
-                      title={!canEnhance ? (stoneCount <= 0 ? '需要技能强化石' : '已满级') : `消耗 1 个技能强化石`}
+                      title={master ? '免费强化一级，最高＋4' : !canEnhance ? (stoneCount <= 0 ? '需要技能强化石' : '已满级') : `消耗 1 个技能强化石`}
                       onClick={() => setEnhanceStoneSlotIndex(idx)}
                     >
-                      <img src={BACKPACK_ITEM_ART.skill_enhance_stone} alt="" /> 强化 · 1个
+                      {master ? '免费强化' : <><img src={BACKPACK_ITEM_ART.skill_enhance_stone} alt="" /> 强化 · 1个</>}
                     </button>
                   ) : (
-                    <span className="growth-skill-max">已满级</span>
+                    <span className="growth-skill-max">{maxLevel === 0 ? '不可强化' : '已满级'}</span>
                   )}
-                  {level > 0 && (
+                  {!master && level > 0 && (
                     <button
                       className="growth-reset-btn"
                       disabled={(state.inventory['reset_stone'] ?? 0) <= 0}
@@ -96,19 +103,19 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
         {enhanceStoneSlotIndex !== null && (
           <div className="growth-modal-overlay" onClick={() => setEnhanceStoneSlotIndex(null)}>
             <div className="growth-modal" onClick={(e) => e.stopPropagation()}>
-              <h3>使用技能强化石</h3>
+              <h3>{master ? '确认大师传承' : '使用技能强化石'}</h3>
               <div className="growth-modal-skill">{getSkill(selectedUnit.skills[enhanceStoneSlotIndex])?.name}<span>+{getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex)} → +{getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex) + 1}</span></div>
               <div className="growth-modal-content has-comparison">
                 <p><strong>当前</strong>{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex))}</p>
                 <p><strong>强化后</strong>{renderSkillEffect(selectedUnit.skills[enhanceStoneSlotIndex], getSkillEnhanceLevel(selectedUnit, enhanceStoneSlotIndex) + 1)}</p>
-                <p>消耗：1 个技能强化石（剩余 {stoneCount - 1} 个）</p>
+                <p>{master ? '本次免费，不消耗强化石；最高＋4' : `消耗：1 个技能强化石（剩余 ${stoneCount - 1} 个）`}</p>
                 <p>无需消耗成长点</p>
               </div>
               <div className="growth-modal-actions">
                 <button
                   className="primary btn"
                   onClick={() => {
-                    dispatch({ type: 'PROF_SKILL_ENHANCE_STONE', uid: selectedUnit.uid, slotIndex: enhanceStoneSlotIndex });
+                    dispatch(master ? { type: 'GROWTH_ENCOUNTER_CONFIRM', uid: selectedUnit.uid, slot: enhanceStoneSlotIndex } : { type: 'PROF_SKILL_ENHANCE_STONE', uid: selectedUnit.uid, slotIndex: enhanceStoneSlotIndex });
                     setEnhanceStoneSlotIndex(null);
                   }}
                 >
@@ -153,7 +160,7 @@ export function EnhanceStoneScreen({ state, dispatch }: Props) {
     );
   }
 
-  return <TrainingWorkbench state={state} dispatch={dispatch} title="技能强化石" subtitle="使用强化石提升技能，不消耗成长点" onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)} />;
+  return <TrainingWorkbench state={workbenchState} dispatch={workbenchDispatch} title={title} subtitle={subtitle} onSelect={unit => setSelectedUid(unit.uid)} onClear={() => setSelectedUid(null)} />;
 }
 
 function renderSkillDesc(skillId: string, level: number): string {
@@ -167,7 +174,7 @@ function renderSkillDesc(skillId: string, level: number): string {
   if (hits > 1) parts.push(`${hits} 段`);
   if (sk.effects && sk.effects.length > 0) {
     for (const e of sk.effects) {
-      const val = e.value + bonus.effectBonus;
+      const val = e.value + getSkillEffectEnhanceBonus(skillId, level, e.kind);
       if (e.kind === 'shield') parts.push(`${val} 护盾`);
       else if (e.kind === 'burn') parts.push(`灼烧${val}层`);
       else if (e.kind === 'poison') parts.push(`中毒${val}层`);
@@ -177,7 +184,8 @@ function renderSkillDesc(skillId: string, level: number): string {
       else if (e.kind === 'atkDown') parts.push(`降攻${val}`);
       else if (e.kind === 'thorns') parts.push(`荆棘反伤${val}`);
       else if (e.kind === 'skillSeal') parts.push(`封印${e.value}技能`);
-      else if (e.kind === 'shadowMark') parts.push(`暗印${val}层`);
+      else if (e.kind === 'shadowMark') parts.push(`印记受伤+${val}`);
+      else if (e.kind === 'waterCurtain') parts.push(`水幕减伤${val}`);
       else if (e.kind === 'fear') parts.push(`恐惧${e.value}层`);
     }
   }

@@ -86,7 +86,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', reach: 'front', kind: 'attack', damage: 4, cooldown: 1, uses: 3,
   },
   shell_charge: {
-    id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多5点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；至少有1点护盾才能使用',
+    id: 'shell_charge', name: '裂壳冲撞', desc: '消耗自身最多5点护盾，攻击单个前排敌人，造成3加实际消耗护盾数的伤害；无护盾仍可使用',
     target: 'single', reach: 'front', kind: 'attack', damage: 3,
   },
   burn_brand: {
@@ -213,8 +213,8 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   heal_light: {
-    id: 'heal_light', name: '愈光', desc: '治疗一个队友；冷却1回合',
-    target: 'ally', kind: 'heal', cooldown: 1, heal: 8,
+    id: 'heal_light', name: '愈光', desc: '为一个队友回复8点生命',
+    target: 'ally', kind: 'heal', heal: 8,
   },
   roar: {
     id: 'roar', name: '战吼', desc: '提升自身伤害，持续2回合', hideEffects: true,
@@ -252,7 +252,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'single', kind: 'attack', damage: 5, reach: 'pierce',
   },
   bloodlust: {
-    id: 'bloodlust', name: '嗜血', desc: '自身吸血+2，持续2回合；攻击每次造成伤害时回复2点生命，重复使用不叠加、刷新持续时间',
+    id: 'bloodlust', name: '嗜血', desc: '自身吸血+2，持续2回合；攻击每次造成伤害时最多回复2点生命，不超过本次造成的生命与护盾实际损失合计，溢出伤害不计；重复使用不叠加、刷新持续时间',
     target: 'self', kind: 'buff', hideEffects: true,
     effects: [{ kind: 'bloodDrain', value: 2, turns: 2 }],
   },

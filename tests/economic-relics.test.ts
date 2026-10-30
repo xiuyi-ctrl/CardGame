@@ -27,7 +27,7 @@ it.each([['battle', 15], ['elite', 30], ['guardian', 30], ['boss', 60], ['corrup
   const after = gameReducer(state, { type: 'BATTLE_END_CONFIRM' });
   expect(after.gold - state.gold).toBe(amount);
   expect(after.runStats!.goldEarned - state.runStats!.goldEarned).toBe(amount);
-  expect(battleVictoryGold({ ...state, runMode: 'proficiency' })).toBe(type === 'boss' ? 30 : 16);
+  expect(battleVictoryGold({ ...state, runMode: 'proficiency' })).toBe(type === 'boss' ? 50 : type === 'elite' || type === 'corrupted' ? 20 : 12);
 });
 
 it('精灵事件战斗20变30，奇遇和奖励卡金币不加成', () => {

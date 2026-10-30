@@ -1,8 +1,8 @@
+import { getCreatureImage } from '../game/data/creature-art';
 import type { GameState } from '../game/state/game';
 import { FIELD_MAX, PROF_FIELD_MAX } from '../game/state/game';
 import type { Unit } from '../game/types';
 import { PetIcon } from './components';
-import { FORMATION_SPRITES } from './formationSprites';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
 
 export const FLOW_ART = '/main-flow-art';
@@ -26,7 +26,7 @@ export function FlowHeader({ title, state, onHome, fieldMax }: { title: string; 
 }
 
 export function FlowPet({ unit }: { unit: Unit }) {
-  const image = FORMATION_SPRITES[unit.speciesId] ?? (unit.speciesId === 'momo' ? '/battle-momo.png' : unit.image);
+  const image = getCreatureImage(unit.speciesId, unit.image);
   return <span className="flow-pet"><PetIcon image={image} emoji={unit.emoji} name={unit.name} /></span>;
 }
 

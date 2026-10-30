@@ -297,6 +297,8 @@ export interface Unit {
   skillEnhancements?: Record<number, number>;
   /** 每个技能槽实际支付的强化成长点；免费强化不增加。旧档缺失时不推算退款。 */
   skillEnhancePaid?: Record<number, number>;
+  /** 属性成长实际支付的成长点；免费属性档位不产生退款。 */
+  statGrowthPaid?: number;
 }
 
 /** 日志高亮片段类型 */

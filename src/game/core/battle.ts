@@ -7,7 +7,7 @@ import { mimicSkillPool, MIMIC_BLOCKED_SKILLS } from '../data/mimic';
 import { createRng, shuffle } from '../rng';
 import type { Difficulty } from '../state/game';
 import { DIFFICULTY_CONFIG } from '../state/game';
-import { getSkillEnhanceLevel, getSkillEnhanceBonus } from './growth';
+import { getSkillEnhanceLevel, getSkillEnhanceBonus, getSkillEffectEnhanceBonus } from './growth';
 import { applyEnemySkillProgression } from './enemy-progression';
 
 export const TAME_THRESHOLD = 0.4;
@@ -215,7 +215,7 @@ function consumeSkillUse(b: BattleState, actor: Unit, skillId: string): BattleSt
 
 /** 技能冷却剩余回合数（无冷却返回 0） */
 export function skillCooldownLeft(u: Unit, skillId: string): number {
-  if (skillId === 'solar_heal' || skillId === 'ember_transfer') return 0;
+  if (skillId === 'solar_heal' || skillId === 'ember_transfer' || skillId === 'heal_light') return 0;
   return u.skillCooldowns?.[skillId] ?? 0;
 }
 
@@ -231,7 +231,6 @@ export function canUnitUseSkill(u: Unit, skillId: string): boolean {
   );
   if (sealed) return false;
   const skill = getSkill(skillId);
-  if (skillId === 'shell_charge' && u.shield <= 0) return false;
   return !skill.growthCost || (u.growthValue ?? 0) >= skill.growthCost;
 }
 
@@ -295,7 +294,6 @@ function makeEnemy(
   untameable = false,
   difficulty?: Difficulty,
   layer?: number,
-  eliteBonus = false,
   encounterHpMult = 1,
 ): Unit {
   const s = getMonster(e.speciesId);
@@ -317,9 +315,9 @@ function makeEnemy(
     unit.maxHp = Math.max(1, Math.round(unit.maxHp * encounterHpMult));
     unit.hp = unit.maxHp;
   }
-  // 熟练度远征：敌人技能随层数强化/替换（rank<4 参与，Boss 与小怪不参与；精英额外+1/+1）
+  // 熟练度远征：敌人技能随层数强化/替换（rank<4 参与，Boss 与小怪不参与）
   if (layer !== undefined && s.rank < 4) {
-    return applyEnemySkillProgression(unit, layer, eliteBonus);
+    return applyEnemySkillProgression(unit, layer);
   }
   return unit;
 }
@@ -462,7 +460,6 @@ export function createBattle(
   const untameable = options?.untameable === true;
   const difficulty = options?.difficulty;
   const layer = options?.layer;
-  const eliteBonus = options?.nodeType === 'elite' && (layer === undefined || layer >= 16);
   const encounterHpMult = options?.encounterHpMult ?? 1;
   if (options?.gauntlet) {
     const [first, ...playerRest] = preparedPlayer;
@@ -471,8 +468,8 @@ export function createBattle(
     b.playerBench = playerRest;
     b.playerDown = [];
     const [firstEnemy, ...enemyRest] = enemySpecies;
-    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer, eliteBonus, encounterHpMult), row: 'front', column: 1 }] : [];
-    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer, eliteBonus, encounterHpMult));
+    b.enemyUnits = firstEnemy ? [{ ...makeEnemy(firstEnemy, 'front', 1, untameable, difficulty, layer, encounterHpMult), row: 'front', column: 1 }] : [];
+    b.enemyBench = enemyRest.map((e) => makeEnemy(e, 'back', 0, untameable, difficulty, layer, encounterHpMult));
     b.gauntlet = { total: enemySpecies.length, current: 1 };
   } else if (options?.mirrorUnits) {
     // 竞技场模拟战：用玩家单位的克隆作为敌人，镜像玩家站位
@@ -500,7 +497,7 @@ export function createBattle(
     const picked = exact ? [...enemySpecies] : [...enemySpecies];
     const layout = planEnemyLayout(picked);
     b.playerUnits = preparedPlayer;
-    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty, layer, eliteBonus, encounterHpMult));
+    b.enemyUnits = picked.map((e, i) => makeEnemy(e, layout[i].row, layout[i].col, untameable, difficulty, layer, encounterHpMult));
     // Boss 小怪战：Boss 显示在前排中间（column 1），与两侧小怪互换位置
     if (b.enemyUnits.length >= 2 && b.enemyUnits[0]?.speciesId.startsWith('boss_')) {
       const boss = b.enemyUnits[0];
@@ -2561,8 +2558,7 @@ function resolveAttack(
         t2 = actorFromId(nb, t2.uid) ?? t2;
       } else if (e.kind === 'burn' || e.kind === 'poison' || e.kind === 'atkDown' || e.kind === 'stun' || e.kind === 'taunt' || e.kind === 'spdDown' || e.kind === 'thorns' || e.kind === 'shadowMark') {
         // 眩晕/封印/嘲讽固定，不随强化变化；其余效果值叠加强化加成
-        const fixedKinds = ['stun', 'taunt'];
-        const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + enhanceBonus.effectBonus + (e.kind === 'burn' && actor.isPlayer !== t2.isPlayer ? foxBurnBonus : 0);
+        const effectValue = e.value + getSkillEffectEnhanceBonus(skill.id, enhanceLevel, e.kind) + (e.kind === 'burn' && actor.isPlayer !== t2.isPlayer ? foxBurnBonus : 0);
         t2 = applyStatusTo(t2, e.kind === 'taunt' ? { ...e, value: effectValue, sourceUid: actor.uid } : { ...e, value: effectValue }, nb.round);
         if (e.kind === 'poison') didPoison = true;
       } else if (e.kind === 'skillSeal') {
@@ -2603,8 +2599,7 @@ function resolveAttack(
       // 零伤全体 debuff：由 useSkillInner 统一推送合并日志，此处跳过
     } else if (seg === 0 && skill.effects && skill.effects.length > 0) {
       const effectDesc = skill.effects.map((e) => {
-        const fixedKinds = ['stun', 'skillSeal', 'taunt'];
-        const val = fixedKinds.includes(e.kind) ? e.value : e.value + enhanceBonus.effectBonus;
+        const val = e.value + getSkillEffectEnhanceBonus(skill.id, enhanceLevel, e.kind);
         if (e.kind === 'poison') return `中毒 ${val} 层`;
         if (e.kind === 'burn') return `灼烧 ${val} 层`;
         if (e.kind === 'atkDown') return `降低攻击 ${val} 层`;
@@ -2648,7 +2643,7 @@ function resolveAttack(
       const drainActor = actorFromId(nb, actor.uid);
       const bloodDrain = drainActor?.statuses.find(s => s.kind === 'bloodDrain')?.value ?? 0;
       if (bloodDrain > 0 && (actualHpLoss > 0 || actualShieldLoss > 0) && drainActor && drainActor.hp > 0) {
-        const amount = Math.min(bloodDrain, getEffectiveMaxHp(drainActor) - drainActor.hp);
+        const amount = Math.min(bloodDrain, actualHpLoss + actualShieldLoss, getEffectiveMaxHp(drainActor) - drainActor.hp);
         nb = replaceUnit(nb, { ...drainActor, hp: drainActor.hp + amount });
         if (amount > 0) nb = pushLog(nb, `${drainActor.name} 的「嗜血」恢复 ${amount} 点生命`, sideOf(drainActor), drainActor.uid, drainActor.uid);
       }
@@ -3061,7 +3056,6 @@ export function mirrorCopyPlan(b: BattleState, actor: Unit): { skill?: SkillDef;
   const skill = SKILLS[record.skillId];
   if (!skill || MIRROR_BLOCKED_SKILLS.has(skill.id) || skill.growthCost) return { reason: '上一名友方使用了不可复制的技能' };
   if (actor.statuses.some(s => s.kind === 'skillSeal' && s.sealedSkills?.includes(skill.id))) return { reason: '该技能被封印' };
-  if (skill.id === 'shell_charge' && actor.shield < 1) return { reason: '自身没有护盾' };
   if (skill.id === 'ignite_embers' && !alliesOf(b, actor).some(u => u.statuses.some(s => s.kind === 'emberSeed'))) return { reason: '我方没有火种' };
   const enemies = enemiesOf(b, actor);
   if (skill.id === 'chain_activate' && !enemies.some(u => u.statuses.some(s => s.kind === 'chainLink'))) return { reason: '敌方没有锁链' };
@@ -3116,9 +3110,6 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
   if (sealStatus && sealStatus.sealedSkills?.includes(skill.id)) {
     // 被封印的技能无法使用
     return markActed(pushLog(b, `${actor.name} 的「${skill.name}」被封印，无法使用`, sideOf(actor)), actor.uid);
-  }
-  if (skill.id === 'shell_charge' && actor.shield <= 0) {
-    return markActed(pushLog(b, `${actor.name} 没有护盾，无法使用「${skill.name}」`, sideOf(actor), actor.uid), actor.uid);
   }
   // 成长值消耗检查
   if (skill.growthCost) {
@@ -3362,8 +3353,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           }
           continue;
         }
-        const fixedKinds = ['stun', 'skillSeal', 'taunt'];
-        const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + healEnhanceBonus.effectBonus;
+        const effectValue = e.value + getSkillEffectEnhanceBonus(skill.id, healEnhanceLevel, e.kind);
         healed = applyStatusTo(healed, { kind: e.kind, value: effectValue, turns: e.turns }, r.round);
         if (e.kind === 'shield') {
           healed = { ...healed, shield: Math.min(99, healed.shield + effectValue) };
@@ -3401,7 +3391,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
             && enemiesOf(nb, actor).some((unit) => unit.statuses.some((status) => status.kind === 'burn' && status.value > 0)) ? 2 : 0;
           const emberBonus = skill.id === 'ember_veil' && t.statuses.some(status => status.kind === 'emberSeed') ? 2 : 0;
           const rewindBonus = skill.id === 'sand_shield' && actor.timeRewindRound === nb.round ? 2 : 0;
-          const effectValue = e.value + ashBonus + emberBonus + rewindBonus + (e.kind === 'shield' ? buffEnhanceBonus.effectBonus : buffEnhanceLevel);
+          const effectValue = e.value + ashBonus + emberBonus + rewindBonus + getSkillEffectEnhanceBonus(skill.id, buffEnhanceLevel, e.kind);
           buffed = applyStatusTo(buffed, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
           if (e.kind === 'shield') {
             buffed = { ...buffed, shield: Math.min(99, buffed.shield + effectValue) };
@@ -3661,8 +3651,7 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
           }
         } else {
           // 眩晕/封印/嘲讽固定，不随强化变化；其余效果值叠加强化加成
-          const fixedKinds = ['stun', 'skillSeal', 'taunt', 'timeLag'];
-          const effectValue = fixedKinds.includes(e.kind) ? e.value : e.value + statusEnhanceBonus.effectBonus + (e.kind === 'burn' && actor.isPlayer !== t.isPlayer ? foxBurnBonus : 0);
+          const effectValue = e.value + getSkillEffectEnhanceBonus(skill.id, statusEnhanceLevel, e.kind) + (e.kind === 'burn' && actor.isPlayer !== t.isPlayer ? foxBurnBonus : 0);
           affected = applyStatusTo(affected, { kind: e.kind, value: effectValue, turns: e.turns }, nb.round);
         }
       }
@@ -3781,10 +3770,8 @@ function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTar
     // 零伤全体 debuff：推送一条合并日志，所有目标通过 burstTargets 同时触发 buff 图标
     if (skill.damage === 0 && skill.effects?.length && skill.target === 'all' && !isGroup) {
       const zeroDmgEnhanceLevel = getSkillEnhanceLevel(actor, actor.skills.indexOf(skill.id));
-      const zeroDmgEnhanceBonus = getSkillEnhanceBonus(skill.id, zeroDmgEnhanceLevel);
       const effectDesc = skill.effects.map((e) => {
-        const fixedKinds = ['stun', 'skillSeal', 'taunt'];
-        const val = fixedKinds.includes(e.kind) ? e.value : e.value + zeroDmgEnhanceBonus.effectBonus;
+        const val = e.value + getSkillEffectEnhanceBonus(skill.id, zeroDmgEnhanceLevel, e.kind);
         if (e.kind === 'poison') return `中毒 ${val} 层`;
         if (e.kind === 'burn') return `灼烧 ${val} 层`;
         if (e.kind === 'atkDown') return `降低攻击 ${val} 层`;

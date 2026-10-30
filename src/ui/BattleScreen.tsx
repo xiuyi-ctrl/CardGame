@@ -1,3 +1,4 @@
+import { TestBattleEditor } from './TestBattleEditor';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBackAction, useMobileLayout } from './mobile';
 import type { CSSProperties, Dispatch, PointerEvent as ReactPointerEvent } from 'react';
@@ -101,7 +102,7 @@ export function BattleUnitInspectPanel({ unit, speed, side, showSkills = side ==
         <div className="enemy-inspect-section-title">技能</div>
         <div className="enemy-inspect-skills">
           {unit.skills.map((sid, slot) => (
-            <SkillTag key={slot} skill={getSkill(sid)} desc usesNote />
+            <SkillTag key={slot} skill={getSkill(sid)} enhanced={getSkillEnhanceLevel(unit, slot)} desc usesNote />
           ))}
         </div>
       </>}
@@ -130,6 +131,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [foodOverlayOpen, setFoodOverlayOpen] = useState(false);
   const [itemOverlayOpen, setItemOverlayOpen] = useState(false);
   const [logExpanded, setLogExpanded] = useState(false);
+  const [testEditorOpen, setTestEditorOpen] = useState(false);
   const [mobileLogOpen, setMobileLogOpen] = useState(false);
   const longPress = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number; pointerId: number } | null>(null);
   const suppressPressClick = useRef(false);
@@ -655,11 +657,13 @@ export function BattleScreen({ state, dispatch }: Props) {
     <div className="screen battle-screen" style={{ '--battle-fx-speed': animSpeed, '--battle-fx-play': effectsPaused ? 'paused' : 'running' } as CSSProperties}>
       {battle.mimicPreviewPending && <MimicPreview units={[...battle.playerUnits, ...battle.enemyUnits, ...(battle.playerBench ?? []), ...(battle.enemyBench ?? [])].filter(unit => unit.hp > 0 && getPassive(unit.passive)?.kind === 'mimic')} onConfirm={() => dispatch({ type: 'ACK_MIMIC_PREVIEW' })} />}
       {collapseWarning && !animating && !logPending && !battle.pendingSwap && <CollapseWarning round={battle.round} onConfirm={acknowledgeCollapse} />}
+      {state.testRun && testEditorOpen && canAct && <TestBattleEditor units={[...battle.playerUnits, ...battle.enemyUnits]} dispatch={dispatch} onClose={() => setTestEditorOpen(false)} />}
       <div className="hud">
         <span className="act">{state.runMode === 'proficiency' ? '熟练度远征' : `第${state.act}幕`} · 第{state.currentRow + 1}层</span>
         <span className="battle-hud-round">回合 {battle.round}</span>
         {battle.rewindChoice && <span className="chip battle-rewind-choice" title="回溯额外行动：请选择技能与目标，或休息">回溯额外行动</span>}
         {battleCollapseDamage(battle.round) > 0 && <span className="chip" title="本回合末双方全体直接扣生命，无视护盾、减伤与伤害上限">{mobile ? '回合末扣血 ' : '崩解：回合结束全体扣除 '}{battleCollapseDamage(battle.round)}{mobile ? '' : '生命'}</span>}
+        {state.testRun && <button type="button" disabled={!canAct} onClick={() => setTestEditorOpen(true)}>调整数值</button>}
         <button type="button" className="touch-only mobile-log-toggle" onClick={() => setMobileLogOpen(v => !v)}>战斗记录</button>
         {battle.gauntlet && (
           <span className="chip" title="敌方轮换上阵，一只倒下另一只顶替">

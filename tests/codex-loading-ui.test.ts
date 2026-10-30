@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest';
 import { CodexScreen } from '../src/ui/App';
 import { MONSTERS } from '../src/game/data/monsters';
-import { FORMATION_SPRITES } from '../src/ui/formationSprites';
+import { formationSprite } from '../src/ui/formationSprites';
 
 const images = vi.hoisted(() => ({ cached: false, sources: [] as string[], finish: () => {} }));
 vi.mock('../src/ui/imageCache', () => ({
@@ -25,7 +25,7 @@ it.each([false, true])('背景和全部立绘解码完成后才显示图鉴，�
   expect(images.sources).toContain('/formation-camp.png');
   expect(images.sources.some(src => src.includes('popup-terminal-frame.svg'))).toBe(true);
   for (const species of Object.values(MONSTERS)) {
-    const image = FORMATION_SPRITES[species.id] ?? (species.id === 'momo' ? '/battle-momo.png' : species.image);
+    const image = formationSprite(species.id) ?? species.image;
     if (image) expect(images.sources).toContain(image);
   }
   await act(async () => { images.finish(); });

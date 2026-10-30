@@ -1,8 +1,9 @@
+import { getCreatureImage } from '../data/creature-art';
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind, TestScenario, EventBattleReward } from './game';
 import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, evolutionLockReason, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
 import { finalEvolutionPaths, economicRelicUnlocks, growthRelicUnlocks, mainShopRefreshCost, RELIC_DEFS } from './game';
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
-import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills, BATTLE_COLLAPSE_WARNING_ROUND } from '../core/battle';
+import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills, BATTLE_COLLAPSE_WARNING_ROUND, computeTurnOrder, pushLog } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
 import type { BattleState, Unit } from '../types';
 import { FOODS, isCaptureFood } from '../data/foods';
@@ -10,7 +11,7 @@ import { getItem, ITEMS, mainShopItemPool } from '../data/items';
 import { getMonster, MONSTERS, SPECIAL_EGG_POOL } from '../data/monsters';
 import { MAIN_REGIONS, isMainRegionId, type MainRegionId } from '../data/regions';
 import { createRng, pick, shuffle } from '../rng';
-import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, REFRESH_COST, MAX_REFRESH_COUNT, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset } from '../core/growth';
+import { SLOT3_COST, SLOT4_COST, SLOT5_COST, REROLL_COST, REFRESH_COST, MAX_REFRESH_COUNT, getRandomSkillChoices, getRandomLegendarySkillChoices, getMaxSkillSlots, applySkillEnhance, applySkillEnhanceStone, applySkillEnhanceReset, resetAttributeGrowth } from '../core/growth';
 import { generateGrowthMap, getGrowthEncounter, getGrowthEliteEncounter, TIER1 } from '../core/growth-map';
 import { getGrowthArenaEncounter } from '../data/growth-arena';
 import { buildGrowthEvent } from '../data/growth-events';
@@ -23,7 +24,7 @@ import { emptyMainRating, trackMainRating } from '../rating';
 import { battleVictoryGold } from './game';
 import { applyTestContent, configureTestGrowth, prepareTestScenario } from './test-scenarios';
 import { generateMainShopStock, getMainShopOffer } from '../data/main-shop';
-import { beginGrowthEncounter, growthEncounterEligible, reduceGrowthEncounter, type GrowthEncounterAction } from './growth-encounters';
+import { beginGrowthEncounter, growthEncounterEligible, reduceGrowthEncounter, resolveGrowthTrial, type GrowthEncounterAction } from './growth-encounters';
 
 function getFoodSafe(id: string): boolean {
   return FOODS[id] !== undefined;
@@ -116,6 +117,7 @@ export type GameAction = GrowthEncounterAction
   | { type: 'DEBUG_CUSTOM_TEST' }
   | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune'; corruptReward?: 'gold' | 'food'; eventType?: string; scenario?: TestScenario }
   | { type: 'TEST_REPLAY' }
+  | { type: 'TEST_BATTLE_EDIT_UNIT'; uid: string; hp: number; maxHp: number; spd: number; shield: number }
   | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
@@ -231,8 +233,8 @@ export function migrateGameState(value: unknown): GameState | null {
   // 旧单位只补图片与造物旧名称，不重算已保存的属性、技能或战斗状态。
   const restoreArt = (savedUnit: Unit): Unit => {
     const unit = savedUnit.speciesId === 'custom_fury' && savedUnit.name === '狂焰兽' ? { ...savedUnit, name: '狂狼兽' } : savedUnit;
-    return !unit.image && ['coal', 'candle', 'coal_guard', 'lantern_moth', 'furnace_beast', 'eternal_moth', 'light_moss', 'moss_beast', 'solar_spirit', 'molten_larva', 'molten_beetle', 'molten_beast', 'ember_hawk', 'searing_hawk', 'solar_eagle', 'fire_fox', 'phantom_tail_fox', 'nine_tail_sovereign', 'torch_fox', 'torch_fox_lord', 'time_sand_beast', 'mimic_beast', 'mirror_beast', 'crystal_core_beast', 'mimi', 'mimi_king', 'mimi_god', 'pipi', 'sisi', 'sisi_god'].includes(unit.speciesId)
-      ? { ...unit, image: getMonster(unit.speciesId).image } : unit;
+    const image = getCreatureImage(unit.speciesId, unit.image);
+    return image !== unit.image ? { ...unit, image } : unit;
   };
   let battle = value.battle;
   if (battle) {
@@ -606,10 +608,12 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
   if (base.runMode === 'proficiency') {
     if (node.type === 'rest') return { ...base, screen: 'rest' };
     if (node.type === 'shop') {
+      if (base.growthShopGuarantee?.nodeId === node.id) return { ...base, screen: 'shop' };
       const rng = createRng(base.seed * 7919 + (base.currentLayer ?? 0) * 104729 + hashStr(node.id));
-      const stock = getGrowthShopStock(rng);
+      const stock = getGrowthShopStock(rng, base.growthShopGuarantee?.missedEnhanceStone ?? false);
       const rs = base.runStats ? { ...base.runStats, shopVisits: base.runStats.shopVisits + 1 } : base.runStats;
-      return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0, runStats: rs };
+      return { ...base, screen: 'shop', shopBought: false, shopBoughtItems: [], shopStock: stock, shopRefreshCount: 0, runStats: rs,
+        growthShopGuarantee: { nodeId: node.id, missedEnhanceStone: !stock.includes('skill_enhance_stone') } };
     }
     if (node.type === 'blacksmith') {
       return { ...base, screen: 'blacksmith' };
@@ -618,11 +622,14 @@ function enterNode(base: GameState, node: MapNode, prevRow?: number, prevNodeId?
       return { ...base, screen: 'arena3', arena3Pending: { mode: undefined } };
     }
     if (node.type === 'event') {
+      if (base.map.events[node.id]) return { ...base, screen: 'event', lastGrowthEvent: base.map.events[node.id].title };
       const rng = createRng(base.seed * 3571 + (base.currentLayer ?? 0) * 9973 + hashStr(node.id));
-      const event = buildGrowthEvent(rng, undefined, (base.deadPets ?? []).length, base.currentLayer ?? 1, base.lastGrowthEvent);
+      const seenTitles = (base.visitedNodeIds ?? []).map(id => base.map.events[id]?.title).filter((title): title is string => !!title);
+      const event = buildGrowthEvent(rng, undefined, (base.deadPets ?? []).length, base.currentLayer ?? 1, base.lastGrowthEvent, seenTitles);
       return { ...base, lastGrowthEvent: event.title, screen: 'event', map: { ...base.map, events: { ...base.map.events, [node.id]: event } } };
     }
     if (node.type === 'special') {
+      if (base.map.specials[node.id]) return { ...base, screen: 'special' };
       const rng = createRng(base.seed * 4919 + (base.currentLayer ?? 0) * 6131 + hashStr(node.id));
       const specialIds = getGrowthSpecialRewards(rng, (base.deadPets ?? []).length, base.currentLayer ?? 1,
         id => !GROWTH_SPECIAL_REWARDS[id].growthEncounter || growthEncounterEligible(base, GROWTH_SPECIAL_REWARDS[id].growthEncounter!));
@@ -849,6 +856,20 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
   if (state.battle?.rewindChoice && ['PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'PLAYER_CANCEL_ORDER', 'END_TURN', 'GAUNTLET_SWAP'].includes(action.type)) return state;
   if (state.battle?.mimicPreviewPending && ['PLAYER_SKILL', 'PLAYER_REST', 'PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'END_TURN'].includes(action.type)) return state;
   switch (action.type) {
+    case 'TEST_BATTLE_EDIT_UNIT': {
+      const battle = state.battle;
+      if (!state.testRun || state.screen !== 'battle' || !battle || battle.phase !== 'acting') return state;
+      if (![action.hp, action.maxHp, action.spd, action.shield].every(Number.isSafeInteger)
+        || action.maxHp < 1 || action.hp < 1 || action.hp > action.maxHp || action.spd < 1 || action.shield < 0) return state;
+      const target = [...battle.playerUnits, ...battle.enemyUnits].find(unit => unit.uid === action.uid && unit.hp > 0);
+      if (!target) return state;
+      const update = (unit: Unit): Unit => unit.uid === target.uid ? { ...unit, hp: action.hp, maxHp: action.maxHp, spd: action.spd, shield: action.shield,
+        statuses: action.shield > 0 ? unit.statuses : unit.statuses.filter(status => status.kind !== 'shield') } : unit;
+      let next = { ...battle, playerUnits: battle.playerUnits.map(update), enemyUnits: battle.enemyUnits.map(update) };
+      next = { ...next, turnOrder: computeTurnOrder(next) };
+      next = pushLog(next, `[测试调整] ${target.name}：生命${action.hp}/${action.maxHp}，基础速度${action.spd}，护盾${action.shield}`, 'info');
+      return { ...state, battle: next };
+    }
     case 'START_RUN': {
       const diff = action.difficulty ?? state.difficulty ?? 'normal';
       const rel = action.relic ?? state.relics?.[0];
@@ -890,7 +911,8 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       if (!visitedNodeIds.includes(action.nodeId)) visitedNodeIds.push(action.nodeId);
       const prevRow = state.currentRow;
       const prevNodeId = state.currentNodeId;
-      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false, visitedNodeIds, skipSelecting: false, scoutSelecting: false };
+      const base: GameState = { ...state, currentRow: targetRow, currentNodeId: action.nodeId, shopBought: false, visitedNodeIds, skipSelecting: false, scoutSelecting: false,
+        ...(state.runMode === 'proficiency' ? { currentLayer: targetRow + 1 } : {}) };
       return enterNode(base, node, prevRow, prevNodeId);
     }
 
@@ -1075,7 +1097,11 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       const ev = state.map.events[state.currentNodeId];
       if (!ev) return state;
       const choice = ev.choices.find((x) => x.id === action.choiceId);
-      if (choice?.kind === 'growthEncounter' && choice.growthEncounter) return beginGrowthEncounter(state, choice.growthEncounter);
+      if (choice?.kind === 'growthEncounter' && choice.growthEncounter) {
+        const next = beginGrowthEncounter(state, choice.growthEncounter);
+        return next !== state && ['supply_heal', 'supply_book', 'buy_stone', 'trial'].includes(choice.growthEncounter)
+          ? reduceGrowthEncounter(next, { type: 'GROWTH_ENCOUNTER_CONFIRM' }) : next;
+      }
       if (!choice) return state;
       if (choice.kind === 'sacrifice' && state.roster.length <= 1) return state;
       // 事件内所有随机选择均由存档种子与节点/选项派生，保证同一种子复跑一致。
@@ -1378,12 +1404,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
                   result = { ...result, growthPoints: (result.growthPoints ?? 0) + (choice.growthPointGain as number) };
                 }
                 if (choice.resetGrowthPoints) {
-                  // 重置成长点：返还所有属性加成
-                  const hpBonus = result.bonusStats?.hp ?? 0;
-                  const spdBonus = result.bonusStats?.spd ?? 0;
-                  const returnedPoints = Math.floor(hpBonus / 2) + spdBonus;
-                  result = { ...result, growthPoints: (result.growthPoints ?? 0) + returnedPoints, bonusStats: { hp: 0, spd: 0 } };
-                  result = { ...result, maxHp: result.maxHp - hpBonus, hp: Math.min(result.hp, result.maxHp), spd: result.spd - spdBonus };
+                  result = resetAttributeGrowth(result);
                 }
                 return result;
               }),
@@ -1617,17 +1638,13 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         if (!target) return state;
         const hpBonus = target.bonusStats?.hp ?? 0;
         const spdBonus = target.bonusStats?.spd ?? 0;
-        const returnedPoints = Math.floor(hpBonus / 2) + spdBonus;
-        if (returnedPoints <= 0) {
+        const returnedPoints = target.statGrowthPaid ?? 0;
+        if (hpBonus <= 0 && spdBonus <= 0) {
           return { ...state, specialPending: undefined, screen: 'map', toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
         }
         const updated = state.roster.map((u) => {
           if (u.uid !== target.uid) return u;
-          return recomputeStats({
-            ...u,
-            growthPoints: (u.growthPoints ?? 0) + returnedPoints,
-            bonusStats: { hp: 0, spd: 0 },
-          });
+          return resetAttributeGrowth(u);
         });
         return {
           ...state,
@@ -1892,6 +1909,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         ...state,
         currentRow: targetRow,
         currentNodeId: node.id,
+        ...(state.runMode === 'proficiency' ? { currentLayer: targetRow + 1 } : {}),
         visitedNodeIds,
         inventory: { ...state.inventory, skip: action.free ? inv : inv - 1 },
         runStats: action.free ? state.runStats : countItemUse(state.runStats),
@@ -1903,7 +1921,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         const encounter = prepared.formation?.encounter ?? base.map.encounter[node.id] ?? base.map.boss[node.id] ?? [];
         const participants = new Set((prepared.formation?.initialField ?? base.roster.filter(unit => base.field.includes(unit.uid))).map(unit => unit.uid));
         const killGp = encounter.reduce((sum, enemy, index) => sum + (node.type === 'boss' && index === 0 ? 6 : getMonster(enemy.speciesId).rank === 2 ? 4 : 2), 0);
-        const goldGain = node.type === 'elite' || (corrupt && node.corruptReward === 'gold') ? 16 : 8;
+        const goldGain = challenge ? 8 : battleVictoryGold(base);
         return { ...addGoldIncome(base, goldGain), screen: 'growth-menu', rewards: [],
           roster: base.roster.map(unit => ({ ...unit, growthPoints: (unit.growthPoints ?? 0) + 1 + (participants.has(unit.uid) ? 1 + killGp : 0) })),
           skipSelecting: false,
@@ -1941,12 +1959,14 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
     case 'FORMATION_CONFIRM': {
       const f = state.formation;
       if (!f || action.units.length === 0) return state;
+      if (state.eventBattle?.growthTrial && (state.screen !== 'formation' || action.units.length > 3 || new Set(action.units.map(unit => unit.uid)).size !== action.units.length || action.units.some(unit => !state.roster.some(pet => pet.uid === unit.uid && pet.hp > 0)))) return state;
       // 事件战斗：用 eventBattle 的敌人；普通战斗：用 formation 的 encounter
       const enemySpecies = state.eventBattle ? state.eventBattle.enemies : f.encounter;
       const battle = createBattle(action.units, enemySpecies, state.seed + state.currentRow * 17, { ...f.options, relics: state.runMode !== 'proficiency' ? state.relics : undefined });
       const lastFormation = f.forceAllUnits ? state.lastFormation
         : Object.fromEntries(action.units.map(u => [u.uid, { row: u.row, column: u.column }]));
-      return { ...state, screen: 'battle', battle, formation: undefined, lastFormation };
+      return { ...state, screen: 'battle', battle, formation: undefined, lastFormation,
+        ...(state.eventBattle?.growthTrial ? { growthEncounterCompleted: [...(state.growthEncounterCompleted ?? []), state.currentNodeId] } : {}) };
     }
 
     case 'GAUNTLET_ORDER_CONFIRM': {
@@ -2076,6 +2096,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
       }
       // 事件战斗：胜负确认后返回地图或成长点分配界面
       if (state.eventBattle) {
+        if (state.runMode === 'proficiency' && state.eventBattle.growthTrial) return state.battle.phase === 'acting' ? state : resolveGrowthTrial(state);
         const eb = state.eventBattle;
         let next: GameState = { ...state, battle: undefined, eventBattle: undefined, postBattle: undefined };
         // 更新事件战斗统计
@@ -2760,6 +2781,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
     }
 
     case 'BACK_TO_MAP': {
+      if (state.screen === 'formation' && state.eventBattle?.growthTrial) return { ...state, screen: 'event', formation: undefined, eventBattle: undefined };
       const prevRow = state.formation?.prevRow ?? state.gauntletPrevRow;
       const prevNodeId = state.formation?.prevNodeId ?? state.gauntletPrevNodeId;
       let nextState: GameState = {
@@ -3202,12 +3224,12 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         // 重置成长点：返还所有属性加成
         const hpBonus = target.bonusStats?.hp ?? 0;
         const spdBonus = target.bonusStats?.spd ?? 0;
-        const returnedPoints = Math.floor(hpBonus / 2) + spdBonus;
-        if (returnedPoints <= 0) {
+        const returnedPoints = target.statGrowthPaid ?? 0;
+        if (hpBonus <= 0 && spdBonus <= 0) {
           const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
           return { ...state, specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: '没有可重置的属性加成', kind: 'warning' } };
         }
-        const updated = { ...target, growthPoints: (target.growthPoints ?? 0) + returnedPoints, bonusStats: { hp: 0, spd: 0 }, maxHp: target.maxHp - hpBonus, hp: Math.min(target.hp, target.maxHp - hpBonus), spd: target.spd - spdBonus };
+        const updated = resetAttributeGrowth(target);
         const returnScreen = state.growthItemPending ? 'backpack' as const : 'shop' as const;
         return { ...state, roster: state.roster.map((u) => u.uid === uid ? updated : u), specialPending: undefined, growthItemPending: undefined, screen: returnScreen, toast: { msg: `${target.name} 重置了成长点（+${returnedPoints} 点）`, kind: 'success' } };
       }
@@ -3241,7 +3263,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         return { ...state, screen: 'enhance-stone', toast: { msg: '选择一只宠物强化技能', kind: 'info' } };
       }
       let next: GameState = { ...state, inventory: { ...state.inventory, [itemId]: count - 1 }, growthItemPending: itemId };
-      if (itemId === 'heal_potion') {
+      if (itemId === 'heal_potion' || itemId === 'heal_potion_g') {
         next = healRoster(next, 0.5);
         return { ...next, growthItemPending: undefined, toast: { msg: '全队回复 50% 生命', kind: 'success' } };
       }
@@ -3298,7 +3320,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         return { ...state, screen: 'formation', arena3Pending: { mode: 'simulation' }, formation: { units: state.roster, initialField: initial, encounter: [{ speciesId: 'momo' }], nodeId: node.id, options, prevRow: state.currentRow, prevNodeId: state.currentNodeId, forceAllUnits: true } };
       }
       if (mode === 'challenge') {
-        // 挑战赛：3精英
+        // 挑战赛：当前层段精英整队预算
         if (state.roster.length === 0) return state;
         const rng = createRng(state.seed * 3331 + (state.currentLayer ?? 0) * 7919);
         const encounter = getGrowthArenaEncounter(state.currentLayer ?? 1, rng);

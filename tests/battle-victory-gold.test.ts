@@ -41,3 +41,12 @@ it.each([false, true])('事件金币按实际奖励显示，非金币挑战不�
   expect(gameReducer(state, { type: 'BATTLE_END_CONFIRM' }).gold - state.gold).toBe(27);
   expect(battleVictoryGold(victory('arena', 0))).toBe(0);
 });
+
+it.each([false, true])('熟练度后期精英胜利提示与实际40金币一致 mobile=%s', async mobile => {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+  const state: GameState = { ...victory('elite', 0), runMode: 'proficiency', currentLayer: 31 };
+  state.map.encounter = {};
+  render(createElement(BattleScreen, { state, dispatch: vi.fn() }));
+  await waitFor(() => expect(screen.getByText('驯服了 0 只宠物，获得 40 金币')).toBeTruthy());
+  expect(gameReducer(state, { type: 'BATTLE_END_CONFIRM' }).gold - state.gold).toBe(40);
+});

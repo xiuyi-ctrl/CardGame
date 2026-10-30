@@ -1,3 +1,4 @@
+import { CREATURE_IMAGES, getCreatureImage } from '../game/data/creature-art';
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { Dispatch, DragEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,7 +30,6 @@ import { SkillPickScreen } from './SkillPickScreen';
 import { BattleScreen, BattleUnitInspectPanel } from './BattleScreen';
 import { FormationScreen } from './FormationScreen';
 import { BATTLE_BUFF_ICON_IMAGES, BuffIcon, CURSE_ART } from './BuffIcon';
-import { FORMATION_SPRITES } from './formationSprites';
 import { BACKPACK_ITEM_ART } from './backpackItemArt';
 import './backpack.css';
 import { FLOW_ART, FLOW_ICON_NAMES, FlowIcon, FlowHeader, FlowPet, FlowPetStats, FlowTeam, flowChoiceArt } from './MainFlowArt';
@@ -53,12 +53,6 @@ import { TestSetupScreen, TestSessionFrame } from './TestSetupScreen';
 import { getMainShopOffer } from '../game/data/main-shop';
 import { computeRunRating, type RunRating } from '../game/rating';
 import { persistSave, quitGame, detectUnlocks, getSlotUnlocks, listSaves, deleteSave, clearDeletedSlot, type SaveSlotInfo } from './persistence';
-import homeXunxun from './assets/home-xunxun.png';
-import homePaopao from './assets/home-paopao.png';
-import homeZhuozhuo from './assets/home-zhuozhuo.png';
-import starterTiedun from './assets/starter-tiedun.png';
-import starterMimi from './assets/starter-mimi.png';
-import starterCici from './assets/starter-cici.png';
 import homeTitleLogo from './assets/home-title-logo.png';
 import homeContinueIcon from './assets/home-terminal-kit-v2/continue-backpack.png';
 import homeNewIcon from './assets/home-terminal-kit-v2/new-expedition-map.png';
@@ -74,6 +68,7 @@ const NO_SAVE_SCREENS = ['title', 'region-select', 'starter', 'gameover', 'victo
 
 const EMPTY_ROW: MapNode[] = [];
 const MAP_ACT_NAMES = ['', '翠绿之径', '暗影沼泽', '余烬险地'];
+
 const chestOpenArt = '/page-special-icons/chest-open.png';
 const watchtowerTelescopeArt = '/page-special-icons/watchtower-telescope.png';
 
@@ -86,14 +81,14 @@ const MAP_BACKGROUNDS = [
 ];
 
 function creatureImages(units: Unit[]): string[] {
-  return units.flatMap((unit) => unit.speciesId === 'momo' ? ['/battle-momo.png'] : unit.image ? [unit.image] : []);
+  return units.flatMap((unit) => getCreatureImage(unit.speciesId, unit.image) ? [getCreatureImage(unit.speciesId, unit.image)!] : []);
 }
 
 function formationImage(speciesId: string, image?: string): string | undefined {
-  return FORMATION_SPRITES[speciesId] ?? (speciesId === 'momo' ? '/battle-momo.png' : image);
+  return getCreatureImage(speciesId, image);
 }
 
-const CODEX_IMAGES = ['/formation-camp.png', homeCodexIcon,
+const codexImages = () => ['/formation-camp.png', homeCodexIcon,
   new URL('./assets/popup-terminal-frame.svg', import.meta.url).href,
   new URL('./assets/starter-stat-life.png', import.meta.url).href,
   new URL('./assets/starter-stat-speed.png', import.meta.url).href, ...UI_SYMBOL_IMAGES,
@@ -105,7 +100,7 @@ const CODEX_IMAGES = ['/formation-camp.png', homeCodexIcon,
 function screenImages(screen: GameState['screen'], state: GameState): string[] {
   switch (screen) {
     case 'title':
-      return [HOME_BACKGROUND, homeTitleLogo, homeXunxun, homePaopao, homeZhuozhuo,
+      return [HOME_BACKGROUND, homeTitleLogo, CREATURE_IMAGES.momo!, CREATURE_IMAGES.lulu!, CREATURE_IMAGES.fifi!,
         homeContinueIcon, homeNewIcon, homeProficiencyIcon, homeCodexIcon, homeSaveIcon,
         homeAchievementIcon, homeSettingsIcon, homeExitIcon, homePawIcon];
     case 'difficulty-select':
@@ -117,12 +112,12 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
       return [HOME_BACKGROUND, MAP_BACKGROUNDS[0]];
     case 'starter':
     case 'proficiency-select':
-      return [HOME_BACKGROUND, homeXunxun, homePaopao, homeZhuozhuo,
-        starterTiedun, starterMimi, starterCici, '/proficiency-starter-hall.png', '/starter-choice-stone.png',
+      return [HOME_BACKGROUND, CREATURE_IMAGES.momo!, CREATURE_IMAGES.lulu!, CREATURE_IMAGES.fifi!,
+        CREATURE_IMAGES.kiki!, CREATURE_IMAGES.mimi!, CREATURE_IMAGES.pipi!, '/proficiency-starter-hall.png', '/starter-choice-stone.png',
         '/formation-plinth-occupied.png', '/starter-growth-icons/starter-paw.png',
         ...MAIN_REGIONS[state.region ?? 'mixed'].starters.map(id => getMonster(id).image).filter((src): src is string => !!src)];
     case 'test-pick':
-      return state.roster.map(unit => unit.image).filter((src): src is string => !!src);
+      return state.roster.map(unit => getCreatureImage(unit.speciesId, unit.image)).filter((src): src is string => !!src);
     case 'map':
       return [MAP_BACKGROUNDS[state.runMode === 'proficiency' ? 3 : Math.min(2, Math.max(0, state.act - 1))],
         '/map-node-stele.png',
@@ -188,8 +183,9 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
         inter_act: 'interact-sunset', victory: 'victory-dawn', gameover: 'defeat-dusk' };
       return [`${FLOW_ART}/${backgrounds[screen]}.png`, '/reward-icons/gold.png', '/reward-icons/heal.png', '/reward-icons/food.png',
         ...(screen === 'event' && state.runMode === 'proficiency' ? [`${FLOW_ART}/encounter-shrine.png`] : []),
+        ...(state.runMode === 'proficiency' ? (state.map.events[state.currentNodeId]?.choices ?? []).flatMap(choice => choice.recruitCandidates ?? []).map(id => formationImage(id, getMonster(id).image)).filter((image): image is string => !!image) : []),
         ...FLOW_ICON_NAMES.map(name => `${FLOW_ART}/icons/${name}.png`), ...Object.values(BACKPACK_ITEM_ART),
-        ...[...state.roster, ...(state.tameOverflow ?? [])].flatMap(unit => {
+        ...[...state.roster, ...(state.tameOverflow ?? []), ...(state.runMode === 'proficiency' ? state.deadPets ?? [] : [])].flatMap(unit => {
           const image = formationImage(unit.speciesId, unit.image);
           return image ? [image] : [];
         })];
@@ -526,13 +522,13 @@ function FuseDiscardConfirm({
         <div className="popup-body">
         {isDiscard && target && (
           <div className="popup-pet-row">
-            {target.image ? <img className="popup-pet-portrait" src={target.image} alt="" /> : <span className="popup-pet-portrait">{target.emoji}</span>}
+            {getCreatureImage(target.speciesId, target.image) ? <img className="popup-pet-portrait" src={getCreatureImage(target.speciesId, target.image)} alt="" /> : <span className="popup-pet-portrait">{target.emoji}</span>}
             <div><p>释放「{target.name}」后，将获得 <b>{5 * getMonster(target.speciesId).rank} 金币</b>。</p><p className="popup-consequence">这名伙伴将永久离队。</p></div>
           </div>
         )}
         {isReplace && target && (
           <div className="popup-pet-row">
-            {target.image ? <img className="popup-pet-portrait" src={target.image} alt="" /> : <span className="popup-pet-portrait">{target.emoji}</span>}
+            {getCreatureImage(target.speciesId, target.image) ? <img className="popup-pet-portrait" src={getCreatureImage(target.speciesId, target.image)} alt="" /> : <span className="popup-pet-portrait">{target.emoji}</span>}
             <div><p>放生「{target.name}」后，将获得 <b>{confirm.gold ?? 0} 金币</b>，然后「{state.tameOverflow?.[0]?.name ?? '新宠物'}」加入队伍。</p><p className="popup-consequence">这名伙伴将永久离队。</p></div>
           </div>
         )}
@@ -708,7 +704,7 @@ export function TestPickScreen({ state, dispatch }: { state: GameState; dispatch
                           }}
                           onPointerCancel={() => { touchSlotDrag.current = null; suppressSlotClick.current = false; }}
                         >
-                          <div className="test-slot-creature"><PetIcon image={u.image} emoji={u.emoji} name={u.name} />
+                          <div className="test-slot-creature"><PetIcon speciesId={u.speciesId} image={u.image} emoji={u.emoji} name={u.name} />
                             <strong>{u.name}</strong><span>♥{u.hp}/{u.maxHp}　⚡{u.spd}</span></div>
                         </div>
                       ) : (
@@ -997,9 +993,9 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
             </h1>
           </header>
           <div className="home-companions" aria-hidden="true">
-            <span className="home-companion home-companion-xunxun"><img src={homeXunxun} alt="" /></span>
-            <span className="home-companion home-companion-paopao"><img src={homePaopao} alt="" /></span>
-            <span className="home-companion home-companion-zhuozhuo"><img src={homeZhuozhuo} alt="" /></span>
+            <span className="home-companion home-companion-xunxun"><img src={CREATURE_IMAGES.momo!} alt="" /></span>
+            <span className="home-companion home-companion-paopao"><img src={CREATURE_IMAGES.lulu!} alt="" /></span>
+            <span className="home-companion home-companion-zhuozhuo"><img src={CREATURE_IMAGES.fifi!} alt="" /></span>
           </div>
         </section>
         <aside className="home-terminal" aria-label="远征终端">
@@ -1067,7 +1063,7 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
             </button>
             <div className="home-menu-divider" aria-hidden="true"><span><img src={homePawIcon} alt="" /></span></div>
             <div className="home-menu-secondary">
-              <button onPointerEnter={() => { void preloadImages(CODEX_IMAGES); }} onFocus={() => { void preloadImages(CODEX_IMAGES); }} onClick={() => setShowCodex(true)}><img src={homeCodexIcon} alt="" aria-hidden="true" /><span>生物图鉴</span></button>
+              <button onPointerEnter={() => { void preloadImages(codexImages()); }} onFocus={() => { void preloadImages(codexImages()); }} onClick={() => setShowCodex(true)}><img src={homeCodexIcon} alt="" aria-hidden="true" /><span>生物图鉴</span></button>
               <button onClick={openSaveMgmt}><img src={homeSaveIcon} alt="" aria-hidden="true" /><span>存档管理</span></button>
               <button onClick={() => {
                 const slotState = slots.find((s) => s.slot === selectedSlot);
@@ -1199,12 +1195,12 @@ const CODEX_GROUPS: { key: string; label: string; match: (m: MonsterSpecies) => 
 
 export function CodexScreen({ onClose }: { onClose: () => void }) {
   const mobile = useMobileLayout();
-  const [ready, setReady] = useState(() => CODEX_IMAGES.every(src => !!getDecodedImage(src)));
+  const [ready, setReady] = useState(() => codexImages().every(src => !!getDecodedImage(src)));
   const [mobileDetail, setMobileDetail] = useState(false);
   useBackAction(mobile && mobileDetail, () => setMobileDetail(false), 1);
   useEffect(() => {
     let active = true;
-    void preloadImages(CODEX_IMAGES).then(() => { if (active) setReady(true); });
+    void preloadImages(codexImages()).then(() => { if (active) setReady(true); });
     return () => { active = false; };
   }, []);
   const groups = useMemo(
@@ -1344,7 +1340,7 @@ export function CodexScreen({ onClose }: { onClose: () => void }) {
                   })}
                 </div>
                 {sp.id.startsWith('custom_') && (
-                  <div className="codex-note">造物：从上方技能池随机组合 3 个技能</div>
+                  <div className="codex-note">造物：从上方技能池随机组合4个技能</div>
                 )}
               </div>
             </>
@@ -1498,10 +1494,7 @@ export function StarterScreen({ state, dispatch }: { state?: GameState; dispatch
   const choices = isCompanion ? region.companions : region.starters;
   const selected = getMonster(candidate ?? choices[0]);
   const passive = getPassive(selected.passive);
-  const starterArt: Record<string, string> = {
-    momo: homeXunxun, lulu: homePaopao, fifi: homeZhuozhuo,
-    kiki: starterTiedun, mimi: starterMimi, pipi: starterCici,
-  };
+  const starterArt = CREATURE_IMAGES;
 
   const confirm = () => {
     if (!candidate) return;
@@ -1539,7 +1532,7 @@ export function StarterScreen({ state, dispatch }: { state?: GameState; dispatch
               return <button key={id} type="button" className={`starter-select-choice ${candidate === id ? 'selected' : ''}`}
                 aria-pressed={candidate === id} onClick={() => setCandidate(id)}>
                 <span className="starter-select-pet">
-                  {starterArt[id] ? <img className={id === 'momo' || id === 'mimi' ? 'unified-creature-art' : undefined} src={starterArt[id]} alt="" /> : species.image ? <BattlePixelSprite src={species.image} name={species.name} /> : <span className="starter-select-placeholder" role="img" aria-label={species.name}>{species.emoji}</span>}
+                  {starterArt[id] ? <img className={id === 'momo' || id === 'mimi' ? 'unified-creature-art' : undefined} src={starterArt[id]} alt={species.name} /> : species.image ? <BattlePixelSprite src={species.image} name={species.name} /> : <span className="starter-select-placeholder" role="img" aria-label={species.name}>{species.emoji}</span>}
                 </span>
                 <span className="starter-select-ground" aria-hidden="true" />
                 <span className="starter-select-label">
@@ -1553,7 +1546,7 @@ export function StarterScreen({ state, dispatch }: { state?: GameState; dispatch
         <aside className="starter-select-panel" aria-label={`${selected.name}详情`}>
           <div className="starter-select-profile">
             <div className="starter-select-portrait">
-              {starterArt[selected.id] ? <img className={selected.id === 'momo' || selected.id === 'mimi' ? 'unified-creature-art' : undefined} src={starterArt[selected.id]} alt="" /> : selected.image ? <BattlePixelSprite src={selected.image} name={selected.name} /> : <span className="starter-select-placeholder" role="img" aria-label={selected.name}>{selected.emoji}</span>}
+              {starterArt[selected.id] ? <img className={selected.id === 'momo' || selected.id === 'mimi' ? 'unified-creature-art' : undefined} src={starterArt[selected.id]} alt={selected.name} /> : selected.image ? <BattlePixelSprite src={selected.image} name={selected.name} /> : <span className="starter-select-placeholder" role="img" aria-label={selected.name}>{selected.emoji}</span>}
             </div>
             <div><h2>{selected.name}</h2><span className="starter-select-role">{STARTER_ROLES[selected.id]}</span><p>{selected.desc}</p></div>
           </div>
@@ -2055,7 +2048,7 @@ function RosterScreen({ state, dispatch }: { state: GameState; dispatch: Dispatc
           <span className="card-sub">出战宠物（点击下方宠物卡加入/移除）：</span>
           {state.field.map((uid) => {
             const u = state.roster.find((x) => x.uid === uid);
-            return u ? <span className="chip" key={uid}><PetIcon image={u.image} emoji={u.emoji} name={u.name} /> {u.name}</span> : null;
+            return u ? <span className="chip" key={uid}><PetIcon speciesId={u.speciesId} image={u.image} emoji={u.emoji} name={u.name} /> {u.name}</span> : null;
           })}
         </div>
       )}
@@ -2495,7 +2488,7 @@ export function BackpackScreen({ state, dispatch }: { state: GameState; dispatch
     else dispatch({ type: 'CLOSE_BACKPACK' });
   });
   const isProf = state.runMode === 'proficiency';
-  const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
+  const growthItemIds = ['book_small', 'book_medium', 'book_large', 'slot_unlock', 'forget_stone', 'heal_potion', 'heal_potion_g', 'reset_stone', 'skill_enhance_stone', 'revival_stone'];
   const eggCount = state.carriedEggs?.length ?? 0;
   const eggItem = { name: '随机蛋', emoji: '🥚', desc: '带问号的神秘蛋。每完成一次关卡推进孵化，可重复同一关；打开背包、查看情报和读档不计数。' };
   const backpackInventory: Record<string, number> = { ...state.inventory, mystery_egg: eggCount };
@@ -2748,7 +2741,7 @@ export function EventScreen({ state, dispatch }: { state: GameState; dispatch: D
           <div className="confirm-box scout-popup" onClick={(e) => e.stopPropagation()}>
             <div className="section-title">孵化结果</div>
             <div className="popup-body">
-            <div style={{ fontSize: 48, marginBottom: 8 }}>{hatchMonster.image ? <img src={hatchMonster.image} className="pet-image" style={{ width: 48, height: 48 }} alt={hatchMonster.name} /> : hatchMonster.emoji}</div>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{getCreatureImage(hatchMonster.id, hatchMonster.image) ? <img src={getCreatureImage(hatchMonster.id, hatchMonster.image)} className="pet-image" style={{ width: 48, height: 48 }} alt={hatchMonster.name} /> : hatchMonster.emoji}</div>
             <div>孵化出了 <b>{hatchMonster.name}</b>！</div>
             <div className="card-sub" style={{ marginBottom: 4, justifyContent: 'center' }}>
               ❤️ {hatchMonster.baseHp} &nbsp; ⚡ {hatchMonster.baseSpd}

@@ -91,7 +91,7 @@ describe('地区开局流程', () => {
     fireEvent.click(screen.getByRole('button', { name: /下一步：选择伙伴/ }));
     const choices = within(screen.getByRole('region', { name: '选择生物' }));
     expect(choices.queryByRole('button', { name: /灼灼/ })).toBeNull();
-    expect(choices.getByRole('img', { name: '火狐' }).tagName).toBe('CANVAS');
+    expect(choices.getByRole('img', { name: '火狐' }).getAttribute('src')).toBe('/fire_fox.png');
     fireEvent.click(choices.getByRole('button', { name: /火狐/ }));
     fireEvent.click(screen.getByRole('button', { name: /选择火狐/ }));
     expect(screen.getByText(/已选主力：火狐 ×2/)).toBeTruthy();

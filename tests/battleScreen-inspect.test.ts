@@ -6,9 +6,19 @@ import { createBattle, makeUnit } from '../src/game/core/battle';
 import { createInitialState } from '../src/game/state/reducer';
 import { BattleScreen } from '../src/ui/BattleScreen';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('战斗生物右键详情', () => {
+  it.each([false, true])('敌方详情显示实际强化等级及强化数值 mobile=%s', mobile => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 42);
+    battle.enemyUnits[0].skills = ['punch']; battle.enemyUnits[0].skillEnhancements = { 0: 2 };
+    render(createElement(BattleScreen, { state: { ...createInitialState(), screen: 'battle', battle }, dispatch: vi.fn() }));
+    fireEvent.contextMenu(screen.getByRole('button', { name: /右键或按菜单键查看敌人信息/ }));
+    const dialog = screen.getByRole('dialog', { name: '敌人信息' });
+    expect(dialog.querySelector('.skill-name')?.textContent).toBe('爪击++');
+    expect(dialog.querySelector('.skill-num')?.textContent).toBe('9');
+  });
   it('点击仍选中我方生物，键盘菜单键打开 Buff 不改变选中态', () => {
     const battle = createBattle([makeUnit('momo', true, 0, false)], [{ speciesId: 'kiki' }], 42);
     const state = { ...createInitialState(), screen: 'battle' as const, battle };

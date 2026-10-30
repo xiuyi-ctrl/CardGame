@@ -45,20 +45,23 @@ export const GROWTH_SPECIAL_REWARDS: Record<GrowthSpecialKind, GrowthSpecialRewa
   },
   legend_recruit: {
     id: 'legend_recruit',
-    label: '传奇招募',
-    desc: '获得 1 个随机传奇技能',
+    label: '传奇秘典',
+    desc: '指定伙伴，传奇技能三选一学习或替换；新技能＋0，原强化清除',
+    growthEncounter: 'legend',
     emoji: '👑',
   },
   gold_treasure: {
     id: 'gold_treasure',
-    label: '金币宝藏',
-    desc: '获得 80 金币',
+    label: '匠师工具箱',
+    desc: '普通技能强化石×1、还原石×1，存入背包',
+    growthEncounter: 'tools',
     emoji: '💎',
   },
   revive: {
     id: 'revive',
-    label: '生命之泉',
-    desc: '复活 1 只死亡宠物（保留 100% 属性）',
+    label: '返魂之泉',
+    desc: '指定死亡伙伴完整养成、满血复活；其他存活伙伴恢复25%生命',
+    growthEncounter: 'revival_spring',
     emoji: '💖',
   },
 };
@@ -67,7 +70,7 @@ export const GROWTH_SPECIAL_IDS = Object.keys(GROWTH_SPECIAL_REWARDS) as GrowthS
 
 /** 获取奇遇关奖励（随机3种展示，若无死亡宠物则排除复活） */
 export function getGrowthSpecialRewards(rng: () => number, deadPetCount: number = 0, layer = 16, eligible: (id: GrowthSpecialKind) => boolean = () => true): GrowthSpecialKind[] {
-  let pool = GROWTH_SPECIAL_IDS.filter(id => (layer >= 16 || id !== 'stat_blessing') && eligible(id));
+  let pool = GROWTH_SPECIAL_IDS.filter(id => (layer >= 16 || !['stat_blessing', 'legend_recruit'].includes(id)) && eligible(id));
   if (deadPetCount <= 0) {
     pool = pool.filter((id) => id !== 'revive');
   }
