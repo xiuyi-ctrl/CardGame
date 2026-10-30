@@ -1,5 +1,6 @@
 import type { BattleState, BattleTelemetryEvent, LogEntry, LogSpan, PassiveDef, PassiveKind, PlayerOrder, SkillDef, StatusEffect, Unit } from '../types';
 import { getSkill, SKILLS } from '../data/skills';
+import { getBattleSkill } from '../data/test-skill-overrides';
 import { getMonster } from '../data/monsters';
 import { getFood } from '../data/foods';
 import { getPassive, PASSIVES } from '../data/passives';
@@ -198,8 +199,9 @@ export function getUnitPassive(u: Unit, b?: BattleState): PassiveDef | undefined
 }
 
 /** 技能的剩余使用次数（无限制技能返回 Infinity） */
-export function skillUsesLeft(u: Unit, skillId: string): number {
-  const limit = getSkill(skillId).uses;
+export function skillUsesLeft(u: Unit, skillId: string, b?: BattleState): number {
+  const limit = getBattleSkill(b, skillId).uses;
+  if (b?.testSkillOverrides?.[skillId]?.uses !== undefined) return limit === undefined ? Infinity : b.testSkillUses?.[u.uid]?.[skillId] ?? limit;
   return limit === undefined ? Infinity : u.skillUses?.[skillId] ?? limit;
 }
 
@@ -207,14 +209,18 @@ export function skillUsesLeft(u: Unit, skillId: string): number {
 function consumeSkillUse(b: BattleState, actor: Unit, skillId: string): BattleState {
   const current = actorFromId(b, actor.uid);
   if (!current) return b;
-  const left = skillUsesLeft(current, skillId);
+  const left = skillUsesLeft(current, skillId, b);
   if (!Number.isFinite(left)) return b;
+  if (b.testSkillOverrides?.[skillId]?.uses !== undefined) return { ...b, testSkillUses: {
+    ...b.testSkillUses, [current.uid]: { ...b.testSkillUses?.[current.uid], [skillId]: Math.max(0, left - 1) },
+  } };
   const next = { ...current.skillUses, [skillId]: Math.max(0, left - 1) };
   return replaceUnit(b, { ...current, skillUses: next });
 }
 
 /** 技能冷却剩余回合数（无冷却返回 0） */
-export function skillCooldownLeft(u: Unit, skillId: string): number {
+export function skillCooldownLeft(u: Unit, skillId: string, b?: BattleState): number {
+  if (b?.testSkillOverrides?.[skillId]?.cooldown !== undefined) return b.testSkillOverrides[skillId].cooldown === 0 ? 0 : u.skillCooldowns?.[skillId] ?? 0;
   if (skillId === 'solar_heal' || skillId === 'ember_transfer' || skillId === 'heal_light') return 0;
   return u.skillCooldowns?.[skillId] ?? 0;
 }
@@ -223,14 +229,14 @@ export function skillCooldownLeft(u: Unit, skillId: string): number {
  * 单位当前是否可以选择指定技能。
  * 集中校验次数、冷却、封印与成长值，供玩家入口、AI 和自动模拟共用。
  */
-export function canUnitUseSkill(u: Unit, skillId: string): boolean {
+export function canUnitUseSkill(u: Unit, skillId: string, b?: BattleState): boolean {
   if (skillId === 'mirror_copy') return false;
-  if (skillUsesLeft(u, skillId) <= 0 || skillCooldownLeft(u, skillId) > 0) return false;
+  if (skillUsesLeft(u, skillId, b) <= 0 || skillCooldownLeft(u, skillId, b) > 0) return false;
   const sealed = u.statuses.some(
     (status) => status.kind === 'skillSeal' && (status.sealedSkills ?? []).includes(skillId),
   );
   if (sealed) return false;
-  const skill = getSkill(skillId);
+  const skill = getBattleSkill(b, skillId);
   return !skill.growthCost || (u.growthValue ?? 0) >= skill.growthCost;
 }
 
@@ -269,11 +275,11 @@ export function computeTurnOrder(b: BattleState): string[] {
       let cFirst = cSkill?.priority === 'first' ? 1 : 0;
       // 若无显式 orders，检查单位技能列表中是否有可用的先手技能（用于显示预测）
       if (!aFirst && !aOrder) {
-        const avail = a.skills.map(getSkill).find((s) => s.priority === 'first' && canUnitUseSkill(a, s.id));
+        const avail = a.skills.map(id => getBattleSkill(b, id)).find((s) => s.priority === 'first' && canUnitUseSkill(a, s.id, b));
         if (avail) aFirst = 1;
       }
       if (!cFirst && !cOrder) {
-        const avail = c.skills.map(getSkill).find((s) => s.priority === 'first' && canUnitUseSkill(c, s.id));
+        const avail = c.skills.map(id => getBattleSkill(b, id)).find((s) => s.priority === 'first' && canUnitUseSkill(c, s.id, b));
         if (avail) cFirst = 1;
       }
       if (aFirst !== cFirst) return cFirst - aFirst;
@@ -1638,8 +1644,8 @@ export function selectEnemyAction(
   }
   // 技能封印：被封印的技能排除出候选池（避免 AI 选到被封印技能导致行动被吞）
   const skills = actor.skills
-    .map(getSkill)
-    .filter((s) => canUnitUseSkill(actor, s.id) && (!requiresBurningTarget(s.id) || stokeFireTargets(b, actor, s.id).length > 0)
+    .map(id => getBattleSkill(b, id))
+    .filter((s) => canUnitUseSkill(actor, s.id, b) && (!requiresBurningTarget(s.id) || stokeFireTargets(b, actor, s.id).length > 0)
       && (s.id !== 'flame_tracing_feather' || flameTracingTargets(b, actor).length > 0)
       && (s.id !== 'ignite_embers' || alliesOf(b, actor).some(u => u.statuses.some(effect => effect.kind === 'emberSeed'))));
   if (skills.length === 0) return undefined;
@@ -1650,7 +1656,7 @@ export function selectEnemyAction(
   // ─── 1. 治疗 ───
   const collapse = battleCollapseDamage(b.round);
   const incomingAttack = (target: Unit) => Math.max(0, ...enemies.flatMap(enemy => enemy.skills
-    .map(getSkill).filter(skill => !enemy.statuses.some(s => s.kind === 'stun') && skill.kind === 'attack' && canUnitUseSkill(enemy, skill.id))
+    .map(id => getBattleSkill(b, id)).filter(skill => !enemy.statuses.some(s => s.kind === 'stun') && skill.kind === 'attack' && canUnitUseSkill(enemy, skill.id, b))
     .map(skill => estimateAiDamage(b, enemy, skill, target))));
   const endDamage = (target: Unit) => collapse + target.statuses.reduce((sum, status) =>
     sum + ((status.kind === 'poison' || (status.kind === 'burn' && getUnitPassive(target, b)?.kind !== 'foxFlame'))
@@ -1769,7 +1775,7 @@ export function selectEnemyAction(
         candidates.push({ kind: 'buff', skill: bs, score: 40 });
       }
     }
-    if (bs.priority === 'first' && canUnitUseSkill(actor, bs.id)) {
+    if (bs.priority === 'first' && canUnitUseSkill(actor, bs.id, b)) {
       if (!actor.statuses.some((s) => s.kind === 'shield' || s.kind === 'shieldCounter' || s.kind === 'atkUp' || s.kind === 'comboBoost')) {
         let firstChance = b.round <= 1 ? 0.8 : 0.5;
         const offensive = bs.effects?.some(e => e.kind === 'atkUp' || e.kind === 'comboBoost');
@@ -2022,14 +2028,14 @@ export function selectEnemyAction(
     if (st.target === 'all') {
       // 全体 debuff：对多个目标施加状态，价值随目标数提升
       const aliveEnemies = targetPool.length;
-      if (aliveEnemies >= 2 && canUnitUseSkill(actor, st.id)) {
+      if (aliveEnemies >= 2 && canUnitUseSkill(actor, st.id, b)) {
         candidates.push({ kind: 'status', skill: st, score: 40 + aliveEnemies * 5 });
       }
     } else {
       // 绝望凝视：仅对恐惧≥3层目标使用，50%概率
       if (st.id === 'despair_gaze') {
         const validTargets = targetPool.filter((t) => getFearStacks(t) >= 3);
-        if (validTargets.length > 0 && rngVal1 < 0.5 && canUnitUseSkill(actor, st.id)) {
+        if (validTargets.length > 0 && rngVal1 < 0.5 && canUnitUseSkill(actor, st.id, b)) {
           const best = validTargets.sort((a, b) => b.hp - a.hp)[0];
           candidates.push({ kind: 'status', skill: st, targetUid: best.uid, score: 30 });
         }
@@ -2045,7 +2051,7 @@ export function selectEnemyAction(
       });
       scoredTargets.sort((a, c) => c.score - a.score);
       const best = scoredTargets[0];
-      if (best && canUnitUseSkill(actor, st.id)) {
+      if (best && canUnitUseSkill(actor, st.id, b)) {
         candidates.push({ kind: 'status', skill: st, targetUid: best.target.uid, score: best.score + 5 });
       }
     }
@@ -2134,7 +2140,7 @@ function enemyAct(b: BattleState, actor: Unit): BattleState {
     return markActed(pushLog(nb, `${actor.name} 被眩晕，无法行动`, sideOf(actor)), actor.uid);
   }
   return useRng(nb, (rngVal, b2) => {
-    const skills = actor.skills.map(getSkill).filter((s) => canUnitUseSkill(actor, s.id));
+    const skills = actor.skills.map(id => getBattleSkill(b, id)).filter((s) => canUnitUseSkill(actor, s.id, b));
     if (skills.length === 0) {
       return markActed(pushLog(b2, `${actor.name} 无技能可用，只能观望`, sideOf(actor)), actor.uid);
     }
@@ -2353,7 +2359,7 @@ function resolveAttack(
   let base: number;
   if (skill.id === 'fear_burst') {
     const fearStacks = getFearStacks(target);
-    base = 8 + fearStacks;
+    base = (skill.damage ?? 8) + fearStacks;
   } else if (skill.id === 'fear_harvest') {
     const fearStacks = getFearStacks(target);
     base = fearStacks * 2;
@@ -3087,11 +3093,13 @@ function resolveMirrorCopy(b: BattleState, actor: Unit): BattleState {
   nb = pushLog(nb, `${actor.name} 的「镜影复制」复制「${plan.skill.name}」`, sideOf(actor), actor.uid);
   nb = useSkillInner(nb, actorFromId(nb, actor.uid)!, plan.skill, plan.targetUid);
   const fresh = actorFromId(nb, actor.uid)!;
+  if (nb.testSkillUses) nb = { ...nb, testSkillUses: { ...nb.testSkillUses, [actor.uid]: b.testSkillUses?.[actor.uid] ?? {} } };
   return replaceUnit(nb, { ...fresh, skillUses: actor.skillUses, skillCooldowns: actor.skillCooldowns, skillEnhancements: actor.skillEnhancements });
 }
 
 /** 玩家与敌方通用的技能结算（内部） */
 function useSkillInner(b: BattleState, actor: Unit, skill: SkillDef, explicitTarget?: string): BattleState {
+  skill = getBattleSkill(b, skill.id);
   const foxBurnBonus = foxFireLayers(actor);
   if (actor.hp <= 0) return b;
   // 指定目标在轮到本次行动前死亡或离场：跳过，不回退到其他目标或消耗技能。
@@ -4039,8 +4047,8 @@ export function playerEndTurn(b: BattleState): BattleState {
           // 休息：放弃本回合基础行动。
         } else {
           // useSkillInner 末尾已含 consumeSkillUse + markActed，这里不再重复扣减
-          const skillId = !extraActionCount[uid] || canUnitUseSkill(unit, order.skillId) ? order.skillId
-            : unit.skills.find((id) => getSkill(id).kind === 'attack' && canUnitUseSkill(unit, id));
+          const skillId = !extraActionCount[uid] || canUnitUseSkill(unit, order.skillId, nb) ? order.skillId
+            : unit.skills.find((id) => getSkill(id).kind === 'attack' && canUnitUseSkill(unit, id, nb));
           nb = skillId ? useSkillInner(nb, unit, getSkill(skillId), order.targetUid) : markActed(nb, uid);
           const reUnit = actorFromId(nb, uid);
           if (reUnit && reUnit.hp > 0 && !reUnit.acted) {
@@ -4125,7 +4133,7 @@ export function playerSkill(b: BattleState, actorUid: string, skillId: string, t
   const actor = b.playerUnits.find((u) => u.uid === actorUid);
   if (!actor || actor.hp <= 0) return b;
   if (actor.statuses.some((s) => s.kind === 'stun')) return b;
-  if (!canUnitUseSkill(actor, skillId)) return b;
+  if (!canUnitUseSkill(actor, skillId, b)) return b;
   const skill = getSkill(skillId);
   // 治疗等 ally 技能只能指定己方单位；非法目标直接拒绝，避免结算时静默回退成治疗自己
   if (skillId === 'flame_tracing_feather' && !flameTracingTargets(b, actor).some((unit) => unit.uid === targetUid)) return b;

@@ -87,6 +87,8 @@ add('forest-map', ui.MapScreen, { region: 'emerald_forest' }, false);
 add('formation', FormationScreen, { formation }, false);
 add('gauntlet-order', GauntletOrderScreen, { gauntletOrder: base.roster.slice(0, 4) });
 add('battle-test-editor', BattleScreen, { testRun: true, battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false, '调整数值');
+add('battle-test-skill-editor', BattleScreen, { testRun: true, battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false, '调整数值|技能数值');
+add('battle-test-skill-effects', BattleScreen, { testRun: true, battle: createBattle([makeUnit('mimi', true, 0, false), makeUnit('kiki', true, 1, false)], encounter, 123) }, false, '调整数值|技能数值|毒刺');
 add('battle', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false);
 add('battle-corrupt-immune', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123, { corruptDebuff: 'immune' }) }, false);
 add('battle-mimic', BattleScreen, { battle: createBattle([makeUnit('mimic_beast', true, 0, false)], [{ speciesId: 'boss_vine' }], 123) }, false);

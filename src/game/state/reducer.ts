@@ -5,7 +5,9 @@ import { finalEvolutionPaths, economicRelicUnlocks, growthRelicUnlocks, mainShop
 import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills, BATTLE_COLLAPSE_WARNING_ROUND, computeTurnOrder, pushLog } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
-import type { BattleState, Unit } from '../types';
+import type { BattleState, Unit, TestSkillOverride } from '../types';
+import { SKILLS } from '../data/skills';
+import { validTestSkillOverride } from '../data/test-skill-overrides';
 import { FOODS, isCaptureFood } from '../data/foods';
 import { getItem, ITEMS, mainShopItemPool } from '../data/items';
 import { getMonster, MONSTERS, SPECIAL_EGG_POOL } from '../data/monsters';
@@ -118,6 +120,7 @@ export type GameAction = GrowthEncounterAction
   | { type: 'TEST_TYPE_PICK'; nodeType: MapNode['type']; corruptDebuff?: 'spd' | 'dmg' | 'burn' | 'immune'; corruptReward?: 'gold' | 'food'; eventType?: string; scenario?: TestScenario }
   | { type: 'TEST_REPLAY' }
   | { type: 'TEST_BATTLE_EDIT_UNIT'; uid: string; hp: number; maxHp: number; spd: number; shield: number }
+  | { type: 'TEST_BATTLE_EDIT_SKILL'; skillId: string; values: TestSkillOverride | null }
   | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
@@ -856,6 +859,33 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
   if (state.battle?.rewindChoice && ['PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'PLAYER_CANCEL_ORDER', 'END_TURN', 'GAUNTLET_SWAP'].includes(action.type)) return state;
   if (state.battle?.mimicPreviewPending && ['PLAYER_SKILL', 'PLAYER_REST', 'PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'END_TURN'].includes(action.type)) return state;
   switch (action.type) {
+    case 'TEST_BATTLE_EDIT_SKILL': {
+      const battle = state.battle, skill = SKILLS[action.skillId];
+      if (!state.testRun || state.screen !== 'battle' || !battle || battle.phase !== 'acting' || !skill) return state;
+      const units = [...battle.playerUnits, ...battle.enemyUnits, ...(battle.playerBench ?? []), ...(battle.enemyBench ?? [])];
+      if (!units.some(unit => unit.skills.includes(skill.id)) || action.values !== null && !validTestSkillOverride(skill, action.values)) return state;
+      const previous = battle.testSkillOverrides?.[skill.id];
+      const overrides = { ...battle.testSkillOverrides };
+      if (action.values === null) delete overrides[skill.id];
+      else overrides[skill.id] = { ...action.values, ...(action.values.effects ? { effects: action.values.effects.map(effect => ({ ...effect })) } : {}) };
+      const resetCooldown = previous?.cooldown !== action.values?.cooldown;
+      const update = (unit: Unit): Unit => {
+        if (!resetCooldown || !unit.skillCooldowns?.[skill.id]) return unit;
+        const { [skill.id]: _removed, ...skillCooldowns } = unit.skillCooldowns;
+        return { ...unit, skillCooldowns };
+      };
+      let testSkillUses = battle.testSkillUses;
+      if (previous?.uses !== action.values?.uses && testSkillUses) testSkillUses = Object.fromEntries(Object.entries(testSkillUses).map(([uid, counters]) => {
+        const { [skill.id]: _removed, ...remaining } = counters;
+        return [uid, remaining];
+      }));
+      let next: BattleState = { ...battle, testSkillOverrides: Object.keys(overrides).length ? overrides : undefined, testSkillUses,
+        playerUnits: battle.playerUnits.map(update), enemyUnits: battle.enemyUnits.map(update),
+        playerBench: battle.playerBench?.map(update), enemyBench: battle.enemyBench?.map(update) };
+      next = { ...next, turnOrder: computeTurnOrder(next) };
+      next = pushLog(next, `[测试技能] ${skill.name}：${action.values === null ? '恢复原值' : '本场所有同名技能已调整'}`, 'info');
+      return { ...state, battle: next };
+    }
     case 'TEST_BATTLE_EDIT_UNIT': {
       const battle = state.battle;
       if (!state.testRun || state.screen !== 'battle' || !battle || battle.phase !== 'acting') return state;

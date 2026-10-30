@@ -11,7 +11,7 @@ import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
 
 /** 技能数值简述：仅伤害/治疗/buff效果数值，如 "5"、"3×2"、"7" */
 export function skillBrief(s: SkillDef, enhanced: number = 0): string {
-  if (s.id === 'bloodlust') return `吸血+${2 + getSkillEnhanceBonus(s.id, enhanced).effectBonus}·2回合`;
+  if (s.id === 'bloodlust') return `吸血+${(s.testAdjusted ? s.effects?.find(effect => effect.kind === 'bloodDrain')?.value ?? 2 : 2) + getSkillEnhanceBonus(s.id, enhanced).effectBonus}·2回合`;
   if (s.id === 'gather_shields') return '全队护盾→自身';
   if (s.id === 'ride_wind') return `本场+${1 + getSkillEnhanceBonus(s.id, enhanced).effectBonus}速`;
   if (s.id === 'wind_assault') return `速度差${enhanced > 0 ? '+' + getSkillEnhanceBonus(s.id, enhanced).damageBonus : ''}`;
@@ -123,6 +123,12 @@ function getDescEffectBonus(s: SkillDef, enhanced: number, kind: StatusEffect['k
 
 /** 技能完整描述：定位标注 + 基础描述 + 具体 buff 效果数值，如 "【前排攻击】攻击单个敌人（灼烧 2/回合，持续 2 回合）" */
 export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
+  if (s.testAdjusted) {
+    const values = [s.damage !== undefined ? `每段基础伤害${s.damage}` : '', s.heal !== undefined ? `基础治疗${s.heal}` : '',
+      s.kind === 'attack' ? `基础段数${s.hits ?? 1}` : '', `冷却${s.cooldown ?? 0}回合`,
+      s.uses === undefined ? '次数不限' : `每场限${s.uses}次`, ...(s.effects ?? []).map(effectText)].filter(Boolean);
+    return `【测试覆盖】${values.join('；')}。强化、被动及条件加成另算。原机制参考（基础数值以上述为准）：${getSkill(s.id).desc}`;
+  }
   const bonus = getSkillEnhanceBonus(s.id, enhanced);
   let desc = s.desc;
   if (s.id === 'bloodlust') desc = desc.replace('吸血+2', `吸血+${2 + bonus.effectBonus}`).replace('回复2点生命', `回复${2 + bonus.effectBonus}点生命`);

@@ -22,11 +22,11 @@ import {
   TAME_THRESHOLD,
 } from '../game/core/battle';
 import { getSkillEnhanceLevel } from '../game/core/growth';
-import { getSkill } from '../game/data/skills';
+import { getBattleSkill } from '../game/data/test-skill-overrides';
 import { getFood } from '../game/data/foods';
 import { getItem } from '../game/data/items';
 import { getPassive } from '../game/data/passives';
-import type { LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
+import type { BattleState, LogSpan, SkillDef, StatusEffect, Unit } from '../game/types';
 import { UnitCard, skillBrief, skillFullDesc, SkillTag, BuffDetailPanel, PixelCreature, BattleHpText } from './components';
 import { useBattleFx } from './battleFx';
 import { persistSave } from './persistence';
@@ -78,7 +78,7 @@ function enemyTargetable(skill: SkillDef, enemy: Unit, enemies: Unit[]): boolean
   return front.length > 0 ? enemy.row === 'front' : true;
 }
 
-export function BattleUnitInspectPanel({ unit, speed, side, showSkills = side === 'enemy', showBuffs = true, eyebrow, children }: { unit: Unit; speed?: number; side: 'enemy' | 'player'; showSkills?: boolean; showBuffs?: boolean; eyebrow?: string; children?: React.ReactNode }) {
+export function BattleUnitInspectPanel({ unit, speed, side, showSkills = side === 'enemy', showBuffs = true, eyebrow, children, battle }: { unit: Unit; speed?: number; side: 'enemy' | 'player'; showSkills?: boolean; showBuffs?: boolean; eyebrow?: string; children?: React.ReactNode; battle?: BattleState }) {
   const hasBuffs = unit.shield > 0 || unit.statuses.length > 0 ||
     (!!unit.battleBuffs && Object.values(unit.battleBuffs).some(Boolean));
   return (
@@ -102,7 +102,7 @@ export function BattleUnitInspectPanel({ unit, speed, side, showSkills = side ==
         <div className="enemy-inspect-section-title">技能</div>
         <div className="enemy-inspect-skills">
           {unit.skills.map((sid, slot) => (
-            <SkillTag key={slot} skill={getSkill(sid)} enhanced={getSkillEnhanceLevel(unit, slot)} desc usesNote />
+            <SkillTag key={slot} skill={getBattleSkill(battle, sid)} enhanced={getSkillEnhanceLevel(unit, slot)} desc usesNote />
           ))}
         </div>
       </>}
@@ -179,8 +179,8 @@ export function BattleScreen({ state, dispatch }: Props) {
     else if (mobileLogOpen) setMobileLogOpen(false);
     else cancelTarget();
   });
-  const choosingEnemyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'single' || !!pendingBattleItem && ['atk_down', 'spd_down', 'hp_down'].includes(pendingBattleItem);
-  const choosingAllyTarget = !!pendingSkill && getSkill(pendingSkill.skillId).target === 'ally' || !!pendingBattleItem && ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
+  const choosingEnemyTarget = !!pendingSkill && getBattleSkill(battle, pendingSkill.skillId).target === 'single' || !!pendingBattleItem && ['atk_down', 'spd_down', 'hp_down'].includes(pendingBattleItem);
+  const choosingAllyTarget = !!pendingSkill && getBattleSkill(battle, pendingSkill.skillId).target === 'ally' || !!pendingBattleItem && ['atk_up', 'spd_up', 'hp_up'].includes(pendingBattleItem);
 
   const alivePlayers = b.playerUnits.filter((u) => u.hp > 0);
   const aliveEnemies = b.enemyUnits.filter((u) => u.hp > 0 && (!u.summoning || revealedSummons.has(u.uid)));
@@ -317,14 +317,14 @@ export function BattleScreen({ state, dispatch }: Props) {
   const inspectedEnemy = inspectEnemy ? battle.enemyUnits.find((u) => u.uid === inspectEnemy && u.hp > 0) : undefined;
   const inspectedAlly = inspectAlly ? battle.playerUnits.find((u) => u.uid === inspectAlly) : undefined;
   const selectedSkills: SkillDef[] = useMemo(
-    () => (selected && selected.hp > 0 ? selected.skills.filter(id => id !== 'mirror_copy').map((id) => getSkill(id)) : []),
-    [selected],
+    () => (selected && selected.hp > 0 ? selected.skills.filter(id => id !== 'mirror_copy').map((id) => getBattleSkill(battle, id)) : []),
+    [selected, battle.testSkillOverrides],
   );
   const selectedOrder = selected ? battle.orders?.[selected.uid] : undefined;
   const selectedOrderLabel = selectedOrder ? (() => {
     if (selectedOrder.skillId === REST_SKILL_ID) return '✓ 休息';
     if (selectedOrder.skillId === 'mirror_copy') return '自动判定';
-    const skill = getSkill(selectedOrder.skillId);
+    const skill = getBattleSkill(battle, selectedOrder.skillId);
     const targetName = (skill.target === 'single' || skill.target === 'ally')
       ? [...battle.playerUnits, ...battle.enemyUnits].find(unit => unit.uid === selectedOrder.targetUid)?.name ?? '目标已离场'
       : ({ all: skill.reach === 'front' ? '敌方前排优先' : skill.reach === 'back' ? '敌方后排' : '敌方全体', allyAll: '我方全体', self: '自身', random: '随机敌方' } as const)[skill.target];
@@ -338,7 +338,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const validEnemyTargets = useMemo(() => {
     const targets = new Set<string>();
     if (pendingSkill) {
-      const skill = getSkill(pendingSkill.skillId);
+      const skill = getBattleSkill(battle, pendingSkill.skillId);
       if (skill.target === 'single') {
         // 嘲讽反向限制：己方被嘲讽时，所有技能只能以嘲讽来源为目标
         const actor = battle?.playerUnits.find((u) => u.uid === pendingSkill.actorUid);
@@ -383,7 +383,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const validAllyTargets = useMemo(() => {
     const targets = new Set<string>();
     if (pendingSkill) {
-      const skill = getSkill(pendingSkill.skillId);
+      const skill = getBattleSkill(battle, pendingSkill.skillId);
       if (skill.id === 'furnace_shell') {
         const actor = battle?.playerUnits.find((unit) => unit.uid === pendingSkill.actorUid);
         if (battle && actor) furnaceShellTargets(battle, actor).forEach((unit) => targets.add(unit.uid));
@@ -401,7 +401,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   function onPlayerClick(uid: string) {
     if (animating) return;
     if (pendingSkill) {
-      const skill = getSkill(pendingSkill.skillId);
+      const skill = getBattleSkill(battle, pendingSkill.skillId);
       if (skill.target === 'ally') {
         if (!validAllyTargets.has(uid)) return;
         dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
@@ -431,7 +431,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   function onEnemyClick(uid: string) {
     if (animating || logPending || captureLock.current) return;
     if (pendingSkill) {
-      const skill = getSkill(pendingSkill.skillId);
+      const skill = getBattleSkill(battle, pendingSkill.skillId);
       // 治疗等 ally 技能只能点己方单位，点敌方直接忽略（保持待定状态）
       if (skill.target === 'single') {
         dispatch({ type: 'PLAYER_SKILL', actorUid: pendingSkill.actorUid, skillId: pendingSkill.skillId, targetUid: uid });
@@ -657,7 +657,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     <div className="screen battle-screen" style={{ '--battle-fx-speed': animSpeed, '--battle-fx-play': effectsPaused ? 'paused' : 'running' } as CSSProperties}>
       {battle.mimicPreviewPending && <MimicPreview units={[...battle.playerUnits, ...battle.enemyUnits, ...(battle.playerBench ?? []), ...(battle.enemyBench ?? [])].filter(unit => unit.hp > 0 && getPassive(unit.passive)?.kind === 'mimic')} onConfirm={() => dispatch({ type: 'ACK_MIMIC_PREVIEW' })} />}
       {collapseWarning && !animating && !logPending && !battle.pendingSwap && <CollapseWarning round={battle.round} onConfirm={acknowledgeCollapse} />}
-      {state.testRun && testEditorOpen && canAct && <TestBattleEditor units={[...battle.playerUnits, ...battle.enemyUnits]} dispatch={dispatch} onClose={() => setTestEditorOpen(false)} />}
+      {state.testRun && testEditorOpen && canAct && <TestBattleEditor battle={battle} units={[...battle.playerUnits, ...battle.enemyUnits]} dispatch={dispatch} onClose={() => setTestEditorOpen(false)} />}
       <div className="hud">
         <span className="act">{state.runMode === 'proficiency' ? '熟练度远征' : `第${state.act}幕`} · 第{state.currentRow + 1}层</span>
         <span className="battle-hud-round">回合 {battle.round}</span>
@@ -752,8 +752,8 @@ export function BattleScreen({ state, dispatch }: Props) {
                   <div className="battle-skill-scroll">
                     <div className="battle-skill-grid">
                     {selectedSkills.map((s, displayIndex) => {
-                    const left = skillUsesLeft(selected, s.id);
-                    const cd = skillCooldownLeft(selected, s.id);
+                    const left = skillUsesLeft(selected, s.id, battle);
+                    const cd = skillCooldownLeft(selected, s.id, battle);
                     const limited = Number.isFinite(left);
                     const onCooldown = cd > 0;
                     const isCurrent = selectedOrder?.skillId === s.id;
@@ -766,7 +766,7 @@ export function BattleScreen({ state, dispatch }: Props) {
                     const fullDesc = skillFullDesc(s, enhanced);
                     const sealStatus = selected.statuses.find((st) => st.kind === 'skillSeal');
                     const isSealed = !!sealStatus && (sealStatus.sealedSkills ?? []).includes(s.id);
-                    const unavailable = !canUnitUseSkill(selected, s.id)
+                    const unavailable = !canUnitUseSkill(selected, s.id, battle)
                       || (s.id === 'flame_tracing_feather' && !isActive && flameTracingTargets(battle, selected).length === 0)
                       || (requiresBurningTarget(s.id) && !isActive && stokeFireTargets(battle, selected, s.id).length === 0);
                     return (
@@ -863,7 +863,7 @@ export function BattleScreen({ state, dispatch }: Props) {
               <h2 id="enemy-inspect-title" className="battle-overlay-title">敌人信息</h2>
               <button className="battle-overlay-close" onClick={() => setInspectEnemy(null)} aria-label="关闭敌人信息" autoFocus><UiSymbol name="close" /></button>
             </div>
-            <BattleUnitInspectPanel unit={shownUnit(inspectedEnemy)} speed={spdMap?.[inspectedEnemy.uid]} side="enemy">
+            <BattleUnitInspectPanel battle={battle} unit={shownUnit(inspectedEnemy)} speed={spdMap?.[inspectedEnemy.uid]} side="enemy">
               <BuffDetailPanel unit={shownUnit(inspectedEnemy)} stacksOverride={passiveSpdMap?.[inspectedEnemy.uid]} rockShellHitsOverride={rockShellHitsMap?.[inspectedEnemy.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[inspectedEnemy.uid]} hideTitle />
             </BattleUnitInspectPanel>
           </div>
@@ -877,7 +877,7 @@ export function BattleScreen({ state, dispatch }: Props) {
               <h2 id="ally-inspect-title" className="battle-overlay-title">我方生物 Buff</h2>
               <button className="battle-overlay-close" onClick={() => setInspectAlly(null)} aria-label="关闭我方生物 Buff" autoFocus><UiSymbol name="close" /></button>
             </div>
-            <BattleUnitInspectPanel unit={shownUnit(inspectedAlly)} speed={spdMap?.[inspectedAlly.uid]} side="player" showSkills={inspectAllySkills}>
+            <BattleUnitInspectPanel battle={battle} unit={shownUnit(inspectedAlly)} speed={spdMap?.[inspectedAlly.uid]} side="player" showSkills={inspectAllySkills}>
               <BuffDetailPanel unit={shownUnit(inspectedAlly)} stacksOverride={passiveSpdMap?.[inspectedAlly.uid]} rockShellHitsOverride={rockShellHitsMap?.[inspectedAlly.uid]} thornsHitCountOverride={thornRoyalHitsMap?.[inspectedAlly.uid]} hideTitle />
             </BattleUnitInspectPanel>
           </div>

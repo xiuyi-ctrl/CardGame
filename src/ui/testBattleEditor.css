@@ -19,3 +19,12 @@
 .mobile-ui .test-battle-dialog { padding: 4px; gap: 4px; }
 .mobile-ui .test-battle-dialog h2 { font-size: 16px; }
 .mobile-ui .test-battle-body, .mobile-ui .test-battle-form { gap: 4px; }
+
+.test-battle-tabs { display: flex; gap: 6px; flex-shrink: 0; }
+.test-battle-tabs [aria-pressed=true] { border-color: #168d89; background: #dfede3; font-weight: 700; }
+.test-skill-content { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.test-skill-content .test-battle-fields { overflow: visible; flex-shrink: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.test-skill-name { font-weight: 700; }
+.test-skill-form footer { flex-shrink: 0; flex-wrap: wrap; }
+.test-skill-content summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.mobile-ui .test-skill-content { gap: 4px; }

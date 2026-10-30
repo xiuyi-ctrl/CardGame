@@ -18,6 +18,8 @@ export interface StatusEffect {
 export type SkillTarget = 'single' | 'all' | 'random' | 'self' | 'ally' | 'allyAll';
 
 export interface SkillDef {
+  /** 测试战斗临时覆盖，仅用于标明详情中的基础数值。 */
+  testAdjusted?: boolean;
   id: string;
   name: string;
   desc: string;
@@ -51,6 +53,8 @@ export interface SkillDef {
   /** 成长值消耗（成长之主Boss专属，使用时扣除对应成长值） */
   growthCost?: number;
 }
+
+export type TestSkillOverride = Partial<Pick<SkillDef, 'damage' | 'heal' | 'hits' | 'cooldown' | 'uses' | 'effects'>>;
 
 /** 被动技能效果类型 */
 export type PassiveKind =
@@ -390,6 +394,9 @@ export interface PlayerOrder {
 }
 
 export interface BattleState {
+  /** 仅测试战斗使用；不写入单位或全局技能表，新建战斗自动清空。 */
+  testSkillOverrides?: Record<string, TestSkillOverride>;
+  testSkillUses?: Record<string, Record<string, number>>;
   /** 仅主模式携带的遗物；随战斗存档保留。 */
   relics?: string[];
   spareCandleUsed?: boolean;
