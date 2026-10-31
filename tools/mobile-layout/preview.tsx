@@ -1,5 +1,6 @@
 import { generateGrowthMap } from '../../src/game/core/growth-map';
 import { CollapseWarning } from '../../src/ui/CollapseWarning';
+import { AudioSettingsPanel } from '../../src/ui/AudioSettings';
 // 仅由独立验收服务器加载，不进入生产入口，也不读取或覆盖真实存档。
 import { createElement, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -63,6 +64,7 @@ type Scene = { component: any; state: GameState; flow?: boolean; setup?: string;
 const registry: Record<string, Scene> = {};
 const add = (name: string, component: any, extra = {}, flow = true, setup?: string) => { registry[name] = { component, state: state(name, extra), flow, setup }; };
 add('title', ui.HomeScreen, {}, false);
+add('audio-settings', () => <AudioSettingsPanel onClose={() => {}} />, {}, false);
 add('region-select', ui.RegionScreen, {}, false);
 add('region-forest', ui.RegionScreen, { region: 'emerald_forest' }, false);
 add('region-ecology', ui.RegionScreen, { region: 'emerald_forest' }, false, '查看生态详情');
@@ -521,7 +523,13 @@ for (const [name, component] of [['blacksmith', BlacksmithScreen], ['enhance-sto
 }
 registry['fixed-effects-compare'] = { ...registry['fixed-effects-blacksmith'], setup: '.training-pet|暗影裂隙强化对比' };
 variant('roster-ten', 'roster', { roster: tenPartners });
+variant('backpack-pets-ten', 'backpack', { roster: tenPartners }, '伙伴');
 variant('postbattle-ten', 'postbattle', { roster: tenPartners });
+const nightCampFox = makeUnit('fire_fox', true, 0, false);
+variant('night-camp-roster', 'postbattle-ten', { roster: [nightCampFox, ...tenPartners.slice(1)] });
+variant('night-camp-directions', 'fusion-dialog', { roster: [nightCampFox, makeUnit('fire_fox', true, 1, false), makeUnit('fire_fox', true, 2, false)] });
+registry['night-camp-directions'].extra = { primary: nightCampFox, onClose: () => {} };
+variant('night-camp-confirm', 'night-camp-directions', {}, '选择传火狐');
 variant('overflow-ten', 'tame-overflow', { roster: tenPartners });
 variant('formation-ten', 'formation', { roster: tenPartners, formation: { ...formation, units: tenPartners } });
 variant('boss-boost-ten', 'boss-reward-boost', { roster: tenPartners }, '伙伴强化');

@@ -3633,6 +3633,45 @@ html:not(.mobile-ui) .postbattle-detail-body::-webkit-scrollbar { display: none;
   .postbattle-heading, .postbattle-header-actions { gap: 6px; }
 }
 
+/* 电脑端休整详情：立绘与属性并排，被动完整展示，技能仅列名称。 */
+html:not(.mobile-ui) .postbattle-layout { grid-template-columns: minmax(0, 2.14fr) minmax(300px, 1fr); }
+html:not(.mobile-ui) .postbattle-detail { gap: 8px; padding: 8px; }
+html:not(.mobile-ui) .postbattle-detail-body {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: auto;
+  overflow: visible;
+}
+html:not(.mobile-ui) .postbattle-detail-body > :not(.postbattle-detail-portrait):not(.postbattle-detail-stats) { grid-column: 1 / -1; }
+html:not(.mobile-ui) .postbattle-detail h2 { font-size: 24px; }
+html:not(.mobile-ui) .postbattle-detail-portrait { min-height: 0; height: 80px; }
+html:not(.mobile-ui) .postbattle-detail-portrait :is(canvas, img) { width: 80px; height: 80px; }
+html:not(.mobile-ui) .postbattle-detail-portrait .battle-sprite-emoji { font-size: 64px; }
+html:not(.mobile-ui) .postbattle-detail-stats { justify-content: flex-start; gap: 8px 16px; padding: 10px 0; border: 0; font-size: 22px; }
+html:not(.mobile-ui) .postbattle-passive { padding-top: 8px; border-top: 2px solid #a4b0ac; }
+html:not(.mobile-ui) .postbattle-passive p { margin-top: 4px; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+html:not(.mobile-ui) .postbattle-skills > div { gap: 6px; margin-top: 5px; }
+html:not(.mobile-ui) .postbattle-skills span { padding: 6px 8px; font-size: 14px; }
+html:not(.mobile-ui) .postbattle-detail-actions { gap: 6px; }
+html:not(.mobile-ui) .postbattle-purify { grid-column: auto; }
+html:not(.mobile-ui) .postbattle-detail-actions:has(.postbattle-purify) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-height: 750px) {
+  html:not(.mobile-ui) .postbattle-screen { grid-template-rows: 58px minmax(0, 1fr); gap: 12px; padding: 10px; }
+  html:not(.mobile-ui) .postbattle-detail { border-width: 12px; border-image-width: 12px; gap: 6px; padding: 6px; }
+  html:not(.mobile-ui) .postbattle-detail-body { grid-template-columns: 64px minmax(0, 1fr); gap: 5px 12px; }
+  html:not(.mobile-ui) .postbattle-detail-portrait { height: 60px; }
+  html:not(.mobile-ui) .postbattle-detail-portrait :is(canvas, img) { width: 60px; height: 60px; }
+  html:not(.mobile-ui) .postbattle-passive { padding-top: 5px; }
+  html:not(.mobile-ui) .postbattle-passive strong { font-size: 14px; }
+  html:not(.mobile-ui) .postbattle-skills span { padding: 5px 6px; }
+  html:not(.mobile-ui) .postbattle-detail-actions p { padding-top: 5px; font-size: 12px; }
+  html:not(.mobile-ui) .postbattle-detail-actions button, html:not(.mobile-ui) .postbattle-continue { min-height: 36px; padding: 5px; font-size: 14px; }
+}
+
 .shop-screen {
   position: relative;
   height: 100%;
@@ -7157,6 +7196,31 @@ img.unified-creature-art { image-rendering: pixelated; object-fit: contain; bord
 }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 .confirm-box.fusion-confirm { width: min(760px, 94vw); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.fusion-direction-dialog { width: min(920px, 94vw); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 12px; color: #101c2c; }
+.fusion-direction-dialog > h2 { flex: none; margin: 0; padding: 12px; border: 3px solid #8a979b; background: #fff9e9; text-align: center; font-size: 24px; }
+.fusion-direction-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; min-height: 0; }
+.fusion-direction-card { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 3px solid #8a979b; background: #fff9e9; box-shadow: inset 0 0 0 3px #e6dfc8, 3px 4px 0 #071421; }
+.fusion-direction-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; }
+.fusion-direction-portrait { display: grid; place-items: center; min-height: 0; }
+.fusion-direction-portrait .pet-icon-inline { width: clamp(64px, 18dvh, 140px); height: clamp(64px, 18dvh, 140px); object-fit: contain; image-rendering: pixelated; }
+.fusion-direction-card h3 { margin: 0; font-size: 24px; text-align: center; }
+.fusion-direction-card .fusion-stats { justify-content: center; }
+.fusion-direction-passive { border-top: 2px solid #a4b0ac; padding-top: 8px; }
+.fusion-direction-passive p { margin: 5px 0 0; font-size: 14px; line-height: 1.45; color: #536574; }
+.fusion-direction-card > button, .fusion-direction-cancel { flex: none; min-height: 44px; border-radius: 0; font-size: 16px; }
+.fusion-direction-cancel { align-self: center; min-width: 140px; background: #fff9e9; color: #101c2c; }
+.mobile-ui .fusion-direction-dialog { width: min(780px, 100%); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 12px); gap: 4px; }
+.mobile-ui .fusion-direction-dialog > h2 { padding: 4px; font-size: 18px; }
+.mobile-ui .fusion-direction-options { gap: 8px; flex: 1; }
+.mobile-ui .fusion-direction-card { padding: 6px; gap: 4px; }
+.mobile-ui .fusion-direction-body { gap: 4px; }
+.mobile-ui .fusion-direction-portrait .pet-icon-inline { width: 52px; height: 52px; }
+.mobile-ui .fusion-direction-card h3 { font-size: 18px; }
+.mobile-ui .fusion-direction-card .fusion-stats { font-size: 14px; gap: 4px 10px; }
+.mobile-ui .fusion-direction-card .fusion-stats img { width: 20px; height: 20px; }
+.mobile-ui .fusion-direction-passive { padding-top: 4px; font-size: 13px; }
+.mobile-ui .fusion-direction-passive p { font-size: 12px; line-height: 1.3; }
+.mobile-ui .fusion-direction-card .skill-tag { font-size: 12px; padding: 3px 5px; }
 .fusion-confirm .fusion-title { justify-content: center; padding-left: 0; text-align: center; }
 .fusion-confirm .fusion-title::before { display: none; }
 .fusion-title img { width: 38px; height: 38px; margin-right: 12px; object-fit: contain; image-rendering: pixelated; }

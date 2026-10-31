@@ -1,0 +1,52 @@
+{
+  "sample_rate": 48000,
+  "channels": 1,
+  "bits": 16,
+  "sounds": [
+    {
+      "id": "ui_click",
+      "name": "轻点",
+      "description": "按钮按下：轻木质短击，适合高频操作。",
+      "file": "ui_click.wav",
+      "duration_ms": 65,
+      "sequence_start_seconds": 0.3,
+      "peak_dbfs": -11.1
+    },
+    {
+      "id": "ui_confirm",
+      "name": "确认",
+      "description": "执行成功：两颗向上跳动的暖色音符。",
+      "file": "ui_confirm.wav",
+      "duration_ms": 240,
+      "sequence_start_seconds": 1.015,
+      "peak_dbfs": -9.4
+    },
+    {
+      "id": "ui_back",
+      "name": "返回",
+      "description": "关闭或退回：两颗下行音符，收尾柔和。",
+      "file": "ui_back.wav",
+      "duration_ms": 180,
+      "sequence_start_seconds": 1.905,
+      "peak_dbfs": -10.5
+    },
+    {
+      "id": "ui_select",
+      "name": "切换",
+      "description": "选项变化：清脆小拨片，比确认更轻更短。",
+      "file": "ui_select.wav",
+      "duration_ms": 75,
+      "sequence_start_seconds": 2.735,
+      "peak_dbfs": -12.8
+    },
+    {
+      "id": "ui_unavailable",
+      "name": "不可用",
+      "description": "条件不足：低音双敲，提示而不刺耳。",
+      "file": "ui_unavailable.wav",
+      "duration_ms": 210,
+      "sequence_start_seconds": 3.46,
+      "peak_dbfs": -10.8
+    }
+  ]
+}

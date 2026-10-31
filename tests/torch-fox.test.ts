@@ -27,13 +27,19 @@ describe('火狐分支与火种', () => {
     expect(fuseUnit(makeUnit('torch_fox', true, 0, false))?.speciesId).toBe('torch_fox_lord');
     expect(fusionNeedCount('torch_fox')).toBe(2);
   });
-  it('融合确认可切换分支，预览固定技能并派发所选形态', () => {
+  it('融合先选择方向，再确认材料并派发所选形态', () => {
     const a = makeUnit('fire_fox', true, 0, false), b = makeUnit('fire_fox', true, 1, false);
     const c = makeUnit('fire_fox', true, 2, false);
     const state = { ...createInitialState(), screen: 'roster' as const, roster: [a, b, c] };
     const dispatch = vi.fn();
     render(createElement(FusionConfirm, { primary: a, state, dispatch, onClose: vi.fn() }));
-    fireEvent.change(screen.getByLabelText('进化形态'), { target: { value: 'torch_fox' } });
+    expect(screen.getByRole('dialog', { name: '选择进化方向' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '选择幻尾火狐' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '确定融合' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '选择传火狐' }));
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: '确认融合' })).toBeTruthy();
+    expect(screen.queryByText('双尾狐焰')).toBeNull();
     expect(screen.getByText('传火之尾')).toBeTruthy();
     fireEvent.click(screen.getByText('确定融合'));
     expect(dispatch).toHaveBeenCalledWith({ type: 'FUSE', primaryUid: a.uid, materialUids: [b.uid, c.uid], targetSpeciesId: 'torch_fox' });

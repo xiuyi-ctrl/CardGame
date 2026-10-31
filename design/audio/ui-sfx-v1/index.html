@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>驯牌远征 · 界面音效试听</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#101e25;color:#f5ecd7;font-family:system-ui,sans-serif;padding:clamp(16px,4vw,48px)}
+  main{max-width:900px;margin:auto}header{border-bottom:2px solid #426365;margin-bottom:24px;padding-bottom:20px}h1{font-size:clamp(22px,4vw,34px);margin:6px 0 12px}
+  .edition{color:#bfa16d;font-size:12px;letter-spacing:.12em}p{color:#b8c9c5;line-height:1.6}button{min-height:44px;padding:8px 18px;border:2px solid #c5a46b;background:#e8c17c;color:#15252b;font:inherit;font-weight:700;cursor:pointer}button:hover,button:focus-visible{outline:2px solid #83d2bb;outline-offset:3px}button.secondary{background:transparent;color:#e8c17c}
+  .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.controls label{display:flex;gap:10px;align-items:center;font-size:14px}input{min-height:44px;accent-color:#82c6ac}
+  .list{display:grid;gap:12px}.sound{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:16px;border:1px solid #456063;background:#192d34;padding:16px}.number{font:24px Georgia,serif;color:#bfa16d}.sound h2{font-size:18px;margin:0 0 5px}.sound p{font-size:14px;margin:0}.duration{color:#8db3a9;font-size:12px;margin-left:8px}footer{font-size:13px;color:#b8c9c5;margin-top:24px;line-height:1.7}#status{min-height:24px;margin:12px 0;color:#91d1b6}
+  @media(max-width:560px){.sound{grid-template-columns:24px 1fr;gap:10px;padding:12px}.sound button{grid-column:2;justify-self:start}.controls label{width:100%}}
+</style>
+<main>
+  <header><div class="edition">UI SOUND STUDY / 01</div><h1>驯牌远征 · 界面音效</h1><p>轻木质触感、短音符与柔和收尾。先听一轮，再比较每种操作的声音。</p>
+  <div class="controls"><button id="sequence">整组试听</button><button class="secondary" id="stop">停止</button><label>试听音量<input id="volume" type="range" min="0" max="100" value="65" aria-label="试听音量"><output id="level">65%</output></label></div></header>
+  <div id="status" role="status">点击按钮开始，不会自动播放。</div>
+  <section class="list" aria-label="音效样本">
+    <article class="sound"><span class="number">01</span><div><h2>轻点<span class="duration">65 ms</span></h2><p>按钮按下：轻木质短击，适合高频操作。</p></div><button data-file="ui_click.wav" data-name="轻点">试听轻点</button></article>
+    <article class="sound"><span class="number">02</span><div><h2>确认<span class="duration">240 ms</span></h2><p>执行成功：两颗向上跳动的暖色音符。</p></div><button data-file="ui_confirm.wav" data-name="确认">试听确认</button></article>
+    <article class="sound"><span class="number">03</span><div><h2>返回<span class="duration">180 ms</span></h2><p>关闭或退回：两颗下行音符，收尾柔和。</p></div><button data-file="ui_back.wav" data-name="返回">试听返回</button></article>
+    <article class="sound"><span class="number">04</span><div><h2>切换<span class="duration">75 ms</span></h2><p>选项变化：清脆小拨片，比确认更轻更短。</p></div><button data-file="ui_select.wav" data-name="切换">试听切换</button></article>
+    <article class="sound"><span class="number">05</span><div><h2>不可用<span class="duration">210 ms</span></h2><p>条件不足：低音双敲，提示而不刺耳。</p></div><button data-file="ui_unavailable.wav" data-name="不可用">试听不可用</button></article>
+  </section>
+  <footer>原创合成试听稿 · WAV / 48 kHz / 16-bit / 单声道<br>整组顺序：轻点 → 确认 → 返回 → 切换 → 不可用。仅为独立样本，尚未接入游戏。</footer>
+</main>
+<script>
+  const player=new Audio();player.volume=.65;
+  const status=document.getElementById('status');
+  async function play(file,name){player.pause();player.src=file;status.textContent='正在试听：'+name;try{await player.play()}catch{status.textContent='无法播放，请将整个音效文件夹解压后再打开试听页。'}}
+  document.querySelectorAll('[data-file]').forEach(button=>button.addEventListener('click',()=>play(button.dataset.file,button.dataset.name)));
+  document.getElementById('sequence').onclick=()=>play('ui_preview_sequence.wav','整组五种音效');
+  document.getElementById('stop').onclick=()=>{player.pause();player.currentTime=0;status.textContent='已停止。'};
+  document.getElementById('volume').oninput=event=>{player.volume=Number(event.target.value)/100;document.getElementById('level').textContent=event.target.value+'%'};
+  player.onended=()=>{status.textContent='试听结束，可再次点击比较。'};
+</script>
+</html>

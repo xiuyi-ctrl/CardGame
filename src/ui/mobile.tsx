@@ -5,6 +5,7 @@ import type { GameAction } from '../game/state/reducer';
 import { persistSave } from './persistence';
 import { isAndroid } from './platform';
 import { MobileVersion } from './MobileVersion';
+import { AudioSettingsButton } from './AudioSettings';
 
 const backActions: { run: () => void; priority: number }[] = [];
 
@@ -152,6 +153,7 @@ export function MobileShell({ state, dispatch, canSave }: { state: GameState; di
       <section className="mobile-system-panel"><h2>{exiting ? '退出游戏？' : '游戏菜单'}</h2>
         <p>存档保存在本机，卸载或清除数据前请先备份。</p>
         <button onClick={() => { setMenu(false); }}>继续游戏</button>
+        <AudioSettingsButton />
         <button onClick={() => { void leave(); }}>{exiting ? '保存并退出' : '保存并返回首页'}</button>
       </section>
     </div>}

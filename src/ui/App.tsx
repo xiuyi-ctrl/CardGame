@@ -4,6 +4,8 @@ import type { Dispatch, DragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
 import { configureTestGrowth } from '../game/state/test-scenarios';
+import { useUiAudio } from './useUiAudio';
+import { AudioSettingsButton } from './AudioSettings';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
 import { canStepTo, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, battleVictoryGold, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type RewardChoice, type SpecialReward } from '../game/state/game';
@@ -236,6 +238,7 @@ function screenImages(screen: GameState['screen'], state: GameState): string[] {
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
+  useUiAudio(state.toast);
   const [readyScreen, setReadyScreen] = useState<string | null>(null);
   const screenKey = state.screen === 'map' ? `${state.screen}-${state.runMode}-${state.act}` : state.screen;
   const imagesReady = state.screen === 'test-type' || state.screen === 'test-config' || readyScreen === screenKey
@@ -463,18 +466,38 @@ export function FusionConfirm({ primary, state, dispatch, onClose }: { primary: 
   const selectedMaterials = materials.filter(unit => materialUids.includes(unit.uid));
   const materialsReady = selectedMaterials.length === materialCount && new Set(materialUids).size === materialCount;
   const branches = getMonster(primary.speciesId).evolutions ?? [];
-  const [targetSpeciesId, setTargetSpeciesId] = useState(branches[0]?.to);
+  const [targetSpeciesId, setTargetSpeciesId] = useState<string | undefined>(branches.length > 1 ? undefined : branches[0]?.to);
   const lockReason = evolutionLockReason(state, primary.speciesId);
   const evolved = useMemo(() => fuseUnit(primary, targetSpeciesId), [primary, targetSpeciesId]);
   if (!evolved) return null;
   const pendingMaterial = selectedMaterials.find(material => overflow.some(unit => unit.uid === material.uid));
   const passive = getPassive(evolved.passive);
   const materialInfo = (unit: Unit) => `生命 ${unit.hp}/${unit.maxHp} · 速度 ${unit.spd} · 强化：生命 +${unit.bonusStats?.hp ?? 0}、速度 +${unit.bonusStats?.spd ?? 0} · 诅咒：${unit.curse ? CURSE_CN[unit.curse] : '无'}`;
+  if (branches.length > 1 && !targetSpeciesId) return <div className="confirm-overlay" onClick={onClose}>
+    <div className="fusion-direction-dialog" role="dialog" aria-modal="true" aria-labelledby="fusion-direction-title" onClick={event => event.stopPropagation()}>
+      <h2 id="fusion-direction-title">选择进化方向</h2>
+      <div className="fusion-direction-options">{branches.map(branch => {
+        const result = fuseUnit(primary, branch.to);
+        if (!result) return null;
+        const branchPassive = getPassive(result.passive);
+        return <section className="fusion-direction-card" key={branch.to} aria-label={result.name}>
+          <div className="fusion-direction-body">
+            <div className="fusion-direction-portrait"><PetIcon image={formationImage(result.speciesId, result.image)} emoji={result.emoji} name={result.name} /></div>
+            <h3>{result.name}</h3>
+            <div className="fusion-stats"><span><img src="/battle-stat-icons/life.png" alt="" />生命 <strong>{result.maxHp}</strong></span><span><img src="/battle-stat-icons/speed.png" alt="" />速度 <strong>{result.spd}</strong></span></div>
+            {branchPassive && <div className="fusion-direction-passive"><strong>被动 · {branchPassive.name}</strong><p>{branchPassive.desc}</p></div>}
+            <div className="fusion-result-skills">{result.skills.map(id => <SkillTag key={id} skill={getSkill(id)} />)}</div>
+          </div>
+          <button type="button" className="primary" onClick={() => setTargetSpeciesId(branch.to)}>选择{result.name}</button>
+        </section>;
+      })}</div>
+      <button type="button" className="fusion-direction-cancel" onClick={onClose}>取消</button>
+    </div>
+  </div>;
   return <div className="confirm-overlay" onClick={onClose}>
     <div className="confirm-box fusion-confirm" role="dialog" aria-modal="true" aria-labelledby="fusion-confirm-title" onClick={event => event.stopPropagation()}>
       <div className="section-title fusion-title" id="fusion-confirm-title"><img src="/main-flow-art/icons/fuse-companion.png" alt="" />确认融合</div>
       <div className="popup-body fusion-confirm-body">
-        {branches.length > 1 && <label>进化形态 <select aria-label="进化形态" value={targetSpeciesId} onChange={event => setTargetSpeciesId(event.target.value)}>{branches.map(branch => <option key={branch.to} value={branch.to}>{getMonster(branch.to).name}</option>)}</select></label>}
         <div className="fusion-result-card">
           <div className="fusion-pet-row"><PetIcon image={formationImage(evolved.speciesId, evolved.image)} emoji={evolved.emoji} name={evolved.name} /><div><h3 className="fusion-name">{evolved.name}</h3><div className="fusion-stats"><span><img src="/battle-stat-icons/life.png" alt="" />生命 <strong>{evolved.hp}/{evolved.maxHp}</strong></span><span><img src="/battle-stat-icons/speed.png" alt="" />速度 <strong>{evolved.spd}</strong></span></div></div></div>
           {passive && <section className="fusion-detail fusion-passive"><h4>被动</h4><strong>{passive.name}</strong><p>{passive.desc}</p></section>}
@@ -1057,11 +1080,11 @@ function HomeScreen({ dispatch, currentSaveSlot }: { dispatch: Dispatch<GameActi
                 </button>
               );
             })()}
-            <button className="home-action" onClick={quitGame}>
+            <div className="home-audio-row"><button className="home-action" onClick={quitGame}>
               <span className="home-action-icon" aria-hidden="true"><img src={homeExitIcon} alt="" /></span>
               <span>退出游戏</span>
               <span className="home-action-arrow" aria-hidden="true" />
-            </button>
+            </button><AudioSettingsButton /></div>
             <div className="home-menu-divider" aria-hidden="true"><span><img src={homePawIcon} alt="" /></span></div>
             <div className="home-menu-secondary">
               <button onPointerEnter={() => { void preloadImages(codexImages()); }} onFocus={() => { void preloadImages(codexImages()); }} onClick={() => setShowCodex(true)}><img src={homeCodexIcon} alt="" aria-hidden="true" /><span>生物图鉴</span></button>
@@ -2217,7 +2240,7 @@ export function PostBattleRosterScreen({ state, dispatch }: { state: GameState; 
           <MobileDetails label={`${focused.name}技能与被动`} details={<><MobileUnitAbilities unit={focused} />{focused.bonusStats && <p>属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}</>}><div className="postbattle-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
           <div className="postbattle-skills"><h3>技能</h3><div>{focused.skills.map((sid, index) => {
             const skill = getSkill(sid);
-            return <span key={`${sid}-${index}`} title={skill.desc}>{skill.name}</span>;
+            return <span key={`${sid}-${index}`}>{skill.name}</span>;
           })}</div></div></MobileDetails>
           </div>
           <div className="postbattle-detail-actions">
@@ -2579,14 +2602,14 @@ export function BackpackScreen({ state, dispatch }: { state: GameState; dispatch
             </div>
             <button className="backpack-use" disabled={!canUseItem} onClick={useItem}>{useLabel}</button>
           </> : <p className="backpack-empty-message">获得物品后，可在这里查看用途。</p> : focused ? <>
-            <div className="backpack-detail-body">
+            <div className="backpack-detail-body backpack-pet-detail-body">
               <div className="backpack-detail-heading"><h2>{focused.name}</h2><span>伙伴详情</span></div>
               <div className="backpack-detail-art">{focusedImage ? <BattlePixelSprite src={focusedImage} name={focused.name} /> : <PixelCreature unit={focused} />}</div>
               <div className="backpack-detail-stats"><span><i className="starter-stat-icon starter-stat-heart" aria-hidden="true" />{focused.hp}/{focused.maxHp}</span><span><i className="starter-stat-icon starter-stat-speed" aria-hidden="true" />{focused.spd}</span></div>
               {focused.curse && <p className="backpack-curse"><BuffIcon art={CURSE_ART[focused.curse]} />{CURSE_CN[focused.curse]}</p>}
               {focused.bonusStats && (focused.bonusStats.hp || focused.bonusStats.spd) && <p className="backpack-bonus">属性强化：生命 +{focused.bonusStats.hp ?? 0} · 速度 +{focused.bonusStats.spd ?? 0}</p>}
               <div className="backpack-passive"><strong>被动 · {passive?.name ?? '无'}</strong><p>{passive?.desc ?? '暂无被动效果'}</p></div>
-              <div className="backpack-skills">{focused.skills.map((id, index) => <span key={`${id}-${index}`} title={getSkill(id).desc}>{getSkill(id).name}</span>)}</div>
+              <div className="backpack-pet-abilities"><h3>技能</h3><div className="backpack-skills">{focused.skills.map((id, index) => <span key={`${id}-${index}`}>{getSkill(id).name}</span>)}</div></div>
             </div>
             <div className="backpack-pet-actions">
               {!isProf && <p>融合条件：{evolutionLockReason(state, focused.speciesId) ?? (stage ? `同物种 ${sameCount}/${fusionNeedCount(focused.speciesId)}` : '已是最终形态')}</p>}
