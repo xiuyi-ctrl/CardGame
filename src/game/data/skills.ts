@@ -1,12 +1,12 @@
 import type { SkillDef } from '../types';
 
 export const SKILLS: Record<string, SkillDef> = {
-  core_crystal_spike: { id: 'core_crystal_spike', name: '晶刺', kind: 'attack', target: 'single', reach: 'direct', damage: 3, hideEffects: true,
-    desc: '攻击单个敌人，造成3点伤害；若自身有护盾，额外造成1点伤害。' },
+  core_crystal_spike: { id: 'core_crystal_spike', name: '晶刺', kind: 'attack', target: 'single', reach: 'front', damage: 3, hideEffects: true,
+    desc: '攻击单个前排敌人，造成3点伤害；若自身有护盾，额外造成3点伤害。' },
   core_crystal_wall: { id: 'core_crystal_wall', name: '晶壁', kind: 'buff', target: 'self', hideEffects: true,
     desc: '自身获得5点护盾。', effects: [{ kind: 'shield', value: 5, turns: 99 }] },
-  core_crystal_burst: { id: 'core_crystal_burst', name: '晶爆', kind: 'attack', target: 'single', reach: 'direct', damage: 2, hideEffects: true,
-    desc: '立即消耗自身最多5点护盾，攻击单个敌人，造成2加实际消耗护盾数的伤害；没有护盾时仍可使用。' },
+  core_crystal_burst: { id: 'core_crystal_burst', name: '晶爆', kind: 'attack', target: 'single', reach: 'front', damage: 2, hideEffects: true,
+    desc: '立即消耗自身最多5点护盾，攻击单个前排敌人，造成2加实际消耗护盾数的伤害；没有护盾时仍可使用。' },
   core_crystal_cleanse: { id: 'core_crystal_cleanse', name: '晶核净化', kind: 'buff', target: 'self', hideEffects: true,
     desc: '按灼烧、中毒、恐惧的顺序，合计移除自身最多6层状态，获得与实际移除层数等量的护盾。' },
   // 保留内部结算标识及旧存档指令兼容，不作为可点击的主动技能。
@@ -20,14 +20,14 @@ export const SKILLS: Record<string, SkillDef> = {
     desc: '攻击单个前排敌人，造成5点伤害；若目标当前速度不高于自身，额外造成2点伤害；本回合已触发回溯时，无视速度条件获得该加伤。' },
   time_lag: { id: 'time_lag', name: '时滞', kind: 'status', target: 'single', reach: 'direct', priority: 'first', cooldown: 1, hideEffects: true,
     desc: '先手，指定一名敌人施加时滞，使其本回合尚未执行的行动延后至最后，不改变速度、不增加行动；冷却1回合。', effects: [{ kind: 'timeLag', value: 1, turns: 1 }] },
-  sand_shield: { id: 'sand_shield', name: '砂盾', kind: 'buff', target: 'self', cooldown: 1, hideEffects: true,
-    desc: '自身获得4点护盾；若本回合已触发回溯，改为6点护盾；冷却1回合。', effects: [{ kind: 'shield', value: 4, turns: 99 }] },
+  sand_shield: { id: 'sand_shield', name: '砂盾', kind: 'buff', target: 'self', hideEffects: true,
+    desc: '自身获得4点护盾；若本回合已触发回溯，改为6点护盾。', effects: [{ kind: 'shield', value: 4, turns: 99 }] },
   time_haste: { id: 'time_haste', name: '时速', kind: 'buff', target: 'self', hideEffects: true,
     desc: '自身增加2点速度，持续2回合。', effects: [{ kind: 'windSpd', value: 2, turns: 2 }] },
   pass_flame: { id: 'pass_flame', name: '传火', desc: '给指定一名友方附加2层灼烧。', kind: 'status', target: 'ally', hideEffects: true, effects: [{ kind: 'burn', value: 2, turns: 2 }] },
   relay_wildfire: { id: 'relay_wildfire', name: '传火燎原', desc: '全体存活队友各附加1层灼烧，各获得1层火种（每只最多1层）；冷却2回合。', kind: 'status', target: 'allyAll', cooldown: 2, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }, { kind: 'emberSeed', value: 1, turns: 0 }] },
   ignite_embers: { id: 'ignite_embers', name: '火种引燃', desc: '立即消耗我方场上所有火种，攻击指定一名敌人，造成消耗火种数×2的伤害。', kind: 'attack', target: 'single', reach: 'direct', damage: 0, hideEffects: true },
-  ember_veil: { id: 'ember_veil', name: '火幕庇护', desc: '所有存活友方获得2点护盾；持有火种的友方额外获得2点护盾；冷却1回合。', kind: 'buff', target: 'allyAll', cooldown: 1, hideEffects: true, effects: [{ kind: 'shield', value: 2, turns: 99 }] },
+  ember_veil: { id: 'ember_veil', name: '火幕庇护', desc: '所有存活友方获得2点护盾；持有火种的友方额外获得2点护盾。', kind: 'buff', target: 'allyAll', hideEffects: true, effects: [{ kind: 'shield', value: 2, turns: 99 }] },
   nine_tail_wildfire: {
     id: 'nine_tail_wildfire', name: '九尾燎原', desc: '对全体敌人各造成3点伤害并附加灼烧1层，冷却1回合，每场限3次',
     target: 'all', kind: 'attack', damage: 3, cooldown: 1, uses: 3, hideEffects: true, effects: [{ kind: 'burn', value: 1, turns: 2 }],
@@ -53,7 +53,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'self', kind: 'status', uses: 1,
   },
   solar_strike: {
-    id: 'solar_strike', name: '日华灼击', desc: '攻击单个敌人，造成3加日华层数乘2的伤害；目标攻击前已灼烧时附加灼烧2层',
+    id: 'solar_strike', name: '日华灼击', desc: '攻击单个敌人，造成3加日华层数乘2的伤害，附加灼烧2层',
     target: 'single', kind: 'attack', damage: 3,
   },
   clean_flame_care: {
@@ -61,7 +61,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'ally', kind: 'buff', uses: 3, hideEffects: true,
   },
   solar_heal: {
-    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数的生命',
+    id: 'solar_heal', name: '日华治愈', desc: '为指定一名己方伙伴回复3加日华层数乘2的生命',
     target: 'ally', kind: 'heal', heal: 3,
   },
   light_bath: {
@@ -82,7 +82,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 1, turns: 2 }],
   },
   sun_sunder: {
-    id: 'sun_sunder', name: '掠日破盾', desc: '攻击单个前排敌人，伤害前移除目标所有护盾，再造成4点伤害；若本次实际移除护盾（包含被动移除），附加5层灼烧；冷却1回合，每场限3次',
+    id: 'sun_sunder', name: '掠日破盾', desc: '攻击单个前排敌人，伤害前移除目标所有护盾，再造成4点伤害；若本次实际移除护盾（包含被动移除），额外造成4点伤害并附加5层灼烧；冷却1回合，每场限3次',
     target: 'single', reach: 'front', kind: 'attack', damage: 4, cooldown: 1, uses: 3,
   },
   shell_charge: {
@@ -118,8 +118,8 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'burn', value: 2, turns: 2 }],
   },
   furnace_shell: {
-    id: 'furnace_shell', name: '炉壳', desc: '自身和指定的一名友方各获得3点护盾，冷却1回合。',
-    target: 'ally', kind: 'buff', cooldown: 1, hideEffects: true,
+    id: 'furnace_shell', name: '炉壳', desc: '自身和指定的一名友方各获得3点护盾。',
+    target: 'ally', kind: 'buff', hideEffects: true,
     effects: [{ kind: 'shield', value: 3, turns: 99 }],
   },
   ash_shelter: {
@@ -142,7 +142,7 @@ export const SKILLS: Record<string, SkillDef> = {
     target: 'ally', kind: 'heal', heal: 5,
   },
   molten_claw: {
-    id: 'molten_claw', name: '熔岩重爪', desc: '攻击单个前排敌人，造成6点伤害；目标攻击前已灼烧时额外造成2点伤害',
+    id: 'molten_claw', name: '熔岩重爪', desc: '攻击单个前排敌人，造成6点伤害',
     target: 'single', reach: 'front', kind: 'attack', damage: 6,
   },
   furnace_bastion: {
@@ -293,6 +293,10 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ kind: 'atkDown', value: 2, turns: 2 }],
     hideEffects: true,
   },
+  thorn_retaliation: {
+    id: 'thorn_retaliation', name: '刺反', desc: '攻击单个敌人，造成2点伤害；若自身本回合已触发反伤，改为3点伤害',
+    target: 'single', kind: 'attack', damage: 2, hideEffects: true,
+  },
   provoke: {
     id: 'provoke', name: '挑衅', desc: '攻击并嘲讽目标，持续2回合；冷却1回合', hideEffects: true,
     target: 'single', kind: 'attack', damage: 3, cooldown: 1,
@@ -425,9 +429,8 @@ export const SKILLS: Record<string, SkillDef> = {
     hideEffects: true,
   },
   toxic_bite: {
-    id: 'toxic_bite', name: '淬毒噬咬', desc: '攻击单个敌人，造成4点伤害并附加中毒4层，若目标已中毒则伤害翻倍',
+    id: 'toxic_bite', name: '淬毒噬咬', desc: '攻击单个敌人，造成4点伤害；若目标已中毒则伤害翻倍',
     kind: 'attack', damage: 4, hits: 1, target: 'single',
-    effects: [{ kind: 'poison', value: 4, turns: 3 }],
     uses: 3,
     hideEffects: true,
   },
@@ -452,9 +455,8 @@ export const SKILLS: Record<string, SkillDef> = {
     reach: 'pierce', priority: 'first',
   },
   tidal_domain: {
-    id: 'tidal_domain', name: '潮汐领域', desc: '全体友方恢复 4 点生命，并附加水幕（下回合受伤 -2）；冷却1回合',
-    kind: 'heal', cooldown: 1, target: 'allyAll',
-    heal: 4,
+    id: 'tidal_domain', name: '潮汐领域', desc: '本回合我方全体受到的伤害减二（受伤 -2）；冷却1回合',
+    kind: 'buff', cooldown: 1, target: 'allyAll',
     effects: [{ kind: 'waterCurtain', value: 2, turns: 1 }],
     uses: 2,
     hideEffects: true,

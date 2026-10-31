@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } fro
 import type { Dispatch, DragEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { gameReducer, createInitialState, newSeed } from '../game/state/reducer';
+import { configureTestGrowth } from '../game/state/test-scenarios';
 import type { GameAction } from '../game/state/reducer';
 import type { GameState, Difficulty } from '../game/state/game';
 import { canStepTo, nodeInfo, FIELD_MAX, PROF_FIELD_MAX, maxFieldForEnemy, battleVictoryGold, fusionNeedCount, evolutionLockReason, fuseUnit, nextStage, CURSE_CN, labelOf, DIFFICULTY_CONFIG, DIFFICULTY_ORDER, RELIC_DEFS, RELIC_ORDER, DEFAULT_UNLOCKS, getMaxRoster, type MapNode, type RewardChoice, type SpecialReward } from '../game/state/game';
@@ -600,7 +601,7 @@ export function TestPickScreen({ state, dispatch }: { state: GameState; dispatch
     const base = makeUnit(speciesId, isPlayerSide, slot.column, false, slot.row);
     const u = { ...base, hp: Math.max(1, Math.round(base.maxHp * (state.testScenario?.hpPercent ?? 100) / 100)),
       growthPoints: state.runMode === 'proficiency' && isPlayerSide ? 100 : undefined };
-    setUnits((prev) => [...prev, u]);
+    setUnits((prev) => [...prev, isPlayerSide ? configureTestGrowth(u, state.testScenario) : u]);
   }
 
   function onSlotClick(row: FormationRow, col: 0 | 1 | 2) {

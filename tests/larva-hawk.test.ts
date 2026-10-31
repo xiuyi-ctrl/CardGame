@@ -124,8 +124,8 @@ describe('熔壳虫与焚风雏鹰', () => {
         b.enemyUnits[0].statuses = burn ? [{ kind: 'burn', value: burn, turns: 2 }] : [];
         const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, skill.id, b.enemyUnits[0].uid));
         const hit = after.log.find(e => e.text.includes('使用「循焰飞羽」攻击'))!;
-        expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(500 - 4 - level * 2 - (burn ? 1 : 0));
-        expect(hit.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(burn + 2);
+        expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(500 - 4 - level * 2);
+        expect(hit.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(burn + 2 + (burn ? 1 : 0));
         expect(hit.addsStatus).toContain('burn');
         expect(after.log.some(e => e.text.includes('灼羽剥甲'))).toBe(burn > 0);
       }

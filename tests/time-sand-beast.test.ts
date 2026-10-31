@@ -92,7 +92,7 @@ describe('时砂兽与时滞', () => {
       if (rewound) b.playerUnits[0].timeRewindRound = b.round;
       const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'sand_shield'));
       expect(after.playerUnits[0].shield).toBe(shield);
-      expect(after.playerUnits[0].skillCooldowns?.sand_shield).toBe(1);
+      expect(after.playerUnits[0].skillCooldowns?.sand_shield).toBeUndefined();
     }
     expect(getSkillEnhanceBonus('sand_shield', 3).effectBonus).toBe(6);
     expect(getSkillEnhanceBonus('sand_time_strike', 3).damageBonus).toBe(6);

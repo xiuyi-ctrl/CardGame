@@ -13,15 +13,15 @@ export const PASSIVES: Record<string, PassiveDef> = {
   nine_tail_heart: { id: 'nine_tail_heart', name: '九尾焰心', desc: '免疫灼烧伤害，每次被附加灼烧获得1层狐火，上限9层；每层使技能对敌人附加的灼烧额外增加1层，狐火满9层时技能直接伤害+1。', kind: 'foxFlame', value: 9, fullFoxDamage: 1 },
   fox_flame_body: { id: 'fox_flame_body', name: '狐火之躯', desc: '免疫灼烧伤害，每次被附加灼烧时获得1层狐火，上限3层；每层使自身技能对敌人附加的灼烧额外增加1层', kind: 'foxFlame', value: 3 },
   twin_fox_flame: { id: 'twin_fox_flame', name: '双尾狐焰', desc: '免疫灼烧伤害，每次被附加灼烧时获得1层狐火，上限5层；每层使自身技能对敌人附加的灼烧额外增加1层', kind: 'foxFlame', value: 5 },
-  clear_flame: { id: 'clear_flame', name: '澄焰', desc: '每次技能治疗后移除目标最多3层灼烧；每回合首次有友方灼烧被技能或被动移除时获得1层日华，上限3层，每只持有者独立计次；灼烧自然结算不触发。本回合未触发充能时，回合结束失去1层日华', kind: 'sunRadiance', value: 3 },
+  clear_flame: { id: 'clear_flame', name: '澄焰', desc: '每次技能治疗后移除目标最多3层灼烧；每回合首次有友方灼烧被技能或被动移除时获得1层日华，上限3层，每只持有者独立计次；灼烧自然结算不触发。日华不会因未充能而衰减', kind: 'sunRadiance', value: 3 },
   heat_moss: { id: 'heat_moss', name: '吸热苔', desc: '每次以技能施加治疗后，移除该伙伴最多2层灼烧。', kind: 'healBurnCleanse', value: 2 },
   clean_moss: { id: 'clean_moss', name: '净苔', desc: '每次以技能施加治疗后，移除目标最多2层灼烧；为治疗前已灼烧的友方提供治疗时，治疗量额外增加2点，灼烧反转按清火前判断。', kind: 'healBurnBoost', value: 2 },
   heated_carapace: { id: 'heated_carapace', name: '热壳换火', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧。每层获得2点护盾；没有灼烧时不触发', kind: 'burnShield', value: 2, burnConsumeMax: 2 },
-  burning_feather: { id: 'burning_feather', name: '灼羽剥甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多2点护盾；若目标无护盾，该次伤害+1。多段或群攻只作用一次', kind: 'burnStripShield', value: 2, unshieldedDamageBonus: 1 },
+  burning_feather: { id: 'burning_feather', name: '灼羽剥甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多2点护盾；若目标原本无护盾，该次命中额外附加灼烧1层。多段或群攻只作用一次', kind: 'burnStripShield', value: 2, unshieldedBurnBonus: 1 },
   red_carapace: { id: 'red_carapace', name: '赤甲炼火', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧，每层获得3点护盾；没有灼烧时不触发。自身存在护盾时，技能伤害+1', kind: 'burnShield', value: 3, burnConsumeMax: 2, shieldDamageBonus: 1 },
-  solar_feather: { id: 'solar_feather', name: '烈日销甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前移除其最多（3＋目标灼烧层数，上限8）点护盾；若目标无护盾，该次伤害+2。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, burnStripCap: 8, unshieldedDamageBonus: 2 },
+  solar_feather: { id: 'solar_feather', name: '烈日销甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前移除其最多（3＋目标灼烧层数，上限8）点护盾；若目标原本无护盾，该次命中额外附加灼烧3层。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, burnStripCap: 8, unshieldedBurnBonus: 3 },
   molten_molt: { id: 'molten_molt', name: '熔蜕', desc: '每回合结束时（灼烧结算后），消耗自身最多2层灼烧，每层获得3点护盾；没有灼烧时不触发', kind: 'burnShield', value: 3, burnConsumeMax: 2 },
-  searing_feather: { id: 'searing_feather', name: '焚风蚀甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多3点护盾；若目标无护盾，该次伤害+2。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, unshieldedDamageBonus: 2 },
+  searing_feather: { id: 'searing_feather', name: '焚风蚀甲', desc: '每回合首次攻击一个已灼烧的敌人时，伤害前额外移除其最多3点护盾；若目标原本无护盾，该次命中额外附加灼烧2层。多段或群攻只作用一次', kind: 'burnStripShield', value: 3, unshieldedBurnBonus: 2 },
   // —— 基础（御三家/常见野怪）——
   quick: { id: 'quick', name: '迅捷', desc: '战斗开始速度 +2', kind: 'spd', value: 2 },
   watery_regen: { id: 'watery_regen', name: '水愈', desc: '每回合开始恢复 2 点生命', kind: 'regen', value: 2 },
@@ -89,7 +89,7 @@ export const PASSIVES: Record<string, PassiveDef> = {
   // —— 奇遇自创生物 ——
   stone_guard: { id: 'stone_guard', name: '磐岩之力', desc: '每回合首次受到敌方攻击技能命中后，获得3点护盾，本回合内自身后续受到的伤害-1', kind: 'reactiveGuard', value: 3 },
   berserk: { id: 'berserk', name: '攻守调和', desc: '使用攻击技能后，自身获得2点护盾；使用护盾或增益技能后，自身下次攻击技能首次命中时伤害+2。两种效果各每回合最多触发一次，伤害加成不可叠加', kind: 'harmony', value: 2 },
-  swift_wind: { id: 'swift_wind', name: '迅风', desc: '造成伤害时恢复 1 点生命', kind: 'drain', value: 1 },
+  swift_wind: { id: 'swift_wind', name: '迅风', desc: '攻击速度低于自身的目标时，额外造成2点伤害', kind: 'fasterDamage', value: 2 },
 
   // —— 初级一阶进化专属 ——
   swift_power: { id: 'swift_power', name: '迅力', desc: '战斗开始速度 +3', kind: 'spd', value: 3 },

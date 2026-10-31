@@ -11,6 +11,7 @@ import { BuffIcon, STATUS_ART, BATTLE_BUFF_ART, CURSE_ART } from './BuffIcon';
 
 /** 技能数值简述：仅伤害/治疗/buff效果数值，如 "5"、"3×2"、"7" */
 export function skillBrief(s: SkillDef, enhanced: number = 0): string {
+  if (s.id === 'tidal_domain') return '本回合减伤2';
   if (s.id === 'bloodlust') return `吸血+${(s.testAdjusted ? s.effects?.find(effect => effect.kind === 'bloodDrain')?.value ?? 2 : 2) + getSkillEnhanceBonus(s.id, enhanced).effectBonus}·2回合`;
   if (s.id === 'gather_shields') return '全队护盾→自身';
   if (s.id === 'ride_wind') return `本场+${1 + getSkillEnhanceBonus(s.id, enhanced).effectBonus}速`;
@@ -23,12 +24,12 @@ export function skillBrief(s: SkillDef, enhanced: number = 0): string {
     const dmg = (s.damage ?? 0) + bonus.damageBonus;
     if (s.id === 'shell_charge') return `${dmg}+护盾`;
     if (s.id === 'core_crystal_burst') return `${dmg}+消耗盾≤5`;
-    if (s.id === 'core_crystal_spike') return `${dmg}·有盾+1`;
+    if (s.id === 'core_crystal_spike') return `${dmg}·有盾+3`;
     if (s.id === 'solar_strike') return `${dmg}+日华×2`;
     const hits = (s.hits ?? 1) + bonus.hitsBonus;
     return hits > 1 ? `${dmg}×${hits}` : String(dmg);
   }
-  if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}${s.id === 'burn_reversal' ? '+移除层数' : s.id === 'solar_heal' ? '+日华' : ''}`;
+  if (s.kind === 'heal') return `+${(s.heal ?? 0) + bonus.healBonus}${s.id === 'burn_reversal' ? '+移除层数' : s.id === 'solar_heal' ? '+日华×2' : ''}`;
   if (s.kind === 'buff') {
     if (s.id === 'clean_flame_care') return '净化·随机增益2';
     const shieldEffect = s.effects?.find(e => e.kind === 'shield');
@@ -52,7 +53,7 @@ function effectText(e: StatusEffect): string {
     case 'foxTailGuard':
       return '施放当回合首次被敌方攻击技能命中且存活后，额外获得1层狐火；多段只触发一次';
     case 'sunRadiance':
-      return `日华 ${e.value}/3；增强日华灼击与日华治愈，本回合未触发充能时回合结束失去1层`;
+      return `日华 ${e.value}/3；增强日华灼击与日华治愈，不会因未充能而衰减`;
     case 'burnBrand':
       return '下次所属阵营攻击命中后引爆剩余全部灼烧并清空';
     case 'burn':
@@ -154,6 +155,7 @@ export function skillFullDesc(s: SkillDef, enhanced: number = 0): string {
   if (s.id === 'sand_shield') desc = desc.replace('改为6点护盾', `改为${6 + bonus.effectBonus}点护盾`);
   if (s.id === 'purifying_orb') desc = desc.replace('3点伤害', `${3 + bonus.damageBonus}点伤害`);
   if (s.id === 'flying_leaf') desc = desc.replace('造成4点伤害', `造成${4 + bonus.damageBonus}点伤害`);
+  if (s.id === 'thorn_retaliation') desc = desc.replace('造成2点伤害', `造成${2 + bonus.damageBonus}点伤害`).replace('改为3点伤害', `改为${3 + bonus.damageBonus}点伤害`);
   if (s.id === 'shadow_claw') desc = desc.replace('造成6点伤害', `造成${6 + bonus.damageBonus}点伤害`);
   if (s.id === 'solar_strike') desc = desc.replace('造成3加', `造成${3 + bonus.damageBonus}加`);
   if (s.id === 'solar_heal') desc = desc.replace('回复3加', `回复${3 + bonus.healBonus}加`);
@@ -340,7 +342,7 @@ export function HpBar({ hp, maxHp }: { hp: number; maxHp: number }) {
 }
 
 export function StatusIcons({ unit }: { unit: Unit }) {
-  const visible = unit.statuses.filter((s) => s.kind !== 'shield');
+  const visible = unit.statuses.filter((s) => s.kind !== 'shield' && (!(s.kind === 'burn' || s.kind === 'poison') || s.value > 0));
   if (visible.length === 0) return <span className="statuses" />;
   return (
     <span className="statuses">
@@ -682,7 +684,7 @@ const STATUS_DESC: Record<string, (v: number) => string> = {
   thornSpikes: () => '受击时获得怒棘（攻击+1，可叠加）',
   rageThorn: (v) => `攻击 +${v}，荆棘之躯反伤 +${v}`,
   windSpd: (v) => `速度 +${v}`,
-  waterCurtain: (v) => `下回合受到伤害 -${v}`,
+  waterCurtain: (v) => `水幕持续期间受到伤害 -${v}`,
   flameShield: (v) => `受攻击时灼烧攻击者 ${v} 层`,
   comboBoost: (v) => `连击段数 +${v}`,
   sporeShield: (v) => `受到伤害 -${v}，回合结束恢复 8 点生命`,
@@ -695,7 +697,7 @@ export function BuffDetailPanel({ unit, stacksOverride, rockShellHitsOverride, t
   const battleBuffEntries = buffs
     ? (Object.entries(buffs) as [keyof typeof BATTLE_BUFF_ART, number][]).filter(([k, v]) => v && k !== 'skillSpd')
     : [];
-  const statuses = unit.statuses;
+  const statuses = unit.statuses.filter(s => !(s.kind === 'burn' || s.kind === 'poison') || s.value > 0);
   const hasPassive = !!passive;
   const hasStatuses = statuses.length > 0;
   const hasBattleBuffs = battleBuffEntries.length > 0;

@@ -119,8 +119,8 @@ describe('连击多段：一段之后敌人已死亡则后续段不再命中', (
     const logs = attackLogs(b1, a.uid, '连击');
     expect(logs.length).toBe(2);
     expect(logs.map((l) => l.text)).toEqual([
-      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
-      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害`,
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害；附加灼烧 3 层`,
+      `${a.name} 使用「连击」攻击 ${enemy.name}，造成 1 伤害；附加灼烧 3 层`,
     ]);
   });
 

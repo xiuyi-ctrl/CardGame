@@ -8,7 +8,7 @@ export function BattleStatusIcons({ unit, pulses = {} }: { unit: Unit; pulses?: 
   const icons: { id: string; art: IconArt; detail: string }[] = [];
   if (unit.shield > 0) icons.push({ id: 'shield', art: STATUS_ART.shield, detail: `护盾（${unit.shield}）` });
   for (const status of unit.statuses) {
-    if (status.kind === 'shield') continue;
+    if (status.kind === 'shield' || ((status.kind === 'burn' || status.kind === 'poison') && status.value <= 0)) continue;
     const art = STATUS_ART[status.kind];
     const value = status.value;
     const turns = status.turns > 0 && !['burn', 'poison', 'fear', 'shield'].includes(status.kind) ? `，剩余 ${status.turns} 回合` : '';

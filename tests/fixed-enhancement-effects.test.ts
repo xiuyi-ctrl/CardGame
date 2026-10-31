@@ -23,13 +23,13 @@ describe('控制、印记、封印与水幕不随强化放大', () => {
   it.each(['provoke', 'group_taunt', 'quake', 'rock_throw', 'shadow_rift', 'growth_bind', 'puppet_bind', 'tidal_domain'])('%s从0到4级固定附加效果，保留伤害或治疗成长', id => {
     const skill = getSkill(id), effect = skill.effects![0];
     const original = cast(id, 0);
-    const target = skill.kind === 'heal' ? original.playerUnits[0] : original.enemyUnits[0];
+    const target = skill.target === 'allyAll' ? original.playerUnits[0] : original.enemyUnits[0];
     const status = original.log.flatMap(entry => entry.statuses?.[target.uid] ?? []).find(s => s.kind === effect.kind || effect.kind === 'skillSeal' && s.kind === 'skillSealPending');
     expect(status).toBeDefined();
     for (let level = 1; level <= 4; level++) {
       expect(getSkillEffectEnhanceBonus(id, level, effect.kind)).toBe(0);
       expect(getSkillEnhanceBonus(id, level).effectBonus).toBe(0);
-      const battle = cast(id, level), unit = skill.kind === 'heal' ? battle.playerUnits[0] : battle.enemyUnits[0];
+      const battle = cast(id, level), unit = skill.target === 'allyAll' ? battle.playerUnits[0] : battle.enemyUnits[0];
       const actual = battle.log.flatMap(entry => entry.statuses?.[unit.uid] ?? []).find(s => s.kind === status!.kind);
       expect(actual).toMatchObject({ value: status!.value, turns: status!.turns });
       if (effect.kind === 'skillSeal') expect(actual!.sealedSkills).toHaveLength(effect.value);

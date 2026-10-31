@@ -84,15 +84,15 @@ describe('群体技能分段批量结算', () => {
   });
 
   it('群体治疗先治疗所有伙伴，再触发净化被动', () => {
-    const b = setup('tidal_domain', ['momo']);
+    const b = setup('boss_vine_shield', ['momo']);
     const healer = makeUnit('light_moss', true, 0, false);
     b.playerUnits[0].passive = healer.passive;
     b.playerUnits = b.playerUnits.map(u => ({ ...u, hp: 30, statuses: [{ kind: 'burn', value: 4, turns: 2 }] }));
-    const after = cast(b, 'tidal_domain');
-    const heal = after.log.filter(e => e.text.includes('使用「潮汐领域」，治愈'));
+    const after = cast(b, 'boss_vine_shield');
+    const heal = after.log.filter(e => e.text.includes('使用「古树庇护」，强化'));
     expect(heal).toHaveLength(2);
     for (const u of b.playerUnits) {
-      expect(heal[0].hp?.[u.uid]).toBe(34);
+      expect(heal[0].hp?.[u.uid]).toBe(32);
       expect(heal[0].statuses?.[u.uid].find(s => s.kind === 'burn')?.value).toBe(4);
     }
     const cleanse = after.log.findIndex(e => e.text.includes('移除') && e.text.includes('灼烧'));

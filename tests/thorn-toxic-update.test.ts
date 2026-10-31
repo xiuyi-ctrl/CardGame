@@ -26,13 +26,14 @@ describe('荆棘与淬毒噬咬调整', () => {
     const hit = after.log.find(entry => entry.text.includes('使用「淬毒噬咬」攻击'))!;
     expect(hit.impacts?.[b.enemyUnits[0].uid].hpLoss).toBe(poisoned ? 8 : 4);
     expect(getSkill('toxic_bite').uses).toBe(3);
-    expect(getSkill('toxic_bite').effects?.[0].value).toBe(4);
+    expect(getSkill('toxic_bite').effects).toBeUndefined();
+    expect(hit.impacts?.[b.enemyUnits[0].uid].addedStatuses?.poison).toBeUndefined();
   });
-  it('淬毒噬咬强化后三档为5+5、6+6、7+7', () => {
+  it('淬毒噬咬为纯攻击强化，后三档伤害6、8、10，不再附毒', () => {
     for (const level of [1, 2, 3]) {
       const bonus = getSkillEnhanceBonus('toxic_bite', level);
-      expect(getSkill('toxic_bite').damage! + bonus.damageBonus).toBe(4 + level);
-      expect(getSkill('toxic_bite').effects![0].value + bonus.effectBonus).toBe(4 + level);
+      expect(getSkill('toxic_bite').damage! + bonus.damageBonus).toBe(4 + level * 2);
+      expect(getSkill('toxic_bite').effects).toBeUndefined();
     }
   });
 });

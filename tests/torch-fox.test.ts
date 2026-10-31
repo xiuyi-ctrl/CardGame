@@ -92,7 +92,7 @@ describe('火狐分支与火种', () => {
     expect(getNormalSkillPool()).toContain('ember_veil');
     expect(LEGENDARY_SKILLS.has('relay_wildfire')).toBe(true);
     expect(LEGENDARY_SKILLS.has('ignite_embers')).toBe(true);
-    expect(getSkill('ember_veil').cooldown).toBe(1);
+    expect(getSkill('ember_veil').cooldown).toBeUndefined();
   });
   it.each([false, true])('奇遇免费进化可指定传火分支，超进化=%s', superEvolution => {
     const fox = makeUnit('fire_fox', true, 0, false);

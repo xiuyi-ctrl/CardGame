@@ -81,11 +81,11 @@ describe('光苔球与光苔兽', () => {
 
   it('群体治疗逐目标加成清火，主动自疗可以触发', () => {
     const b = ailments(ailments(quiet(), 4, 0, 0), 3, 4);
-    b.playerUnits[0].skills = ['tidal_domain', 'light_bath'];
-    const group = cast(b, 'tidal_domain');
-    const heals = group.log.filter(e => e.text.includes('潮汐领域」，治愈'));
+    b.playerUnits[0].skills = ['boss_vine_shield', 'light_bath'];
+    const group = cast(b, 'boss_vine_shield');
+    const heals = group.log.filter(e => e.text.includes('古树庇护」，强化'));
     expect(heals).toHaveLength(2);
-    for (const entry of heals) expect(entry.text).toContain(`${(getSkill('tidal_domain').heal ?? 0) + 2} 点生命`);
+    for (const entry of heals) expect(entry.text).toContain(`${(getSkill('boss_vine_shield').heal ?? 0) + 2} 点生命`);
     expect(group.log.filter(e => e.text.includes('净苔」移除'))).toHaveLength(2);
     expect(healing(cast(b, 'light_bath', 0), '光浴').hp?.[b.playerUnits[0].uid]).toBe(55);
   });

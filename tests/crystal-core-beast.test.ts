@@ -29,7 +29,7 @@ describe('晶核兽', () => {
     expect(SKILLS.crystal_sting.id).not.toBe(SKILLS.core_crystal_spike.id);
     expect(SKILLS.crystal_sting.desc).not.toContain('自身有护盾');
   });
-  it.each([[0, 3], [1, 4]])('晶刺：护盾%d时造成%d伤害', (shield, damage) => {
+  it.each([[0, 3], [1, 6]])('晶刺：护盾%d时造成%d伤害', (shield, damage) => {
     const b = cast('core_crystal_spike', shield);
     const log = b.log.find(entry => entry.text.includes('使用「晶刺」攻击'))!;
     expect(log.shields![b.enemyUnits[0].uid]).toBe(10 - damage);

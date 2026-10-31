@@ -100,7 +100,7 @@ describe('煤煤与炉甲獾', () => {
     expect(reveals[0][0].uid).toBe(event.targetUid);
   });
 
-  it('炉壳为自身及指定友方各加3盾并保留冷却，灰烬庇护仍提供4或6盾', () => {
+  it('炉壳为自身及指定友方各加3盾且无冷却，灰烬庇护仍提供4或6盾', () => {
     const unit = makeUnit('coal_guard', true, 0, false);
     const ally = makeUnit('momo', true, 1, false);
     const raw = createBattle([unit, ally], [{ speciesId: 'momo' }], 8);
@@ -108,8 +108,8 @@ describe('煤煤与炉甲獾', () => {
     const shell = playerEndTurn(playerSkill(battle, unit.uid, 'furnace_shell', ally.uid));
     expect(shell.playerUnits[0].shield).toBe(3);
     expect(shell.playerUnits[1].shield).toBe(3);
-    expect(skillCooldownLeft(shell.playerUnits[0], 'furnace_shell')).toBe(1);
-    expect(playerSkill(shell, unit.uid, 'furnace_shell', ally.uid)).toBe(shell);
+    expect(skillCooldownLeft(shell.playerUnits[0], 'furnace_shell')).toBe(0);
+    expect(playerSkill(shell, unit.uid, 'furnace_shell', ally.uid).orders?.[unit.uid]?.skillId).toBe('furnace_shell');
     expect(skillCooldownLeft(playerEndTurn(shell).playerUnits[0], 'furnace_shell')).toBe(0);
     for (const burning of [false, true]) {
       const b: BattleState = { ...battle, enemyUnits: battle.enemyUnits.map(u => ({ ...u,

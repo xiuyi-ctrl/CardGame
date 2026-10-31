@@ -10,14 +10,15 @@ function setup(speciesId = 'ember_hawk', skillId = 'punch', count = 1) {
 }
 
 describe('灼烧剥甲改版', () => {
-  it.each([['ember_hawk', 1], ['searing_hawk', 2], ['solar_eagle', 2]] as const)('%s 对攻击前已燃烧无盾目标加伤%s，剥光护盾不追补加伤', (species, bonus) => {
+  it.each([['ember_hawk', 1], ['searing_hawk', 2], ['solar_eagle', 3]] as const)('%s 对攻击前已燃烧无盾目标额外附火%s层，剥光护盾不追补', (species, bonus) => {
     for (const shield of [0, 1]) {
       const b = setup(species);
       b.enemyUnits[0].shield = shield;
       b.enemyUnits[0].statuses = [{ kind: 'burn', value: 4, turns: 2 }];
       const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'punch', b.enemyUnits[0].uid));
       const hit = after.log.find(e => e.actorUid === b.playerUnits[0].uid && e.text.includes('使用「爪击」攻击'))!;
-      expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(500 - getSkill('punch').damage! - (shield ? 0 : bonus));
+      expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(500 - getSkill('punch').damage!);
+      expect(hit.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(4 + (shield ? 0 : bonus));
     }
   });
 
@@ -30,23 +31,25 @@ describe('灼烧剥甲改版', () => {
     expect(strip.shields?.[b.enemyUnits[0].uid]).toBe(30 - Math.min(3 + burn, 8));
   });
 
-  it('多段只对第一段加伤，群攻只对一名目标加伤；已用标记不会刷新', () => {
+  it('多段只对第一段附火，群攻只对一名目标附火；已用标记不会刷新', () => {
     const b = setup('searing_hawk', 'double_hit');
     b.enemyUnits[0].statuses = [{ kind: 'burn', value: 8, turns: 2 }];
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'double_hit', b.enemyUnits[0].uid));
     const hits = after.log.filter(e => e.actorUid === b.playerUnits[0].uid && e.text.includes('攻击') && e.text.includes('造成'));
     const base = getSkill('double_hit').damage!;
     expect(hits).toHaveLength(2);
-    expect(hits[0].hp?.[b.enemyUnits[0].uid]).toBe(500 - base - 2);
-    expect(hits[1].hp?.[b.enemyUnits[0].uid]).toBe(500 - base * 2 - 2);
+    expect(hits[0].hp?.[b.enemyUnits[0].uid]).toBe(500 - base);
+    expect(hits[1].hp?.[b.enemyUnits[0].uid]).toBe(500 - base * 2);
+    expect(hits.map(e => e.impacts?.[b.enemyUnits[0].uid].addedStatuses?.burn ?? 0)).toEqual([2, 0]);
     const group = setup('searing_hawk', 'tail', 3);
     group.enemyUnits.forEach(u => { u.statuses = [{ kind: 'burn', value: 8, turns: 2 }]; });
     const result = playerEndTurn(playerSkill(group, group.playerUnits[0].uid, 'tail'));
     const attacks = result.log.filter(e => e.actorUid === group.playerUnits[0].uid && e.text.includes('攻击') && e.text.includes('造成'));
-    expect(attacks.map(e => 500 - e.hp![e.targetUid!])).toEqual([getSkill('tail').damage! + 2, getSkill('tail').damage!, getSkill('tail').damage!]);
+    expect(attacks.map(e => 500 - e.hp![e.targetUid!])).toEqual([getSkill('tail').damage!, getSkill('tail').damage!, getSkill('tail').damage!]);
+    expect(attacks.map(e => e.impacts?.[e.targetUid!].addedStatuses?.burn ?? 0)).toEqual([2, 0, 0]);
     b.playerUnits[0].burnStripUsed = true;
     const spent = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'double_hit', b.enemyUnits[0].uid));
-    expect(spent.log.some(e => e.text.includes('本次伤害增加'))).toBe(false);
+    expect(spent.log.some(e => e.text.includes('本次命中额外附加'))).toBe(false);
   });
 
   it.each(['sun_sunder', 'nine_tail_wildfire'])('%s 敌我每场只能使用三次，仍保留一回合冷却', skillId => {

@@ -45,7 +45,7 @@ describe('战场右侧状态图标', () => {
     expect(readFileSync(resolve('public/buff-icons/fox-fire.png'))).toEqual(readFileSync(resolve('美术素材/buff-icons/fox-fire.png')));
   });
 
-  it('日华显示当前层数并在Buff详情中说明上限与衰减', () => {
+  it('日华显示当前层数并在Buff详情中说明上限和不再衰减', () => {
     const unit = makeUnit('solar_spirit', true, 0, false);
     unit.statuses = [{ kind: 'sunRadiance', value: 2, turns: 0 }];
     const { unmount } = render(createElement(BattleStatusIcons, { unit }));

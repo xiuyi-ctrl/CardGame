@@ -93,6 +93,7 @@ export type PassiveKind =
   | 'spdOnHit' // 受击加速：受到攻击后速度 +value（可叠加，上限 6 层）
   | 'treeSpeedUp' // 古木加速：每回合恢复3HP + 受击后速度+1（可叠加，上限8层）
   | 'speedBonus' // 速度差增伤：速度每高于目标 1 点伤害 +1，上限 value
+  | 'fasterDamage' // 攻击速度低于自身的目标时，固定额外伤害 value
   | 'bigHitGuard' // 大额伤害减免：受到超过 value 点伤害时，伤害 -2
   | 'scorchPlus' // 余烬焚身：攻击附灼烧 value 层；已灼烧目标每层+1伤害，上限+3
   | 'lifeSpring' // 生命之泉：每回合开始恢复 3 点生命；受到超过 value 点伤害时，伤害 -2
@@ -137,8 +138,8 @@ export interface PassiveDef {
   burnConsumeMax?: number;
   /** 剥甲值加目标灼烧层数后的上限；缺省不随灼烧层数增长。 */
   burnStripCap?: number;
-  /** 剥甲触发前目标无盾时，仅首段获得的伤害加成。 */
-  unshieldedDamageBonus?: number;
+  /** 剥甲触发前目标无盾时，仅首段额外附加的灼烧层数。 */
+  unshieldedBurnBonus?: number;
   /** 狐火达到本被动上限时的技能直接伤害加成，缺省0。 */
   fullFoxDamage?: number;
 }
@@ -271,6 +272,8 @@ export interface Unit {
     /** 技能/被动提供的永久速度加成（风羽/疾风连携），与药水 spdUp 独立 */
     skillSpd?: number;
   };
+  /** 最近触发反伤或盾反的回合，供刺反判断；新战斗清空。 */
+  counterTriggeredRound?: number;
   /** 荆棘之躯被动：本场战斗中受击次数（每 3 次触发强化反伤） */
   thornsHitCount?: number;
   /** 岩壳崩解被动：本场战斗中受击计数（每 4 次触发全体伤害+清减益） */
@@ -394,6 +397,8 @@ export interface PlayerOrder {
 }
 
 export interface BattleState {
+  /** 测试木桩开关：暂停敌方主动行动，被动和回合结算不变。 */
+  testEnemyInactive?: boolean;
   /** 仅测试战斗使用；不写入单位或全局技能表，新建战斗自动清空。 */
   testSkillOverrides?: Record<string, TestSkillOverride>;
   testSkillUses?: Record<string, Record<string, number>>;

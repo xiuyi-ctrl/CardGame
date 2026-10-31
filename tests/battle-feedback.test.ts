@@ -25,9 +25,9 @@ describe('实际战斗反馈数值', () => {
   it('状态施加飘字只含图标和数字，不含状态名称', () => {
     const pops = impactPops({ hpLoss: 0, shieldLoss: 0, healing: 0, shieldGain: 0, shieldBroken: false, addedStatuses: { burn: 2, poison: 3, atkDown: 1 } }, false, false, undefined, true);
     expect(pops).toEqual([
-      { text: '+2', heal: false, kind: 'status', statusIcon: 'burn' },
-      { text: '+3', heal: false, kind: 'status', statusIcon: 'poison' },
-      { text: '+1', heal: false, kind: 'status', statusIcon: 'atkDown' },
+      { text: '+2', heal: false, kind: 'status', statusIcon: 'burn', debuff: true },
+      { text: '+3', heal: false, kind: 'status', statusIcon: 'poison', debuff: true },
+      { text: '−1', heal: false, kind: 'status', statusIcon: 'atkDown', debuff: true },
     ]);
   });
   it('扣盾与扣血分开记录，飘字合并为同一次伤害', () => {

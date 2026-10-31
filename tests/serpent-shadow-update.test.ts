@@ -5,7 +5,7 @@ import { getSkill } from '../src/game/data/skills';
 
 describe('蟒影、暗爪与铁卫调整', () => {
   it('生成新面板，蟒影命中附毒且不再对中毒目标额外加伤', () => {
-    expect(makeUnit('mimi_king', true, 0, false)).toMatchObject({ maxHp: 15, spd: 5 });
+    expect(makeUnit('mimi_king', true, 0, false)).toMatchObject({ maxHp: 14, spd: 5 });
     expect(makeUnit('gora', true, 0, false).spd).toBe(3);
     for (const poison of [0, 2]) {
       const b = createBattle([makeUnit('mimi_king', true, 0, false)], [{ speciesId: 'momo' }], 1);

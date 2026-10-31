@@ -42,11 +42,11 @@ describe('熔炉兽与长明灵蛾', () => {
     expect(parseEvent(after, shields[0])?.kind).toBe('buff');
   });
 
-  it('熔岩重爪对燃烧目标造成8伤、否则6伤，壁垒8盾并冷却，封炉全队3盾且每场三次', () => {
+  it('熔岩重爪对燃烧与非燃烧目标均造成6伤，壁垒8盾并冷却，封炉全队3盾且每场三次', () => {
     for (const burned of [false, true]) {
       const b = peacefulBattle('furnace_beast', burned);
       const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'molten_claw', b.enemyUnits[0].uid));
-      expect(after.log.find(entry => entry.text.includes('使用「熔岩重爪」攻击'))?.text).toContain(`造成 ${burned ? 8 : 6} 伤害`);
+      expect(after.log.find(entry => entry.text.includes('使用「熔岩重爪」攻击'))?.text).toContain('造成 6 伤害');
     }
     const b = peacefulBattle('furnace_beast');
     const wall = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'furnace_bastion'));

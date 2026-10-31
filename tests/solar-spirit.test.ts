@@ -59,32 +59,32 @@ describe('日炎灵与日华', () => {
     expect(after.log.filter(e => e.text.includes('日华」充能'))).toHaveLength(2);
   });
 
-  it('自然灼烧结算不充能，无充能回合衰减一层且不低于零', () => {
+  it('自然灼烧结算不充能，无充能回合也保留日华', () => {
     const b = radiant(burn(quiet(), 1));
     const first = playerEndTurn(b);
-    expect(radianceLayers(first.playerUnits[0])).toBe(1);
+    expect(radianceLayers(first.playerUnits[0])).toBe(2);
     expect(first.log.some(e => e.text.includes('日华」充能'))).toBe(false);
     const second = playerEndTurn(first);
-    expect(radianceLayers(second.playerUnits[0])).toBe(0);
-    expect(second.playerUnits[0].statuses.some(s => s.kind === 'sunRadiance')).toBe(false);
-    expect(radianceLayers(playerEndTurn(second).playerUnits[0])).toBe(0);
+    expect(radianceLayers(second.playerUnits[0])).toBe(2);
+    expect(second.playerUnits[0].statuses.some(s => s.kind === 'sunRadiance')).toBe(true);
+    expect(radianceLayers(playerEndTurn(second).playerUnits[0])).toBe(2);
   });
 
-  it('最多3层，满层仍满足充能则不衰减；下一无充能回合才降至2', () => {
+  it('最多3层，满层之后未充能也不衰减', () => {
     const b = radiant(burn(quiet(), 6), 3);
     const after = cast(b);
     expect(radianceLayers(after.playerUnits[0])).toBe(3);
-    expect(radianceLayers(playerEndTurn(after).playerUnits[0])).toBe(2);
+    expect(radianceLayers(playerEndTurn(after).playerUnits[0])).toBe(3);
   });
 
-  it('回合末熔甲换盾属于本回合清火机会，在日华衰减判断前充能', () => {
+  it('回合末熔甲换盾属于本回合清火机会并充能日华', () => {
     const b = radiant(burn(quiet(['solar_spirit', 'molten_beetle']), 4), 2);
     const after = playerEndTurn(b);
     expect(radianceLayers(after.playerUnits[0])).toBe(3);
     expect(after.playerUnits[0].radianceGainedThisRound).toBeUndefined();
     const logs = after.log.filter(e => e.text.includes('日华」'));
     expect(logs.map(e => e.text)).toEqual([expect.stringContaining('充能')]);
-    expect(radianceLayers(playerEndTurn(after).playerUnits[0])).toBe(2);
+    expect(radianceLayers(playerEndTurn(after).playerUnits[0])).toBe(3);
   });
 
   it('自燃顶撞消耗燃料属于被动/技能清火，但清除敌方灼烧不为我方充能', () => {
@@ -98,24 +98,24 @@ describe('日炎灵与日华', () => {
     expect(radianceLayers(moved.enemyUnits[2])).toBe(1);
   });
 
-  it.each([0, 1, 2, 3])('日华灼击按施放时%s层造成3＋2N伤害，不消耗日华，已燃烧才附火', layers => {
+  it.each([0, 1, 2, 3])('日华灼击按施放时%s层造成3＋2N伤害，不消耗日华，无条件附火', layers => {
     const b = layers ? radiant(quiet(), layers) : quiet();
     b.enemyUnits[0].statuses = [{ kind: 'burn', value: 4, turns: 2 }];
     const after = playerEndTurn(playerSkill(b, b.playerUnits[0].uid, 'solar_strike', b.enemyUnits[0].uid));
     const hit = after.log.find(e => e.text.includes('日华灼击」攻击'))!;
     expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(497 - layers * 2);
     expect(hit.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(6);
-    expect(radianceLayers(after.playerUnits[0])).toBe(Math.max(0, layers - 1));
+    expect(radianceLayers(after.playerUnits[0])).toBe(layers);
     const cold = quiet();
     const noBurn = playerEndTurn(playerSkill(cold, cold.playerUnits[0].uid, 'solar_strike', cold.enemyUnits[0].uid));
-    expect(noBurn.enemyUnits[0].statuses.some(s => s.kind === 'burn')).toBe(false);
+    expect(noBurn.log.find(e => e.text.includes('日华灼击」攻击'))?.impacts?.[cold.enemyUnits[0].uid].addedStatuses?.burn).toBe(2);
   });
 
   it('日华治愈按治疗前层数计算，随后清火获得的新层数不追溯增加本次治疗，自疗不覆盖新日华', () => {
     const b = radiant(burn(quiet(), 1, 0), 2);
     const after = cast(b, 'solar_heal', 0);
     const heal = after.log.find(e => e.text.includes('日华治愈」，治愈'))!;
-    expect(heal.hp?.[b.playerUnits[0].uid]).toBe(55);
+    expect(heal.hp?.[b.playerUnits[0].uid]).toBe(57);
     expect(radianceLayers(after.playerUnits[0])).toBe(3);
     const self = cast(burn(quiet(), 6, 0), 'burn_reversal', 0);
     expect(radianceLayers(self.playerUnits[0])).toBe(1);

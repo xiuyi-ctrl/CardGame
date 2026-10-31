@@ -89,6 +89,7 @@ add('gauntlet-order', GauntletOrderScreen, { gauntletOrder: base.roster.slice(0,
 add('battle-test-editor', BattleScreen, { testRun: true, battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false, '调整数值');
 add('battle-test-skill-editor', BattleScreen, { testRun: true, battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false, '调整数值|技能数值');
 add('battle-test-skill-effects', BattleScreen, { testRun: true, battle: createBattle([makeUnit('mimi', true, 0, false), makeUnit('kiki', true, 1, false)], encounter, 123) }, false, '调整数值|技能数值|毒刺');
+add('battle-test-lineup', BattleScreen, { testRun: true, battle: createBattle([makeUnit('mimi', true, 0, false), makeUnit('kiki', true, 1, false)], encounter, 123) }, false, '调整数值|上场生物');
 add('battle', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123) }, false);
 add('battle-corrupt-immune', BattleScreen, { battle: createBattle(base.roster.slice(0, 5), encounter, 123, { corruptDebuff: 'immune' }) }, false);
 add('battle-mimic', BattleScreen, { battle: createBattle([makeUnit('mimic_beast', true, 0, false)], [{ speciesId: 'boss_vine' }], 123) }, false);
@@ -450,12 +451,13 @@ let feedbackDispatch: ((action: any) => void) | undefined;
 let feedbackEnter: (() => void) | undefined;
 const feedbackCases: Record<string, { skillId: string; targetUid: string }> = {};
 feedbackCases['chain-explosion'] = { skillId: 'chain_activate', targetUid: chainFixture.enemyUnits[0].uid };
-for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch'], ['pure-debuff', 'poison_mist'], ['pure-self', 'illusory_flame'], ['pure-ally', 'pass_flame'], ['pure-allies', 'relay_wildfire']]) {
+for (const [label, skillId] of [['melee', 'punch'], ['ranged', 'ember'], ['block', 'ember'], ['heavy', 'shadow_claw'], ['heal', 'water_bath'], ['shield', 'shield_skill'], ['group', 'vine_whip'], ['combo', 'swift_needle'], ['death', 'vine_whip'], ['rewind', 'punch'], ['group-heal', 'tidal_domain'], ['group-shield', 'ember_veil'], ['multi-group', 'inferno'], ['entry', 'punch'], ['pure-debuff', 'poison_mist'], ['pure-self', 'illusory_flame'], ['pure-ally', 'pass_flame'], ['pure-allies', 'relay_wildfire'], ['weaken-atk', 'weaken'], ['weaken-spd', 'weaken'], ['iron-double', 'iron_double']]) {
   const pets = ['momo_queen', 'fifi_king', 'lulu_king', 'coal', 'light_moss'].map((id, i) => makeUnit(id, true, (i % 3) as 0 | 1 | 2, false, i < 3 ? 'front' : 'back'));
   const battle = createBattle(pets, [{ speciesId: 'fifi_king' }, { speciesId: 'lulu_king' }, { speciesId: 'momo_queen' }], 31);
   battle.playerUnits = battle.playerUnits.map((unit, i) => ({ ...unit, hp: i === 0 ? 19 : 20, maxHp: 20, passive: undefined, spd: 99, skills: i === 0 ? [skillId] : unit.skills }));
   battle.enemyUnits = battle.enemyUnits.map(unit => ({ ...unit, hp: 20, maxHp: 20, passive: undefined, skills: [], acted: true, shield: label === 'block' ? 30 : unit.row === 'front' ? 2 : 0 }));
   if (label === 'shield') battle.playerUnits[0].shield = 98;
+  if (label === 'weaken-atk' || label === 'weaken-spd') battle.rngCount = label === 'weaken-atk' ? 0 : 1;
   if (label === 'death') battle.enemyUnits.forEach(unit => { unit.hp = 1; unit.shield = 0; });
   if (label === 'group-heal') battle.playerUnits.forEach((unit, i) => { unit.hp = 10 + i; });
   if (label === 'rewind') {

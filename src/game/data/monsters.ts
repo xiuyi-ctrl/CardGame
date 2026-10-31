@@ -56,8 +56,8 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   pipi: {
     id: 'pipi', name: '刺刺', emoji: '🦔', image: CREATURE_IMAGES.pipi,
     baseHp: 11, baseSpd: 1,
-    skills: ['weaken', 'provoke'],
-    desc: '受击反伤，嘲讽敌人',
+    skills: ['weaken', 'thorn_retaliation'],
+    desc: '速度缓慢，受击反伤',
     passive: 'spike',
     evolutions: [{ to: 'sisi' }],
     tame: { difficulty: 0.75 }, rank: 1,
@@ -109,7 +109,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
   },
   mimi_king: {
     id: 'mimi_king', name: '蟒影', emoji: '🐍', image: CREATURE_IMAGES.mimi_king,
-    baseHp: 15, baseSpd: 5,
+    baseHp: 14, baseSpd: 5,
     skills: ['poison_sting', 'shadow_strike', 'shadow_claw'],
     desc: '咪咪的融合形态，毒系影袭刺客，优先猎杀后排。',
     passive: 'venom_power',
@@ -152,7 +152,7 @@ export const MONSTERS: Record<string, MonsterSpecies> = {
     id: 'lulu_god', name: '泡泡龙神', emoji: '🐳', image: CREATURE_IMAGES.lulu_god,
     baseHp: 30, baseSpd: 5,
     skills: ['tidal_domain', 'heal_light', 'water_shot', 'wave'],
-    desc: '泡泡最终形态，全体回血与伤害减免',
+    desc: '泡泡最终形态，群体减伤与单体治疗',
     passive: 'life_spring',
     tame: { difficulty: 0.3 }, rank: 3,
   },

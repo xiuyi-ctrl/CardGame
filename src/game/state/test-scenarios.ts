@@ -61,6 +61,7 @@ export function prepareTestScenario(initial: GameState, input: TestScenario): { 
 }
 
 export function configureTestGrowth(unit: Unit, scenario?: TestScenario): Unit {
+  unit = { ...unit, hp: Math.max(1, Math.round(scenario?.hpPercent ?? 100)), maxHp: Math.max(100, unit.maxHp) };
   if (scenario?.mode !== 'proficiency' || !(scenario.growthSkillLevel! > 0)) return unit;
   const slots = unit.skills.map((_, slot) => slot).filter(slot => canMasterEnhance(unit, slot));
   return { ...unit, skillEnhancements: Object.fromEntries(slots.map(slot => [slot, Math.max(0, Math.min(4, Math.floor(scenario.growthSkillLevel!)))])),

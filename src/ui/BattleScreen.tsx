@@ -125,6 +125,7 @@ export function BattleScreen({ state, dispatch }: Props) {
   const [pendingTame, setPendingTame] = useState<string | null>(null);
   const [pendingBattleItem, setPendingBattleItem] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  const selectedRound = useRef(battle.round);
   const [inspectEnemy, setInspectEnemy] = useState<string | null>(null);
   const [inspectAlly, setInspectAlly] = useState<string | null>(null);
   const [inspectAllySkills, setInspectAllySkills] = useState(false);
@@ -219,17 +220,7 @@ export function BattleScreen({ state, dispatch }: Props) {
     if (shieldMap) next = { ...next, shield: shieldMap[u.uid] ?? next.shield };
     const sm = statusMap ? statusMap[u.uid] : undefined;
     if (sm) {
-      const smMap = new Map(sm.map((s) => [s.kind, s]));
-      // 动画期间：叠加型状态（灼烧/中毒/怒棘）完全由 statusMap 快照控制，
-      // 排除不在 smMap 中的叠加型状态，防止从真实 unit 泄露最终层数
-      const STACKING_ANIM = new Set(['burn', 'poison', 'rageThorn']);
-      const merged = next.statuses
-        .filter((s) => !STACKING_ANIM.has(s.kind) || smMap.has(s.kind))
-        .map((s) => smMap.get(s.kind) ?? s);
-      for (const s of sm) {
-        if (!merged.some((ms) => ms.kind === s.kind)) merged.push(s);
-      }
-      next = { ...next, statuses: merged };
+      return { ...next, statuses: sm };
     }
     const hidden = hiddenStatuses[u.uid];
     if (hidden && hidden.length > 0) {
@@ -276,6 +267,17 @@ export function BattleScreen({ state, dispatch }: Props) {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [inspectEnemy, inspectAlly, choosingEnemyTarget, choosingAllyTarget]);
+
+  // 回合结算完后默认显示从左到右、从前到后的首只存活伙伴；指令阶段不抢走手动选择。
+  useEffect(() => {
+    if (animating || logPending || battle.phase !== 'acting' || battle.rewindChoice) return;
+    const invalid = selectedUid !== null && !battle.playerUnits.some(unit => unit.uid === selectedUid && unit.hp > 0);
+    if (selectedRound.current === battle.round && !invalid) return;
+    selectedRound.current = battle.round;
+    const first = battle.playerUnits.filter(unit => unit.hp > 0).sort((a, b) =>
+      Number(a.row === 'back') - Number(b.row === 'back') || a.column - b.column)[0];
+    setSelectedUid(first?.uid ?? null);
+  }, [battle.round, battle.phase, battle.rewindChoice, battle.playerUnits, selectedUid, animating, logPending]);
 
   // 车轮战：场上只有一只上场宠物，默认选中它，技能栏直接展示其技能（含替补轮换后自动重选）
   useEffect(() => {

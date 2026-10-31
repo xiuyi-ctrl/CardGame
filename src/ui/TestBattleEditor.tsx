@@ -1,6 +1,7 @@
 import { useState, type Dispatch } from 'react';
 import type { BattleState, TestSkillOverride, Unit } from '../game/types';
 import { getSkill } from '../game/data/skills';
+import { MONSTERS } from '../game/data/monsters';
 import { getBattleSkill, testSkillEditable, testEffectTurnsEditable, testEffectValueEditable, validTestSkillOverride } from '../game/data/test-skill-overrides';
 import { STATUS_ART } from './BuffIcon';
 import type { GameAction } from '../game/state/reducer';
@@ -9,21 +10,55 @@ import './testBattleEditor.css';
 
 export function TestBattleEditor({ units, battle, dispatch, onClose }: { units: Unit[]; battle?: BattleState; dispatch: Dispatch<GameAction>; onClose: () => void }) {
   const [uid, setUid] = useState(units.find(unit => unit.hp > 0)?.uid ?? '');
-  const [mode, setMode] = useState<'unit' | 'skill'>('unit');
+  const [mode, setMode] = useState<'unit' | 'skill' | 'lineup'>('unit');
   const skillIds = [...new Set([...units, ...(battle?.playerBench ?? []), ...(battle?.enemyBench ?? [])].flatMap(unit => unit.skills))].filter(id => id !== 'mirror_copy');
   const [skillId, setSkillId] = useState(skillIds[0] ?? '');
   const unit = units.find(candidate => candidate.uid === uid);
-  const title = mode === 'unit' ? '调整测试生物数值' : '调整测试技能数值';
+  const title = mode === 'unit' ? '调整测试生物数值' : mode === 'skill' ? '调整测试技能数值' : '调整测试阵容';
   useBackAction(true, onClose, 100);
   return <div className="mobile-system-overlay test-battle-overlay" onClick={onClose}>
     <section className="test-battle-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}>
-      <header><h2>{title}</h2><nav className="test-battle-tabs" aria-label="调整类型"><button aria-pressed={mode === 'unit'} onClick={() => setMode('unit')}>生物数值</button><button aria-pressed={mode === 'skill'} onClick={() => setMode('skill')}>技能数值</button></nav><button onClick={onClose}>关闭</button></header>
-      <div className="test-battle-body"><div className="test-battle-units" role="group" aria-label={mode === 'unit' ? '选择调整对象' : '选择调整技能'}>{mode === 'unit' ? units.filter(pet => pet.hp > 0).map(pet =>
+      <header><h2>{title}</h2><nav className="test-battle-tabs" aria-label="调整类型"><button aria-pressed={mode === 'unit'} onClick={() => setMode('unit')}>生物数值</button><button aria-pressed={mode === 'skill'} onClick={() => setMode('skill')}>技能数值</button>{battle && <button aria-pressed={mode === 'lineup'} onClick={() => setMode('lineup')}>上场生物</button>}</nav><button onClick={onClose}>关闭</button></header>
+      {mode === 'lineup' && battle ? <TestLineupForm battle={battle} dispatch={dispatch} onClose={onClose} /> :
+      <div className="test-battle-body"><div className="test-battle-sidebar">{battle && <button type="button" aria-pressed={!battle.testEnemyInactive} onClick={() => dispatch({ type: 'TEST_BATTLE_SET_ENEMY_ATTACK', enabled: !!battle.testEnemyInactive })}>敌人攻击：{battle.testEnemyInactive ? '关闭' : '开启'}<small>关闭后暂停主动行动，被动及回合结算保留</small></button>}<div className="test-battle-units" role="group" aria-label={mode === 'unit' ? '选择调整对象' : '选择调整技能'}>{mode === 'unit' ? units.filter(pet => pet.hp > 0).map(pet =>
         <button key={pet.uid} aria-pressed={uid === pet.uid} onClick={() => setUid(pet.uid)}>{pet.isPlayer ? '我方' : '敌方'} · {pet.name}<small>{pet.row === 'front' ? '前排' : '后排'}{pet.column + 1} · {pet.hp}/{pet.maxHp}</small></button>) : skillIds.map(id => <button key={id} aria-pressed={skillId === id} onClick={() => setSkillId(id)}>{getSkill(id).name}<small>{battle?.testSkillOverrides?.[id] ? '已调整 · 本场全部同名技能' : '本场全部同名技能'}</small></button>)}</div>
-        {mode === 'unit' && unit && <TestBattleForm key={unit.uid} unit={unit} dispatch={dispatch} onClose={onClose} />}
+        </div>{mode === 'unit' && unit && <TestBattleForm key={unit.uid} unit={unit} dispatch={dispatch} onClose={onClose} />}
         {mode === 'skill' && skillId && <TestSkillForm key={skillId} skillId={skillId} battle={battle} dispatch={dispatch} onClose={onClose} />}
-      </div>
+      </div>}
     </section>
+  </div>;
+}
+
+function TestLineupForm({ battle, dispatch, onClose }: { battle: BattleState; dispatch: Dispatch<GameAction>; onClose: () => void }) {
+  const [side, setSide] = useState<'player' | 'enemy'>('player');
+  const [slot, setSlot] = useState(0);
+  const [query, setQuery] = useState('');
+  const [speciesId, setSpeciesId] = useState('');
+  const units = side === 'player' ? battle.playerUnits : battle.enemyUnits;
+  const slots = battle.gauntlet ? units.map(unit => ({ row: unit.row, column: unit.column }))
+    : (['front', 'back'] as const).flatMap(row => ([0, 1, 2] as const).map(column => ({ row, column })));
+  const position = slots[slot] ?? slots[0];
+  const old = units.find(unit => unit.row === position?.row && unit.column === position?.column);
+  const blocked = !!battle.rewindChoice || !!battle.pendingSwap?.player || !!battle.pendingSwap?.enemy;
+  const submit = (id: string | null) => {
+    if (!position || blocked) return;
+    dispatch({ type: 'TEST_BATTLE_SET_SLOT', side, ...position, speciesId: id }); onClose();
+  };
+  return <div className="test-battle-body test-lineup-body">
+    <div className="test-lineup-positions">
+      <nav className="test-battle-tabs" aria-label="调整阵营">{(['player', 'enemy'] as const).map(value => <button key={value} aria-pressed={side === value} onClick={() => { setSide(value); setSlot(0); }}>{value === 'player' ? '我方' : '敌方'}</button>)}</nav>
+      <div className="test-lineup-slots" role="group" aria-label="上场格位">{slots.map((pos, index) => {
+        const unit = units.find(candidate => candidate.row === pos.row && candidate.column === pos.column);
+        return <button key={`${pos.row}${pos.column}`} aria-pressed={index === slot} onClick={() => setSlot(index)}>{pos.row === 'front' ? '前排' : '后排'}{pos.column + 1}<small>{unit ? `${unit.name}${unit.hp <= 0 ? '（阵亡）' : ''}` : '空位'}</small></button>;
+      })}</div>
+      <p>选格位后选择新生物。我方下阵后保留为待命伙伴；替换使用新生物初始状态，我方当前生命100。{blocked ? '当前需先完成回溯选择或轮换。' : ''}</p>
+    </div>
+    <div className="test-battle-form">
+      <label className="test-lineup-search">查找生物<input value={query} onChange={event => setQuery(event.target.value)} placeholder="名称或编号" /></label>
+      <div className="test-battle-units test-lineup-species" role="group" aria-label="选择上场生物">{Object.values(MONSTERS).filter(species => species.name.includes(query.trim()) || species.id.includes(query.trim())).map(species =>
+        <button key={species.id} aria-pressed={speciesId === species.id} onClick={() => setSpeciesId(species.id)}>{species.name}</button>)}</div>
+      <footer><button disabled={blocked || !old || !units.some(unit => unit.uid !== old.uid && unit.hp > 0)} onClick={() => submit(null)}>下阵</button><button disabled={blocked || !position || !speciesId} onClick={() => submit(speciesId)}>{old ? '替换生物' : '新增生物'}</button></footer>
+    </div>
   </div>;
 }
 

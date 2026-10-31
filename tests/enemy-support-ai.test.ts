@@ -130,10 +130,10 @@ describe('敌方治疗与增益决策', () => {
     expect(choices(b, repeated)).toEqual(choices(b));
   });
 
-  it('只有一个重伤伙伴也能使用群体治疗', () => {
+  it('潮汐领域作为群体增益使用，不再按群体治疗评分', () => {
     const b = setup(['tidal_domain', 'claw_attack']);
     b.enemyUnits[0].hp = 2;
-    expect(count(b, 'heal')).toBeGreaterThan(0);
+    expect(count(b, 'heal')).toBe(0);
   });
 
   it('治疗的净化被动会增加灼烧目标的处理优先度', () => {

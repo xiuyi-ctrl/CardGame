@@ -123,7 +123,7 @@ describe('熔甲兽与烈日神鹰', () => {
     const hit = after.log.find(e => e.text.includes('掠日破盾」攻击'))!;
     const burn = hit.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value ?? 0;
     expect(burn).toBe(shield > 0 ? 5 : 0);
-    expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(496);
+    expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(shield > 0 ? 492 : 496);
     expect(hit.shields?.[b.enemyUnits[0].uid]).toBe(0);
     expect(hit.statuses?.[b.enemyUnits[0].uid].some(s => s.kind === 'shield')).toBe(false);
     expect(skillCooldownLeft(after.playerUnits[0], 'sun_sunder')).toBe(1);
@@ -140,7 +140,7 @@ describe('熔甲兽与烈日神鹰', () => {
       expect.stringContaining('烈日销甲」剥除'), expect.stringContaining('掠日破盾」剥除'),
     ] : [expect.stringContaining('烈日销甲」剥除')]);
     const hit = after.log.find(e => e.text.includes('掠日破盾」攻击'))!;
-    expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(492);
+    expect(hit.hp?.[b.enemyUnits[0].uid]).toBe(488);
     expect(hit.statuses?.[b.enemyUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(9);
     expect(parseEvent(after, strips[0])).toMatchObject({ kind: 'buff', skillName: '烈日销甲' });
     expect(skillFullDesc(getSkill('sun_sunder'), 2)).toContain('造成8点伤害');
@@ -173,7 +173,7 @@ describe('熔甲兽与烈日神鹰', () => {
     const acted = playerEndTurn(enemy);
     const enemyHit = acted.log.find(e => e.text.includes('掠日破盾」攻击'))!;
     expect(enemyHit.shields?.[enemy.playerUnits[0].uid]).toBe(0);
-    expect(enemyHit.hp?.[enemy.playerUnits[0].uid]).toBe(96);
+    expect(enemyHit.hp?.[enemy.playerUnits[0].uid]).toBe(92);
     expect(enemyHit.statuses?.[enemy.playerUnits[0].uid].find(s => s.kind === 'burn')?.value).toBe(5);
   });
 

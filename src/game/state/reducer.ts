@@ -2,7 +2,7 @@ import { getCreatureImage } from '../data/creature-art';
 import type { GameState, MapNode, RewardChoice, RunMap, RunStats, Difficulty, Unlocks, SpecialRewardKind, TestScenario, EventBattleReward } from './game';
 import { applyCorruptFoodReward, applyCurseToUnit, buildEventByType, buildPunishmentEvent, buildSpecial, canStepTo, currentNode, CUSTOM_PRESETS, DEFAULT_UNLOCKS, DIFFICULTY_CONFIG, FIELD_MAX, evolutionLockReason, fuseUnit, fusionNeedCount, generateChallengeRewards, generateMap, generateRewards, getMaxRoster, hashStr, labelOf, makeCustomUnit, maxFieldForEnemy, nextStage, nodeInfo, RELIC_ORDER, removeCurseFromUnit, rollChest, recomputeStats } from './game';
 import { finalEvolutionPaths, economicRelicUnlocks, growthRelicUnlocks, mainShopRefreshCost, RELIC_DEFS } from './game';
-import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap } from '../core/battle';
+import { useBattleItem, playerCancelOrder, playerEndTurn, playerRest, playerSwap, performGauntletSwap, drawMimicSkills } from '../core/battle';
 import { createBattle, makeUnit, playerSkill, playerTame, updateUnitSkills, BATTLE_COLLAPSE_WARNING_ROUND, computeTurnOrder, pushLog } from '../core/battle';
 import type { BattleOptions } from '../core/battle';
 import type { BattleState, Unit, TestSkillOverride } from '../types';
@@ -121,6 +121,8 @@ export type GameAction = GrowthEncounterAction
   | { type: 'TEST_REPLAY' }
   | { type: 'TEST_BATTLE_EDIT_UNIT'; uid: string; hp: number; maxHp: number; spd: number; shield: number }
   | { type: 'TEST_BATTLE_EDIT_SKILL'; skillId: string; values: TestSkillOverride | null }
+  | { type: 'TEST_BATTLE_SET_ENEMY_ATTACK'; enabled: boolean }
+  | { type: 'TEST_BATTLE_SET_SLOT'; side: 'player' | 'enemy'; row: 'front' | 'back'; column: 0 | 1 | 2; speciesId: string | null }
   | { type: 'TEST_PICK_PLAYER_CONFIRM'; units: Unit[] }
   | { type: 'TEST_PICK_ENEMY_CONFIRM'; units: Unit[] }
   | { type: 'TEST_ITEMS_CONFIRM'; inventory: Record<string, number>; gold: number; seed: number }
@@ -859,6 +861,44 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
   if (state.battle?.rewindChoice && ['PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'PLAYER_CANCEL_ORDER', 'END_TURN', 'GAUNTLET_SWAP'].includes(action.type)) return state;
   if (state.battle?.mimicPreviewPending && ['PLAYER_SKILL', 'PLAYER_REST', 'PLAYER_SWAP', 'PLAYER_TAME', 'USE_BATTLE_ITEM', 'END_TURN'].includes(action.type)) return state;
   switch (action.type) {
+    case 'TEST_BATTLE_SET_SLOT': {
+      const battle = state.battle;
+      if (!state.testRun || state.screen !== 'battle' || !battle || battle.phase !== 'acting' || battle.rewindChoice
+        || battle.pendingSwap?.player || battle.pendingSwap?.enemy
+        || !['player', 'enemy'].includes(action.side) || !['front', 'back'].includes(action.row)
+        || ![0, 1, 2].includes(action.column) || (action.speciesId !== null && !Object.prototype.hasOwnProperty.call(MONSTERS, action.speciesId))) return state;
+      const player = action.side === 'player';
+      const key = player ? 'playerUnits' : 'enemyUnits';
+      const units = battle[key];
+      const old = units.find(unit => unit.row === action.row && unit.column === action.column);
+      if (battle.gauntlet && !old && units.length > 0) return state;
+      if (action.speciesId === null && (!old || !units.some(unit => unit.uid !== old.uid && unit.hp > 0))) return state;
+      const species = action.speciesId ? MONSTERS[action.speciesId] : undefined;
+      const tameable = !player && !!species && species.rank < 4 && species.tame.difficulty > 0
+        && state.runMode !== 'proficiency' && !['arena', 'gauntlet', 'guardian'].includes(battle.nodeType ?? '');
+      let added = action.speciesId ? makeUnit(action.speciesId, player, action.column, tameable, action.row) : undefined;
+      if (added && player) added = configureTestGrowth(added);
+      if (added && !player && battle.corruptDebuff === 'immune') added = { ...added, debuffImmune: true };
+      const nextUnits = units.filter(unit => unit.uid !== old?.uid);
+      if (added) nextUnits.push(added);
+      const orders = Object.fromEntries(Object.entries(battle.orders ?? {}).filter(([uid, order]) => uid !== old?.uid && (!old || order.targetUid !== old.uid)));
+      let next: BattleState = { ...battle, [key]: nextUnits, orders };
+      if (added) next = drawMimicSkills(next, added.uid);
+      next = { ...next, turnOrder: computeTurnOrder(next) };
+      next = pushLog(next, `[测试阵容] ${player ? '我方' : '敌方'}${action.row === 'front' ? '前排' : '后排'}${action.column + 1}：${added ? added.name : '下阵'}`, 'info');
+      const roster = player && added ? (old && state.roster.some(unit => unit.uid === old.uid)
+        ? state.roster.map(unit => unit.uid === old.uid ? added! : unit) : [...state.roster, added]) : state.roster;
+      return { ...state, battle: next, roster, ...(player ? { field: next.playerUnits.filter(unit => unit.hp > 0).map(unit => unit.uid) } : {}) };
+    }
+    case 'TEST_BATTLE_SET_ENEMY_ATTACK': {
+      const battle = state.battle;
+      if (!state.testRun || state.screen !== 'battle' || !battle || battle.phase !== 'acting' || typeof action.enabled !== 'boolean') return state;
+      if (!!battle.testEnemyInactive === !action.enabled) return state;
+      const orders = Object.fromEntries(Object.entries(battle.orders ?? {}).filter(([uid]) => !battle.enemyUnits.some(unit => unit.uid === uid)));
+      let next: BattleState = { ...battle, testEnemyInactive: !action.enabled, orders };
+      next = { ...next, turnOrder: computeTurnOrder(next) };
+      return { ...state, battle: pushLog(next, `[测试] 敌人攻击已${action.enabled ? '开启' : '关闭（暂停主动行动）'}`, 'info') };
+    }
     case 'TEST_BATTLE_EDIT_SKILL': {
       const battle = state.battle, skill = SKILLS[action.skillId];
       if (!state.testRun || state.screen !== 'battle' || !battle || battle.phase !== 'acting' || !skill) return state;
@@ -974,7 +1014,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         map,
         currentRow: row,
         currentNodeId: node.id,
-        roster: debugRoster,
+        roster: debugRoster.map(unit => configureTestGrowth(unit)),
         field: debugRoster.map((u) => u.uid),
         gold: 500,
         inventory: { berry: 5, meat: 5, skip: 3, scout: 2, twin: 2 },
@@ -1036,7 +1076,7 @@ function reduceGameAction(state: GameState, action: GameAction): GameState {
         map,
         currentRow: 0,
         currentNodeId: nodeId,
-        roster: starters,
+        roster: starters.map(unit => configureTestGrowth(unit)),
         field: starters.map((u) => u.uid),
         inventory: testInventory,
         rewards: [],

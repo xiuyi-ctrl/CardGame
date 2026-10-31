@@ -3,7 +3,7 @@ import type { BattleState, LogEntry, StatusEffect, Unit } from '../game/types';
 import { SKILLS } from '../game/data/skills';
 import { getPassive } from '../game/data/passives';
 import { PausableTimers } from './pausableTimers';
-import { impactPops, RANGED_FEEDBACK_SKILLS } from './battleFeedback';
+import { impactPops, statusPop, RANGED_FEEDBACK_SKILLS } from './battleFeedback';
 import type { FeedbackPop } from './battleFeedback';
 
 /** 战斗动画事件（由日志文本解析而来，纯 UI 视觉，不影响战斗逻辑） */
@@ -131,7 +131,7 @@ export function allRevealed(newStatuses: Record<string, string[]>): Record<strin
   return out;
 }
 
-const RE_ATTACK = /^(.+?) 使用「(.+?)」攻击 (.+?)，造成 (\d+) 伤害$/;
+const RE_ATTACK = /^(.+?) 使用「(.+?)」攻击 (.+?)，造成 (\d+) 伤害(?:；.*)?$/;
 const RE_HEAL = /^(.+?) 使用「(.+?)」(?:，治愈|恢复) (?:(.+?) )?(\d+) 点生命$/;
 const RE_MOSS_CLEANSE = /^(.+?) 的「(吸热苔|净苔|澄焰|灼烧反转|净焰照护)」移除 (.+?) (\d+) 层(灼烧|中毒)$/;
 const RE_RADIANCE = /^(.+?) 的「日华」(?:充能|衰减)（当前 (\d)\/3）$/;
@@ -480,7 +480,7 @@ function parseLegacyEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   return null;
 }
 
-const DEBUFF_KINDS = ['burn', 'poison', 'fear', 'atkDown', 'spdDown', 'stun', 'timeLag', 'skillSeal', 'burnBrand', 'chainLink'];
+const DEBUFF_KINDS = ['burn', 'poison', 'fear', 'atkDown', 'spdDown', 'stun', 'timeLag', 'skillSeal', 'skillSealPending', 'burnBrand', 'shadowMark', 'chainLink'];
 
 export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   const statusSkillName = entry.text.match(/^.+? 使用「(.+?)」/)?.[1];
@@ -488,7 +488,9 @@ export function parseEvent(b: BattleState, entry: LogEntry): FxEvent | null {
   if (statusSkill && statusSkill.kind === 'status'
     && [...(entry.addsStatus ?? []), ...(statusSkill.effects ?? []).map(effect => effect.kind)].some(kind => DEBUFF_KINDS.includes(kind))) {
     return { kind: 'buff', actorUid: entry.actorUid, targetUid: entry.targetUid, skillName: statusSkill.name, value: 0,
-      addsStatus: entry.addsStatus ?? statusSkill.effects?.map(effect => effect.kind),
+      addsStatus: Object.values(entry.impacts ?? {}).some(change => Object.keys(change.addedStatuses ?? {}).length)
+        ? [...new Set(Object.values(entry.impacts ?? {}).flatMap(change => Object.keys(change.addedStatuses ?? {})))]
+        : parseLegacyEvent(b, entry)?.addsStatus ?? entry.addsStatus ?? statusSkill.effects?.map(effect => effect.kind),
       debuffTargets: entry.burstTargets, revealUids: entry.burstTargets,
       hp: entry.hp, statuses: entry.statuses, shields: entry.shields, impacts: entry.impacts };
   }
@@ -969,7 +971,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
             const statusIcon = isShield ? 'shield' : sk?.id === 'chain_link' ? 'chainLink' : undefined;
             const buffCls = impact?.shieldBroken ? 'fx-break' : isShield ? 'fx-shield' : 'fx-buff';
             const debuffIcon = ev.addsStatus?.find(kind => DEBUFF_KINDS.includes(kind)) as StatusEffect['kind'] | undefined;
-            const debuffLabel = `+${skill?.effects?.find(effect => effect.kind === debuffIcon)?.value ?? 1}`;
+            const debuffPop = debuffIcon ? statusPop(debuffIcon, skill?.effects?.find(effect => effect.kind === debuffIcon)?.value ?? skill?.effects?.[0]?.value ?? 1) : undefined;
             if (ev.debuffTargets && ev.debuffTargets.length > 0) {
               // 全体 debuff：所有目标同时显示 debuff 图标 + debuff 飘字；每个目标独立 seq 以便 clear 精确匹配
               debuffTargetSeqs = {};
@@ -977,7 +979,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
                 if (pureDebuff && eventImpacts && !Object.keys(eventImpacts[uid]?.addedStatuses ?? {}).length) continue;
                 ++fxSeq; debuffTargetSeqs[uid] = fxSeq;
                 setFx((p) => ({ ...p, [uid]: { cls: 'fx-debuff', seq: fxSeq } }));
-                legacyPop({ id: popId, uid, text: debuffLabel, heal: false, debuff: true, statusIcon: debuffIcon });
+                if (debuffPop) legacyPop({ ...debuffPop, id: popId, uid });
               }
             } else if (targetUid && !ev.noPop && (!pureDebuff || !eventImpacts || Object.keys(eventImpacts[targetUid]?.addedStatuses ?? {}).length > 0)) {
               // 区分 debuff（RE_DEBUFF 解析）和普通 buff（RE_BUFF 解析）
@@ -985,7 +987,7 @@ export function useBattleFx(battle: BattleState | null | undefined) {
               if (isDebuffEvent) {
                 ++fxSeq; capturedTargetSeq = fxSeq;
                 setFx((p) => ({ ...p, [targetUid]: { cls: 'fx-debuff', seq: capturedTargetSeq } }));
-                legacyPop({ id: popId, uid: targetUid, text: debuffLabel, heal: false, debuff: true, statusIcon: debuffIcon });
+                if (debuffPop) legacyPop({ ...debuffPop, id: popId, uid: targetUid });
               } else {
                 ++fxSeq; capturedTargetSeq = fxSeq;
                 setFx((p) => ({ ...p, [targetUid]: { cls: buffCls, seq: capturedTargetSeq } }));
@@ -1102,5 +1104,9 @@ export function useBattleFx(battle: BattleState | null | undefined) {
 
   const pendingCaptured = battle?.log.slice(prevLen.current).filter(entry => entry.capture?.success).map(entry => entry.capture!.targetUid) ?? [];
   const departingEnemies = [...captureGhosts, ...(prevBattle.current?.enemyUnits ?? []).filter(unit => pendingCaptured.includes(unit.uid) && !captureGhosts.some(ghost => ghost.uid === unit.uid))];
-  return { fx, pops, strikes, life, statusPulses, capture, departingEnemies, effectsPaused, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed: changeAnimSpeed, skipAnim };
+  // effect 初始化回放之前的首帧也必须使用旧快照，不能泄露最终状态。
+  const shownStatusMap = logPending && prevStatusRef.current && battle?.seed === prevStatusRef.current.seed
+    && battle.log.slice(prevLen.current).some(entry => entry.statuses !== undefined)
+    ? statusesOfUnits(prevStatusRef.current) : statusMap;
+  return { fx, pops, strikes, life, statusPulses, capture, departingEnemies, effectsPaused, hpMap, shieldMap, spdMap, passiveSpdMap, rockShellHitsMap, thornRoyalHitsMap, statusMap: shownStatusMap, hiddenStatuses, endingStatuses, animating, logPending, revealedLogLen, revealedSummons, animSpeed, setAnimSpeed: changeAnimSpeed, skipAnim };
 }

@@ -70,7 +70,8 @@ describe('战场崩解与治疗限制', () => {
       expect(getSkill(id).uses).toBeUndefined();
       expect(getSkill(id).cooldown ?? 0).toBe(0);
     }
-    for (const id of ['ash_shelter', 'furnace_shell', 'furnace_bastion', 'burn_reversal', 'iron_double', 'tidal_slam', 'spore_shield']) expect(getSkill(id).cooldown).toBe(1);
+    for (const id of ['ash_shelter', 'furnace_bastion', 'burn_reversal', 'iron_double', 'tidal_slam', 'spore_shield']) expect(getSkill(id).cooldown).toBe(1);
+    expect(getSkill('furnace_shell').cooldown).toBeUndefined();
     expect(getSkill('flame_tail_shield')).toMatchObject({ cooldown: 1, uses: 2 });
     expect(getSkill('heal_light').uses).toBeUndefined();
     expect(getSkill('iron_domain')).toMatchObject({ cooldown: 1, uses: 2 });
